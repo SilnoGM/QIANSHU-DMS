@@ -1,4 +1,5 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
+import { proxyNodeBadgeCounts } from '../../store/modules/app/proxy-node-badge-counts'
 import FundAccountManagement from './fund-account.management'
 import {
   FINANCE_WORKBENCH_PERMISSION,
@@ -322,6 +323,18 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         icon: 'qs-overseas-storage',
         singleMenu: true,
         auth: 'shipment-storage:read',
+      },
+    },
+    {
+      path: '/qs-purchase-transport/proxy-nodes',
+      name: 'qsPurchaseTransportProxyNodes',
+      component: () => import('@/views/workbenches/proxy-nodes/index.vue'),
+      meta: {
+        title: 'IPFoxy静态节点',
+        icon: 'qs-static-node',
+        singleMenu: true,
+        auth: 'proxy-nodes:manage',
+        badge: [() => proxyNodeBadgeCounts.all.value, 'destructive'],
       },
     },
   ],

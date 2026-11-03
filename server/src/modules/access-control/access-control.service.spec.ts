@@ -133,8 +133,10 @@ describe('permission constants', () => {
       'workbench:purchase-transport',
       'data-scope:self',
       'data-scope:all',
+      'proxy-nodes:read',
+      'proxy-nodes:manage',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 102)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 104)
   })
 })
 

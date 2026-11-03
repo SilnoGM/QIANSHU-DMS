@@ -1502,6 +1502,7 @@
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/create-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
       "packages/components/src/pro/code/index.vue",
       "packages/components/src/pro/storage-box/index.vue"
@@ -1645,6 +1646,7 @@
       "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
       "apps/qsmds-arco/src/views/operations/goods-storage/index.vue",
+      "apps/qsmds-arco/src/views/operations/network-ads/static-nodes/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/system/audit/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/currencies/currency-form-modal.vue",
@@ -1678,6 +1680,7 @@
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-void-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/amount-revision-modal.vue"
     ]
@@ -1953,6 +1956,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "apps/qsmds-arco/src/components/business/QsProxyNodeCard/index.vue",
       "apps/qsmds-arco/src/views/component_library/basic/components/IconLibraryDetails.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/ocean-container-line-drawer.vue",
@@ -2022,6 +2026,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/business/QsProxyNodeCard/index.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
@@ -2188,6 +2193,15 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.logic.ts",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:filter-x",
+    "label": "i-lucide:filter-x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue"
     ]
   },
   {
@@ -3157,6 +3171,7 @@
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-records-page.vue",
@@ -3297,6 +3312,7 @@
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "packages/components/src/pro/tree/index.vue"
     ]
   },
@@ -3327,6 +3343,16 @@
     ]
   },
   {
+    "name": "i-lucide:server",
+    "label": "i-lucide:server",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/network-ads/static-nodes/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:shield-alert",
     "label": "i-lucide:shield-alert",
     "category": "通用图标",
@@ -3346,6 +3372,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
       "apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue",
       "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
+      "apps/qsmds-arco/src/views/operations/network-ads/static-nodes/index.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/all.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
@@ -3369,6 +3396,7 @@
       "apps/qsmds-arco/src/views/workbenches/invoices/records/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-page.vue",
+      "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/batch-payment-page.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-page.vue",
@@ -3652,6 +3680,7 @@
       "apps/qsmds-arco/src/components/AppCheckUpdates/index.vue",
       "apps/qsmds-arco/src/components/base/QsToast/config.ts",
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "apps/qsmds-arco/src/components/business/QsProxyNodeCard/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",

@@ -97,6 +97,9 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'CONTAINER_BATCH_UPDATED',
     'CONTAINER_LOADING_ITEM_UPDATED',
     'CONTAINER_LOADING_ITEM_CREATED',
+    'PROXY_NODE_SYNCED',
+    'PROXY_NODE_ASSIGNED',
+    'PROXY_NODE_RELEASED',
   ])
 })
 
@@ -193,6 +196,17 @@ test('柜次相关事件使用中文名称且支持独立筛选', () => {
     ['CONTAINER_BATCH_UPDATED', '柜次已修改'],
     ['CONTAINER_LOADING_ITEM_UPDATED', '装柜明细已修改'],
     ['CONTAINER_LOADING_ITEM_CREATED', '装柜明细已创建'],
+  ] as const) {
+    assert.equal(formatAuditEvent(code), label)
+    assert.equal(buildAuditEventListQuery(1, 20, '', code, undefined).eventType, code)
+  }
+})
+
+test('静态节点事件使用中文名称且支持独立筛选', () => {
+  for (const [code, label] of [
+    ['PROXY_NODE_SYNCED', '静态节点已同步'],
+    ['PROXY_NODE_ASSIGNED', '静态节点已绑定'],
+    ['PROXY_NODE_RELEASED', '静态节点已解绑'],
   ] as const) {
     assert.equal(formatAuditEvent(code), label)
     assert.equal(buildAuditEventListQuery(1, 20, '', code, undefined).eventType, code)

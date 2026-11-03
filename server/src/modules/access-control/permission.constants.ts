@@ -202,6 +202,17 @@ export const SHIPMENT_STORAGE_PERMISSION_CODES = [
 ] as const
 
 /**
+ * IPFoxy 静态节点：运营只读本人绑定节点，采运侧负责同步和绑定关系。
+ *
+ * 两个权限都不进入 DataScope 判定：运营接口在 SQL 层固定按 assigned_user_id
+ * 过滤，管理接口直接要求 manage，避免「全量数据范围」角色意外看到他人凭证。
+ */
+export const PROXY_NODE_PERMISSION_CODES = [
+  'proxy-nodes:read',
+  'proxy-nodes:manage',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -262,6 +273,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...INVOICE_REQUEST_PERMISSION_CODES,
   ...WORKBENCH_ACCESS_PERMISSION_CODES,
   ...DATA_SCOPE_PERMISSION_CODES,
+  ...PROXY_NODE_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

@@ -5,6 +5,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { validateEnvironment } from './config/env.validation'
 import appConfig from './config/app.config'
 import authConfig from './config/auth.config'
+import ipfoxyConfig from './config/ipfoxy.config'
 import mediaConfig from './config/media.config'
 import { HTTP_MODULES } from './http.modules'
 import { PrismaModule } from './infrastructure/database/prisma.module'
@@ -19,7 +20,7 @@ import { PermissionGuard } from './modules/auth/guards/permission.guard'
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,
-      load: [appConfig, authConfig, mediaConfig],
+      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig],
       validate: validateEnvironment,
     }),
     PrismaModule,

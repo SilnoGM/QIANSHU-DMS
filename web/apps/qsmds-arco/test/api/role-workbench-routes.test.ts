@@ -98,16 +98,21 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
   assert.ok(leaves.every(leaf => leaf.children === undefined))
 })
 
-test('柜次、寄仓菜单使用独立读取权限，货件与审核菜单保留既有授权', () => {
+test('柜次、寄仓、静态节点菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
+  const proxyNodes = routes.find(route => route.name === 'qsPurchaseTransportProxyNodes')
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
   assert.equal(storage?.meta?.title, '寄仓管理')
   assert.match(String(storage?.component), /workbenches\/purchase-storage\/index\.vue/u)
+  assert.equal(proxyNodes?.meta?.auth, 'proxy-nodes:manage')
+  assert.equal(proxyNodes?.meta?.title, 'IPFoxy静态节点')
+  assert.equal(proxyNodes?.meta?.icon, 'qs-static-node')
+  assert.match(String(proxyNodes?.component), /workbenches\/proxy-nodes\/index\.vue/u)
   assert.equal(containers?.meta?.auth, 'container-batches:read')
   assert.equal(containers?.meta?.title, 'workbench.containers')
   assert.equal(containers?.meta?.icon, 'qs-container-management')

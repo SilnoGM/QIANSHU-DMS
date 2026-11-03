@@ -269,7 +269,7 @@ describe('dictionary management database schema', () => {
     // 产品、资金、销售订单、销售加购、采购订单、开票申请、提款申请与广告充值领域会在后续
     // append-only migration 扩展审计类型；字典测试锁定当前全量基线，同时只要求字典 migration
     // 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(134)
+    expect(auditEventTypes).toHaveLength(137)
     expect(auditEventTypes).toEqual(expect.arrayContaining([
       'SLH_BILL_IMPORTED',
       'SLH_RECONCILIATION_BATCH_CREATED',
