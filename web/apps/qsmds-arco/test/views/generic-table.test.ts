@@ -8,10 +8,12 @@ import {
   calculateColumnSummary,
   createActionColumn,
   createDefaultColumnSettings,
+  createSelectionColumn,
   DEFAULT_PAGE_SIZE,
   DEFAULT_PAGE_SIZE_OPTIONS,
   getContinuousRowNumber,
   QS_GENERIC_TABLE_ACTION_COLUMN_ID,
+  QS_GENERIC_TABLE_SELECTION_COLUMN_ID,
   resolveVisibleTableColumns,
 } from '../../src/components/business/QsGenericTable/logic'
 
@@ -640,4 +642,40 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
     amountCellSource,
     /weight="(?:medium|semibold)"|content-class="text-(?:xs|sm) tabular-nums"/u,
   )
+})
+
+test('可选选择列固定左侧，并用非空表头关闭 FaTable 自带的表头全选', () => {
+  const column = createSelectionColumn<GenericMetricRow>((row, index) => index === 1 || row.status === '已完成')
+
+  assert.equal(column.id, QS_GENERIC_TABLE_SELECTION_COLUMN_ID)
+  assert.equal(column.type, 'selection')
+  assert.equal(column.fixed, 'left')
+  assert.equal(column.enableHiding, false)
+  assert.equal(column.enableSorting, false)
+  assert.equal(column.width, 56)
+  assert.ok(column.header, '非空 header 用于抑制 FaTable 默认全选')
+  assert.equal(column.disabled?.(rows[0], 0), false)
+  assert.equal(column.disabled?.(rows[1], 1), true)
+})
+
+test('QsGenericTable 透出可选多选、禁用行、全量选择事件和清空选择', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /selectable\?: boolean/u)
+  assert.match(source, /selectionDisabled\?: \(row: TData, index: number\) => boolean/u)
+  assert.match(source, /selectionChange: \[rows: TData\[\], rowSelection: Record<string, boolean>\]/u)
+  assert.match(source, /createSelectionColumn(?:<TData>)?\(props\.selectionDisabled\)/u)
+  assert.match(source, /:selectable="selectable"/u)
+  assert.match(source, /:multiple="true"/u)
+  assert.match(source, /@selection-change="handleSelectionChange"/u)
+  assert.match(source, /function clearSelection\(\)/u)
+  assert.match(source, /function selectRows\(ids: readonly string\[\], limit = Number\.POSITIVE_INFINITY\)/u)
+  assert.match(source, /function deselectRows\(ids: readonly string\[\]\)/u)
+  assert.match(source, /table\.setRowSelection/u)
+  assert.match(source, /row\.getCanSelect\(\)/u)
+  assert.match(source, /delete next\[id\]/u)
+  assert.match(source, /defineExpose\(\{ clearSelection, selectRows, deselectRows \}\)/u)
+  assert.match(source, /ref="faTableRef"/u)
 })

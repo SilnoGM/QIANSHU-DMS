@@ -1,4 +1,4 @@
-import type { TableAlign, TableColumn, TableColumnFixed } from '@fantastic-admin/components'
+import type { TableAlign, TableColumn, TableColumnFixed, TableSelectionColumn } from '@fantastic-admin/components'
 import type { Component } from 'vue'
 
 export type { QsGenericTableGrouping } from './grouping'
@@ -8,6 +8,8 @@ export const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const
 export const QS_GENERIC_TABLE_ALL_FILTER_VALUE = '__qs_generic_table_all_filter__'
 export const QS_GENERIC_TABLE_ACTION_COLUMN_ID = '__qs_generic_table_actions__'
 export const QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID = '__qs_generic_table_row_number__'
+export const QS_GENERIC_TABLE_SELECTION_COLUMN_ID = '__qs_generic_table_selection__'
+export const QS_GENERIC_TABLE_SELECTION_COLUMN_WIDTH = 56
 
 export type QsGenericTableFilterValue = number | string | undefined
 export type QsGenericTableSummaryType = 'average' | 'count' | 'sum'
@@ -78,6 +80,28 @@ export function createActionColumn<TData extends object>(
     maxWidth: config.maxWidth,
     minWidth: config.minWidth,
     width: config.width ?? 160,
+  }
+}
+
+/**
+ * 选择列使用非空 header 关闭 FaTable 自带的“全选当前页”。
+ * 批量审核有 20 单上限，表头全选无法可靠截断剩余名额，逐行勾选更可控；
+ * 选择状态仍由 FaTable 内部维护，页面通过 selectionChange 的全量 rowSelection 做跨页累计。
+ */
+export function createSelectionColumn<TData extends object>(
+  disabled?: (row: TData, index: number) => boolean,
+): TableSelectionColumn<TData> {
+  return {
+    id: QS_GENERIC_TABLE_SELECTION_COLUMN_ID,
+    type: 'selection',
+    header: '选择',
+    enableHiding: false,
+    enableSorting: false,
+    fixed: 'left',
+    width: QS_GENERIC_TABLE_SELECTION_COLUMN_WIDTH,
+    minWidth: QS_GENERIC_TABLE_SELECTION_COLUMN_WIDTH,
+    maxWidth: QS_GENERIC_TABLE_SELECTION_COLUMN_WIDTH,
+    disabled,
   }
 }
 

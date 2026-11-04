@@ -25,6 +25,7 @@ import {
   calculateColumnSummary,
   createActionColumn,
   createDefaultColumnSettings,
+  createSelectionColumn,
   DEFAULT_PAGE_SIZE,
   formatSummaryValue,
   getColumnRawValue,
@@ -64,6 +65,9 @@ const props = withDefaults(defineProps<{
   rowClass?: TableProps<TData>['rowClass']
   searchable?: boolean
   searchPlaceholder?: string
+  /** 桌面表格可选多选；移动端卡片列表不渲染选择列，批量入口由页面自行隐藏。 */
+  selectable?: boolean
+  selectionDisabled?: (row: TData, index: number) => boolean
   showColumnSettings?: boolean
   showPagination?: boolean
   showRowNumber?: boolean
@@ -87,6 +91,8 @@ const props = withDefaults(defineProps<{
   rowKey: undefined,
   searchable: true,
   searchPlaceholder: '搜索当前业务数据',
+  selectable: false,
+  selectionDisabled: undefined,
   showColumnSettings: true,
   showPagination: true,
   showRowNumber: true,
@@ -106,6 +112,8 @@ const emit = defineEmits<{
   // 行整块可点开的页面（如顺联航账单列表）依赖该事件；不监听的页面行为不变。
   rowClick: [row: TData, index: number, event: MouseEvent]
   search: [keyword: string]
+  // rows 仅当前页；rowSelection 是 FaTable 的全量选择状态，页面据此做跨页累计。
+  selectionChange: [rows: TData[], rowSelection: Record<string, boolean>]
   sortingChange: [sorting: TableSortingState]
 }>()
 
@@ -189,6 +197,69 @@ const TABLE_SCROLL_EDGE_TOLERANCE = 1
 const actionCellSlotName = `cell-${QS_GENERIC_TABLE_ACTION_COLUMN_ID}`
 const isNarrow = useMediaQuery('(max-width: 767px)')
 const desktopTableRoot = ref<HTMLElement>()
+const faTableRef = ref<{
+  table?: {
+    getRow?: (id: string) => { getCanSelect: () => boolean } | undefined
+    resetRowSelection?: () => void
+    setRowSelection?: (updater: (previous: Record<string, boolean>) => Record<string, boolean>) => void
+  }
+} | null>(null)
+
+function handleSelectionChange(rows: TData[], rowSelection: Record<string, boolean>) {
+  emit('selectionChange', rows, rowSelection)
+}
+
+/** FaTable 的选择状态在分页数据切换时不会自动清空；切页签/搜索后由页面显式清空。 */
+function clearSelection() {
+  faTableRef.value?.table?.resetRowSelection?.()
+  emit('selectionChange', [], {})
+}
+
+/** 程序化补选指定行，按 limit 与表格全量选择状态共同截断，避免跨页或陈旧 ID 突破上限。 */
+function selectRows(ids: readonly string[], limit = Number.POSITIVE_INFINITY) {
+  const table = faTableRef.value?.table
+  if (!props.selectable || table?.setRowSelection === undefined || ids.length === 0) {
+    return
+  }
+  table.setRowSelection((previous) => {
+    const next = { ...previous }
+    let selectedCount = Object.values(next).filter(Boolean).length
+    if (selectedCount >= limit) {
+      return next
+    }
+    for (const id of ids) {
+      if (selectedCount >= limit) {
+        break
+      }
+      if (next[id]) {
+        continue
+      }
+      const row = table.getRow === undefined ? undefined : table.getRow(id)
+      if (row !== undefined && row.getCanSelect()) {
+        next[id] = true
+        selectedCount += 1
+      }
+    }
+    return next
+  })
+}
+
+/** 取消指定行的勾选，与 selectRows 对称；只移除传入 ID，保留其他页选择。 */
+function deselectRows(ids: readonly string[]) {
+  const table = faTableRef.value?.table
+  if (!props.selectable || table?.setRowSelection === undefined || ids.length === 0) {
+    return
+  }
+  table.setRowSelection((previous) => {
+    const next = { ...previous }
+    for (const id of ids) {
+      delete next[id]
+    }
+    return next
+  })
+}
+
+defineExpose({ clearSelection, selectRows, deselectRows })
 const hasLeftTableOverflow = ref(false)
 const hasRightTableOverflow = ref(false)
 const searchDraft = ref(search.value)
@@ -262,6 +333,7 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
   }
 
   return [
+    ...(props.selectable ? [createSelectionColumn<TData>(props.selectionDisabled)] : []),
     ...(props.showRowNumber && !props.grouping ? [rowNumberColumn] : []),
     ...visibleBusinessColumns.value.map(column => ({
       ...column,
@@ -689,11 +761,14 @@ watch([tableColumns, isNarrow], () => {
       @scroll.capture="handleTableScroll"
     >
       <FaTable
+        ref="faTableRef"
         :border="border"
         :columns="tableColumns"
         :data="data"
         :row-key="rowKey"
         :row-class="rowClass"
+        :selectable="selectable"
+        :multiple="true"
         :tree="Boolean(grouping)"
         :group-row="grouping ? isGroupRow : undefined"
         :get-sub-rows="grouping ? groupedSubRows : undefined"
@@ -706,6 +781,7 @@ watch([tableColumns, isNarrow], () => {
         table-root-class="overflow-x-auto"
         :class="loading && data.length ? 'pointer-events-none opacity-60' : undefined"
         @sorting-change="handleSortingChange"
+        @selection-change="handleSelectionChange"
         @expanded-change="updateTableExpanded"
         @row-click="(row, index, event) => emit('rowClick', row, index, event)"
       >
