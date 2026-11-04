@@ -22,6 +22,7 @@ import {
   reconcilePurchaseBatchSelection,
   resolvePurchaseBatchActions,
   resolvePurchaseBatchPageSelection,
+  resolvePurchaseBatchSelectedPageIds,
   summarizePurchaseBatch,
 } from '../../src/views/workbenches/purchase-reviews/batch-review.logic'
 
@@ -165,6 +166,19 @@ test('勾选本页计划按剩余名额补足，跳过已选与非待审核行',
   const short = resolvePurchaseBatchPageSelection(shortPage, new Map())
   assert.equal(short.count, 2)
   assert.deepEqual(short.ids, ['x', 'y'])
+})
+
+test('取消勾选本页只返回当前页已选订单，保留其他页选择', () => {
+  const page = [order('a'), order('b'), order('c')]
+  const selected = new Map([
+    ['a', order('a')],
+    ['c', order('c', { orderStatus: 'CANCELLED' })],
+    ['other-page', order('other-page')],
+  ])
+
+  assert.deepEqual(resolvePurchaseBatchSelectedPageIds(page, selected), ['a', 'c'])
+  assert.deepEqual(resolvePurchaseBatchSelectedPageIds(page, new Map()), [])
+  assert.deepEqual(resolvePurchaseBatchSelectedPageIds([], selected), [])
 })
 
 test('批量状态汇总区分生成失败、审核失败、已审核和失效', () => {

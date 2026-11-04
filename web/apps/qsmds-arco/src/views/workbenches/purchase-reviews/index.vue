@@ -21,7 +21,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
 import PurchaseAmountRevisionModal from './amount-revision-modal.vue'
-import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection, resolvePurchaseBatchPageSelection } from './batch-review.logic'
+import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection, resolvePurchaseBatchPageSelection, resolvePurchaseBatchSelectedPageIds } from './batch-review.logic'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 import PurchaseBatchReviewModal from './purchase-batch-review-modal.vue'
@@ -50,6 +50,7 @@ const batchReviewVisible = ref(false)
 const selectedOrders = shallowRef<ReadonlyMap<string, PurchaseOrderListItemDto>>(new Map())
 const tableRef = ref<{
   clearSelection: () => void
+  deselectRows: (ids: readonly string[]) => void
   selectRows: (ids: readonly string[], limit?: number) => void
 } | null>(null)
 const selectedCount = computed(() => selectedOrders.value.size)
@@ -62,6 +63,9 @@ const batchSelectionDisabled = computed(() => (row: PurchaseOrderListItemDto) =>
 const pageSelectionPlan = computed(() =>
   resolvePurchaseBatchPageSelection(items.value, selectedOrders.value))
 const pageSelectableCount = computed(() => pageSelectionPlan.value.count)
+const pageSelectedIds = computed(() =>
+  resolvePurchaseBatchSelectedPageIds(items.value, selectedOrders.value))
+const pageSelectedCount = computed(() => pageSelectedIds.value.length)
 const cancellationVisible = ref(false)
 const cancellationId = ref<string | null>(null)
 const amountRevisionVisible = ref(false)
@@ -175,6 +179,12 @@ function selectCurrentPage(): void {
     return
   }
   tableRef.value?.selectRows(pageSelectionPlan.value.ids, PURCHASE_BATCH_REVIEW_LIMIT)
+}
+function deselectCurrentPage(): void {
+  if (!canBatchReview.value || loading.value || pageSelectedCount.value === 0) {
+    return
+  }
+  tableRef.value?.deselectRows(pageSelectedIds.value)
 }
 function handleSelectionChange(
   _rows: PurchaseOrderListItemDto[],
@@ -370,7 +380,7 @@ onBeforeUnmount(() => {
         @search="search" @selection-change="handleSelectionChange" @pagination-change="load" @retry="refresh"
       >
         <template #query-leading>
-          <span v-if="canBatchReview" class="hidden md:inline-flex">
+          <span v-if="canBatchReview" class="gap-2 hidden md:inline-flex">
             <FaButton
               type="button"
               variant="outline"
@@ -383,6 +393,20 @@ onBeforeUnmount(() => {
             >
               <FaIcon name="i-lucide:list-checks" aria-hidden="true" />
               {{ t('purchaseReview.batch.selectPage', { count: pageSelectableCount }) }}
+            </FaButton>
+            <FaButton
+              v-if="pageSelectedCount > 0"
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-testid="purchase-batch-deselect-page"
+              class="min-h-11 sm:min-h-9"
+              :disabled="loading"
+              :title="t('purchaseReview.batch.deselectPageHint')"
+              @click="deselectCurrentPage"
+            >
+              <FaIcon name="i-lucide:x" aria-hidden="true" />
+              {{ t('purchaseReview.batch.deselectPage', { count: pageSelectedCount }) }}
             </FaButton>
           </span>
         </template>

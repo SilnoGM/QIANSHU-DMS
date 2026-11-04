@@ -21,6 +21,19 @@ export interface PurchaseBatchPageSelectionPlan {
   readonly remaining: number
 }
 
+export function resolvePurchaseBatchSelectedPageIds(
+  pageOrders: readonly PurchaseOrderListItemDto[],
+  selected: PurchaseBatchSelection,
+): readonly string[] {
+  const ids: string[] = []
+  for (const order of pageOrders) {
+    if (selected.has(order.id)) {
+      ids.push(order.id)
+    }
+  }
+  return ids
+}
+
 /** 勾选本页只补足到全局上限，跳过已选和非待审核行；页大小超过 20 时只取前 N 条。 */
 export function resolvePurchaseBatchPageSelection(
   pageOrders: readonly PurchaseOrderListItemDto[],

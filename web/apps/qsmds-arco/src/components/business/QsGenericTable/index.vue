@@ -234,7 +234,7 @@ function selectRows(ids: readonly string[], limit = Number.POSITIVE_INFINITY) {
       if (next[id]) {
         continue
       }
-      const row = table.getRow?.(id)
+      const row = table.getRow === undefined ? undefined : table.getRow(id)
       if (row !== undefined && row.getCanSelect()) {
         next[id] = true
         selectedCount += 1
@@ -244,7 +244,22 @@ function selectRows(ids: readonly string[], limit = Number.POSITIVE_INFINITY) {
   })
 }
 
-defineExpose({ clearSelection, selectRows })
+/** 取消指定行的勾选，与 selectRows 对称；只移除传入 ID，保留其他页选择。 */
+function deselectRows(ids: readonly string[]) {
+  const table = faTableRef.value?.table
+  if (!props.selectable || table?.setRowSelection === undefined || ids.length === 0) {
+    return
+  }
+  table.setRowSelection((previous) => {
+    const next = { ...previous }
+    for (const id of ids) {
+      delete next[id]
+    }
+    return next
+  })
+}
+
+defineExpose({ clearSelection, selectRows, deselectRows })
 const hasLeftTableOverflow = ref(false)
 const hasRightTableOverflow = ref(false)
 const searchDraft = ref(search.value)
