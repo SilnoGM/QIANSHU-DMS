@@ -107,7 +107,6 @@ function handlePreviewError() {
           <QsCopyableText :label="t('purchaseReview.orderNo')" :text="item.order.orderNo" />
         </div>
         <div class="qs-type-meta text-muted-foreground flex flex-wrap gap-x-2 gap-y-1 min-w-0 items-center">
-          <span class="truncate">{{ item.order.supplier.label }}</span>
           <AmountDisplay :value="amount" currency="CNY" :currencies="currencies" />
         </div>
       </div>
