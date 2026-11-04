@@ -119,6 +119,12 @@ test('审核工作台提供单次最多 20 单的批量入口、跨页选择与�
   assert.match(source, /openBatchReview/u)
   assert.match(source, /@closed="handleBatchClosed"/u)
   assert.match(source, /purchaseReview\.batch\.action/u)
+  assert.match(source, /#query-leading/u)
+  assert.match(source, /resolvePurchaseBatchPageSelection/u)
+  assert.match(source, /pageSelectableCount/u)
+  assert.match(source, /selectCurrentPage/u)
+  assert.match(source, /selectRows/u)
+  assert.match(source, /purchaseReview\.batch\.selectPage/u)
 })
 
 test('批量审核弹窗展示订单号与图片槽位，逐单生成并支持重试/重新生成/确认', async () => {

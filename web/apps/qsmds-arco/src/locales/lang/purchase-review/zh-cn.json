@@ -140,6 +140,8 @@
     "batch": {
       "action": "批量审核",
       "clearSelection": "清空选择",
+      "selectPage": "勾选本页（{count}）",
+      "selectPageHint": "保留已选，最多补足 20 单",
       "selected": "已选 {count}/{limit} 单",
       "title": "批量审核采购单",
       "description": "已选 {count} 单（单次最多 {limit} 单）；生成图片会派发唛头，关闭后仍保留。",

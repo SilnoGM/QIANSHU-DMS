@@ -15,6 +15,35 @@ export interface PurchaseBatchSelectionReconcileResult {
   readonly selected: PurchaseBatchSelection
 }
 
+export interface PurchaseBatchPageSelectionPlan {
+  readonly count: number
+  readonly ids: readonly string[]
+  readonly remaining: number
+}
+
+/** 勾选本页只补足到全局上限，跳过已选和非待审核行；页大小超过 20 时只取前 N 条。 */
+export function resolvePurchaseBatchPageSelection(
+  pageOrders: readonly PurchaseOrderListItemDto[],
+  selected: PurchaseBatchSelection,
+  limit = PURCHASE_BATCH_REVIEW_LIMIT,
+): PurchaseBatchPageSelectionPlan {
+  const remaining = Math.max(0, limit - selected.size)
+  if (remaining === 0) {
+    return { count: 0, ids: [], remaining: 0 }
+  }
+  const ids: string[] = []
+  for (const order of pageOrders) {
+    if (ids.length >= remaining) {
+      break
+    }
+    if (order.orderStatus !== 'PENDING_REVIEW' || selected.has(order.id)) {
+      continue
+    }
+    ids.push(order.id)
+  }
+  return { count: ids.length, ids, remaining }
+}
+
 export type PurchaseBatchItemStatus
   = | 'idle'
     | 'generating'

@@ -21,7 +21,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
 import PurchaseAmountRevisionModal from './amount-revision-modal.vue'
-import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection } from './batch-review.logic'
+import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection, resolvePurchaseBatchPageSelection } from './batch-review.logic'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
 import PurchaseBatchReviewModal from './purchase-batch-review-modal.vue'
@@ -48,7 +48,10 @@ const reviewVisible = ref(false)
 const reviewId = ref<string | null>(null)
 const batchReviewVisible = ref(false)
 const selectedOrders = shallowRef<ReadonlyMap<string, PurchaseOrderListItemDto>>(new Map())
-const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const tableRef = ref<{
+  clearSelection: () => void
+  selectRows: (ids: readonly string[], limit?: number) => void
+} | null>(null)
 const selectedCount = computed(() => selectedOrders.value.size)
 const canBatchReview = computed(() => canReview.value && status.value === 'PENDING_REVIEW')
 const batchReviewOrders = computed(() => [...selectedOrders.value.values()]
@@ -56,6 +59,9 @@ const batchReviewOrders = computed(() => [...selectedOrders.value.values()]
   .slice(0, PURCHASE_BATCH_REVIEW_LIMIT))
 const batchSelectionDisabled = computed(() => (row: PurchaseOrderListItemDto) =>
   isPurchaseBatchSelectionDisabled(selectedOrders.value, row))
+const pageSelectionPlan = computed(() =>
+  resolvePurchaseBatchPageSelection(items.value, selectedOrders.value))
+const pageSelectableCount = computed(() => pageSelectionPlan.value.count)
 const cancellationVisible = ref(false)
 const cancellationId = ref<string | null>(null)
 const amountRevisionVisible = ref(false)
@@ -163,6 +169,12 @@ function refresh(): void {
 function clearBatchSelection(): void {
   selectedOrders.value = new Map()
   tableRef.value?.clearSelection()
+}
+function selectCurrentPage(): void {
+  if (!canBatchReview.value || loading.value || pageSelectableCount.value === 0) {
+    return
+  }
+  tableRef.value?.selectRows(pageSelectionPlan.value.ids, PURCHASE_BATCH_REVIEW_LIMIT)
 }
 function handleSelectionChange(
   _rows: PurchaseOrderListItemDto[],
@@ -357,6 +369,23 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]" :action-column="{ fixed: 'right', minWidth: actionColumnWidth, width: actionColumnWidth }"
         @search="search" @selection-change="handleSelectionChange" @pagination-change="load" @retry="refresh"
       >
+        <template #query-leading>
+          <span v-if="canBatchReview" class="hidden md:inline-flex">
+            <FaButton
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="purchase-batch-select-page"
+              class="min-h-11 sm:min-h-9"
+              :disabled="loading || pageSelectableCount === 0"
+              :title="t('purchaseReview.batch.selectPageHint')"
+              @click="selectCurrentPage"
+            >
+              <FaIcon name="i-lucide:list-checks" aria-hidden="true" />
+              {{ t('purchaseReview.batch.selectPage', { count: pageSelectableCount }) }}
+            </FaButton>
+          </span>
+        </template>
         <template #cell-orderNo="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="qs-type-data-emphasis">

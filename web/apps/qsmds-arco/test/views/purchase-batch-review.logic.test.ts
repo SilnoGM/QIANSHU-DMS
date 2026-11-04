@@ -21,6 +21,7 @@ import {
   PURCHASE_BATCH_REVIEW_LIMIT,
   reconcilePurchaseBatchSelection,
   resolvePurchaseBatchActions,
+  resolvePurchaseBatchPageSelection,
   summarizePurchaseBatch,
 } from '../../src/views/workbenches/purchase-reviews/batch-review.logic'
 
@@ -121,6 +122,49 @@ test('选择同步跨页保留快照、已选失效项仍可取消，并在超�
   )
   assert.equal(overflow.selected.size, 20)
   assert.equal(overflow.limited, true)
+})
+
+test('勾选本页计划按剩余名额补足，跳过已选与非待审核行', () => {
+  const page = [
+    order('a'),
+    order('b'),
+    order('cancelled', { orderStatus: 'CANCELLED' }),
+    ...Array.from({ length: 25 }, (_, index) => order(`p-${index}`)),
+  ]
+
+  const empty = resolvePurchaseBatchPageSelection(page, new Map())
+  assert.equal(empty.count, 20)
+  assert.equal(empty.remaining, 20)
+  assert.deepEqual(empty.ids.slice(0, 2), ['a', 'b'])
+  assert.equal(empty.ids.includes('cancelled'), false)
+  assert.equal(empty.ids.length, 20)
+
+  const selectedFifteen = new Map(
+    Array.from({ length: 15 }, (_, index) => {
+      const current = order(`selected-${index}`)
+      return [current.id, current] as const
+    }),
+  )
+  const fillFive = resolvePurchaseBatchPageSelection(page, selectedFifteen)
+  assert.equal(fillFive.count, 5)
+  assert.equal(fillFive.remaining, 5)
+  assert.deepEqual(fillFive.ids, ['a', 'b', 'p-0', 'p-1', 'p-2'])
+
+  const selectedTwenty = new Map(
+    Array.from({ length: 20 }, (_, index) => {
+      const current = order(`full-${index}`)
+      return [current.id, current] as const
+    }),
+  )
+  const full = resolvePurchaseBatchPageSelection(page, selectedTwenty)
+  assert.equal(full.count, 0)
+  assert.equal(full.remaining, 0)
+  assert.deepEqual(full.ids, [])
+
+  const shortPage = [order('x'), order('y')]
+  const short = resolvePurchaseBatchPageSelection(shortPage, new Map())
+  assert.equal(short.count, 2)
+  assert.deepEqual(short.ids, ['x', 'y'])
 })
 
 test('批量状态汇总区分生成失败、审核失败、已审核和失效', () => {

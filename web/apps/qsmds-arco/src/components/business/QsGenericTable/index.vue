@@ -197,7 +197,13 @@ const TABLE_SCROLL_EDGE_TOLERANCE = 1
 const actionCellSlotName = `cell-${QS_GENERIC_TABLE_ACTION_COLUMN_ID}`
 const isNarrow = useMediaQuery('(max-width: 767px)')
 const desktopTableRoot = ref<HTMLElement>()
-const faTableRef = ref<{ table?: { resetRowSelection?: () => void } } | null>(null)
+const faTableRef = ref<{
+  table?: {
+    getRow?: (id: string) => { getCanSelect: () => boolean } | undefined
+    resetRowSelection?: () => void
+    setRowSelection?: (updater: (previous: Record<string, boolean>) => Record<string, boolean>) => void
+  }
+} | null>(null)
 
 function handleSelectionChange(rows: TData[], rowSelection: Record<string, boolean>) {
   emit('selectionChange', rows, rowSelection)
@@ -209,7 +215,36 @@ function clearSelection() {
   emit('selectionChange', [], {})
 }
 
-defineExpose({ clearSelection })
+/** 程序化补选指定行，按 limit 与表格全量选择状态共同截断，避免跨页或陈旧 ID 突破上限。 */
+function selectRows(ids: readonly string[], limit = Number.POSITIVE_INFINITY) {
+  const table = faTableRef.value?.table
+  if (!props.selectable || table?.setRowSelection === undefined || ids.length === 0) {
+    return
+  }
+  table.setRowSelection((previous) => {
+    const next = { ...previous }
+    let selectedCount = Object.values(next).filter(Boolean).length
+    if (selectedCount >= limit) {
+      return next
+    }
+    for (const id of ids) {
+      if (selectedCount >= limit) {
+        break
+      }
+      if (next[id]) {
+        continue
+      }
+      const row = table.getRow?.(id)
+      if (row !== undefined && row.getCanSelect()) {
+        next[id] = true
+        selectedCount += 1
+      }
+    }
+    return next
+  })
+}
+
+defineExpose({ clearSelection, selectRows })
 const hasLeftTableOverflow = ref(false)
 const hasRightTableOverflow = ref(false)
 const searchDraft = ref(search.value)
