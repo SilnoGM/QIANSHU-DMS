@@ -87,7 +87,7 @@ const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
   { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', width: 132, minWidth: 132, cellClass: 'qs-type-data' },
   { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => warehouseLabel(row.warehouseValue), width: 275, minWidth: 220 },
   { id: 'quantities', title: t('containerPage.quantityInfo'), accessorFn: row => quantities(row).map(item => item.value).join(' '), width: 150, minWidth: 150 },
-  { id: 'bindingStats', title: t('containerPage.bindingStats'), accessorFn: row => bindingStatsText(row), width: 168, minWidth: 160 },
+  { id: 'bindingStats', title: t('containerPage.bindingStats'), accessorFn: row => bindingStatsText(row), width: 140, minWidth: 132 },
   { id: 'totals', title: t('containerPage.loadSummary'), accessorFn: row => totals(row).map(item => item.value).join(' '), width: 190, minWidth: 190 },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])

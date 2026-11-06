@@ -50,6 +50,9 @@ test('状态文案由标签渲染，标签与行数共用同一状态配色', as
   assert.match(source, /<FaTag/u)
   assert.match(source, /:class="stats\.tagClass"/u)
   assert.match(source, /:class="stats\.toneClass"/u)
+  // 行数与标签分成两行展示，且行数加粗。
+  assert.match(source, /flex-col/u)
+  assert.match(source, /qs-type-data font-semibold/u)
 })
 
 test('异常行数收敛到可展示范围，不出现已绑定超过总行数', () => {
