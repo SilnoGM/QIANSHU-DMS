@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   createMachineViewingDraft,
   daysInMonth,
+  formatMachineViewingFullTime,
   formatMachineViewingTime,
 
   previewMachineViewingTime,
@@ -45,6 +46,12 @@ function translate(key: string, params?: Record<string, string | number>): strin
   }
   if (key === 'machineViewing.time.withoutHour') {
     return `${params?.date}日 ${params?.period}`
+  }
+  if (key === 'machineViewing.time.withHourFull') {
+    return `${params?.date} ${params?.period} ${params?.hour}点`
+  }
+  if (key === 'machineViewing.time.withoutHourFull') {
+    return `${params?.date} ${params?.period}`
   }
   return key
 }
@@ -148,4 +155,15 @@ test('展示格式固定为 M/D日 上午/下午 [H点]', () => {
   )
   assert.equal(previewMachineViewingTime(translate, draft()), '11/20日 下午 3点')
   assert.equal(previewMachineViewingTime(translate, draft({ month: null })), '')
+})
+
+test('详情抽屉展示含年份的完整日期', () => {
+  assert.equal(
+    formatMachineViewingFullTime(translate, { appointmentDate: '2027-01-05', period: 'AM', hour: null }),
+    '2027-01-05 上午',
+  )
+  assert.equal(
+    formatMachineViewingFullTime(translate, { appointmentDate: '2026-11-06', period: 'PM', hour: 3 }),
+    '2026-11-06 下午 3点',
+  )
 })

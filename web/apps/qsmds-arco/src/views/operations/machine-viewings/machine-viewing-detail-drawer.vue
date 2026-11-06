@@ -3,7 +3,7 @@ import type { MachineViewingDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
-import { formatMachineViewingTime } from '@/utils/machine-viewing-schedule'
+import { formatMachineViewingFullTime } from '@/utils/machine-viewing-schedule'
 import { machineViewingStatusMeta } from '@/utils/machine-viewing-status'
 import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
 
@@ -59,7 +59,7 @@ function close(value = false): void {
               {{ t('machineViewing.column.appointmentTime') }}
             </dt>
             <dd class="qs-type-data mt-1">
-              {{ formatMachineViewingTime(t, record) }}
+              {{ formatMachineViewingFullTime(t, record) }}
             </dd>
           </div>
           <div>

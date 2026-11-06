@@ -60,7 +60,9 @@
     },
     "time": {
       "withHour": "{date} {period} {hour}:00",
-      "withoutHour": "{date} {period}"
+      "withoutHour": "{date} {period}",
+      "withHourFull": "{date} {period} {hour}:00",
+      "withoutHourFull": "{date} {period}"
     },
     "form": {
       "title": "Book a viewing",

@@ -172,7 +172,7 @@ export function toMachineViewingCreatePayload(draft: MachineViewingDraft): Creat
   }
 }
 
-/** 展示格式固定为「M/D日 上午/下午 [H点]」，年份只在数据里，不出现在界面。 */
+/** 列表展示格式固定为「M/D日 上午/下午 [H点]」，年份只在数据里，不出现在列表。 */
 export function formatMachineViewingTime(
   translate: Translate,
   input: Pick<MachineViewingDto, 'appointmentDate' | 'period' | 'hour'>,
@@ -184,6 +184,26 @@ export function formatMachineViewingTime(
   return translate(
     input.hour === null ? 'machineViewing.time.withoutHour' : 'machineViewing.time.withHour',
     { date: `${month}/${day}`, period: translate(`machineViewing.period.${input.period}`), hour: input.hour ?? '' },
+  )
+}
+
+/**
+ * 详情抽屉的展示格式：「YYYY-MM-DD 上午/下午 [H点]」。
+ *
+ * 年份推断对用户不可见，跨年预约或补录历史日期时必须在详情里能看到实际落库年份，
+ * 否则「1/5日」这类文案无法判断是今年还是明年。
+ */
+export function formatMachineViewingFullTime(
+  translate: Translate,
+  input: Pick<MachineViewingDto, 'appointmentDate' | 'period' | 'hour'>,
+): string {
+  const [year, month, day] = input.appointmentDate.split('-').map(Number)
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || !Number.isSafeInteger(day)) {
+    return input.appointmentDate
+  }
+  return translate(
+    input.hour === null ? 'machineViewing.time.withoutHourFull' : 'machineViewing.time.withHourFull',
+    { date: input.appointmentDate, period: translate(`machineViewing.period.${input.period}`), hour: input.hour ?? '' },
   )
 }
 

@@ -60,7 +60,9 @@
     },
     "time": {
       "withHour": "{date}日 {period} {hour}点",
-      "withoutHour": "{date}日 {period}"
+      "withoutHour": "{date}日 {period}",
+      "withHourFull": "{date} {period} {hour}点",
+      "withoutHourFull": "{date} {period}"
     },
     "form": {
       "title": "预约看机",

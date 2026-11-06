@@ -84,6 +84,7 @@ test('详情抽屉完整展示反馈正文且只读', () => {
     const source = readFileSync(url, 'utf8')
     assert.match(source, /QsGenericDrawer/u, label)
     assert.match(source, /machineViewing\.detail\.feedback/u, `${label}：缺少反馈信息分区`)
+    assert.match(source, /formatMachineViewingFullTime/u, `${label}：详情抽屉必须显示含年份的完整日期`)
     assert.match(source, /whitespace-pre-wrap break-words/u, `${label}：反馈正文必须保留换行`)
     assert.doesNotMatch(source, /FaTextarea|FaInput|FaForm\b/u, `${label}：详情抽屉不应包含输入控件`)
   }
