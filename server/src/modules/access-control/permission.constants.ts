@@ -243,6 +243,30 @@ export const MACHINE_VIEWING_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 通知中心：共享的模板/策略/记录权限，以及千树小助理渠道专属权限。
+ *
+ * 全部为 system_only；阶段 1 只启用千树小助理相关权限，站内通知接口只要求
+ * 登录，不新增权限码。回调引入后再增加 assistant-callback:read。
+ */
+export const NOTIFICATION_PERMISSION_CODES = [
+  'notification-template:read',
+  'notification-template:update',
+  'notification-policy:read',
+  'notification-policy:update',
+  'notification-record:read',
+  'notification-record:manage',
+  'assistant-channel:read',
+  'assistant-channel:update',
+  'assistant-account:read',
+  'assistant-account:operate',
+  'assistant-binding:read',
+  'assistant-binding:manage',
+  'assistant-target:read',
+  'assistant-target:manage',
+  'assistant-delivery:resend',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -306,6 +330,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PROXY_NODE_PERMISSION_CODES,
   ...ADVERTISING_RECHARGE_PERMISSION_CODES,
   ...MACHINE_VIEWING_PERMISSION_CODES,
+  ...NOTIFICATION_PERMISSION_CODES,
   ...NETWORK_NODES_PERMISSION_CODES,
 ] as const
 

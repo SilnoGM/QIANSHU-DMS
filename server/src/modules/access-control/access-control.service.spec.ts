@@ -141,9 +141,24 @@ describe('permission constants', () => {
       'advertising-recharges:pay',
       'machine-viewings:read',
       'machine-viewings:create',
+      'notification-template:read',
+      'notification-template:update',
+      'notification-policy:read',
+      'notification-policy:update',
+      'notification-record:read',
+      'notification-record:manage',
+      'assistant-channel:read',
+      'assistant-channel:update',
+      'assistant-account:read',
+      'assistant-account:operate',
+      'assistant-binding:read',
+      'assistant-binding:manage',
+      'assistant-target:read',
+      'assistant-target:manage',
+      'assistant-delivery:resend',
       'network-nodes:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 111)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 126)
   })
 })
 

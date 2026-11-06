@@ -1,0 +1,393 @@
+import { randomInt, randomUUID } from 'node:crypto'
+import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+
+import type { AssistantConfiguration } from '../../config/assistant.config'
+import { Prisma } from '../../generated/prisma/client'
+import { PrismaService } from '../../infrastructure/database/prisma.service'
+import {
+  ASSISTANT_TRANSPORT,
+  type AssistantTransport,
+  type AssistantTransportResult,
+} from './notification.types'
+
+const LEASE_ID = 'assistant-dispatch'
+const LEASE_TTL_MS = 30_000
+const MAX_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] as const
+const OFFLINE_RETRY_DELAYS_MS = [30_000, 120_000, 300_000] as const
+const RATE_LIMIT_RETRY_MS = 60_000
+
+interface ClaimedDelivery {
+  readonly id: string
+  readonly notification_id: string
+  readonly recipient_user_id: string | null
+  readonly target_id: string | null
+  readonly account_id: string | null
+  readonly attempt_count: number
+  readonly rendered_content: string
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, ms)
+    timer.unref()
+  })
+}
+
+/**
+ * 千树小助理派发器。
+ *
+ * 进程内循环 + 数据库租约，保证同一时刻只有一个实例领取交付。只做领取、发送、
+ * 状态更新与退避；站内通知不需要 worker。
+ */
+@Injectable()
+export class AssistantDispatchService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(AssistantDispatchService.name)
+  private readonly ownerId = randomUUID()
+  private running = false
+  private lastSentAt = 0
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+    @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport,
+  ) {}
+
+  onApplicationBootstrap(): void {
+    const app = this.configService.get<{ readonly nodeEnv?: string }>('app')
+    if (app?.nodeEnv === 'test') {
+      return
+    }
+    const config = this.configService.get<AssistantConfiguration>('assistant')
+    if (config === undefined || config.token === null || !config.workerEnabled) {
+      this.logger.log('assistant worker disabled: token or worker switch missing')
+      return
+    }
+    this.running = true
+    void this.loop(config)
+  }
+
+  onModuleDestroy(): void {
+    this.running = false
+  }
+
+  private async loop(config: AssistantConfiguration): Promise<void> {
+    while (this.running) {
+      try {
+        await this.dispatchOnce(config.batchSize)
+      }
+      catch (error) {
+        this.logger.warn(`assistant dispatch cycle failed: ${error instanceof Error ? error.name : 'unknown'}`)
+      }
+      await sleep(config.pollMs)
+    }
+  }
+
+  /** 公开给测试直接触发一轮，不依赖真实定时器。 */
+  async dispatchOnce(batchSize: number): Promise<void> {
+    if (!await this.acquireLease()) {
+      return
+    }
+    const setting = await this.prisma.notificationChannelSettings.findUnique({
+      where: { channel: 'ASSISTANT' },
+      select: { enabled: true },
+    })
+    if (setting === null || !setting.enabled) {
+      return
+    }
+
+    await this.expireOverdueDeliveries()
+    const deliveries = await this.claimDeliveries(batchSize)
+    for (const delivery of deliveries) {
+      if (!await this.acquireLease()) {
+        this.logger.warn('assistant dispatch lease lost during batch')
+        break
+      }
+      await this.dispatchDelivery(delivery)
+    }
+  }
+
+  private async acquireLease(): Promise<boolean> {
+    const expiresAt = new Date(Date.now() + LEASE_TTL_MS)
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      UPDATE "assistant_dispatch_leases"
+      SET "owner_id" = ${this.ownerId}::uuid,
+          "expires_at" = ${expiresAt},
+          "updated_at" = now()
+      WHERE "id" = ${LEASE_ID}
+        AND ("expires_at" IS NULL OR "expires_at" < now() OR "owner_id" = ${this.ownerId}::uuid)
+      RETURNING "id"
+    `)
+    return rows.length > 0
+  }
+
+  private async claimDeliveries(batchSize: number): Promise<ClaimedDelivery[]> {
+    return this.prisma.$queryRaw<ClaimedDelivery[]>(Prisma.sql`
+      UPDATE "assistant_deliveries" d
+      SET "status" = 'SENDING', "updated_at" = now()
+      WHERE d."id" IN (
+        SELECT d2."id"
+        FROM "assistant_deliveries" d2
+        JOIN "notifications" n ON n."id" = d2."notification_id"
+        WHERE d2."status" = 'PENDING'
+          AND d2."next_attempt_at" <= now()
+        ORDER BY n."priority" DESC, d2."created_at" ASC
+        FOR UPDATE OF d2 SKIP LOCKED
+        LIMIT ${batchSize}
+      )
+      RETURNING d."id",
+                d."notification_id",
+                d."recipient_user_id",
+                d."target_id",
+                d."account_id",
+                d."attempt_count",
+                d."rendered_content"
+    `)
+  }
+
+  private async dispatchDelivery(delivery: ClaimedDelivery): Promise<void> {
+    const notification = await this.prisma.notification.findUnique({
+      where: { id: delivery.notification_id },
+      select: { id: true, expiresAt: true },
+    })
+    if (notification === null) {
+      await this.markDelivery(delivery.id, 'CANCELLED', { failureCode: 'NOTIFICATION_MISSING', failureMessage: '通知已不存在' })
+      return
+    }
+    if (notification.expiresAt !== null && notification.expiresAt.getTime() <= Date.now()) {
+      await this.markDelivery(delivery.id, 'EXPIRED', { failureCode: 'EXPIRED', failureMessage: '通知已过期' })
+      await this.refreshNotificationStatus(notification.id)
+      return
+    }
+
+    const account = delivery.account_id === null
+      ? null
+      : await this.prisma.assistantAccount.findUnique({
+        where: { id: delivery.account_id },
+        select: { id: true, appId: true, enabled: true, status: true },
+      })
+    if (account === null || !account.enabled || account.status === 'DISABLED' || account.status === 'REQUIRES_LOGIN') {
+      await this.failDelivery(delivery, 'ACCOUNT_DISABLED', '公司号不可用', false)
+      await this.refreshNotificationStatus(notification.id)
+      return
+    }
+
+    let toWxid: string | null = null
+    let isGroup = false
+    if (delivery.recipient_user_id !== null) {
+      const binding = await this.prisma.assistantBinding.findFirst({
+        where: {
+          userId: delivery.recipient_user_id,
+          accountId: account.id,
+          status: 'ACTIVE',
+          verifiedAt: { not: null },
+        },
+        select: { wxid: true },
+      })
+      toWxid = binding?.wxid ?? null
+    }
+    else if (delivery.target_id !== null) {
+      const target = await this.prisma.assistantTarget.findUnique({
+        where: { id: delivery.target_id },
+        select: { chatroomId: true, enabled: true },
+      })
+      if (target?.enabled === true) {
+        toWxid = target.chatroomId
+        isGroup = true
+      }
+    }
+
+    if (toWxid === null) {
+      await this.markDelivery(delivery.id, 'SKIPPED', {
+        failureCode: delivery.recipient_user_id !== null ? 'NOT_BOUND' : 'TARGET_DISABLED',
+        failureMessage: delivery.recipient_user_id !== null ? '员工绑定已失效' : '群目标已停用',
+      })
+      await this.refreshNotificationStatus(notification.id)
+      return
+    }
+
+    await this.waitForRateLimit(isGroup)
+    this.lastSentAt = Date.now()
+    const result = await this.transport.sendText({
+      appId: account.appId,
+      toWxid,
+      content: delivery.rendered_content,
+    })
+    if (result.ok) {
+      await this.prisma.assistantDelivery.update({
+        where: { id: delivery.id },
+        data: {
+          status: 'ACCEPTED',
+          attemptCount: { increment: 1 },
+          acceptedAt: new Date(),
+          providerMsgId: result.msgId,
+          providerNewMsgId: result.newMsgId,
+          failureCode: null,
+          failureMessage: null,
+        },
+      })
+      await this.prisma.assistantAccount.update({
+        where: { id: account.id },
+        data: { status: 'ONLINE', lastOnlineAt: new Date(), lastErrorCode: null, lastErrorMessage: null },
+      })
+      await this.refreshNotificationStatus(notification.id)
+      return
+    }
+
+    await this.handleFailure(delivery, result, notification.expiresAt)
+    await this.refreshNotificationStatus(notification.id)
+  }
+
+  private async handleFailure(
+    delivery: ClaimedDelivery,
+    result: Extract<AssistantTransportResult, { ok: false }>,
+    expiresAt: Date | null,
+  ): Promise<void> {
+    const attempt = delivery.attempt_count + 1
+    const retryable = result.kind === 'TIMEOUT'
+      || result.kind === 'NETWORK'
+      || result.kind === 'RATE_LIMITED'
+      || result.kind === 'OFFLINE'
+    const delays = result.kind === 'OFFLINE' ? OFFLINE_RETRY_DELAYS_MS : RETRY_DELAYS_MS
+    const delay = result.kind === 'RATE_LIMITED' ? RATE_LIMIT_RETRY_MS : delays[Math.min(attempt - 1, delays.length - 1)] ?? 120_000
+    const nextAttemptAt = new Date(Date.now() + delay)
+    const expired = expiresAt !== null && nextAttemptAt.getTime() >= expiresAt.getTime()
+    const finalFailure = !retryable || attempt >= MAX_ATTEMPTS || expired
+
+    if (delivery.account_id !== null && result.kind === 'OFFLINE') {
+      await this.prisma.assistantAccount.update({
+        where: { id: delivery.account_id },
+        data: {
+          status: 'OFFLINE',
+          lastErrorCode: result.code,
+          lastErrorMessage: result.message.slice(0, 255),
+        },
+      }).catch(() => undefined)
+    }
+
+    await this.prisma.assistantDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: finalFailure ? (expired ? 'EXPIRED' : 'FAILED') : 'PENDING',
+        attemptCount: { increment: 1 },
+        nextAttemptAt: finalFailure ? undefined : nextAttemptAt,
+        failureCode: result.code,
+        failureMessage: result.message.slice(0, 255),
+        ...(finalFailure ? { acceptedAt: null } : {}),
+      },
+    })
+  }
+
+  private async failDelivery(
+    delivery: ClaimedDelivery,
+    code: string,
+    message: string,
+    retryable: boolean,
+  ): Promise<void> {
+    await this.prisma.assistantDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: retryable ? 'PENDING' : 'FAILED',
+        attemptCount: { increment: 1 },
+        failureCode: code,
+        failureMessage: message.slice(0, 255),
+        nextAttemptAt: retryable ? new Date(Date.now() + 30_000) : undefined,
+      },
+    })
+  }
+
+  private async markDelivery(
+    deliveryId: string,
+    status: 'SKIPPED' | 'EXPIRED' | 'CANCELLED',
+    failure: { readonly failureCode: string, readonly failureMessage: string },
+  ): Promise<void> {
+    await this.prisma.assistantDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status,
+        attemptCount: { increment: 1 },
+        failureCode: failure.failureCode,
+        failureMessage: failure.failureMessage.slice(0, 255),
+      },
+    })
+  }
+
+  private async refreshNotificationStatus(notificationId: string): Promise<void> {
+    const rows = await this.prisma.assistantDelivery.groupBy({
+      by: ['status'],
+      where: { notificationId },
+      _count: { _all: true },
+    })
+    const counts = new Map(rows.map(row => [row.status, row._count._all]))
+    const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)
+    const accepted = counts.get('ACCEPTED') ?? 0
+    const expired = counts.get('EXPIRED') ?? 0
+    const skipped = counts.get('SKIPPED') ?? 0
+    const total = accepted + expired + skipped + (counts.get('FAILED') ?? 0) + (counts.get('CANCELLED') ?? 0) + pending
+    if (total === 0) {
+      return
+    }
+
+    let status: 'PENDING' | 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'SKIPPED' | 'EXPIRED' | 'CANCELLED'
+    if (pending > 0) {
+      status = 'PENDING'
+    }
+    else if (accepted === total) {
+      status = 'COMPLETED'
+    }
+    else if (accepted > 0) {
+      status = 'PARTIAL'
+    }
+    else if (expired > 0) {
+      status = 'EXPIRED'
+    }
+    else if (skipped === total) {
+      status = 'SKIPPED'
+    }
+    else if (counts.get('CANCELLED') === total) {
+      status = 'CANCELLED'
+    }
+    else {
+      status = 'FAILED'
+    }
+
+    await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        status,
+        completedAt: status === 'PENDING' ? null : new Date(),
+      },
+    })
+  }
+
+  private async expireOverdueDeliveries(): Promise<void> {
+    const rows = await this.prisma.assistantDelivery.findMany({
+      where: {
+        status: 'PENDING',
+        notification: { expiresAt: { lte: new Date() } },
+      },
+      select: { id: true, notificationId: true },
+    })
+    if (rows.length === 0) {
+      return
+    }
+    await this.prisma.assistantDelivery.updateMany({
+      where: { id: { in: rows.map(row => row.id) } },
+      data: { status: 'EXPIRED', failureCode: 'EXPIRED', failureMessage: '通知已过期' },
+    })
+    for (const notificationId of new Set(rows.map(row => row.notificationId))) {
+      await this.refreshNotificationStatus(notificationId)
+    }
+  }
+
+  private async waitForRateLimit(isGroup: boolean): Promise<void> {
+    const minimumGap = isGroup
+      ? 2_000 + randomInt(0, 3_000)
+      : 1_000
+    const wait = Math.max(0, this.lastSentAt + minimumGap - Date.now())
+    if (wait > 0) {
+      await sleep(wait)
+    }
+  }
+}
