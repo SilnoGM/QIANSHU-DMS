@@ -18,6 +18,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
+import { SystemNotificationService } from '../notifications/system-notification.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import {
@@ -222,6 +224,7 @@ export class PurchaseOrderCommandService {
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
     private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -402,6 +405,38 @@ export class PurchaseOrderCommandService {
             numberedPartCount: partNumbers.length,
           },
         })
+        let customerName = '—'
+        if (command.salesOrderId !== null) {
+          try {
+            const salesOrder = await transaction.salesOrder.findUnique({
+              where: { id: command.salesOrderId },
+              select: { customerName: true },
+            })
+            customerName = salesOrder?.customerName ?? '—'
+          }
+          catch {
+            // 客户名称只服务通知文案；查询失败不能阻断采购单创建。
+            customerName = '—'
+          }
+        }
+        await this.notifications.publish({
+          eventType: 'PURCHASE_REVIEW_PENDING',
+          source: { type: 'PURCHASE_ORDER', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:review' },
+          templateKey: 'purchase.review.pending',
+          variables: {
+            orderNo: issuance.number,
+            vendorName: command.customSupplierName ?? command.supplierValue ?? '—',
+            totalAmount: command.purchaseTotalAmount.toString(),
+            currencyCode: command.currencyCode,
+            lineCount: effective.lines.length,
+            partCount: persistedParts.length,
+            customerName,
+          },
+          dedupeKey: `purchase-review:${created.id}`,
+          priority: 'HIGH',
+          requestedByUserId: trusted.actorUserId,
+        }, { transaction })
         return created.id
       // 最大货件/分配项仍共用固定采购事务预算，不放宽全局查询或锁等待上限。
       }, { isolationLevel: 'Serializable', timeout: 30_000 })

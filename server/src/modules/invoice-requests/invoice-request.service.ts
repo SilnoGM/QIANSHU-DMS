@@ -3,6 +3,8 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AuditService } from '../audit/audit.service'
+import { SystemNotificationService } from '../notifications/system-notification.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
 import { truncateFundSourceText } from '../fund-accounts/application/fund-source-snapshot'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
@@ -142,6 +144,7 @@ export class InvoiceRequestService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   // ---------------------------------------------------------------- 提交与重新提交
@@ -210,6 +213,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: created.id,
           metadata: { invoiceNo: created.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
+          source: { type: 'INVOICE_REQUEST', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
+          templateKey: 'invoice.review.pending',
+          variables: {
+            invoiceNo: created.invoiceNo,
+            buyerName: payload.buyerName,
+            totalAmount: payload.totalAmount.toString(),
+            lineCount: payload.lines.length,
+          },
+          dedupeKey: `invoice-review:${created.id}:v1`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
         return created.id
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
@@ -269,6 +287,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
+          templateKey: 'invoice.review.pending',
+          variables: {
+            invoiceNo: row.invoiceNo,
+            buyerName: payload.buyerName,
+            totalAmount: payload.totalAmount.toString(),
+            lineCount: payload.lines.length,
+          },
+          dedupeKey: `invoice-review:${id}:v${row.version + 1}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
     }
