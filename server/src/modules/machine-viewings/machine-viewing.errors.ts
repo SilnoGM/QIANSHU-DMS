@@ -2,6 +2,7 @@ import { HttpStatus } from '@nestjs/common'
 
 import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { NumberingGenerationError } from '../numbering/numbering.errors'
 
 export function machineViewingFailure(code: string, message: string, status = 422): never {
   throw new ApiException(status, code, message)
@@ -10,6 +11,7 @@ export function machineViewingFailure(code: string, message: string, status = 42
 export const MACHINE_VIEWING_ERROR_CODES = {
   VALIDATION_FAILED: 'MACHINE_VIEWING_VALIDATION_FAILED',
   IDEMPOTENCY_CONFLICT: 'MACHINE_VIEWING_IDEMPOTENCY_CONFLICT',
+  NUMBER_UNAVAILABLE: 'MACHINE_VIEWING_NUMBER_UNAVAILABLE',
   CONFLICT: 'MACHINE_VIEWING_CONFLICT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const
@@ -24,6 +26,13 @@ export type MachineViewingErrorCode =
 export function mapMachineViewingError(error: unknown): never {
   if (error instanceof ApiException) {
     throw error
+  }
+  if (error instanceof NumberingGenerationError) {
+    return machineViewingFailure(
+      MACHINE_VIEWING_ERROR_CODES.NUMBER_UNAVAILABLE,
+      '预约编号暂时无法派发，请检查编号规则 MACHINE_VIEWING_NO 后重试',
+      HttpStatus.CONFLICT,
+    )
   }
   const facts = readPersistenceErrorFacts(error)
   if (['P2002', '23505'].some(code => hasPersistenceCode(facts, code))) {

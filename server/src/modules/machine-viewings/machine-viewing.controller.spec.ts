@@ -32,6 +32,7 @@ function createRequest(): object {
 
 const RESULT: MachineViewingDto = {
   id: '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a',
+  appointmentNo: 'MV/20261105-0001',
   site: 'TAICHUNG_LONGJING',
   machineType: 'SHREDDER',
   appointmentDate: '2026-11-20',

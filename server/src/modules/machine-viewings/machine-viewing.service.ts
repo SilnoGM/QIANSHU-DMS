@@ -5,6 +5,11 @@ import { AuditEventType } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { AuditService } from '../audit/audit.service'
+import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import {
+  MACHINE_VIEWING_NO_CONSUMER_CODE,
+  MACHINE_VIEWING_NO_RULE_CODE,
+} from './machine-viewing.contract'
 import type { CreateMachineViewingDto, MachineViewingDto } from './machine-viewing.dto'
 import {
   MACHINE_VIEWING_ERROR_CODES,
@@ -12,6 +17,7 @@ import {
   mapMachineViewingError,
 } from './machine-viewing.errors'
 import {
+  hashMachineViewingNumberFingerprint,
   hashMachineViewingRequestKey,
   MachineViewingValidationError,
   normalizeMachineViewingCreate,
@@ -39,6 +45,7 @@ export class MachineViewingService {
     private readonly prisma: PrismaService,
     private readonly queries: MachineViewingQueryService,
     private readonly audit: AuditService,
+    private readonly numbering: NumberingGeneratorService,
   ) {}
 
   async create(
@@ -91,8 +98,28 @@ export class MachineViewingService {
           return await this.requireDto(transaction, previous.id)
         }
 
+        const appointmentDate = normalized.appointmentDate.toISOString().slice(0, 10)
+        const issuance = await this.numbering.generateScopedInTransaction(transaction, {
+          ruleCode: MACHINE_VIEWING_NO_RULE_CODE,
+          consumerCode: MACHINE_VIEWING_NO_CONSUMER_CODE,
+          idempotencyKey: [context.actorUserId, ':', requestKey].join(''),
+          requestFingerprint: hashMachineViewingNumberFingerprint({
+            actorUserId: context.actorUserId,
+            site: normalized.site,
+            machineType: normalized.machineType,
+            appointmentDate,
+            period: normalized.period,
+            hour: normalized.hour,
+            customerName: normalized.customerName,
+            customerPhone: normalized.customerPhone,
+            contactPerson: normalized.contactPerson,
+            requestKey,
+          }),
+        })
         const created = await transaction.machineViewingAppointment.create({
           data: {
+            appointmentNo: issuance.number,
+            numberingIssuanceId: issuance.issuanceId,
             site: normalized.site,
             machineType: normalized.machineType,
             appointmentDate: normalized.appointmentDate,
@@ -115,9 +142,10 @@ export class MachineViewingService {
           targetType: 'MACHINE_VIEWING_APPOINTMENT',
           targetId: created.id,
           metadata: {
+            appointmentNo: issuance.number,
             site: normalized.site,
             machineType: normalized.machineType,
-            appointmentDate: normalized.appointmentDate.toISOString().slice(0, 10),
+            appointmentDate,
             period: normalized.period,
             hour: normalized.hour,
             customerName: normalized.customerName,

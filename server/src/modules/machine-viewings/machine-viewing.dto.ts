@@ -71,6 +71,8 @@ export class MachineViewingPersonDto {
 
 export class MachineViewingDto {
   @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ maxLength: 64, example: 'MV/20261106-0001', description: '看机预约编号，由规则 MACHINE_VIEWING_NO 在提交时派发。' })
+  appointmentNo!: string
   @ApiProperty({ enum: MACHINE_VIEWING_SITE_VALUES }) site!: MachineViewingSiteValue
   @ApiProperty({ enum: MACHINE_VIEWING_MACHINE_TYPE_VALUES }) machineType!: MachineViewingMachineTypeValue
   @ApiProperty({ type: 'string', format: 'date', example: '2026-11-05', description: '已按创建时刻推断年份的实际日期。' })

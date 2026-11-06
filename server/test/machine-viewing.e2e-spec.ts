@@ -140,6 +140,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
       contactPerson: '李华',
       createdBy: { id: operationsId },
     })
+    expect(created.appointmentNo).toMatch(/^MV\/\d{8}-\d{4}$/u)
 
     const audit = await prisma.auditEvent.findFirst({
       where: { eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED', targetId: created.id },
@@ -154,6 +155,8 @@ describe('machine viewing appointments against PostgreSQL', () => {
     )
     expect(withoutHour.hour).toBeNull()
     expect(withoutHour.appointmentDate).toBe('2026-11-20')
+    expect(withoutHour.appointmentNo).toMatch(/^MV\/\d{8}-\d{4}$/u)
+    expect(withoutHour.appointmentNo).not.toBe(created.appointmentNo)
   })
 
   it('rolls a past month/day into the next year and rejects an impossible day', async () => {
@@ -178,6 +181,8 @@ describe('machine viewing appointments against PostgreSQL', () => {
     const first = await service.create(commandContext(operationsId), input({ customerName: '幂等客户' }), key, NOW)
     const replay = await service.create(commandContext(operationsId), input({ customerName: '幂等客户' }), key, NOW)
     expect(replay.id).toBe(first.id)
+    // 重放不能二次发号：编号必须与原单一致。
+    expect(replay.appointmentNo).toBe(first.appointmentNo)
 
     await expect(service.create(
       commandContext(operationsId),
@@ -206,18 +211,11 @@ describe('machine viewing appointments against PostgreSQL', () => {
     expect(all.items.some(item => item.id === others.id)).toBe(true)
   })
 
-  it('paginates newest submissions first', async () => {
+  it('lists by appointment number descending so the newest registration is first', async () => {
     const first = await service.create(commandContext(purchasingId), input({ customerName: '分页一' }), randomUUID(), NOW)
     const second = await service.create(commandContext(purchasingId), input({ customerName: '分页二' }), randomUUID(), NOW)
-    // 同一毫秒内创建时 createdAt 可能相同；显式错开时间，断言才不会依赖随机 UUID 排序。
-    await prisma.machineViewingAppointment.update({
-      where: { id: first.id },
-      data: { createdAt: new Date('2026-11-05T01:00:00.000Z') },
-    })
-    await prisma.machineViewingAppointment.update({
-      where: { id: second.id },
-      data: { createdAt: new Date('2026-11-05T02:00:00.000Z') },
-    })
+    // 编号由同一规则按序派发，后登记的编号一定更大。
+    expect(second.appointmentNo > first.appointmentNo).toBe(true)
 
     const page = await queries.listForActor(purchasingId, { page: 1, pageSize: 100 })
     const ids = page.items.map(item => item.id)

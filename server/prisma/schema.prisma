@@ -2081,6 +2081,7 @@ model NumberingIssuance {
   fundPostingBatch FundPostingBatch?
   fundWithdrawalRequest FundWithdrawalRequest?
   advertisingRechargeRequest AdvertisingRechargeRequest?
+  machineViewingAppointment MachineViewingAppointment?
 
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleId                 String   @map("rule_id") @db.Uuid
@@ -3186,20 +3187,24 @@ enum MachineViewingPeriod {
 /// `appointment_date`；此后跨年也不会改变已登记的预约日期。列表按该日期排序，
 /// 因此不需要额外保存月/日两个冗余字段。
 model MachineViewingAppointment {
-  id              String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  site            MachineViewingSite
-  machineType     MachineViewingMachineType   @map("machine_type")
-  appointmentDate DateTime                   @map("appointment_date") @db.Date
-  period          MachineViewingPeriod
-  hour            Int?
-  customerName    String                     @map("customer_name") @db.VarChar(128)
-  customerPhone   String?                    @map("customer_phone") @db.VarChar(64)
-  contactPerson   String                     @map("contact_person") @db.VarChar(64)
-  createdByUserId String                     @map("created_by_user_id") @db.Uuid
-  requestKeyHash  Bytes                      @map("request_key_hash") @db.ByteA
-  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appointmentNo       String                   @unique(map: "machine_viewing_appointments_number_key") @map("appointment_no") @db.VarChar(64)
+  /// 新登记必须绑定真实发号；本域上线前已有的测试行由迁移回填为 MV/LEGACY-####，保持为空。
+  numberingIssuanceId String?                  @unique(map: "machine_viewing_appointments_issuance_key") @map("numbering_issuance_id") @db.Uuid
+  site                MachineViewingSite
+  machineType         MachineViewingMachineType @map("machine_type")
+  appointmentDate     DateTime                 @map("appointment_date") @db.Date
+  period              MachineViewingPeriod
+  hour                Int?
+  customerName        String                   @map("customer_name") @db.VarChar(128)
+  customerPhone       String?                  @map("customer_phone") @db.VarChar(64)
+  contactPerson       String                   @map("contact_person") @db.VarChar(64)
+  createdByUserId     String                   @map("created_by_user_id") @db.Uuid
+  requestKeyHash      Bytes                    @map("request_key_hash") @db.ByteA
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdBy User @relation("MachineViewingAppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy         User               @relation("MachineViewingAppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance? @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([createdByUserId, requestKeyHash], map: "machine_viewing_appointments_creator_request_key")
   @@index([createdByUserId, createdAt(sort: Desc), id(sort: Desc)], map: "machine_viewing_appointments_creator_created_idx")

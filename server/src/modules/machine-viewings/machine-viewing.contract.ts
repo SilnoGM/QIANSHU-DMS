@@ -22,6 +22,10 @@ export type MachineViewingPeriodValue = (typeof MACHINE_VIEWING_PERIOD_VALUES)[n
 export const MACHINE_VIEWING_PERMISSION_READ = 'machine-viewings:read'
 export const MACHINE_VIEWING_PERMISSION_CREATE = 'machine-viewings:create'
 
+/** 编号域规则：MV/YYYYMMDD-####，按年重置；规则由建号迁移写入并启用。 */
+export const MACHINE_VIEWING_NO_RULE_CODE = 'MACHINE_VIEWING_NO'
+export const MACHINE_VIEWING_NO_CONSUMER_CODE = 'MACHINE_VIEWING.CREATE'
+
 export const MACHINE_VIEWING_CUSTOMER_NAME_MAX_LENGTH = 128
 export const MACHINE_VIEWING_CUSTOMER_PHONE_MAX_LENGTH = 64
 export const MACHINE_VIEWING_CONTACT_PERSON_MAX_LENGTH = 64

@@ -51,6 +51,7 @@ export function toMachineViewingDto(row: Row): MachineViewingDto {
   const person = toPersonReference(row.createdBy)
   return {
     id: row.id,
+    appointmentNo: row.appointmentNo,
     site: row.site,
     machineType: row.machineType,
     appointmentDate: formatMachineViewingDate(row.appointmentDate),
@@ -81,7 +82,8 @@ export class MachineViewingQueryService {
         transaction.machineViewingAppointment.findMany({
           where,
           include: ROW_INCLUDE,
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          // 编号含日期前缀与递增序号，倒序即「最新登记在前」；编号唯一，无需额外兜底键。
+          orderBy: [{ appointmentNo: 'desc' }],
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),

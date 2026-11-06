@@ -7,6 +7,10 @@ const migration = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261106120000_machine_viewing_appointments/migration.sql'),
   'utf8',
 )
+const numberMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261106130000_machine_viewing_appointment_number/migration.sql'),
+  'utf8',
+)
 const permissionConstants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -48,21 +52,25 @@ describe('machine viewing appointment database contract', () => {
   it('keeps the inferred year, optional hour and submitter on the model', () => {
     const model = modelBlock('MachineViewingAppointment')
     for (const field of [
-      'site            MachineViewingSite',
-      'machineType     MachineViewingMachineType',
-      'appointmentDate DateTime',
-      'period          MachineViewingPeriod',
-      'hour            Int?',
-      'customerName    String',
-      'customerPhone   String?',
-      'contactPerson   String',
-      'createdByUserId String',
-      'requestKeyHash  Bytes',
+      'site',
+      'machineType',
+      'appointmentDate',
+      'period',
+      'hour',
+      'customerName',
+      'customerPhone',
+      'contactPerson',
+      'createdByUserId',
+      'requestKeyHash',
+    ]) {
+      expect(model).toMatch(new RegExp(`^\\s*${field}\\s`, 'mu'))
+    }
+    for (const column of [
       '@map("appointment_date") @db.Date',
       '@map("created_by_user_id") @db.Uuid',
       '@map("request_key_hash") @db.ByteA',
     ]) {
-      expect(model).toContain(field)
+      expect(model).toContain(column)
     }
     expect(model).toContain('@@unique([createdByUserId, requestKeyHash]')
     expect(model).toContain('"machine_viewing_appointments_creator_request_key"')
@@ -115,6 +123,30 @@ describe('machine viewing appointment database contract', () => {
     expect(migration).toContain(
       `ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'MACHINE_VIEWING_APPOINTMENT_CREATED'`,
     )
+  })
+
+  it('binds every appointment to a number issued by MACHINE_VIEWING_NO', () => {
+    const model = modelBlock('MachineViewingAppointment')
+    expect(model).toContain('appointmentNo')
+    expect(model).toContain('@map("appointment_no") @db.VarChar(64)')
+    expect(model).toContain('numberingIssuanceId')
+    expect(model).toContain('@map("numbering_issuance_id") @db.Uuid')
+    expect(modelBlock('NumberingIssuance')).toContain('machineViewingAppointment MachineViewingAppointment?')
+
+    expect(numberMigration).toContain('ADD COLUMN "appointment_no" VARCHAR(64)')
+    expect(numberMigration).toContain('ADD COLUMN "numbering_issuance_id" UUID')
+    expect(numberMigration).toContain(`'MV/LEGACY-'`)
+    expect(numberMigration).toContain('"machine_viewing_appointments_number_key" UNIQUE ("appointment_no")')
+    expect(numberMigration).toContain('"machine_viewing_appointments_numbering_issuance_id_fkey"')
+    expect(numberMigration).toContain(`CHECK ("appointment_no" ~ '^MV/[A-Z0-9]+-[0-9]{4,}$')`)
+    expect(numberMigration).toContain(`'MACHINE_VIEWING_NO'`)
+    expect(numberMigration).toContain(`'MV'`)
+    expect(numberMigration).toContain(`'YYYYMMDD'`)
+    expect(numberMigration).toContain(
+      'd145ae12d9e093a305346e711c38d7a0ba552ab34dcb73b03857f6782d2850fd',
+    )
+    expect(numberMigration).toContain(`"status" = 'ENABLED'`)
+    expect(numberMigration).toContain(`version."status" = 'ACTIVE'`)
   })
 
   it('keeps the permission catalog and seed roles in sync', () => {

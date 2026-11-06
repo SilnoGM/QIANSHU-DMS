@@ -167,6 +167,37 @@ export function hashMachineViewingRequestKey(value: string): Uint8Array<ArrayBuf
   return bytes
 }
 
+/**
+ * 编号指纹绑定全部不可变登记内容：同一幂等键改了任何字段都必须冲突，
+ * 不能复用旧单号登记一条内容不同的预约。
+ */
+export function hashMachineViewingNumberFingerprint(input: {
+  readonly actorUserId: string
+  readonly site: string
+  readonly machineType: string
+  readonly appointmentDate: string
+  readonly period: string
+  readonly hour: number | null
+  readonly customerName: string
+  readonly customerPhone: string | null
+  readonly contactPerson: string
+  readonly requestKey: string
+}): string {
+  return createHash('sha256').update(JSON.stringify({
+    format: 'machine-viewing.create.v1',
+    actorUserId: input.actorUserId,
+    site: input.site,
+    machineType: input.machineType,
+    appointmentDate: input.appointmentDate,
+    period: input.period,
+    hour: input.hour,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    contactPerson: input.contactPerson,
+    requestKey: input.requestKey,
+  })).digest('hex')
+}
+
 /** 幂等重放必须比对全部不可变字段；同一把钥匙提交不同内容要明确冲突。 */
 export function sameMachineViewingPayload(
   previous: {
