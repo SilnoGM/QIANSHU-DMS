@@ -96,6 +96,7 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   const row = { itemCount: 10, boundItemCount: 8, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
   assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!(row, 0), '8/10 [containerPage.bindingPartial]')
+  assert.equal(columns.find(column => column.id === 'bindingStats')!.align, 'right')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 10 }, 0), '10/10 [containerPage.bindingAll]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0 }, 0), '0/10 [containerPage.bindingNone]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0, itemCount: 0 }, 0), '0/0 [containerPage.bindingEmpty]')
