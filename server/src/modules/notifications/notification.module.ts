@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common'
 import { AuthModule } from '../auth/auth.module'
 import { AssistantAdminController } from './assistant-admin.controller'
 import { AssistantAdminService } from './assistant-admin.service'
+import { NotificationAdminController } from './notification-admin.controller'
+import { NotificationAdminService } from './notification-admin.service'
 import { AssistantDispatchService } from './assistant-dispatch.service'
 import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
@@ -17,10 +19,11 @@ import { SystemNotificationService } from './system-notification.service'
  */
 @Module({
   imports: [AuthModule],
-  controllers: [AssistantAdminController],
+  controllers: [AssistantAdminController, NotificationAdminController],
   providers: [
     SystemNotificationService,
     AssistantAdminService,
+    NotificationAdminService,
     GeweAssistantTransport,
     GeweAssistantAdminTransport,
     {
