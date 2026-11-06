@@ -1,0 +1,79 @@
+{
+  "machineViewing": {
+    "title": "Machine Viewing Appointments",
+    "description": "Record customer viewing requests and arrange on-site reception",
+    "create": "Book a viewing",
+    "empty": "No machine viewing appointments yet",
+    "emptyDescription": "Click \"Book a viewing\" to record a customer visit",
+    "loadFailed": "Failed to load appointments",
+    "loadFailedDescription": "Check your network and try again",
+    "retry": "Retry",
+    "noPhone": "Not provided",
+    "column": {
+      "site": "Site",
+      "machineType": "Machine",
+      "appointmentTime": "Appointment",
+      "customerName": "Customer",
+      "customerPhone": "Phone",
+      "contactPerson": "Contact",
+      "createdBy": "Submitted by",
+      "createdAt": "Submitted at"
+    },
+    "site": {
+      "NEW_TAIPEI_LINKOU": "Linkou, New Taipei",
+      "TAICHUNG_LONGJING": "Longjing, Taichung"
+    },
+    "machineType": {
+      "MINI_TILLER": "Mini tiller",
+      "SHREDDER": "Shredder",
+      "INCINERATOR": "Incinerator"
+    },
+    "period": {
+      "AM": "Morning",
+      "PM": "Afternoon"
+    },
+    "time": {
+      "withHour": "{date} {period} {hour}:00",
+      "withoutHour": "{date} {period}"
+    },
+    "form": {
+      "title": "Book a viewing",
+      "site": "Site",
+      "sitePlaceholder": "Select a site",
+      "machineType": "Machine",
+      "machineTypePlaceholder": "Select a machine",
+      "appointmentTime": "Appointment",
+      "monthPlaceholder": "Month",
+      "dayPlaceholder": "Day",
+      "periodPlaceholder": "Period",
+      "hourPlaceholder": "Hour (optional)",
+      "hourUnspecified": "Not specified",
+      "monthOption": "{month}",
+      "dayOption": "{day}",
+      "hourOption": "{hour}:00",
+      "customerName": "Customer",
+      "customerNamePlaceholder": "Enter the customer name",
+      "customerPhone": "Phone",
+      "customerPhonePlaceholder": "Optional",
+      "contactPerson": "Contact",
+      "contactPersonPlaceholder": "Enter the contact person",
+      "contactPersonHint": "Defaults to your issuer prefix and can be changed",
+      "submit": "Submit",
+      "cancel": "Cancel",
+      "previewLabel": "Appointment preview"
+    },
+    "validation": {
+      "siteRequired": "Select a site",
+      "machineTypeRequired": "Select a machine",
+      "appointmentTimeRequired": "Select the month, day and period",
+      "appointmentTimeInvalid": "That date does not exist, please choose again",
+      "customerNameRequired": "Enter the customer name",
+      "customerNameTooLong": "Customer name must be at most 128 characters",
+      "customerPhoneTooLong": "Phone must be at most 64 characters",
+      "contactPersonRequired": "Enter the contact person",
+      "contactPersonTooLong": "Contact person must be at most 64 characters"
+    },
+    "created": "Machine viewing appointment submitted",
+    "saveFailed": "Failed to submit the appointment"
+  }
+}

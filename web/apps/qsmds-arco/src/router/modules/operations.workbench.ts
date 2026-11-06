@@ -167,6 +167,14 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // 看机预约是单页，用 singleMenu 平铺成与分组并列的一级菜单。
+    // 列表归属由服务端按 data-scope:all 判定：运营只看本人，采运看全部。
+    path: '/qs-operations/machine-viewings',
+    name: 'qsOperationsMachineViewings',
+    component: () => import('@/views/operations/machine-viewings/index.vue'),
+    meta: { title: '看机预约', icon: 'qs-date-time', singleMenu: true, auth: 'machine-viewings:read' },
+  },
+  {
     // 运营只看本人财务数据，因此本人账户读取用独立权限 `fund-accounts:read-self`，
     // 不借用财务侧的全量账户视图权限 `fund-accounts:read`；提款按提交与审批拆分，
     // 本组只声明提交。分组 auth 只用于菜单过滤，取组内叶子业务码的并集。

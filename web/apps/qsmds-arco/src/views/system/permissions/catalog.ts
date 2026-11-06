@@ -19,6 +19,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'fund-transactions': '资金批次',
   'fund-withdrawals': '提款',
   'invoice-requests': '开票申请',
+  'machine-viewings': '看机预约',
   'numbering-rules': '编号规则',
   'packaging-costs': '打木架费用',
   'product-media': '产品媒体',

@@ -1,0 +1,79 @@
+{
+  "machineViewing": {
+    "title": "看机预约",
+    "description": "登记客户看机意向，按预约时间安排现场接待",
+    "create": "预约看机",
+    "empty": "还没有看机预约",
+    "emptyDescription": "点击「预约看机」登记客户到访意向",
+    "loadFailed": "预约列表加载失败",
+    "loadFailedDescription": "请检查网络后重试",
+    "retry": "重试",
+    "noPhone": "未填写",
+    "column": {
+      "site": "看机地点",
+      "machineType": "看机机型",
+      "appointmentTime": "预约时间",
+      "customerName": "客户姓名",
+      "customerPhone": "客户电话",
+      "contactPerson": "业务对接人",
+      "createdBy": "提交人",
+      "createdAt": "提交时间"
+    },
+    "site": {
+      "NEW_TAIPEI_LINKOU": "新北林口",
+      "TAICHUNG_LONGJING": "台中龙井"
+    },
+    "machineType": {
+      "MINI_TILLER": "微耕机",
+      "SHREDDER": "撕碎机",
+      "INCINERATOR": "焚烧炉"
+    },
+    "period": {
+      "AM": "上午",
+      "PM": "下午"
+    },
+    "time": {
+      "withHour": "{date}日 {period} {hour}点",
+      "withoutHour": "{date}日 {period}"
+    },
+    "form": {
+      "title": "预约看机",
+      "site": "看机地点",
+      "sitePlaceholder": "选择看机地点",
+      "machineType": "看机机型",
+      "machineTypePlaceholder": "选择看机机型",
+      "appointmentTime": "预约时间",
+      "monthPlaceholder": "月",
+      "dayPlaceholder": "日",
+      "periodPlaceholder": "时段",
+      "hourPlaceholder": "几点（选填）",
+      "hourUnspecified": "不指定",
+      "monthOption": "{month}月",
+      "dayOption": "{day}日",
+      "hourOption": "{hour}点",
+      "customerName": "客户姓名",
+      "customerNamePlaceholder": "请输入客户姓名",
+      "customerPhone": "客户电话",
+      "customerPhonePlaceholder": "选填",
+      "contactPerson": "业务对接人",
+      "contactPersonPlaceholder": "请输入业务对接人",
+      "contactPersonHint": "默认为你的出单人前缀，可以修改",
+      "submit": "提交预约",
+      "cancel": "取消",
+      "previewLabel": "预约时间预览"
+    },
+    "validation": {
+      "siteRequired": "请选择看机地点",
+      "machineTypeRequired": "请选择看机机型",
+      "appointmentTimeRequired": "请选择预约的月、日与时段",
+      "appointmentTimeInvalid": "预约日期不存在，请重新选择",
+      "customerNameRequired": "请填写客户姓名",
+      "customerNameTooLong": "客户姓名不能超过 128 个字符",
+      "customerPhoneTooLong": "客户电话不能超过 64 个字符",
+      "contactPersonRequired": "请填写业务对接人",
+      "contactPersonTooLong": "业务对接人不能超过 64 个字符"
+    },
+    "created": "看机预约已提交",
+    "saveFailed": "预约提交失败"
+  }
+}

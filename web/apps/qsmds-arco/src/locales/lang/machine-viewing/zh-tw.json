@@ -1,0 +1,79 @@
+{
+  "machineViewing": {
+    "title": "看機預約",
+    "description": "登記客戶看機意願，依預約時間安排現場接待",
+    "create": "預約看機",
+    "empty": "還沒有看機預約",
+    "emptyDescription": "點擊「預約看機」登記客戶到訪意願",
+    "loadFailed": "預約列表載入失敗",
+    "loadFailedDescription": "請檢查網路後重試",
+    "retry": "重試",
+    "noPhone": "未填寫",
+    "column": {
+      "site": "看機地點",
+      "machineType": "看機機型",
+      "appointmentTime": "預約時間",
+      "customerName": "客戶姓名",
+      "customerPhone": "客戶電話",
+      "contactPerson": "業務對接人",
+      "createdBy": "提交人",
+      "createdAt": "提交時間"
+    },
+    "site": {
+      "NEW_TAIPEI_LINKOU": "新北林口",
+      "TAICHUNG_LONGJING": "台中龍井"
+    },
+    "machineType": {
+      "MINI_TILLER": "微耕機",
+      "SHREDDER": "撕碎機",
+      "INCINERATOR": "焚燒爐"
+    },
+    "period": {
+      "AM": "上午",
+      "PM": "下午"
+    },
+    "time": {
+      "withHour": "{date}日 {period} {hour}點",
+      "withoutHour": "{date}日 {period}"
+    },
+    "form": {
+      "title": "預約看機",
+      "site": "看機地點",
+      "sitePlaceholder": "選擇看機地點",
+      "machineType": "看機機型",
+      "machineTypePlaceholder": "選擇看機機型",
+      "appointmentTime": "預約時間",
+      "monthPlaceholder": "月",
+      "dayPlaceholder": "日",
+      "periodPlaceholder": "時段",
+      "hourPlaceholder": "幾點（選填）",
+      "hourUnspecified": "不指定",
+      "monthOption": "{month}月",
+      "dayOption": "{day}日",
+      "hourOption": "{hour}點",
+      "customerName": "客戶姓名",
+      "customerNamePlaceholder": "請輸入客戶姓名",
+      "customerPhone": "客戶電話",
+      "customerPhonePlaceholder": "選填",
+      "contactPerson": "業務對接人",
+      "contactPersonPlaceholder": "請輸入業務對接人",
+      "contactPersonHint": "預設為你的出單人前綴，可以修改",
+      "submit": "提交預約",
+      "cancel": "取消",
+      "previewLabel": "預約時間預覽"
+    },
+    "validation": {
+      "siteRequired": "請選擇看機地點",
+      "machineTypeRequired": "請選擇看機機型",
+      "appointmentTimeRequired": "請選擇預約的月、日與時段",
+      "appointmentTimeInvalid": "預約日期不存在，請重新選擇",
+      "customerNameRequired": "請填寫客戶姓名",
+      "customerNameTooLong": "客戶姓名不能超過 128 個字元",
+      "customerPhoneTooLong": "客戶電話不能超過 64 個字元",
+      "contactPersonRequired": "請填寫業務對接人",
+      "contactPersonTooLong": "業務對接人不能超過 64 個字元"
+    },
+    "created": "看機預約已提交",
+    "saveFailed": "預約提交失敗"
+  }
+}

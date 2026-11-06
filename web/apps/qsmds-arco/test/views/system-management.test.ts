@@ -293,6 +293,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'fund-transactions',
     'fund-withdrawals',
     'invoice-requests',
+    'machine-viewings',
     'numbering-rules',
     'packaging-costs',
     'product-media',

@@ -74,6 +74,8 @@ const rolePermissions: Record<string, string[]> = {
     'invoice-requests:cancel',
     'invoice-requests:create',
     'invoice-requests:read',
+    'machine-viewings:create',
+    'machine-viewings:read',
     'packaging-costs:create',
     'purchase-orders:create',
     'purchase-orders:document',
@@ -121,6 +123,7 @@ const rolePermissions: Record<string, string[]> = {
     'container-batches:create',
     'container-batches:read',
     'container-batches:update',
+    'machine-viewings:read',
     'purchase-orders:read',
     'purchase-orders:review',
     'purchase-orders:update',
@@ -175,6 +178,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-purchase-transport/containers',
     '/qs-purchase-transport/containers/container-1/import',
     '/qs-purchase-transport/storage',
+    '/qs-purchase-transport/machine-viewings',
     '/qs-finance/invoices/approval',
     '/system/audit',
     '/system/application-settings',
@@ -190,6 +194,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/goods-storage',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/machine-viewings',
     '/qs-operations/personal-finance/fund-accounts',
     '/qs-operations/personal-finance/withdrawals',
   ]) {
@@ -204,6 +209,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/ocean-containers/all',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/machine-viewings',
     '/qs-operations/personal-finance/fund-accounts',
     '/qs-operations/personal-finance/withdrawals',
     '/qs-purchase-transport/containers',
@@ -233,6 +239,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/warehouse-transport/goods-storage',
     '/qs-operations/invoices/create',
     '/qs-operations/invoices/records',
+    '/qs-operations/machine-viewings',
     '/qs-operations/personal-finance/fund-accounts',
     '/qs-operations/personal-finance/withdrawals',
     '/qs-finance/realtime-payments/purchase-payments',
@@ -250,6 +257,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-purchase-transport/containers',
     '/qs-purchase-transport/containers/container-1',
     '/qs-purchase-transport/containers/container-1/import',
+    '/qs-purchase-transport/machine-viewings',
   ]) {
     assert.equal(canEnter(purchasingStaff, path), true, `采运角色应能进入 ${path}`)
   }

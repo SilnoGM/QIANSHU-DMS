@@ -98,13 +98,19 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
   assert.ok(leaves.every(leaf => leaf.children === undefined))
 })
 
-test('柜次、寄仓、静态节点菜单使用独立权限，货件与审核菜单保留既有授权', () => {
+test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes', 'qsPurchaseTransportMachineViewings'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
   const proxyNodes = routes.find(route => route.name === 'qsPurchaseTransportProxyNodes')
+  const machineViewings = routes.find(route => route.name === 'qsPurchaseTransportMachineViewings')
+  assert.equal(machineViewings?.meta?.auth, 'machine-viewings:read')
+  assert.equal(machineViewings?.meta?.title, 'workbench.machineViewings')
+  assert.equal(machineViewings?.meta?.icon, 'qs-date-time')
+  assert.equal(machineViewings?.meta?.singleMenu, true)
+  assert.match(String(machineViewings?.component), /workbenches\/machine-viewings\/index\.vue/u)
   assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
   assert.equal(storage?.meta?.title, '寄仓管理')
