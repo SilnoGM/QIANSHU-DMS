@@ -9,6 +9,7 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import { resolveContainerBindingStats } from './binding-stats.logic'
+import ContainerBindingStats from './container-binding-stats.vue'
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerRemark from './container-remark.vue'
 import ContainerSwapModal from './container-swap-modal.vue'
@@ -180,10 +181,7 @@ onDeactivated(() => {
             </QsTableStackedCell>
           </template>
           <template #cell-bindingStats="{ row }">
-            <span class="qs-type-data whitespace-nowrap" :class="bindingStats(row.original).toneClass">
-              {{ bindingStats(row.original).bound }}/{{ bindingStats(row.original).total }}
-              <span class="text-xs font-sans">[{{ t(bindingStats(row.original).labelKey) }}]</span>
-            </span>
+            <ContainerBindingStats :stats="bindingStats(row.original)" />
           </template>
           <template #cell-remark="{ row }">
             <ContainerRemark :text="row.original.remark" />
@@ -218,9 +216,8 @@ onDeactivated(() => {
                 <div class="flex gap-3 items-baseline">
                   <dt class="qs-type-meta text-muted-foreground shrink-0">
                     {{ t('containerPage.bindingStats') }}
-                  </dt><dd class="qs-type-data" :class="bindingStats(row).toneClass">
-                    {{ bindingStats(row).bound }}/{{ bindingStats(row).total }}
-                    <span class="text-xs font-sans">[{{ t(bindingStats(row).labelKey) }}]</span>
+                  </dt><dd>
+                    <ContainerBindingStats :stats="bindingStats(row)" />
                   </dd>
                 </div>
               </dl>
