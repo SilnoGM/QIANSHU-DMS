@@ -60,6 +60,8 @@ export function toMachineViewingDto(row: Row): MachineViewingDto {
     customerName: row.customerName,
     customerPhone: row.customerPhone,
     contactPerson: row.contactPerson,
+    status: row.status,
+    feedback: row.feedback,
     createdBy: { id: person.id, name: person.displayName, avatarUrl: person.avatarUrl },
     createdAt: row.createdAt.toISOString(),
   }

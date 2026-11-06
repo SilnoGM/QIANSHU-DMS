@@ -19,6 +19,17 @@ export type MachineViewingMachineTypeValue = (typeof MACHINE_VIEWING_MACHINE_TYP
 export const MACHINE_VIEWING_PERIOD_VALUES = ['AM', 'PM'] as const
 export type MachineViewingPeriodValue = (typeof MACHINE_VIEWING_PERIOD_VALUES)[number]
 
+/** 状态与数据库枚举一一对应；本期只读，提交后固定为待预约。 */
+export const MACHINE_VIEWING_STATUS_VALUES = [
+  'PENDING_APPOINTMENT',
+  'APPOINTED',
+  'FEEDBACK_GIVEN',
+  'CANCELLED',
+] as const
+export type MachineViewingStatusValue = (typeof MACHINE_VIEWING_STATUS_VALUES)[number]
+
+export const MACHINE_VIEWING_FEEDBACK_MAX_LENGTH = 500
+
 export const MACHINE_VIEWING_PERMISSION_READ = 'machine-viewings:read'
 export const MACHINE_VIEWING_PERMISSION_CREATE = 'machine-viewings:create'
 

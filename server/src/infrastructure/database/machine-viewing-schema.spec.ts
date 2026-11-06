@@ -15,6 +15,10 @@ const legacySortMigration = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261106140000_machine_viewing_legacy_number_sort/migration.sql'),
   'utf8',
 )
+const statusMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261106150000_machine_viewing_status_and_feedback/migration.sql'),
+  'utf8',
+)
 const permissionConstants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -155,6 +159,29 @@ describe('machine viewing appointment database contract', () => {
     // 历史测试行必须改成排序最低的哨兵编号，否则会压住所有真实编号。
     expect(legacySortMigration).toContain(`WHERE "appointment_no" LIKE 'MV/LEGACY-%'`)
     expect(legacySortMigration).toContain(`'MV/00000000-' || lpad(`)
+  })
+
+  it('adds the read-only status and feedback fields with a safe default', () => {
+    const status = enumBlock('MachineViewingStatus')
+    for (const value of ['PENDING_APPOINTMENT', 'APPOINTED', 'FEEDBACK_GIVEN', 'CANCELLED']) {
+      expect(status).toContain(value)
+    }
+    expect(status).toContain('@@map("machine_viewing_status")')
+
+    const model = modelBlock('MachineViewingAppointment')
+    expect(model).toContain('status              MachineViewingStatus     @default(PENDING_APPOINTMENT)')
+    expect(model).toContain('feedback            String?                  @db.VarChar(500)')
+
+    expect(statusMigration).toContain(`CREATE TYPE "machine_viewing_status" AS ENUM`)
+    expect(statusMigration).toContain(
+      `ADD COLUMN "status" "machine_viewing_status" NOT NULL DEFAULT 'PENDING_APPOINTMENT'`,
+    )
+    expect(statusMigration).toContain(`ADD COLUMN "feedback" VARCHAR(500)`)
+    expect(statusMigration).toContain('"machine_viewing_appointments_feedback_shape_check"')
+    expect(statusMigration).toContain(`CHECK ("feedback" IS NULL OR ("feedback" = btrim("feedback") AND length("feedback") > 0))`)
+    // 本期不开放状态流转，迁移里不应出现任何权限或审计枚举变更。
+    expect(statusMigration).not.toContain('INSERT INTO "permissions"')
+    expect(statusMigration).not.toContain('audit_event_type')
   })
 
   it('keeps the permission catalog and seed roles in sync', () => {

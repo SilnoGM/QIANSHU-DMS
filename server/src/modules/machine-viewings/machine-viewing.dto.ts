@@ -7,14 +7,17 @@ import {
   MACHINE_VIEWING_CONTACT_PERSON_MAX_LENGTH,
   MACHINE_VIEWING_CUSTOMER_NAME_MAX_LENGTH,
   MACHINE_VIEWING_CUSTOMER_PHONE_MAX_LENGTH,
+  MACHINE_VIEWING_FEEDBACK_MAX_LENGTH,
   MACHINE_VIEWING_HOUR_MAX,
   MACHINE_VIEWING_HOUR_MIN,
   MACHINE_VIEWING_MACHINE_TYPE_VALUES,
   MACHINE_VIEWING_PERIOD_VALUES,
   MACHINE_VIEWING_SITE_VALUES,
+  MACHINE_VIEWING_STATUS_VALUES,
   type MachineViewingMachineTypeValue,
   type MachineViewingPeriodValue,
   type MachineViewingSiteValue,
+  type MachineViewingStatusValue,
 } from './machine-viewing.contract'
 
 export class MachineViewingListQueryDto {
@@ -83,6 +86,13 @@ export class MachineViewingDto {
   @ApiProperty() customerName!: string
   @ApiProperty({ type: 'string', nullable: true }) customerPhone!: string | null
   @ApiProperty() contactPerson!: string
+  @ApiProperty({
+    enum: MACHINE_VIEWING_STATUS_VALUES,
+    description: '预约状态；提交后默认为 PENDING_APPOINTMENT，状态流转入口尚未开放。',
+  })
+  status!: MachineViewingStatusValue
+  @ApiProperty({ type: 'string', nullable: true, maxLength: MACHINE_VIEWING_FEEDBACK_MAX_LENGTH })
+  feedback!: string | null
   @ApiProperty({ type: MachineViewingPersonDto }) createdBy!: MachineViewingPersonDto
   @ApiProperty({ type: 'string', format: 'date-time' }) createdAt!: string
 }

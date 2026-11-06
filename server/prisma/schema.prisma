@@ -3181,6 +3181,16 @@ enum MachineViewingPeriod {
   @@map("machine_viewing_period")
 }
 
+/// 看机预约状态。当前只做数据与展示，状态流转入口尚未开放。
+enum MachineViewingStatus {
+  PENDING_APPOINTMENT
+  APPOINTED
+  FEEDBACK_GIVEN
+  CANCELLED
+
+  @@map("machine_viewing_status")
+}
+
 /// 看机预约：运营登记客户到访意向，采运按预约时间跟进。
 ///
 /// 需求只选择月/日，年份在创建时由服务端按上海自然日推断并固定写入
@@ -3199,6 +3209,9 @@ model MachineViewingAppointment {
   customerName        String                   @map("customer_name") @db.VarChar(128)
   customerPhone       String?                  @map("customer_phone") @db.VarChar(64)
   contactPerson       String                   @map("contact_person") @db.VarChar(64)
+  status              MachineViewingStatus     @default(PENDING_APPOINTMENT)
+  /// 看机反馈正文；为空表示尚未反馈，列表显示占位符而不是空字符串。
+  feedback            String?                  @db.VarChar(500)
   createdByUserId     String                   @map("created_by_user_id") @db.Uuid
   requestKeyHash      Bytes                    @map("request_key_hash") @db.ByteA
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)

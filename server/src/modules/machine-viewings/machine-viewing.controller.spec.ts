@@ -41,6 +41,8 @@ const RESULT: MachineViewingDto = {
   customerName: '陈先生',
   customerPhone: null,
   contactPerson: '李华',
+  status: 'PENDING_APPOINTMENT',
+  feedback: null,
   createdBy: { id: ACTOR, name: '测试运营', avatarUrl: null },
   createdAt: '2026-11-05T02:00:00.000Z',
 }

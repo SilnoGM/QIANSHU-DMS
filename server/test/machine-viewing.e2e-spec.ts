@@ -138,6 +138,8 @@ describe('machine viewing appointments against PostgreSQL', () => {
       customerName: '陈先生',
       customerPhone: '0912-345-678',
       contactPerson: '李华',
+      status: 'PENDING_APPOINTMENT',
+      feedback: null,
       createdBy: { id: operationsId },
     })
     expect(created.appointmentNo).toMatch(/^MV\/\d{8}-\d{4}$/u)
@@ -221,5 +223,26 @@ describe('machine viewing appointments against PostgreSQL', () => {
     const ids = page.items.map(item => item.id)
     expect(ids.indexOf(second.id)).toBeLessThan(ids.indexOf(first.id))
     expect(page.total).toBe(ids.length)
+  })
+
+  it('reads back a manually recorded status and feedback', async () => {
+    // 状态流转入口尚未开放，这里直接写库验证迁移与序列化链路。
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '反馈读取' }),
+      randomUUID(),
+      NOW,
+    )
+    await prisma.machineViewingAppointment.update({
+      where: { id: created.id },
+      data: { status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机，倾向年底下单。' },
+    })
+
+    const page = await queries.listForActor(purchasingId, { page: 1, pageSize: 100 })
+    const row = page.items.find(item => item.id === created.id)
+    expect(row).toMatchObject({
+      status: 'FEEDBACK_GIVEN',
+      feedback: '客户到场，已看过微耕机，倾向年底下单。',
+    })
   })
 })

@@ -121269,6 +121269,21 @@
           "contactPerson": {
             "type": "string"
           },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_APPOINTMENT",
+              "APPOINTED",
+              "FEEDBACK_GIVEN",
+              "CANCELLED"
+            ],
+            "description": "预约状态；提交后默认为 PENDING_APPOINTMENT，状态流转入口尚未开放。"
+          },
+          "feedback": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          },
           "createdBy": {
             "$ref": "#/components/schemas/MachineViewingPersonDto"
           },
@@ -121288,6 +121303,8 @@
           "customerName",
           "customerPhone",
           "contactPerson",
+          "status",
+          "feedback",
           "createdBy",
           "createdAt"
         ]
