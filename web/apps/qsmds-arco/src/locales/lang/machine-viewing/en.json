@@ -10,6 +10,7 @@
     "retry": "Retry",
     "noPhone": "Not provided",
     "column": {
+      "appointmentNo": "No.",
       "site": "Site",
       "machineType": "Machine",
       "appointmentTime": "Appointment",

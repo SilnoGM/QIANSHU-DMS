@@ -10,6 +10,7 @@
     "retry": "重試",
     "noPhone": "未填寫",
     "column": {
+      "appointmentNo": "預約編號",
       "site": "看機地點",
       "machineType": "看機機型",
       "appointmentTime": "預約時間",

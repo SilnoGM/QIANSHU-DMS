@@ -35,6 +35,18 @@ let controller: AbortController | null = null
 
 const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
   {
+    id: 'appointmentNo',
+    accessorKey: 'appointmentNo',
+    title: t('machineViewing.column.appointmentNo'),
+    width: 168,
+    minWidth: 168,
+    fixed: 'left',
+    copyable: true,
+    copyMode: 'text',
+    cellClass: 'qs-type-data-emphasis',
+    mobileCellClass: 'qs-type-data-emphasis',
+  },
+  {
     id: 'appointmentTime',
     accessorFn: row => formatMachineViewingTime(t, row),
     title: t('machineViewing.column.appointmentTime'),
@@ -146,6 +158,9 @@ async function submitCreate(payload: CreateMachineViewingDto): Promise<void> {
   try {
     await machineViewingsApi.create(payload, createKey.value, request.signal)
     toast.success(t('machineViewing.created'))
+    // QsGenericModal 在 submitting 期间会拒绝受控关闭并回写 true；先释放 busy 再关。
+    creating.value = false
+    await nextTick()
     open.value = false
     page.value = 1
     await load()
@@ -219,8 +234,11 @@ watch(open, (value) => {
         </template>
         <template #mobile-row="{ row }">
           <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
+            <div class="qs-type-data-emphasis">
+              {{ row.appointmentNo }}
+            </div>
             <div class="flex gap-3 items-baseline justify-between">
-              <span class="qs-type-data-emphasis">{{ formatMachineViewingTime(t, row) }}</span>
+              <span class="qs-type-data">{{ formatMachineViewingTime(t, row) }}</span>
               <span class="text-primary qs-type-tag">{{ t(`machineViewing.machineType.${row.machineType}`) }}</span>
             </div>
             <dl class="space-y-2">
