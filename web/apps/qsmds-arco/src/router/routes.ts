@@ -16,6 +16,7 @@ import ProductManagement from './modules/product.management'
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
 import SupplierPaymentProfiles from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
+import SystemNotifications from './modules/system.notifications'
 import {
   ADMIN_WORKBENCH_PERMISSION,
   OPERATIONS_WORKBENCH_PERMISSION,
@@ -124,6 +125,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     children: [
       SystemAudit,
       ApplicationSettings,
+      SystemNotifications,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)

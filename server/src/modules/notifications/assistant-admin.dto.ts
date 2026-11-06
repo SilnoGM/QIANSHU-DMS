@@ -22,13 +22,13 @@ export class AssistantAccountDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() name!: string
   @ApiProperty() appId!: string
-  @ApiProperty({ nullable: true }) wxidMasked!: string | null
-  @ApiProperty({ nullable: true }) nickname!: string | null
-  @ApiProperty({ nullable: true }) avatarUrl!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) wxidMasked!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) nickname!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
   @ApiProperty({ enum: ['ONLINE', 'OFFLINE', 'REQUIRES_LOGIN', 'DISABLED'] }) status!: string
   @ApiProperty() enabled!: boolean
-  @ApiProperty({ nullable: true, format: 'date-time' }) lastOnlineAt!: string | null
-  @ApiProperty({ nullable: true, format: 'date-time' }) lastLoginAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastOnlineAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastLoginAt!: string | null
   @ApiProperty({ type: 'integer' }) version!: number
 }
 
@@ -36,13 +36,13 @@ export class AssistantAccountCreateDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/\S/u) name!: string
   @ApiProperty({ maxLength: 16 }) @IsString() regionId!: string
   @ApiPropertyOptional({ enum: ['ipad', 'mac'] }) @IsOptional() @IsIn(['ipad', 'mac']) type?: 'ipad' | 'mac'
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
 }
 
 export class AssistantAccountUpdateDto {
   @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() name?: string
   @ApiPropertyOptional({ maxLength: 16 }) @IsOptional() @IsString() regionId?: string
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
   @ApiProperty({ type: 'integer', minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
 }
@@ -56,21 +56,21 @@ export class AssistantLoginQrDto {
   @ApiProperty() appId!: string
   @ApiProperty() uuid!: string
   @ApiProperty() qrImgBase64!: string
-  @ApiProperty({ nullable: true, format: 'date-time' }) expiresAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) expiresAt!: string | null
 }
 
 export class AssistantLoginStatusDto {
   @ApiProperty({ enum: ['WAITING', 'SCANNED', 'ONLINE', 'EXPIRED'] }) status!: string
-  @ApiProperty({ nullable: true }) wxidMasked!: string | null
-  @ApiProperty({ nullable: true }) nickname!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) wxidMasked!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) nickname!: string | null
 }
 
 export class AssistantContactDto {
   @ApiProperty() wxid!: string
-  @ApiProperty({ nullable: true }) nickname!: string | null
-  @ApiProperty({ nullable: true }) remark!: string | null
-  @ApiProperty({ nullable: true }) alias!: string | null
-  @ApiProperty({ nullable: true }) avatarUrl!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) nickname!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) remark!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) alias!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
 }
 
 export class AssistantBindingDto {
@@ -80,10 +80,10 @@ export class AssistantBindingDto {
   @ApiProperty({ format: 'uuid' }) accountId!: string
   @ApiProperty() accountName!: string
   @ApiProperty() wxidMasked!: string
-  @ApiProperty({ nullable: true }) wechatNickname!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) wechatNickname!: string | null
   @ApiProperty({ enum: ['ACTIVE', 'INVALID', 'DISABLED'] }) status!: string
-  @ApiProperty({ nullable: true, format: 'date-time' }) verifiedAt!: string | null
-  @ApiProperty({ nullable: true, format: 'date-time' }) friendCheckedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) verifiedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) friendCheckedAt!: string | null
   @ApiProperty({ format: 'date-time' }) boundAt!: string
 }
 
@@ -112,16 +112,16 @@ export class AssistantTargetDto {
   @ApiProperty() key!: string
   @ApiProperty() chatroomId!: string
   @ApiProperty() name!: string
-  @ApiProperty({ nullable: true }) purpose!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) purpose!: string | null
   @ApiProperty() internalOnly!: boolean
   @ApiProperty({ nullable: true, type: 'integer' }) memberCount!: number | null
   @ApiProperty() enabled!: boolean
-  @ApiProperty({ nullable: true, format: 'date-time' }) lastSyncedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastSyncedAt!: string | null
 }
 
 export class AssistantTargetUpdateDto {
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() name?: string
-  @ApiPropertyOptional({ maxLength: 255, nullable: true }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsString() purpose?: string | null
+  @ApiPropertyOptional({ type: 'string', maxLength: 255, nullable: true }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsString() purpose?: string | null
   @ApiPropertyOptional() @IsOptional() @IsBoolean() internalOnly?: boolean
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
 }

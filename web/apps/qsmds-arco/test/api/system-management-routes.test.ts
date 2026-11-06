@@ -12,6 +12,7 @@ import basicDataRoutes from '../../src/router/modules/basic.data'
 import productManagementRoutes from '../../src/router/modules/product.management'
 import supplierPaymentProfilesRoute from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
+import systemNotificationsRoute from '../../src/router/modules/system.notifications'
 import {
   ADMIN_WORKBENCH_PERMISSION,
   SYSTEM_MANAGEMENT_PERMISSION,
@@ -82,7 +83,17 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
   )
   assert.match(
     asyncRoutesSource,
-    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?ApplicationSettings,/u,
+    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?ApplicationSettings,[\s\S]*?SystemNotifications,/u,
+  )
+
+  assert.equal(systemNotificationsRoute.path, '/system/notifications')
+  assert.equal(systemNotificationsRoute.name, 'systemNotifications')
+  assert.equal(systemNotificationsRoute.meta?.title, '通知中心')
+  assert.equal(systemNotificationsRoute.meta?.icon, 'qs-notification')
+  assert.equal(systemNotificationsRoute.meta?.singleMenu, true)
+  assert.deepEqual(
+    systemNotificationsRoute.meta?.auth,
+    ['notification-record:read', 'notification-template:read', 'assistant-channel:read'],
   )
 
   // 原「权限体系」分组已解散：管理页面不再位于系统管理主路由内。

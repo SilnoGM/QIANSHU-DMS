@@ -29,9 +29,9 @@ export class NotificationTemplateDto {
   @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) channel!: string
   @ApiProperty() name!: string
   @ApiProperty({ enum: ['TEXT', 'LINK'] }) messageKind!: string
-  @ApiProperty({ nullable: true }) titleTemplate!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) titleTemplate!: string | null
   @ApiProperty() bodyTemplate!: string
-  @ApiProperty({ nullable: true }) linkUrlTemplate!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) linkUrlTemplate!: string | null
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) variables!: NotificationTemplateVariableDto[]
   @ApiProperty({ type: 'integer' }) maxLength!: number
   @ApiProperty() enabled!: boolean
@@ -44,9 +44,9 @@ export class NotificationTemplateCreateDto {
   @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) @IsIn(['IN_APP', 'ASSISTANT']) channel!: 'IN_APP' | 'ASSISTANT'
   @ApiProperty({ maxLength: 128 }) @IsString() @Matches(/\S/u) name!: string
   @ApiPropertyOptional({ enum: ['TEXT', 'LINK'] }) @IsOptional() @IsIn(['TEXT', 'LINK']) messageKind?: 'TEXT' | 'LINK'
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
   @ApiProperty() @IsString() @Matches(/\S/u) bodyTemplate!: string
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables!: NotificationTemplateVariableDto[]
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000, default: 2000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() enabled?: boolean
@@ -55,9 +55,9 @@ export class NotificationTemplateCreateDto {
 export class NotificationTemplateUpdateDto {
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() name?: string
   @ApiPropertyOptional({ enum: ['TEXT', 'LINK'] }) @IsOptional() @IsIn(['TEXT', 'LINK']) messageKind?: 'TEXT' | 'LINK'
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
   @ApiPropertyOptional() @IsOptional() @IsString() bodyTemplate?: string
-  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
   @ApiPropertyOptional({ type: () => [NotificationTemplateVariableDto] }) @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables?: NotificationTemplateVariableDto[]
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
@@ -70,7 +70,7 @@ export class NotificationTemplatePreviewDto {
 
 export class NotificationTemplatePreviewResultDto {
   @ApiProperty() content!: string
-  @ApiProperty({ nullable: true }) linkUrl!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) linkUrl!: string | null
   @ApiProperty() truncated!: boolean
   @ApiProperty({ type: [String] }) warnings!: string[]
 }
@@ -81,7 +81,7 @@ export class NotificationChannelPolicyDto {
   @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) channel!: string
   @ApiProperty({ enum: ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] }) targetMode!: string
   @ApiProperty({ type: 'object', additionalProperties: true }) targetConfig!: Record<string, unknown>
-  @ApiProperty({ nullable: true }) templateKey!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) templateKey!: string | null
   @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) priority!: string
   @ApiProperty({ nullable: true, type: 'integer' }) ttlSeconds!: number | null
   @ApiProperty({ type: 'object', nullable: true, additionalProperties: true }) quietHours!: Record<string, unknown> | null
@@ -93,7 +93,7 @@ export class NotificationChannelPolicyDto {
 export class NotificationChannelPolicyUpdateDto {
   @ApiProperty({ enum: ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] }) @IsIn(['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP']) targetMode!: string
   @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() targetConfig!: Record<string, unknown>
-  @ApiPropertyOptional({ nullable: true, maxLength: 64 }) @IsOptional() @IsString() templateKey?: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 64 }) @IsOptional() @IsString() templateKey?: string | null
   @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) @IsIn(['NORMAL', 'HIGH']) priority!: string
   @ApiPropertyOptional({ nullable: true, type: 'integer', minimum: 60, maximum: 604800 }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsInt() @Min(60) @Max(604800) ttlSeconds?: number | null
   @ApiPropertyOptional({ type: 'object', nullable: true, additionalProperties: true }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsObject() quietHours?: Record<string, unknown> | null
@@ -117,13 +117,13 @@ export class NotificationRecordQueryDto {
 
 export class NotificationDeliveryDto {
   @ApiProperty({ format: 'uuid' }) id!: string
-  @ApiProperty({ nullable: true }) recipientName!: string | null
-  @ApiProperty({ nullable: true }) targetName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) recipientName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
   @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
   @ApiProperty({ type: 'integer' }) attemptCount!: number
-  @ApiProperty({ nullable: true }) failureCode!: string | null
-  @ApiProperty({ nullable: true }) failureMessage!: string | null
-  @ApiProperty({ nullable: true, format: 'date-time' }) acceptedAt!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) failureCode!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) failureMessage!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) acceptedAt!: string | null
 }
 
 export class NotificationRecordDto {
@@ -134,9 +134,9 @@ export class NotificationRecordDto {
   @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) priority!: string
   @ApiProperty({ enum: ['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
   @ApiProperty() templateKey!: string
-  @ApiProperty({ nullable: true, format: 'date-time' }) expiresAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) expiresAt!: string | null
   @ApiProperty({ format: 'date-time' }) publishedAt!: string
-  @ApiProperty({ nullable: true, format: 'date-time' }) completedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) completedAt!: string | null
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' } }) deliveryCounts!: Record<string, number>
 }
 
@@ -159,9 +159,9 @@ export class NotificationCancelResultDto {
 export class NotificationOverviewDto {
   @ApiProperty() channelEnabled!: boolean
   @ApiProperty() tokenConfigured!: boolean
-  @ApiProperty({ nullable: true }) accountName!: string | null
-  @ApiProperty({ nullable: true }) accountStatus!: string | null
-  @ApiProperty({ nullable: true, format: 'date-time' }) lastOnlineAt!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) accountName!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) accountStatus!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastOnlineAt!: string | null
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' } }) last24Hours!: Record<string, number>
   @ApiProperty({ type: 'object', additionalProperties: true }) queue!: Record<string, string | number | null>
 }

@@ -129286,15 +129286,15 @@
             "type": "string"
           },
           "wxidMasked": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "nickname": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "avatarUrl": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -129310,14 +129310,14 @@
             "type": "boolean"
           },
           "lastOnlineAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "lastLoginAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "version": {
             "type": "integer"
@@ -129356,7 +129356,7 @@
             ]
           },
           "proxyIp": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           }
         },
@@ -129377,7 +129377,7 @@
             "maxLength": 16
           },
           "proxyIp": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "enabled": {
@@ -129409,9 +129409,9 @@
             "type": "string"
           },
           "expiresAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -129435,11 +129435,11 @@
             ]
           },
           "wxidMasked": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "nickname": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           }
         },
@@ -129467,19 +129467,19 @@
             "type": "string"
           },
           "nickname": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "remark": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "alias": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "avatarUrl": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           }
         },
@@ -129516,7 +129516,7 @@
             "type": "string"
           },
           "wechatNickname": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -129528,14 +129528,14 @@
             ]
           },
           "verifiedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "friendCheckedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "boundAt": {
             "type": "string",
@@ -129635,7 +129635,7 @@
             "type": "string"
           },
           "purpose": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "internalOnly": {
@@ -129649,9 +129649,9 @@
             "type": "boolean"
           },
           "lastSyncedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -129674,7 +129674,7 @@
             "maxLength": 128
           },
           "purpose": {
-            "type": "object",
+            "type": "string",
             "maxLength": 255,
             "nullable": true
           },
@@ -129696,17 +129696,17 @@
             "type": "boolean"
           },
           "accountName": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "accountStatus": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "lastOnlineAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "last24Hours": {
             "type": "object",
@@ -129780,14 +129780,14 @@
             ]
           },
           "titleTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "bodyTemplate": {
             "type": "string"
           },
           "linkUrlTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "variables": {
@@ -129852,14 +129852,14 @@
             ]
           },
           "titleTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "bodyTemplate": {
             "type": "string"
           },
           "linkUrlTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "variables": {
@@ -129902,14 +129902,14 @@
             ]
           },
           "titleTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "bodyTemplate": {
             "type": "string"
           },
           "linkUrlTemplate": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "variables": {
@@ -129954,7 +129954,7 @@
             "type": "string"
           },
           "linkUrl": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "truncated": {
@@ -130006,7 +130006,7 @@
             "additionalProperties": true
           },
           "templateKey": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "priority": {
@@ -130068,7 +130068,7 @@
             "additionalProperties": true
           },
           "templateKey": {
-            "type": "object",
+            "type": "string",
             "nullable": true,
             "maxLength": 64
           },
@@ -130149,18 +130149,18 @@
             "type": "string"
           },
           "expiresAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "publishedAt": {
             "type": "string",
             "format": "date-time"
           },
           "completedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "deliveryCounts": {
             "type": "object",
@@ -130217,11 +130217,11 @@
             "format": "uuid"
           },
           "recipientName": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "targetName": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "status": {
@@ -130240,17 +130240,17 @@
             "type": "integer"
           },
           "failureCode": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "failureMessage": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "acceptedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -130303,18 +130303,18 @@
             "type": "string"
           },
           "expiresAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "publishedAt": {
             "type": "string",
             "format": "date-time"
           },
           "completedAt": {
-            "type": "object",
-            "nullable": true,
-            "format": "date-time"
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "deliveryCounts": {
             "type": "object",

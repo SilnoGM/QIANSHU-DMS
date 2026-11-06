@@ -574,5 +574,13 @@
     "usages": [
       "运营工作台广告充值页 / 财务工作台实收实付广告充值页"
     ]
+  },
+  {
+    "name": "qs-notification",
+    "label": "通知中心",
+    "category": "系统",
+    "usages": [
+      "通知中心"
+    ]
   }
 ]
