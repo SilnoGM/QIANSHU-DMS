@@ -6,7 +6,7 @@
 | --- | --- |
 | 文档状态 | 设计稿，关键决策已确认，待实施 |
 | 方案定位 | 通知中心（系统通知）为统一能力；站内通知与千树小助理是两个渠道 |
-| 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
+| 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[站内通知设计](./inapp.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco` |
 | 最后更新 | 2026-10-28 |
 | 实施边界 | 本文不含迁移 SQL、接口实现与页面代码；表结构、权限与迁移需单独评审批准 |
@@ -145,7 +145,7 @@ await this.systemNotifications.publish(
 | 表 | 归属 | 用途 | 关键字段 |
 | --- | --- | --- | --- |
 | `notifications` | 通知中心 | 逻辑通知 | `event_type`、`source_type`、`source_id`、`dedupe_key` 唯一、`priority`、`status`、`template_key`、`requested_channels`、`variables`、`expires_at`、`published_at`、`completed_at`、`requested_by_user_id` |
-| `notification_inbox_items` | 站内通知 | 收件箱条目（阶段 3） | `notification_id`、`user_id`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
+| `notification_inbox_items` | 站内通知 | 收件箱条目（阶段 3） | `notification_id`、`user_id`、`event_type`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
 | `notification_templates` | 通知中心 | 按渠道的模板 | `key`、`channel`、`name`、`title_template`、`body_template`、`link_url_template`、`variables`、`max_length`、`enabled`、`version`；唯一 `(key, channel)` |
 | `notification_channel_policies` | 通知中心 | 事件 × 渠道策略 | `event_type`、`channel`、`target_mode`、`target_config`、`template_key`、`priority`、`ttl_seconds`、`quiet_hours`、`allow_sensitive`、`enabled`、`version`；唯一 `(event_type, channel)` |
 | `notification_settings` | 通知中心 | 全局设置 | `id='default'`、`notification_retention_days`、`delivery_retention_days`、`callback_retention_days`、`version`、`updated_by_user_id` |
@@ -232,7 +232,7 @@ PENDING ──► SENDING ──► ACCEPTED
 | `assistant_callback_events` | 30 天 | 原始报文可能含消息内容，保留期最短（回调引入后） |
 | `assistant_deliveries` | 90 天 | 站外发送台账，用于排查与对账 |
 | `notifications` | 180 天 | 逻辑通知与统计 |
-| `notification_inbox_items` | 用户归档或 1 年 | 站内消息是用户资产，不随站外 TTL 删除 |
+| `notification_inbox_items` | 未归档 180 天、已归档 1 年 | 站内消息是用户资产，不随站外 TTL 删除 |
 
 清理由 `server/src/commands/notification-operations.ts cleanup` 执行，沿用媒体清理的 systemd timer 模式，每日一次。保留期可在 `notification_settings` 调整，但必须有下限（回调 ≥7 天、站外投递 ≥30 天）。
 
@@ -500,7 +500,7 @@ export type AssistantTransportResult =
 | 页签 | 内容 | 阶段 |
 | --- | --- | --- |
 | 概览 | 渠道状态、公司号在线、今日发送/失败/未读、队列积压 | 1 |
-| 站内通知 | 站内渠道配置与消息治理 | 3，阶段 1 隐藏 |
+| 站内通知 | 站内渠道配置与消息治理（见 [站内通知设计](./inapp.md)） | 3，阶段 1 隐藏 |
 | 千树小助理 | 渠道配置、公司号、管理员绑定、群目标 | 1 |
 | 通知规则 | 模板（按渠道）与事件 × 渠道策略 | 1 |
 | 发送记录 | 逻辑通知、渠道汇总、逐人交付、重试/取消 | 1 |
@@ -578,7 +578,8 @@ views/system/notifications/
 - 员工**不需要**安装任何客户端，也不把自己的微信登录到 GeWe。
 - 员工侧**没有绑定入口**；绑定、解绑、换号全部由管理员在后台完成。员工只需要在微信里添加公司号并接收消息。
 - 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 发送测试消息 → 员工确认后标记 `verified_at`。
-- 阶段 3 的站内通知入口在顶栏铃铛与「站内通知」页；数据来自 `notification_inbox_items`，未读数来自 `read_at IS NULL` 的计数。
+- 阶段 3 的站内通知入口在顶栏铃铛与 `/notifications` 页面；单列表 + 业务域筛选，30 秒轮询，聚焦与操作后立即刷新；未读数只返回总数。详见 [站内通知设计](./inapp.md)。
+- 桌面浏览器通知为可选增强：通知页开关、仅桌面端、页面隐藏时逐条弹、允许带详情；不做 Web Push。
 - 员工在微信里看到的发送者名称是**公司号微信自己的昵称**，不是系统里的「千树小助理」标签。上线时要把公司号昵称与头像设置为「千树小助理」，否则员工看到的是「公司号-01」。
 
 ## 10. 权限与审计
@@ -696,7 +697,7 @@ views/system/notifications/
 | --- | --- | --- |
 | 1. 通知中心骨架 + 千树小助理 | 共享表、3 个事件、渠道策略、模板、站外交付、进程内 worker、群目标、管理员绑定与验证、发送记录、渠道停发、管理端「概览/千树小助理/通知规则/发送记录」 | 一名测试员工完成管理员绑定并收到 1:1；内部测试群收到群通知；停发立即生效；站内渠道保持关闭；无回调 |
 | 2. 事件扩展与内容增强 | 其余 4 个事件、链接消息、摘要聚合 | 7 个事件均可配置；通知可跳回系统页面；同一员工短时间内多条待办可合并为一条摘要 |
-| 3. 站内通知中心 | 启用 `IN_APP` 渠道、收件箱页面、顶栏铃铛、已读/归档、未读计数 | 站内与千树小助理共享同一发布接口；业务调用方零改动 |
+| 3. 站内通知中心 | 启用 `IN_APP` 渠道、`/notifications` 页面、顶栏铃铛、单列表 + 业务域筛选、30 秒轮询、已读/归档、未读计数；桌面通知可选 | 站内与千树小助理共享同一发布接口；业务调用方零改动；桌面通知不依赖新基础设施 |
 | 4. 多公司号与可选回调 | 多账号路由；仅在需要实时掉线/联系人事件时引入回调 | 多号可切换；若引入回调，完成 CSRF 安全评审与回调测试 |
 
 阶段 1 的前置条件：

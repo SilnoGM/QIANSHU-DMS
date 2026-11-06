@@ -264,11 +264,17 @@ CHECK：两个保留期都在 `7..3650`。
 
 ### 5.1 `notification_inbox_items`（阶段 3）
 
-`id`、`notificationId`、`userId`、`templateVersion`、`titleSnapshot`、`bodySnapshot`、`linkUrlSnapshot`、`readAt`、`archivedAt`、`createdAt`。
+`id`、`notificationId`、`userId`、`eventType`、`templateVersion`、`titleSnapshot`、`bodySnapshot`、`linkUrlSnapshot`、`readAt`、`archivedAt`、`createdAt`。
 
 - 唯一 `(notificationId, userId)`。
-- 索引 `(userId, archivedAt, createdAt DESC)`。
+- 列表索引：`(userId, archivedAt, createdAt DESC)`。
+- 未读计数部分索引：`(userId) WHERE readAt IS NULL AND archivedAt IS NULL`。
+- 业务域筛选索引：`(userId, eventType, createdAt DESC)`。
 - 没有投递状态枚举；未读 = `readAt IS NULL AND archivedAt IS NULL`。
+- 归档时如果 `readAt` 为空，同时写 `readAt = now()`，避免取消归档后未读数回跳。
+- `eventType` 是快照，用于通知主表清理后仍能按业务域筛选；业务域本身由共享常量派生，不落库。
+- 未归档保留 180 天、已归档保留 1 年；不做删除接口，归档可逆。
+- 完整接口、轮询与桌面通知规则见 [站内通知设计](./inapp.md)。
 
 ### 5.2 `assistant_callback_events`（回调引入时）
 

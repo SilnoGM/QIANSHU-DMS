@@ -8,7 +8,7 @@
 | 方案定位 | 通知中心（系统通知）的统一接口；千树小助理是其中的微信出站渠道 |
 | 关联文档 | [文档索引](./README.md)、[落地设计](./design.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 最后更新 | 2026-10-28 |
-| 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约 |
+| 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约；站内 30 秒轮询 |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco/src/api/modules/notifications.ts` |
 
 本文中的 TypeScript 片段是契约示意，不是最终代码；表结构、权限与迁移以评审通过的实施方案为准。
@@ -55,7 +55,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'FUND_WITHDRAWAL_REVIEW_PENDING',
   'INVOICE_REQUEST_REVIEW_PENDING',
   'PACKAGING_COST_PAYMENT_PENDING',
-  'PURCHASE_PAYABLE_DUE',
+  'PURCHASE_PAYABLE_PENDING',
   'SLH_RECONCILIATION_COMPLETED',
   'SHIPMENT_ARRIVED',
 ] as const
@@ -189,15 +189,17 @@ export interface SystemNotificationPublishResult {
 
 ### 2.7 事件目录（首批候选，需业务确认）
 
-| eventType | source.type | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
-| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
-| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
-| `PURCHASE_PAYABLE_DUE` | `PURCHASE_ORDER_PAYABLE` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.due` | NORMAL | 24h | 2 |
-| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
-| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
+| eventType | source.type | 业务域 | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | 采购 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | 资金 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
+| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | 发票 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
+| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | 资金 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
+| `PURCHASE_PAYABLE_PENDING` | `PURCHASE_ORDER_PAYABLE` | 采购 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.pending` | NORMAL | 24h | 2 |
+| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | 对账 | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
+| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | 货件 | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
+
+业务域用于站内通知的单列表筛选；`PURCHASE_PAYABLE_PENDING` 归采购已确认，其余阶段 2 业务域为建议值，实施前确认。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
@@ -349,16 +351,25 @@ export interface SystemNotificationPublishResult {
 
 ## 5. 员工侧接口（站内阶段 3 预留）
 
-### 5.1 站内通知（阶段 3 预留）
+### 5.1 站内通知（阶段 3）
+
+全部只要求登录，不要求管理权限；服务端强制 `userId = 当前会话用户`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/notifications/me/inbox` | 本人收件箱，支持未读/已读/已归档筛选 |
-| GET | `/api/notifications/me/inbox/unread-count` | 未读数，供顶栏铃铛 |
-| POST | `/api/notifications/me/inbox/:id/read` | 标记已读 |
-| POST | `/api/notifications/me/inbox/:id/archive` | 归档 |
+| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=purchase/fund/invoice/reconciliation/shipment`、`page`、`pageSize` |
+| GET | `/api/notifications/me/inbox/unread-count` | 未读总数 `{ total }`；只算未读且未归档 |
+| GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供桌面通知使用 |
+| GET | `/api/notifications/me/inbox/:id` | 详情；不属于当前用户返回 404 |
+| POST | `/api/notifications/me/inbox/:id/read` | 标记已读，幂等 |
+| POST | `/api/notifications/me/inbox/:id/unread` | 标记未读，幂等 |
+| POST | `/api/notifications/me/inbox/read-all` | 全部已读；请求体可选 `{ domain }` |
+| POST | `/api/notifications/me/inbox/:id/archive` | 归档；未读时同时写 `readAt` |
+| POST | `/api/notifications/me/inbox/:id/unarchive` | 取消归档；`readAt` 保留 |
 
-该组接口在阶段 3 实现，本文只冻结路径与语义。
+列表响应使用 `{ items, page, pageSize, total }`；列表项返回 `id`、`eventType`、`domain`、`title`、`readAt`、`archivedAt`、`createdAt`，正文只在详情返回。增量接口返回 `{ items, unreadTotal, nextCursor, hasMore, serverTime }`，游标编码 `(createdAt, id)`，避免同一时间戳消息漏拉。
+
+完整语义、业务域映射与 30 秒轮询规则见 [站内通知设计](./inapp.md)。
 
 ### 5.2 千树小助理绑定
 

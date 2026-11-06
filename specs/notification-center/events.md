@@ -76,6 +76,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `purchase.review.pending` |
+| 业务域 | 采购 |
 | 优先级 | `HIGH`（突破静默时段） |
 | 站外 TTL | 24 小时 |
 | `dedupeKey` | `purchase-review:{purchaseOrderId}` |
@@ -137,6 +138,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `slh.reconciliation.completed` |
+| 业务域 | 对账 |
 | 优先级 | `NORMAL` |
 | 站外 TTL | 8 小时 |
 | `dedupeKey` | `slh-reconciliation-completed:{batchId}` |
@@ -196,6 +198,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `shipment.arrived` |
+| 业务域 | 货件 |
 | 优先级 | `NORMAL` |
 | 站外 TTL | 8 小时 |
 | `dedupeKey` | `shipment-arrived:{purchaseOrderId}:{sortedPartIds.join(',')}` |
@@ -206,12 +209,14 @@
 
 以下只列触发方向，具体触发点与文案在阶段 2 前补齐。
 
-| 事件 | 触发方向 | 默认目标 | 备注 |
-| --- | --- | --- | --- |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
-| `INVOICE_REQUEST_REVIEW_PENDING` | 开票申请提交/进入待审 | 权限 `invoice-requests:review`，1:1 | 开票时效 |
-| `PACKAGING_COST_PAYMENT_PENDING` | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
-| `PURCHASE_PAYABLE_DUE` | 应付到期扫描 | 应付负责人，1:1 | **仓库没有调度器**，需要 CLI + systemd timer 或复用 worker 的日扫描；先定扫描频率与逾期口径 |
+| 事件 | 业务域 | 触发方向 | 默认目标 | 备注 |
+| --- | --- | --- | --- | --- |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | 资金 | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
+| `INVOICE_REQUEST_REVIEW_PENDING` | 发票 | 开票申请提交/进入待审 | 权限 `invoice-requests:review`，1:1 | 开票时效 |
+| `PACKAGING_COST_PAYMENT_PENDING` | 资金 | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
+| `PURCHASE_PAYABLE_PENDING` | 采购 | 采购单存在未付清的定金/尾款 | 应付负责人，1:1 | 待付款提醒，不依赖到期日；每日扫描需要 CLI + systemd timer，`dedupeKey` 带日期 |
+
+业务域中 `PURCHASE_PAYABLE_PENDING` 归采购已确认；其余阶段 2 业务域为建议值，实施前确认。
 
 ## 6. 测试与验收
 
