@@ -46,8 +46,8 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 29],
-  ['operations_staff', 25],
-  ['purchasing_staff', 14],
+  ['operations_staff', 27],
+  ['purchasing_staff', 15],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
   ADVERTISING_RECHARGE_NO: 'FIXED(AD) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
