@@ -111,11 +111,12 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const signal = new AbortController().signal
-    const [templateResult, policyResult] = await Promise.all([
+    const [assistantTemplates, inappTemplates, policyResult] = await Promise.all([
       notificationsApi.templates.list('ASSISTANT', signal),
+      notificationsApi.templates.list('IN_APP', signal),
       notificationsApi.policies.list({}, signal),
     ])
-    templates.value = templateResult.data
+    templates.value = [...assistantTemplates.data, ...inappTemplates.data]
     policies.value = policyResult.data
   }
   catch (failure) {
