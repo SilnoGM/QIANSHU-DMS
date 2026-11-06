@@ -12,6 +12,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { formatMachineViewingTime } from '@/utils/machine-viewing-schedule'
 import { machineViewingStatusMeta } from '@/utils/machine-viewing-status'
 import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
+import MachineViewingDetailDrawer from './machine-viewing-detail-drawer.vue'
 import MachineViewingFeedbackModal from './machine-viewing-feedback-modal.vue'
 import MachineViewingFormModal from './machine-viewing-form-modal.vue'
 
@@ -38,6 +39,8 @@ const createError = ref('')
 const fieldErrors = ref<Record<string, string>>({})
 const feedbackOpen = ref(false)
 const feedbackRecord = ref<MachineViewingDto | null>(null)
+const detailOpen = ref(false)
+const detailRecord = ref<MachineViewingDto | null>(null)
 
 let controller: AbortController | null = null
 
@@ -90,18 +93,18 @@ const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
   },
   { id: 'contactPerson', accessorKey: 'contactPerson', title: t('machineViewing.column.contactPerson'), minWidth: 120 },
   {
-    id: 'submitted',
-    accessorFn: row => `${row.createdBy.name} ${row.createdAt}`,
-    title: t('machineViewing.column.submitted'),
-    minWidth: 176,
-  },
-  {
     id: 'feedback',
     accessorFn: row => row.feedback ?? '',
     title: t('machineViewing.column.feedback'),
     width: 112,
     minWidth: 112,
     align: 'center',
+  },
+  {
+    id: 'submitted',
+    accessorFn: row => `${row.createdBy.name} ${row.createdAt}`,
+    title: t('machineViewing.column.submitted'),
+    minWidth: 176,
   },
 ])
 
@@ -220,6 +223,11 @@ function openFeedback(row: MachineViewingDto): void {
   feedbackRecord.value = row
   feedbackOpen.value = true
 }
+
+function openDetail(row: MachineViewingDto): void {
+  detailRecord.value = row
+  detailOpen.value = true
+}
 </script>
 
 <template>
@@ -245,6 +253,7 @@ function openFeedback(row: MachineViewingDto): void {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('machineViewing.empty')"
         :empty-description="t('machineViewing.emptyDescription')"
+        :action-column="{ width: 104, minWidth: 104 }"
         table-class="w-max min-w-full"
         :aria-label="t('machineViewing.title')"
         @pagination-change="load"
@@ -351,6 +360,17 @@ function openFeedback(row: MachineViewingDto): void {
             </div>
           </div>
         </template>
+        <template #actions="{ row }">
+          <FaButton
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-8"
+            :aria-label="`${row.appointmentNo}：${t('machineViewing.action.detail')}`"
+            @click="openDetail(row)"
+          >
+            {{ t('machineViewing.action.detail') }}
+          </FaButton>
+        </template>
       </QsGenericTable>
     </FaPageMain>
 
@@ -362,5 +382,6 @@ function openFeedback(row: MachineViewingDto): void {
       @submit="submitCreate"
     />
     <MachineViewingFeedbackModal v-model="feedbackOpen" :record="feedbackRecord" />
+    <MachineViewingDetailDrawer v-model="detailOpen" :record="detailRecord" />
   </div>
 </template>

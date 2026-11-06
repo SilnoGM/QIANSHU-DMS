@@ -34,6 +34,17 @@
       "content": "回饋內容",
       "close": "關閉"
     },
+    "action": {
+      "detail": "查看詳情"
+    },
+    "detail": {
+      "title": "看機預約詳情",
+      "appointment": "預約資訊",
+      "customer": "客戶資訊",
+      "feedback": "回饋資訊",
+      "submitted": "提交資訊",
+      "close": "關閉"
+    },
     "site": {
       "NEW_TAIPEI_LINKOU": "新北林口",
       "TAICHUNG_LONGJING": "台中龍井"

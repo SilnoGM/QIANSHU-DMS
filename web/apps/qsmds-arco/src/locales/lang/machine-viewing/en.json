@@ -34,6 +34,17 @@
       "content": "Feedback",
       "close": "Close"
     },
+    "action": {
+      "detail": "View details"
+    },
+    "detail": {
+      "title": "Machine viewing details",
+      "appointment": "Appointment",
+      "customer": "Customer",
+      "feedback": "Feedback",
+      "submitted": "Submission",
+      "close": "Close"
+    },
     "site": {
       "NEW_TAIPEI_LINKOU": "Linkou, New Taipei",
       "TAICHUNG_LONGJING": "Longjing, Taichung"

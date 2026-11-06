@@ -34,6 +34,17 @@
       "content": "反馈内容",
       "close": "关闭"
     },
+    "action": {
+      "detail": "查看详情"
+    },
+    "detail": {
+      "title": "看机预约详情",
+      "appointment": "预约信息",
+      "customer": "客户信息",
+      "feedback": "反馈信息",
+      "submitted": "提交信息",
+      "close": "关闭"
+    },
     "site": {
       "NEW_TAIPEI_LINKOU": "新北林口",
       "TAICHUNG_LONGJING": "台中龙井"
