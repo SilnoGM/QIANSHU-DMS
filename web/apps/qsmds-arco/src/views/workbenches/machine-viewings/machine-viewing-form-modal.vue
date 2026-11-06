@@ -207,7 +207,7 @@ function submit(): void {
   <QsGenericModal
     :model-value="modelValue"
     :title="t('machineViewing.form.title')"
-    size="md"
+    size="lg"
     :submitting="locked"
     @update:model-value="close"
   >
