@@ -51,6 +51,7 @@ export class ContainerLoadingItemUpdateDto extends ContainerLoadingItemCreateDto
 }
 export class ContainerBatchDto {
   @ApiProperty() itemCount!: number
+  @ApiProperty({ description: 'Loading lines already bound to a shipment; unbound lines stay at 0 and are counted in itemCount.' }) boundItemCount!: number
   @ApiProperty() shipmentCount!: number
   @ApiProperty() packageCountTotal!: number
   @ApiProperty({ type: String, nullable: true }) grossWeightKgTotal!: string | null

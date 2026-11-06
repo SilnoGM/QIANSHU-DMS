@@ -114303,6 +114303,10 @@
           "itemCount": {
             "type": "number"
           },
+          "boundItemCount": {
+            "type": "number",
+            "description": "Loading lines already bound to a shipment; unbound lines stay at 0 and are counted in itemCount."
+          },
           "shipmentCount": {
             "type": "number"
           },
@@ -114370,6 +114374,7 @@
         },
         "required": [
           "itemCount",
+          "boundItemCount",
           "shipmentCount",
           "packageCountTotal",
           "grossWeightKgTotal",

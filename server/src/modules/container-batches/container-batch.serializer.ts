@@ -17,7 +17,8 @@ function summarize(items: SummaryItem[]) {
     const text = sum.toString().padStart(scale + 1, '0')
     return `${text.slice(0, -scale)}.${text.slice(-scale)}`
   }
-  return { itemCount: items.length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 0), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: items.some(item => item.chargeableVolumeCai == null) ? null : items.reduce((sum, item) => sum + item.chargeableVolumeCai!, 0) }
+  // 绑定统计按装柜明细行计，同一货件占多行也各算一行；签收不会清 shipmentId，解绑才会变未绑定。
+  return { itemCount: items.length, boundItemCount: items.filter(item => item.shipmentId !== null).length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 0), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: items.some(item => item.chargeableVolumeCai == null) ? null : items.reduce((sum, item) => sum + item.chargeableVolumeCai!, 0) }
 }
 export function serializeContainerBatch(row: ContainerBatch & { items?: SummaryItem[] }): ContainerBatchDto {
   return { ...summarize(row.items ?? []), createdById: row.createdById, id: row.id, containerBatchNo: row.containerBatchNo, containerBatchName: row.containerBatchName, loadingDate: row.loadingDate.toISOString().slice(0, 10), sequenceInDay: row.sequenceInDay, warehouseValue: row.warehouseValue, sourceFileId: row.sourceFileId, remark: row.remark, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }
