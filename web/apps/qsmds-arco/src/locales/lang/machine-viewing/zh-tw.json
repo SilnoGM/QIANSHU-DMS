@@ -14,11 +14,25 @@
       "site": "看機地點",
       "machineType": "看機機型",
       "appointmentTime": "預約時間",
+      "status": "狀態",
       "customerName": "客戶姓名",
       "customerPhone": "客戶電話",
       "contactPerson": "業務對接人",
-      "createdBy": "提交人",
-      "createdAt": "提交時間"
+      "submitted": "提交人 / 時間",
+      "feedback": "回饋資訊"
+    },
+    "status": {
+      "PENDING_APPOINTMENT": "待預約",
+      "APPOINTED": "已預約",
+      "FEEDBACK_GIVEN": "已回饋",
+      "CANCELLED": "已取消"
+    },
+    "feedback": {
+      "view": "查看詳情",
+      "none": "-",
+      "title": "查看回饋",
+      "content": "回饋內容",
+      "close": "關閉"
     },
     "site": {
       "NEW_TAIPEI_LINKOU": "新北林口",

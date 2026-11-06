@@ -14,11 +14,25 @@
       "site": "Site",
       "machineType": "Machine",
       "appointmentTime": "Appointment",
+      "status": "Status",
       "customerName": "Customer",
       "customerPhone": "Phone",
       "contactPerson": "Contact",
-      "createdBy": "Submitted by",
-      "createdAt": "Submitted at"
+      "submitted": "Submitted by / at",
+      "feedback": "Feedback"
+    },
+    "status": {
+      "PENDING_APPOINTMENT": "Pending",
+      "APPOINTED": "Appointed",
+      "FEEDBACK_GIVEN": "Feedback given",
+      "CANCELLED": "Cancelled"
+    },
+    "feedback": {
+      "view": "View",
+      "none": "-",
+      "title": "View feedback",
+      "content": "Feedback",
+      "close": "Close"
     },
     "site": {
       "NEW_TAIPEI_LINKOU": "Linkou, New Taipei",

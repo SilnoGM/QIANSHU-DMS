@@ -6,7 +6,13 @@ import machineViewingsApi from '@/api/modules/machine-viewings'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
+import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { formatMachineViewingTime } from '@/utils/machine-viewing-schedule'
+import { machineViewingStatusMeta } from '@/utils/machine-viewing-status'
+import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
+import MachineViewingFeedbackModal from './machine-viewing-feedback-modal.vue'
 import MachineViewingFormModal from './machine-viewing-form-modal.vue'
 
 defineOptions({ name: 'QsOperationsMachineViewings' })
@@ -30,6 +36,8 @@ const createKey = ref('')
 const creating = ref(false)
 const createError = ref('')
 const fieldErrors = ref<Record<string, string>>({})
+const feedbackOpen = ref(false)
+const feedbackRecord = ref<MachineViewingDto | null>(null)
 
 let controller: AbortController | null = null
 
@@ -54,6 +62,12 @@ const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
     cellClass: 'qs-type-data-emphasis',
     mobileCellClass: 'qs-type-data-emphasis',
   },
+  {
+    id: 'status',
+    accessorFn: row => t(machineViewingStatusMeta(row.status).labelKey),
+    title: t('machineViewing.column.status'),
+    minWidth: 104,
+  },
   { id: 'customerName', accessorKey: 'customerName', title: t('machineViewing.column.customerName'), minWidth: 132 },
   {
     id: 'customerPhone',
@@ -76,16 +90,18 @@ const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
   },
   { id: 'contactPerson', accessorKey: 'contactPerson', title: t('machineViewing.column.contactPerson'), minWidth: 120 },
   {
-    id: 'createdBy',
-    accessorFn: row => row.createdBy.name,
-    title: t('machineViewing.column.createdBy'),
-    minWidth: 132,
+    id: 'submitted',
+    accessorFn: row => `${row.createdBy.name} ${row.createdAt}`,
+    title: t('machineViewing.column.submitted'),
+    minWidth: 176,
   },
   {
-    id: 'createdAt',
-    accessorKey: 'createdAt',
-    title: t('machineViewing.column.createdAt'),
-    minWidth: 168,
+    id: 'feedback',
+    accessorFn: row => row.feedback ?? '',
+    title: t('machineViewing.column.feedback'),
+    width: 112,
+    minWidth: 112,
+    align: 'center',
   },
 ])
 
@@ -199,6 +215,11 @@ watch(open, (value) => {
     fieldErrors.value = {}
   }
 })
+
+function openFeedback(row: MachineViewingDto): void {
+  feedbackRecord.value = row
+  feedbackOpen.value = true
+}
 </script>
 
 <template>
@@ -229,8 +250,35 @@ watch(open, (value) => {
         @pagination-change="load"
         @retry="load"
       >
-        <template #cell-createdAt="{ row }">
-          <DateTimeDisplay :value="row.original.createdAt" />
+        <template #cell-status="{ row }">
+          <span
+            class="qs-type-tag px-2 py-0.5 border rounded-md whitespace-nowrap"
+            :class="resolveStatusTagToneClass(machineViewingStatusMeta(row.original.status).tone)"
+          >
+            {{ t(machineViewingStatusMeta(row.original.status).labelKey) }}
+          </span>
+        </template>
+        <template #cell-submitted="{ row }">
+          <QsTableStackedCell>
+            <QsPersonDisplay :display-name="row.original.createdBy.name" size="sm" :avatar-url="row.original.createdBy.avatarUrl" />
+            <QsTableStackedLine tone="muted">
+              <DateTimeDisplay :value="row.original.createdAt" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+        <template #cell-feedback="{ row }">
+          <FaButton
+            v-if="row.original.feedback"
+            variant="link"
+            size="sm"
+            class="px-0 min-h-11 sm:min-h-8"
+            @click="openFeedback(row.original)"
+          >
+            {{ t('machineViewing.feedback.view') }}
+          </FaButton>
+          <span v-else class="text-muted-foreground">
+            {{ t('machineViewing.feedback.none') }}
+          </span>
         </template>
         <template #mobile-row="{ row }">
           <div class="min-w-0 [overflow-wrap:anywhere] space-y-3">
@@ -239,7 +287,12 @@ watch(open, (value) => {
             </div>
             <div class="flex gap-3 items-baseline justify-between">
               <span class="qs-type-data">{{ formatMachineViewingTime(t, row) }}</span>
-              <span class="text-primary qs-type-tag">{{ t(`machineViewing.machineType.${row.machineType}`) }}</span>
+              <span
+                class="qs-type-tag px-2 py-0.5 border rounded-md whitespace-nowrap"
+                :class="resolveStatusTagToneClass(machineViewingStatusMeta(row.status).tone)"
+              >
+                {{ t(machineViewingStatusMeta(row.status).labelKey) }}
+              </span>
             </div>
             <dl class="space-y-2">
               <div class="flex gap-3 items-baseline">
@@ -264,14 +317,37 @@ watch(open, (value) => {
               </div>
               <div class="flex gap-3 items-baseline">
                 <dt class="qs-type-meta text-muted-foreground shrink-0">
+                  {{ t('machineViewing.column.machineType') }}
+                </dt>
+                <dd>{{ t(`machineViewing.machineType.${row.machineType}`) }}</dd>
+              </div>
+              <div class="flex gap-3 items-baseline">
+                <dt class="qs-type-meta text-muted-foreground shrink-0">
                   {{ t('machineViewing.column.contactPerson') }}
                 </dt>
                 <dd>{{ row.contactPerson }}</dd>
               </div>
             </dl>
             <div class="qs-type-meta text-muted-foreground pt-3 border-t border-border flex gap-2 items-center justify-between">
-              <span>{{ row.createdBy.name }}</span>
+              <QsPersonDisplay :display-name="row.createdBy.name" size="sm" :avatar-url="row.createdBy.avatarUrl" />
               <DateTimeDisplay :value="row.createdAt" />
+            </div>
+            <div class="pt-3 border-t border-border flex gap-2 items-center justify-between">
+              <span class="qs-type-meta text-muted-foreground">
+                {{ t('machineViewing.column.feedback') }}
+              </span>
+              <FaButton
+                v-if="row.feedback"
+                variant="link"
+                size="sm"
+                class="px-0 min-h-11"
+                @click="openFeedback(row)"
+              >
+                {{ t('machineViewing.feedback.view') }}
+              </FaButton>
+              <span v-else class="qs-type-meta text-muted-foreground">
+                {{ t('machineViewing.feedback.none') }}
+              </span>
             </div>
           </div>
         </template>
@@ -285,5 +361,6 @@ watch(open, (value) => {
       :field-errors="fieldErrors"
       @submit="submitCreate"
     />
+    <MachineViewingFeedbackModal v-model="feedbackOpen" :record="feedbackRecord" />
   </div>
 </template>
