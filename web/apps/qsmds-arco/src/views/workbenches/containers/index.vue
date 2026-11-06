@@ -8,6 +8,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { resolveContainerBindingStats } from './binding-stats.logic'
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerRemark from './container-remark.vue'
 import ContainerSwapModal from './container-swap-modal.vue'
@@ -72,12 +73,20 @@ function totals(row: ContainerBatchDto) {
     { label: 'totalVolumeLabel', value: measurement(row.volumeCaiTotal, 2, t('containerManagement.volumeUnit')) },
   ]
 }
+function bindingStats(row: ContainerBatchDto) {
+  return resolveContainerBindingStats(row.boundItemCount, row.itemCount)
+}
+function bindingStatsText(row: ContainerBatchDto) {
+  const stats = bindingStats(row)
+  return `${stats.bound}/${stats.total} [${t(stats.labelKey)}]`
+}
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
   { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', width: 126, minWidth: 126, maxWidth: 126, fixed: 'left', cellClass: 'qs-type-data-emphasis whitespace-nowrap' },
   { id: 'containerBatchName', title: t('containerPage.name'), accessorKey: 'containerBatchName', width: 160, minWidth: 140 },
   { id: 'loadingDate', title: t('containerPage.date'), accessorKey: 'loadingDate', width: 132, minWidth: 132, cellClass: 'qs-type-data' },
   { id: 'warehouse', title: t('containerPage.warehouse'), accessorFn: row => warehouseLabel(row.warehouseValue), width: 275, minWidth: 220 },
   { id: 'quantities', title: t('containerPage.quantityInfo'), accessorFn: row => quantities(row).map(item => item.value).join(' '), width: 150, minWidth: 150 },
+  { id: 'bindingStats', title: t('containerPage.bindingStats'), accessorFn: row => bindingStatsText(row), width: 168, minWidth: 160 },
   { id: 'totals', title: t('containerPage.loadSummary'), accessorFn: row => totals(row).map(item => item.value).join(' '), width: 190, minWidth: 190 },
   { id: 'remark', title: t('containerPage.remark'), accessorKey: 'remark', width: 220, minWidth: 220, maxWidth: 220 },
 ])
@@ -170,6 +179,12 @@ onDeactivated(() => {
               </QsTableStackedLine>
             </QsTableStackedCell>
           </template>
+          <template #cell-bindingStats="{ row }">
+            <span class="qs-type-data whitespace-nowrap" :class="bindingStats(row.original).toneClass">
+              {{ bindingStats(row.original).bound }}/{{ bindingStats(row.original).total }}
+              <span class="text-xs font-sans">[{{ t(bindingStats(row.original).labelKey) }}]</span>
+            </span>
+          </template>
           <template #cell-remark="{ row }">
             <ContainerRemark :text="row.original.remark" />
           </template>
@@ -198,6 +213,14 @@ onDeactivated(() => {
                     {{ t('containerPage.warehouse') }}
                   </dt><dd>
                     {{ warehouseLabel(row.warehouseValue) }}
+                  </dd>
+                </div>
+                <div class="flex gap-3 items-baseline">
+                  <dt class="qs-type-meta text-muted-foreground shrink-0">
+                    {{ t('containerPage.bindingStats') }}
+                  </dt><dd class="qs-type-data" :class="bindingStats(row).toneClass">
+                    {{ bindingStats(row).bound }}/{{ bindingStats(row).total }}
+                    <span class="text-xs font-sans">[{{ t(bindingStats(row).labelKey) }}]</span>
                   </dd>
                 </div>
               </dl>

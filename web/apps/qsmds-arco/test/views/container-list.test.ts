@@ -11,6 +11,7 @@ import ts from 'typescript'
 import { computed, effectScope, ref, watch } from 'vue'
 import { parse } from 'vue/compiler-sfc'
 import { resolveDictionaryCatalogValue } from '../../src/dictionary-catalog/options'
+import { resolveContainerBindingStats } from '../../src/views/workbenches/containers/binding-stats.logic'
 import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
 
 async function fixture(options: { permissions?: string[], created?: { id: string } | null } = {}) {
@@ -30,6 +31,7 @@ async function fixture(options: { permissions?: string[], created?: { id: string
     ref,
     watch,
     formatContainerMeasurement,
+    resolveContainerBindingStats,
     defineOptions: () => {},
     useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
     useAppAuth: () => ({ auth: (permission: string) => !options.permissions || options.permissions.includes(permission) }),
@@ -88,11 +90,15 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   const f = await fixture()
   context.after(f.dispose)
   const columns = f.state.columns.value
-  assert.deepEqual(Array.from(columns, column => column.id), ['containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouse', 'quantities', 'totals', 'remark'])
+  assert.deepEqual(Array.from(columns, column => column.id), ['containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouse', 'quantities', 'bindingStats', 'totals', 'remark'])
   assert.ok(columns.every(column => column.defaultVisible !== false))
   assert.notEqual(columns.find(column => column.id === 'containerBatchNo')!.copyable, true)
-  const row = { itemCount: 10, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
+  const row = { itemCount: 10, boundItemCount: 8, shipmentCount: 8, packageCountTotal: 15, grossWeightKgTotal: '1173.400', volumeCaiTotal: '25.135', chargeableVolumeCaiTotal: 27 } as ContainerBatchDto
   assert.equal(columns.find(column => column.id === 'quantities')!.accessorFn!(row, 0), '10 8')
+  assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!(row, 0), '8/10 [containerPage.bindingPartial]')
+  assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 10 }, 0), '10/10 [containerPage.bindingAll]')
+  assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0 }, 0), '0/10 [containerPage.bindingNone]')
+  assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0, itemCount: 0 }, 0), '0/0 [containerPage.bindingEmpty]')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 kg 25.14 材')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
 })
