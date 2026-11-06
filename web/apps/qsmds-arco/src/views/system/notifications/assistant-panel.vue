@@ -2,7 +2,7 @@
 import type { AssistantAccountDto, AssistantBindingDto, AssistantChannelDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { getApiClientErrorMessage } from '@/api/errors'
 import managementApi from '@/api/modules/management'
@@ -31,20 +31,30 @@ const targets = ref<AssistantTargetDto[]>([])
 const users = ref<UserDto[]>([])
 const contacts = ref<AssistantContactDto[]>([])
 
-const createAccountOpen = ref(false)
-const accountDraft = ref({ name: '', regionId: '320000' })
-const qrOpen = ref(false)
-const qrImage = ref('')
-const qrStatus = ref('正在获取二维码…')
-const qrAccountId = ref<string | null>(null)
-const qrUuid = ref<string | null>(null)
+const accountDialogOpen = ref(false)
+const accountDialogMode = ref<'create' | 'update'>('create')
+const editingAccountId = ref<string | null>(null)
+const accountDraft = ref({ name: '', appId: '', wxid: '', nickname: '' })
 const ownQrOpen = ref(false)
 const ownQrImage = ref('')
 const bindingOpen = ref(false)
 const bindingUserId = ref<string | undefined>(undefined)
 const bindingContactWxid = ref<string | undefined>(undefined)
 
-let qrTimer: ReturnType<typeof setInterval> | null = null
+const editingAccount = computed(() => accounts.value.find(account => account.id === editingAccountId.value) ?? null)
+const accountDialogTitle = computed(() => accountDialogMode.value === 'create' ? '导入公司号' : '更新公司号节点')
+const accountDialogDescription = computed(() => accountDialogMode.value === 'create'
+  ? '在 GeWe 控制台打开节点详情，复制 appId 与 wxid。系统会调用 checkOnline 验证，离线节点不能导入。'
+  : 'appId 与 wxid 留空表示不修改。修改 appId 时会重新校验节点在线；控制台负责登录与重连。')
+const appIdPlaceholder = computed(() => accountDialogMode.value === 'create' ? 'wx_...' : '留空表示不修改')
+const wxidPlaceholder = computed(() => accountDialogMode.value === 'create'
+  ? 'wxid_...'
+  : `留空表示不修改；当前 ${editingAccount.value?.wxidMasked ?? '未记录'}`)
+const canSubmitAccount = computed(() => accountDialogMode.value === 'create'
+  ? accountDraft.value.name.trim().length > 0
+  && accountDraft.value.appId.trim().length > 0
+  && accountDraft.value.wxid.trim().length > 0
+  : true)
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -73,7 +83,7 @@ function statusClass(status: string): string {
 const STATUS_LABELS: Record<string, string> = {
   ONLINE: '在线',
   OFFLINE: '离线',
-  REQUIRES_LOGIN: '需要登录',
+  REQUIRES_LOGIN: '待导入',
   DISABLED: '已停用',
   ACTIVE: '有效',
   INVALID: '已失效',
@@ -81,6 +91,10 @@ const STATUS_LABELS: Record<string, string> = {
 
 function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status
+}
+
+function isPendingAccount(account: AssistantAccountDto): boolean {
+  return account.appId.startsWith('pending-') || account.status === 'REQUIRES_LOGIN'
 }
 
 const userOptions = computed(() => users.value.map(user => ({ label: `${user.displayName}（${user.username}）`, value: user.id })))
@@ -157,93 +171,76 @@ async function testChannel(): Promise<void> {
   }
 }
 
-async function createAccount(): Promise<void> {
-  busy.value = true
-  try {
-    await notificationsApi.assistant.accounts.create({
-      name: accountDraft.value.name,
-      regionId: accountDraft.value.regionId,
-    })
-    createAccountOpen.value = false
-    accountDraft.value = { name: '', regionId: '320000' }
-    toast.success('公司号已创建，请扫码登录')
-    await loadAll()
-  }
-  catch (failure) {
-    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
-  }
-  finally {
-    busy.value = false
-  }
+function openCreateAccount(): void {
+  accountDialogMode.value = 'create'
+  editingAccountId.value = null
+  accountDraft.value = { name: '', appId: '', wxid: '', nickname: '' }
+  accountDialogOpen.value = true
 }
 
-function stopQrPolling(): void {
-  if (qrTimer !== null) {
-    clearInterval(qrTimer)
-    qrTimer = null
+function openUpdateAccount(account: AssistantAccountDto): void {
+  accountDialogMode.value = 'update'
+  editingAccountId.value = account.id
+  accountDraft.value = {
+    name: account.name,
+    appId: isPendingAccount(account) ? '' : account.appId,
+    wxid: '',
+    nickname: account.nickname ?? '',
   }
+  accountDialogOpen.value = true
 }
 
-async function pollQr(): Promise<void> {
-  if (qrAccountId.value === null || qrUuid.value === null) {
+async function submitAccount(): Promise<void> {
+  const draft = accountDraft.value
+  const name = draft.name.trim()
+  const appId = draft.appId.trim()
+  const wxid = draft.wxid.trim()
+  const nickname = draft.nickname.trim()
+
+  if (accountDialogMode.value === 'create' && (name.length === 0 || appId.length === 0 || wxid.length === 0)) {
+    toast.warning('请填写备注名、appId 与 wxid')
     return
   }
-  try {
-    const result = (await notificationsApi.assistant.accounts.loginStatus(
-      qrAccountId.value,
-      qrUuid.value,
-      new AbortController().signal,
-    )).data
-    qrStatus.value = result.status === 'WAITING'
-      ? '等待扫码'
-      : result.status === 'SCANNED'
-        ? '已扫码，请在手机上确认'
-        : result.status === 'EXPIRED'
-          ? '二维码已过期，请重新获取'
-          : '登录成功'
-    if (result.status === 'ONLINE') {
-      stopQrPolling()
-      qrOpen.value = false
-      toast.success('公司号登录成功')
-      await loadAll()
-    }
-    if (result.status === 'EXPIRED') {
-      stopQrPolling()
-    }
-  }
-  catch (failure) {
-    stopQrPolling()
-    qrStatus.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
-  }
-}
 
-async function startLogin(account: AssistantAccountDto): Promise<void> {
   busy.value = true
   try {
-    const result = (await notificationsApi.assistant.accounts.loginStart(account.id)).data
-    qrAccountId.value = account.id
-    qrUuid.value = result.uuid
-    qrImage.value = result.qrImgBase64
-    qrStatus.value = '等待扫码'
-    qrOpen.value = true
-    stopQrPolling()
-    qrTimer = setInterval(() => {
-      void pollQr()
-    }, 5_000)
-  }
-  catch (failure) {
-    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
-  }
-  finally {
-    busy.value = false
-  }
-}
-
-async function reconnect(account: AssistantAccountDto): Promise<void> {
-  busy.value = true
-  try {
-    await notificationsApi.assistant.accounts.reconnect(account.id)
-    toast.success('重连请求已提交')
+    if (accountDialogMode.value === 'create') {
+      await notificationsApi.assistant.accounts.create({
+        name,
+        appId,
+        wxid,
+        ...(nickname.length > 0 ? { nickname } : {}),
+      })
+      toast.success('公司号已导入，节点在线')
+    }
+    else {
+      const account = editingAccount.value
+      if (account === null) {
+        return
+      }
+      const input: { expectedVersion: number, name?: string, appId?: string, wxid?: string, nickname?: string } = {
+        expectedVersion: account.version,
+      }
+      if (name.length > 0 && name !== account.name) {
+        input.name = name
+      }
+      if (appId.length > 0 && appId !== account.appId) {
+        input.appId = appId
+      }
+      if (wxid.length > 0) {
+        input.wxid = wxid
+      }
+      if (nickname !== (account.nickname ?? '')) {
+        input.nickname = nickname
+      }
+      if (input.name === undefined && input.appId === undefined && input.wxid === undefined && input.nickname === undefined) {
+        toast.warning('没有需要保存的修改')
+        return
+      }
+      await notificationsApi.assistant.accounts.update(account.id, input)
+      toast.success('公司号节点已更新')
+    }
+    accountDialogOpen.value = false
     await loadAll()
   }
   catch (failure) {
@@ -254,12 +251,30 @@ async function reconnect(account: AssistantAccountDto): Promise<void> {
   }
 }
 
-async function logout(account: AssistantAccountDto): Promise<void> {
+async function checkAccountStatus(account: AssistantAccountDto): Promise<void> {
   busy.value = true
   try {
-    await notificationsApi.assistant.accounts.logout(account.id)
-    toast.success('公司号已退出')
-    await loadAll()
+    const updated = (await notificationsApi.assistant.accounts.checkStatus(account.id)).data
+    accounts.value = accounts.value.map(item => item.id === updated.id ? updated : item)
+    toast.success(updated.status === 'ONLINE' ? '节点在线' : '节点离线，请在 GeWe 控制台重连')
+  }
+  catch (failure) {
+    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
+  }
+  finally {
+    busy.value = false
+  }
+}
+
+async function setAccountEnabled(account: AssistantAccountDto, enabled: boolean): Promise<void> {
+  busy.value = true
+  try {
+    const updated = (await notificationsApi.assistant.accounts.update(account.id, {
+      enabled,
+      expectedVersion: account.version,
+    })).data
+    accounts.value = accounts.value.map(item => item.id === updated.id ? updated : item)
+    toast.success(enabled ? '公司号已启用派发' : '公司号已停用派发')
   }
   catch (failure) {
     toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
@@ -406,10 +421,6 @@ async function updateTarget(target: AssistantTargetDto, input: { internalOnly?: 
 onMounted(() => {
   void loadAll()
 })
-
-onBeforeUnmount(() => {
-  stopQrPolling()
-})
 </script>
 
 <template>
@@ -457,16 +468,16 @@ onBeforeUnmount(() => {
               公司号
             </h3>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              扫码登录由持有公司手机的管理员完成；掉线后优先重连，失败再重新扫码。
+              节点登录、掉线与重连都在 GeWe 控制台完成；这里只导入 appId 与 wxid，并检查在线状态。
             </p>
           </div>
-          <FaButton size="sm" :disabled="!canOperateAccount || busy" @click="createAccountOpen = true">
-            新增公司号
+          <FaButton size="sm" :disabled="!canOperateAccount || busy" @click="openCreateAccount">
+            导入公司号
           </FaButton>
         </div>
 
         <div v-if="accounts.length === 0" class="qs-type-meta text-muted-foreground mt-4">
-          还没有公司号。先新增，再扫码登录。
+          还没有公司号。先在 GeWe 控制台确认节点在线，再点击「导入公司号」。
         </div>
         <div v-else class="mt-4 gap-3 grid lg:grid-cols-2">
           <div v-for="account in accounts" :key="account.id" class="p-3 border border-border rounded-lg">
@@ -476,27 +487,46 @@ onBeforeUnmount(() => {
                   {{ account.name }}
                 </p>
                 <p class="qs-type-meta text-muted-foreground m-0">
-                  {{ account.nickname ?? '未登录' }} · {{ account.appId }}
+                  {{ account.nickname ?? account.name }} · {{ account.appId }}
                 </p>
               </div>
               <FaTag variant="outline" :class="statusClass(account.status)">
                 {{ statusLabel(account.status) }}
               </FaTag>
             </div>
-            <p class="qs-type-meta text-muted-foreground mt-2">
-              最后在线：{{ formatDate(account.lastOnlineAt) }}
-            </p>
+            <div class="mt-2 flex flex-wrap gap-3 items-center justify-between">
+              <p class="qs-type-meta text-muted-foreground m-0">
+                最后在线：{{ formatDate(account.lastOnlineAt) }}
+              </p>
+              <label v-if="!isPendingAccount(account)" class="qs-type-meta flex gap-2 items-center">
+                <FaSwitch
+                  :model-value="account.enabled"
+                  :disabled="!canOperateAccount || busy"
+                  @update:model-value="setAccountEnabled(account, Boolean($event))"
+                />
+                启用派发
+              </label>
+            </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              <FaButton size="sm" :disabled="!canOperateAccount || busy" @click="startLogin(account)">
-                扫码登录
+              <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="openUpdateAccount(account)">
+                更新节点
               </FaButton>
-              <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="reconnect(account)">
-                重连
+              <FaButton
+                v-if="!isPendingAccount(account)"
+                variant="outline"
+                size="sm"
+                :disabled="!canOperateAccount || busy"
+                @click="checkAccountStatus(account)"
+              >
+                检查状态
               </FaButton>
-              <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="logout(account)">
-                退出
-              </FaButton>
-              <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="showOwnQr(account)">
+              <FaButton
+                v-if="!isPendingAccount(account)"
+                variant="outline"
+                size="sm"
+                :disabled="!canOperateAccount || busy"
+                @click="showOwnQr(account)"
+              >
                 个人二维码
               </FaButton>
             </div>
@@ -605,45 +635,45 @@ onBeforeUnmount(() => {
       </section>
     </template>
 
-    <QsGenericModal v-model="createAccountOpen" title="新增公司号" size="md" :submitting="busy" @update:model-value="createAccountOpen = $event">
+    <QsGenericModal
+      v-model="accountDialogOpen"
+      :title="accountDialogTitle"
+      size="md"
+      :submitting="busy"
+      @update:model-value="accountDialogOpen = $event"
+    >
       <div class="flex flex-col gap-3">
         <label class="flex flex-col gap-1">
           <span class="qs-type-compact-label">备注名</span>
           <FaInput v-model="accountDraft.name" placeholder="公司号-01" />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">登录区域</span>
-          <FaInput v-model="accountDraft.regionId" placeholder="320000" />
+          <span class="qs-type-compact-label">appId</span>
+          <FaInput v-model="accountDraft.appId" :placeholder="appIdPlaceholder" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">wxid</span>
+          <FaInput v-model="accountDraft.wxid" :placeholder="wxidPlaceholder" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">微信昵称（可选）</span>
+          <FaInput v-model="accountDraft.nickname" placeholder="千树小助理" />
         </label>
         <p class="qs-type-meta text-muted-foreground">
-          创建后点「扫码登录」，由持有公司手机的管理员扫码确认。
+          {{ accountDialogDescription }}
+        </p>
+        <p class="qs-type-meta text-muted-foreground">
+          不要在系统里下线或退出节点；控制台负责登录与重连。
         </p>
       </div>
       <template #footer>
-        <FaButton variant="outline" :disabled="busy" @click="createAccountOpen = false">
+        <FaButton variant="outline" :disabled="busy" @click="accountDialogOpen = false">
           取消
         </FaButton>
-        <FaButton :loading="busy" :disabled="accountDraft.name.trim().length === 0" @click="createAccount">
-          创建
+        <FaButton :loading="busy" :disabled="!canSubmitAccount" @click="submitAccount">
+          {{ accountDialogMode === 'create' ? '导入' : '保存' }}
         </FaButton>
       </template>
-    </QsGenericModal>
-
-    <QsGenericModal
-      v-model="qrOpen"
-      title="扫码登录公司号"
-      size="md"
-      @update:model-value="(value) => { qrOpen = value; if (!value) stopQrPolling() }"
-    >
-      <div class="flex flex-col gap-3 items-center">
-        <img v-if="qrImage" :src="qrImage" alt="微信登录二维码" class="border border-border rounded-lg size-64 object-contain">
-        <p class="qs-type-body m-0">
-          {{ qrStatus }}
-        </p>
-        <p class="qs-type-meta text-muted-foreground text-center">
-          用公司手机微信扫码并在手机上确认；二维码有效期约 150 秒，过期后重新扫码。
-        </p>
-      </div>
     </QsGenericModal>
 
     <QsGenericModal v-model="ownQrOpen" title="公司号个人二维码" size="md" @update:model-value="ownQrOpen = $event">

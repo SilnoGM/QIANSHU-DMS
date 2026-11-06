@@ -31,13 +31,19 @@ test('通知中心页面使用统一页头、页签与四个面板', () => {
   assert.match(indexSource, /data-testid="notification-center-tabs"/u)
 })
 
-test('千树小助理面板包含扫码登录、绑定验证与群目标开关', () => {
-  assert.match(assistantSource, /扫码登录/u)
+test('千树小助理面板从控制台导入节点，不提供扫码登录与退出', () => {
+  assert.match(assistantSource, /导入公司号/u)
+  assert.match(assistantSource, /检查状态/u)
+  assert.match(assistantSource, /更新节点/u)
+  assert.match(assistantSource, /个人二维码/u)
+  assert.match(assistantSource, /启用派发/u)
   assert.match(assistantSource, /发送测试/u)
   assert.match(assistantSource, /仅内部成员/u)
   assert.match(assistantSource, /<QsGenericTable/u)
   assert.match(assistantSource, /<QsGenericModal/u)
   assert.match(assistantSource, /<FaAlert/u)
+  assert.doesNotMatch(assistantSource, /扫码登录/u)
+  assert.doesNotMatch(assistantSource, /accounts\.(?:loginStart|loginStatus|reconnect|logout)/u)
   assert.doesNotMatch(assistantSource, /<FaTable/u)
   assert.doesNotMatch(assistantSource, /#(?:[0-9a-fA-F]{3}){1,2}\b/u)
 })

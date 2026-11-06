@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateIf } from 'class-validator'
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator'
 
 export class AssistantChannelDto {
   @ApiProperty() enabled!: boolean
@@ -33,36 +33,19 @@ export class AssistantAccountDto {
 }
 
 export class AssistantAccountCreateDto {
-  @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/\S/u) name!: string
-  @ApiProperty({ maxLength: 16 }) @IsString() regionId!: string
-  @ApiPropertyOptional({ enum: ['ipad', 'mac'] }) @IsOptional() @IsIn(['ipad', 'mac']) type?: 'ipad' | 'mac'
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
+  @ApiProperty({ maxLength: 64 }) @IsString() @MaxLength(64) @Matches(/\S/u) name!: string
+  @ApiProperty({ maxLength: 128 }) @IsString() @MaxLength(128) @Matches(/\S/u) appId!: string
+  @ApiProperty({ maxLength: 128 }) @IsString() @MaxLength(128) @Matches(/\S/u) wxid!: string
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @MaxLength(128) nickname?: string
 }
 
 export class AssistantAccountUpdateDto {
-  @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() name?: string
-  @ApiPropertyOptional({ maxLength: 16 }) @IsOptional() @IsString() regionId?: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() proxyIp?: string | null
+  @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) @Matches(/\S/u) name?: string
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @MaxLength(128) @Matches(/\S/u) appId?: string
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @MaxLength(128) @Matches(/\S/u) wxid?: string
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @MaxLength(128) nickname?: string
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
   @ApiProperty({ type: 'integer', minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
-}
-
-export class AssistantLoginStatusQueryDto {
-  @ApiProperty() @IsString() @Matches(/\S/u) uuid!: string
-}
-
-export class AssistantLoginQrDto {
-  @ApiProperty({ format: 'uuid' }) accountId!: string
-  @ApiProperty() appId!: string
-  @ApiProperty() uuid!: string
-  @ApiProperty() qrImgBase64!: string
-  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) expiresAt!: string | null
-}
-
-export class AssistantLoginStatusDto {
-  @ApiProperty({ enum: ['WAITING', 'SCANNED', 'ONLINE', 'EXPIRED'] }) status!: string
-  @ApiProperty({ type: 'string', nullable: true }) wxidMasked!: string | null
-  @ApiProperty({ type: 'string', nullable: true }) nickname!: string | null
 }
 
 export class AssistantContactDto {

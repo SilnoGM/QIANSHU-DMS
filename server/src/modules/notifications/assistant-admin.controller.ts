@@ -22,9 +22,6 @@ import {
   AssistantContactDto,
   AssistantContactQueryDto,
   AssistantIdParamDto,
-  AssistantLoginQrDto,
-  AssistantLoginStatusDto,
-  AssistantLoginStatusQueryDto,
   AssistantTargetDto,
   AssistantTargetUpdateDto,
   AssistantTestSendDto,
@@ -84,7 +81,10 @@ export class AssistantAdminController {
   @HttpCode(200)
   @RequirePermissions('assistant-channel:update')
   @ApiContractResponse({ status: 200, type: AssistantTestSendDto })
-  @contract('assistant_channel_test', true, [...upstreamErrors, { status: 422, codes: ['ASSISTANT_ACCOUNT_UNAVAILABLE'] }])
+  @contract('assistant_channel_test', true, [
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_UNAVAILABLE', 'ASSISTANT_ACCOUNT_NOT_IMPORTED', 'ASSISTANT_ACCOUNT_OFFLINE'] },
+    ...upstreamErrors,
+  ])
   testChannel() {
     return this.assistant.testChannel()
   }
@@ -101,58 +101,49 @@ export class AssistantAdminController {
   @HttpCode(201)
   @RequirePermissions('assistant-account:operate')
   @ApiContractResponse({ status: 201, type: AssistantAccountDto })
-  @contract('assistant_accounts_create', true)
-  createAccount(@Body() input: AssistantAccountCreateDto) {
-    return this.assistant.createAccount(input)
+  @contract('assistant_accounts_create', true, [
+    { status: 409, codes: ['ASSISTANT_ACCOUNT_APP_ID_EXISTS'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_OFFLINE', 'ASSISTANT_ACCOUNT_APP_ID_INVALID'] },
+    ...upstreamErrors,
+  ])
+  createAccount(@Body() input: AssistantAccountCreateDto, @Req() request: object) {
+    return this.assistant.createAccount(context(request), input)
   }
 
   @Patch('accounts/:id')
   @RequirePermissions('assistant-account:operate')
   @ApiContractResponse({ status: 200, type: AssistantAccountDto })
-  @contract('assistant_accounts_update', true, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, { status: 409, codes: ['ASSISTANT_ACCOUNT_STATE_CHANGED'] }])
-  updateAccount(@Param() params: AssistantIdParamDto, @Body() input: AssistantAccountUpdateDto) {
-    return this.assistant.updateAccount(params.id, input)
+  @contract('assistant_accounts_update', true, [
+    { status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] },
+    { status: 409, codes: ['ASSISTANT_ACCOUNT_STATE_CHANGED', 'ASSISTANT_ACCOUNT_APP_ID_EXISTS'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_OFFLINE', 'ASSISTANT_ACCOUNT_NOT_IMPORTED', 'ASSISTANT_ACCOUNT_APP_ID_INVALID'] },
+    ...upstreamErrors,
+  ])
+  updateAccount(@Param() params: AssistantIdParamDto, @Body() input: AssistantAccountUpdateDto, @Req() request: object) {
+    return this.assistant.updateAccount(context(request), params.id, input)
   }
 
-  @Post('accounts/:id/login')
-  @HttpCode(200)
-  @RequirePermissions('assistant-account:operate')
-  @ApiContractResponse({ status: 200, type: AssistantLoginQrDto })
-  @contract('assistant_accounts_login_start', true, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, ...upstreamErrors])
-  startLogin(@Param() params: AssistantIdParamDto, @Req() request: object) {
-    return this.assistant.startLogin(context(request), params.id)
-  }
-
-  @Get('accounts/:id/login-status')
-  @RequirePermissions('assistant-account:operate')
-  @ApiContractResponse({ status: 200, type: AssistantLoginStatusDto })
-  @contract('assistant_accounts_login_status', false, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, ...upstreamErrors])
-  loginStatus(@Param() params: AssistantIdParamDto, @Query() query: AssistantLoginStatusQueryDto, @Req() request: object) {
-    return this.assistant.loginStatus(context(request), params.id, query.uuid)
-  }
-
-  @Post('accounts/:id/reconnect')
+  @Post('accounts/:id/check')
   @HttpCode(200)
   @RequirePermissions('assistant-account:operate')
   @ApiContractResponse({ status: 200, type: AssistantAccountDto })
-  @contract('assistant_accounts_reconnect', true, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, ...upstreamErrors])
-  reconnect(@Param() params: AssistantIdParamDto, @Req() request: object) {
-    return this.assistant.reconnect(context(request), params.id)
-  }
-
-  @Post('accounts/:id/logout')
-  @HttpCode(200)
-  @RequirePermissions('assistant-account:operate')
-  @ApiContractResponse({ status: 200, type: AssistantAccountDto })
-  @contract('assistant_accounts_logout', true, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, ...upstreamErrors])
-  logout(@Param() params: AssistantIdParamDto, @Req() request: object) {
-    return this.assistant.logout(context(request), params.id)
+  @contract('assistant_accounts_check_status', true, [
+    { status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_NOT_IMPORTED'] },
+    ...upstreamErrors,
+  ])
+  checkAccountStatus(@Param() params: AssistantIdParamDto) {
+    return this.assistant.checkAccountStatus(params.id)
   }
 
   @Get('accounts/:id/qrcode')
   @RequirePermissions('assistant-account:read')
   @ApiContractResponse({ status: 200, type: AssistantAccountQrDto })
-  @contract('assistant_accounts_qrcode', false, [{ status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] }, ...upstreamErrors])
+  @contract('assistant_accounts_qrcode', false, [
+    { status: 404, codes: ['ASSISTANT_ACCOUNT_NOT_FOUND'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_NOT_IMPORTED'] },
+    ...upstreamErrors,
+  ])
   accountQrCode(@Param() params: AssistantIdParamDto) {
     return this.assistant.accountQrCode(params.id)
   }

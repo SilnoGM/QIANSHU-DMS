@@ -258,13 +258,10 @@ export interface SystemNotificationPublishResult {
 | PUT | `/api/assistant/channel` | `assistant-channel:update` | `assistant_channel_update` | 启停、Base URL、默认静默时段，需 `expectedVersion` |
 | POST | `/api/assistant/channel/test` | `assistant-channel:update` | `assistant_channel_test` | 用公司号自己的文件传输助手发测试消息 |
 | GET | `/api/assistant/accounts` | `assistant-account:read` | `assistant_accounts_list` | 账号列表 |
-| POST | `/api/assistant/accounts` | `assistant-account:operate` | `assistant_accounts_create` | 新增账号记录（首期仅一条） |
-| PATCH | `/api/assistant/accounts/:id` | `assistant-account:operate` | `assistant_accounts_update` | 备注名、区域、代理、启停 |
-| POST | `/api/assistant/accounts/:id/login` | `assistant-account:operate` | `assistant_accounts_login_start` | 获取二维码 |
-| GET | `/api/assistant/accounts/:id/login-status` | `assistant-account:operate` | `assistant_accounts_login_status` | 轮询扫码状态 |
-| GET | `/api/assistant/accounts/:id/qrcode` | `assistant-account:read` | `assistant_accounts_qrcode` | 获取公司号个人二维码，供员工扫码添加好友 |
-| POST | `/api/assistant/accounts/:id/reconnect` | `assistant-account:operate` | `assistant_accounts_reconnect` | 掉线重连 |
-| POST | `/api/assistant/accounts/:id/logout` | `assistant-account:operate` | `assistant_accounts_logout` | 退出登录 |
+| POST | `/api/assistant/accounts` | `assistant-account:operate` | `assistant_accounts_create` | 导入 GeWe 控制台已有节点（`appId` + `wxid`），先校验在线 |
+| PATCH | `/api/assistant/accounts/:id` | `assistant-account:operate` | `assistant_accounts_update` | 备注名、`appId`/`wxid`、启停；`appId` 变化时重新校验在线 |
+| POST | `/api/assistant/accounts/:id/check` | `assistant-account:operate` | `assistant_accounts_check_status` | 调用 `checkOnline` 刷新本地在线状态，不触发登录、重连或退出 |
+| GET | `/api/assistant/accounts/:id/qrcode` | `assistant-account:read` | `assistant_accounts_qrcode` | 获取公司号个人二维码，供员工扫码添加好友；未导入节点返回 422 |
 | GET | `/api/assistant/contacts` | `assistant-binding:read` | `assistant_contacts_list` | 公司号好友列表，供管理员选择绑定对象 |
 | GET | `/api/assistant/bindings` | `assistant-binding:read` | `assistant_bindings_list` | 绑定列表 |
 | POST | `/api/assistant/bindings` | `assistant-binding:manage` | `assistant_bindings_create` | 管理员创建绑定（员工 + 好友 `wxid`） |
@@ -277,6 +274,8 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
 | GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
 | GET | `/api/assistant/callback-events/:id` | `assistant-callback:read` | `assistant_callback_events_get` | 回调详情；原始报文脱敏（可选） |
+
+账号登录、掉线重连与退出全部在 GeWe 控制台完成；系统不提供扫码登录、`reconnection` 或 `logout` 接口。系统只保存管理员从控制台复制的 `appId`/`wxid`，并在导入或重新指向节点时调用 `checkOnline` 校验；离线节点拒绝导入。旧版 `REQUIRES_LOGIN` 账号仅作为历史占位，需要在「更新节点」中补齐真实 `appId`。
 
 ### 4.3 关键响应示例
 
@@ -302,12 +301,29 @@ export interface SystemNotificationPublishResult {
 ```
 
 ```json
-// POST /api/assistant/accounts/:id/login
+// POST /api/assistant/accounts
 {
-  "accountId": "3d0f...",
+  "name": "公司号-01",
   "appId": "wx_wR_U4zPj2M_OTS3BCyoE4",
-  "qrImgBase64": "data:image/jpg;base64,...",
-  "expiresAt": "2026-10-28T02:20:00.000Z"
+  "wxid": "wxid_company01",
+  "nickname": "千树小助理"
+}
+```
+
+```json
+// POST /api/assistant/accounts/:id/check
+{
+  "id": "3d0f...",
+  "name": "公司号-01",
+  "appId": "wx_wR_U4zPj2M_OTS3BCyoE4",
+  "wxidMasked": "wxid****01",
+  "nickname": "千树小助理",
+  "avatarUrl": null,
+  "status": "ONLINE",
+  "enabled": true,
+  "lastOnlineAt": "2026-10-28T02:15:00.000Z",
+  "lastLoginAt": null,
+  "version": 2
 }
 ```
 

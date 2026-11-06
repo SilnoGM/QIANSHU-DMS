@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
@@ -25,8 +24,6 @@ import type {
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
-  AssistantLoginQrDto,
-  AssistantLoginStatusDto,
   AssistantTargetDto,
   AssistantTargetUpdateDto,
 } from './assistant-admin.dto'
@@ -38,6 +35,13 @@ export interface AssistantAdminContext {
 
 const TEST_TEXT = '【千树小助理】通道自检：这是一条测试消息，无需处理。'
 const VERIFY_TEXT = '【千树小助理】绑定验证：这是一条测试消息，请确认已收到。'
+const PENDING_APP_ID_PREFIX = 'pending-'
+
+/** 仅已从 GeWe 控制台导入、处于启用状态且不是占位 appId 的账号才能参与发送。 */
+const ACTIVE_ACCOUNT_WHERE: Prisma.AssistantAccountWhereInput = {
+  enabled: true,
+  appId: { not: { startsWith: PENDING_APP_ID_PREFIX } },
+}
 
 function maskWxid(wxid: string | null): string | null {
   if (wxid === null || wxid.length <= 4) {
@@ -48,6 +52,28 @@ function maskWxid(wxid: string | null): string | null {
 
 function iso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
+}
+
+function isPendingAppId(appId: string): boolean {
+  return appId.startsWith(PENDING_APP_ID_PREFIX)
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (error as { code?: string }).code === 'P2002'
+}
+
+interface AccountRecord {
+  readonly id: string
+  readonly name: string
+  readonly appId: string
+  readonly wxid: string | null
+  readonly nickname: string | null
+  readonly avatarUrl: string | null
+  readonly status: string
+  readonly enabled: boolean
+  readonly lastOnlineAt: Date | null
+  readonly lastLoginAt: Date | null
+  readonly version: number
 }
 
 @Injectable()
@@ -76,6 +102,43 @@ export class AssistantAdminService {
       throw new ApiException(404, 'ASSISTANT_ACCOUNT_NOT_FOUND', '公司号不存在')
     }
     return account
+  }
+
+  private toAccountDto(account: AccountRecord): AssistantAccountDto {
+    return {
+      id: account.id,
+      name: account.name,
+      appId: account.appId,
+      wxidMasked: maskWxid(account.wxid),
+      nickname: account.nickname,
+      avatarUrl: account.avatarUrl,
+      status: account.status,
+      enabled: account.enabled,
+      lastOnlineAt: iso(account.lastOnlineAt),
+      lastLoginAt: iso(account.lastLoginAt),
+      version: account.version,
+    }
+  }
+
+  private assertImported(account: { readonly appId: string }): void {
+    if (isPendingAppId(account.appId)) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_NOT_IMPORTED', '该账号尚未导入 GeWe 节点，请填写 appId 与 wxid')
+    }
+  }
+
+  private async checkOnline(appId: string): Promise<boolean> {
+    try {
+      return await this.adminTransport.checkOnline(appId)
+    }
+    catch (error) {
+      this.mapUpstreamError(error)
+    }
+  }
+
+  private async requireOnlineNode(appId: string): Promise<void> {
+    if (!await this.checkOnline(appId)) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_OFFLINE', '节点不在线，请先在 GeWe 控制台确认节点在线')
+    }
   }
 
   async getChannel(): Promise<AssistantChannelDto> {
@@ -119,13 +182,14 @@ export class AssistantAdminService {
 
   async testChannel(): Promise<{ accepted: true }> {
     const account = await this.prisma.assistantAccount.findFirst({
-      where: { enabled: true },
+      where: ACTIVE_ACCOUNT_WHERE,
       orderBy: { createdAt: 'asc' },
       select: { appId: true },
     })
     if (account === null) {
       throw new ApiException(422, 'ASSISTANT_ACCOUNT_UNAVAILABLE', '没有可用的公司号')
     }
+    await this.requireOnlineNode(account.appId)
     const result = await this.transport.sendText({ appId: account.appId, toWxid: 'filehelper', content: TEST_TEXT })
     if (!result.ok) {
       throw new ApiException(503, 'ASSISTANT_UPSTREAM_UNAVAILABLE', '千树小助理服务暂时不可用')
@@ -135,111 +199,122 @@ export class AssistantAdminService {
 
   async listAccounts(): Promise<AssistantAccountDto[]> {
     const accounts = await this.prisma.assistantAccount.findMany({ orderBy: { createdAt: 'asc' } })
-    return accounts.map(account => ({
-      id: account.id,
-      name: account.name,
-      appId: account.appId,
-      wxidMasked: maskWxid(account.wxid),
-      nickname: account.nickname,
-      avatarUrl: account.avatarUrl,
-      status: account.status,
-      enabled: account.enabled,
-      lastOnlineAt: iso(account.lastOnlineAt),
-      lastLoginAt: iso(account.lastLoginAt),
-      version: account.version,
-    }))
+    return accounts.map(account => this.toAccountDto(account))
   }
 
-  async createAccount(input: AssistantAccountCreateDto): Promise<AssistantAccountDto> {
-    const account = await this.prisma.assistantAccount.create({
-      data: {
-        name: input.name.slice(0, 64),
-        appId: `pending-${randomUUID()}`,
-        regionId: input.regionId.slice(0, 16),
-        status: 'REQUIRES_LOGIN',
-        enabled: false,
-      },
-    })
-    return (await this.listAccounts()).find(item => item.id === account.id)!
-  }
+  /**
+   * 导入 GeWe 控制台中已经登录的执行节点。系统不发起扫码、重连或退出；
+   * appId 与 wxid 由管理员从控制台复制，服务端只校验节点在线后落库。
+   */
+  async createAccount(context: AssistantAdminContext, input: AssistantAccountCreateDto): Promise<AssistantAccountDto> {
+    const name = input.name.trim()
+    const appId = input.appId.trim()
+    const wxid = input.wxid.trim()
+    const nickname = input.nickname?.trim() || null
 
-  async updateAccount(id: string, input: AssistantAccountUpdateDto): Promise<AssistantAccountDto> {
-    const account = await this.requireAccount(id)
-    if (account.version !== input.expectedVersion) {
-      throw new ApiException(409, 'ASSISTANT_ACCOUNT_STATE_CHANGED', '公司号状态已变化，请刷新后重试')
+    if (isPendingAppId(appId)) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_APP_ID_INVALID', 'appId 无效，请填写 GeWe 控制台中的真实 appId')
     }
-    await this.prisma.assistantAccount.update({
-      where: { id },
-      data: {
-        ...(input.name !== undefined ? { name: input.name.slice(0, 64) } : {}),
-        ...(input.regionId !== undefined ? { regionId: input.regionId.slice(0, 16) } : {}),
-        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-        ...(input.proxyIp !== undefined ? { proxyIpEncrypted: input.proxyIp } : {}),
-        version: { increment: 1 },
-      },
-    })
-    return (await this.listAccounts()).find(item => item.id === id)!
-  }
+    const existing = await this.prisma.assistantAccount.findUnique({ where: { appId }, select: { id: true } })
+    if (existing !== null) {
+      throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
+    }
+    await this.requireOnlineNode(appId)
 
-  async startLogin(context: AssistantAdminContext, id: string): Promise<AssistantLoginQrDto> {
-    const account = await this.requireAccount(id)
-    const appId = account.appId.startsWith('pending-') ? '' : account.appId
     try {
-      const qr = await this.adminTransport.createLoginQrCode({
-        appId,
-        type: 'ipad',
-        regionId: account.regionId ?? '320000',
-      })
-      await this.prisma.$transaction(async transaction => {
-        await transaction.assistantAccount.update({
-          where: { id },
-          data: { appId: qr.appId, status: 'REQUIRES_LOGIN', version: { increment: 1 } },
+      const created = await this.prisma.$transaction(async transaction => {
+        const account = await transaction.assistantAccount.create({
+          data: {
+            name: name.slice(0, 64),
+            appId,
+            wxid: wxid.slice(0, 128),
+            nickname: nickname === null ? null : nickname.slice(0, 128),
+            status: 'ONLINE',
+            enabled: true,
+            lastOnlineAt: new Date(),
+            lastErrorCode: null,
+            lastErrorMessage: null,
+          },
         })
         await this.audit.record(transaction, {
-          eventType: 'ASSISTANT_ACCOUNT_LOGIN_STARTED',
+          eventType: 'ASSISTANT_ACCOUNT_LOGGED_IN',
           outcome: 'SUCCESS',
           actorType: 'USER',
           actorUserId: context.actorUserId,
           requestId: context.requestId,
           targetType: 'ASSISTANT_ACCOUNT',
-          targetId: id,
-          metadata: { appId: qr.appId },
+          targetId: account.id,
+          metadata: { appId, wxidMasked: maskWxid(wxid), mode: 'CONSOLE_IMPORT' },
         })
+        return account
       })
-      return {
-        accountId: id,
-        appId: qr.appId,
-        uuid: qr.uuid,
-        qrImgBase64: qr.qrImgBase64,
-        expiresAt: qr.expiresAt,
-      }
+      return this.toAccountDto(created)
     }
     catch (error) {
-      this.mapUpstreamError(error)
+      if (isUniqueViolation(error)) {
+        throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
+      }
+      throw error
     }
   }
 
-  async loginStatus(context: AssistantAdminContext, id: string, uuid: string): Promise<AssistantLoginStatusDto> {
+  /**
+   * 更新公司号备注或重新指向控制台中的节点。只有 appId 变化时才再次校验在线状态；
+   * version 由 updateMany 条件保证，避免两个管理员同时覆盖。
+   */
+  async updateAccount(context: AssistantAdminContext, id: string, input: AssistantAccountUpdateDto): Promise<AssistantAccountDto> {
     const account = await this.requireAccount(id)
+    if (account.version !== input.expectedVersion) {
+      throw new ApiException(409, 'ASSISTANT_ACCOUNT_STATE_CHANGED', '公司号状态已变化，请刷新后重试')
+    }
+
+    const name = input.name?.trim()
+    const nextWxid = input.wxid?.trim()
+    const nickname = input.nickname === undefined ? undefined : input.nickname.trim() || null
+    const nextAppId = input.appId?.trim()
+    const changedAppId = nextAppId !== undefined && nextAppId !== account.appId ? nextAppId : null
+
+    if (changedAppId !== null) {
+      if (isPendingAppId(changedAppId)) {
+        throw new ApiException(422, 'ASSISTANT_ACCOUNT_APP_ID_INVALID', 'appId 无效，请填写 GeWe 控制台中的真实 appId')
+      }
+      const existing = await this.prisma.assistantAccount.findUnique({ where: { appId: changedAppId }, select: { id: true } })
+      if (existing !== null && existing.id !== id) {
+        throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
+      }
+      await this.requireOnlineNode(changedAppId)
+    }
+
+    if (input.enabled === true && isPendingAppId(changedAppId ?? account.appId)) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_NOT_IMPORTED', '该账号尚未导入 GeWe 节点，请填写 appId 与 wxid')
+    }
+
     try {
-      const result = await this.adminTransport.checkLogin({ appId: account.appId, uuid })
-      if (result.status === 'ONLINE' && result.wxid !== null) {
-        await this.prisma.$transaction(async transaction => {
-          await transaction.assistantAccount.update({
-            where: { id },
-            data: {
-              wxid: result.wxid,
-              nickname: result.nickname,
-              avatarUrl: result.avatarUrl,
-              status: 'ONLINE',
-              enabled: true,
-              lastLoginAt: new Date(),
-              lastOnlineAt: new Date(),
-              lastErrorCode: null,
-              lastErrorMessage: null,
-              version: { increment: 1 },
-            },
-          })
+      const updated = await this.prisma.$transaction(async transaction => {
+        const result = await transaction.assistantAccount.updateMany({
+          where: { id, version: input.expectedVersion },
+          data: {
+            ...(name !== undefined ? { name: name.slice(0, 64) } : {}),
+            ...(changedAppId !== null
+              ? {
+                  appId: changedAppId,
+                  status: 'ONLINE' as const,
+                  enabled: input.enabled ?? true,
+                  lastOnlineAt: new Date(),
+                  lastErrorCode: null,
+                  lastErrorMessage: null,
+                }
+              : {}),
+            ...(nextWxid !== undefined ? { wxid: nextWxid.slice(0, 128) } : {}),
+            ...(nickname !== undefined ? { nickname: nickname === null ? null : nickname.slice(0, 128) } : {}),
+            ...(changedAppId === null && input.enabled !== undefined ? { enabled: input.enabled } : {}),
+            version: { increment: 1 },
+          },
+        })
+        if (result.count === 0) {
+          throw new ApiException(409, 'ASSISTANT_ACCOUNT_STATE_CHANGED', '公司号状态已变化，请刷新后重试')
+        }
+        if (changedAppId !== null) {
           await this.audit.record(transaction, {
             eventType: 'ASSISTANT_ACCOUNT_LOGGED_IN',
             outcome: 'SUCCESS',
@@ -248,77 +323,53 @@ export class AssistantAdminService {
             requestId: context.requestId,
             targetType: 'ASSISTANT_ACCOUNT',
             targetId: id,
-            metadata: { appId: account.appId },
+            metadata: {
+              appId: changedAppId,
+              previousAppId: account.appId,
+              mode: 'CONSOLE_IMPORT_UPDATE',
+            },
           })
-        })
-      }
-      return {
-        status: result.status,
-        wxidMasked: maskWxid(result.wxid),
-        nickname: result.nickname,
-      }
+        }
+        return transaction.assistantAccount.findUniqueOrThrow({ where: { id } })
+      })
+      return this.toAccountDto(updated)
     }
     catch (error) {
-      this.mapUpstreamError(error)
+      if (isUniqueViolation(error)) {
+        throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
+      }
+      throw error
     }
   }
 
-  async reconnect(context: AssistantAdminContext, id: string): Promise<AssistantAccountDto> {
+  /** 从 GeWe 读取节点在线状态；只更新本地快照，不触发登录、重连或退出。 */
+  async checkAccountStatus(id: string): Promise<AssistantAccountDto> {
     const account = await this.requireAccount(id)
-    try {
-      await this.adminTransport.reconnect(account.appId)
-      await this.prisma.$transaction(async transaction => {
-        await transaction.assistantAccount.update({
-          where: { id },
-          data: { status: 'ONLINE', lastOnlineAt: new Date(), version: { increment: 1 } },
-        })
-        await this.audit.record(transaction, {
-          eventType: 'ASSISTANT_ACCOUNT_RECONNECTED',
-          outcome: 'SUCCESS',
-          actorType: 'USER',
-          actorUserId: context.actorUserId,
-          requestId: context.requestId,
-          targetType: 'ASSISTANT_ACCOUNT',
-          targetId: id,
-          metadata: { appId: account.appId },
-        })
-      })
-      return (await this.listAccounts()).find(item => item.id === id)!
-    }
-    catch (error) {
-      this.mapUpstreamError(error)
-    }
-  }
-
-  async logout(context: AssistantAdminContext, id: string): Promise<AssistantAccountDto> {
-    const account = await this.requireAccount(id)
-    try {
-      await this.adminTransport.logout(account.appId)
-      await this.prisma.$transaction(async transaction => {
-        await transaction.assistantAccount.update({
-          where: { id },
-          data: { status: 'OFFLINE', enabled: false, version: { increment: 1 } },
-        })
-        await this.audit.record(transaction, {
-          eventType: 'ASSISTANT_ACCOUNT_LOGGED_OUT',
-          outcome: 'SUCCESS',
-          actorType: 'USER',
-          actorUserId: context.actorUserId,
-          requestId: context.requestId,
-          targetType: 'ASSISTANT_ACCOUNT',
-          targetId: id,
-          metadata: { appId: account.appId },
-        })
-      })
-      return (await this.listAccounts()).find(item => item.id === id)!
-    }
-    catch (error) {
-      this.mapUpstreamError(error)
-    }
+    this.assertImported(account)
+    const online = await this.checkOnline(account.appId)
+    const updated = await this.prisma.assistantAccount.update({
+      where: { id },
+      data: online
+        ? {
+            status: 'ONLINE',
+            lastOnlineAt: new Date(),
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            version: { increment: 1 },
+          }
+        : {
+            status: 'OFFLINE',
+            lastErrorCode: 'ASSISTANT_ACCOUNT_OFFLINE',
+            lastErrorMessage: '节点离线，请在 GeWe 控制台重连',
+            version: { increment: 1 },
+          },
+    })
+    return this.toAccountDto(updated)
   }
 
   async accountQrCode(id: string): Promise<{ qrCodeBase64: string }> {
     const account = await this.requireAccount(id)
+    this.assertImported(account)
     try {
       return { qrCodeBase64: await this.adminTransport.getOwnQrCode(account.appId) }
     }
@@ -329,7 +380,7 @@ export class AssistantAdminService {
 
   async listContacts(query: string | undefined): Promise<AssistantContactDto[]> {
     const account = await this.prisma.assistantAccount.findFirst({
-      where: { enabled: true },
+      where: ACTIVE_ACCOUNT_WHERE,
       orderBy: { createdAt: 'asc' },
       select: { appId: true },
     })
@@ -420,7 +471,7 @@ export class AssistantAdminService {
   async createBinding(context: AssistantAdminContext, input: AssistantBindingCreateDto): Promise<AssistantBindingDto> {
     const [user, account] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, status: true } }),
-      this.prisma.assistantAccount.findFirst({ where: { enabled: true }, orderBy: { createdAt: 'asc' }, select: { id: true } }),
+      this.prisma.assistantAccount.findFirst({ where: ACTIVE_ACCOUNT_WHERE, orderBy: { createdAt: 'asc' }, select: { id: true } }),
     ])
     if (user === null || user.status !== 'ACTIVE') {
       throw new ApiException(422, 'ASSISTANT_BINDING_USER_INVALID', '员工不存在或已停用')
@@ -594,7 +645,7 @@ export class AssistantAdminService {
 
   async syncTargets(): Promise<AssistantTargetDto[]> {
     const account = await this.prisma.assistantAccount.findFirst({
-      where: { enabled: true },
+      where: ACTIVE_ACCOUNT_WHERE,
       orderBy: { createdAt: 'asc' },
       select: { appId: true },
     })

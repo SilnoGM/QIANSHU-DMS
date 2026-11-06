@@ -30,7 +30,7 @@
 | `NotificationStatus` | `PENDING`、`COMPLETED`、`PARTIAL`、`FAILED`、`SKIPPED`、`EXPIRED`、`CANCELLED` | 逻辑通知状态 |
 | `NotificationTargetMode` | `COMMAND_TARGET`、`USERS`、`ROLE`、`PERMISSION`、`GROUP` | 渠道策略的目标模式 |
 | `NotificationTemplateKind` | `TEXT`、`LINK` | 阶段 1 只用 `TEXT`，`LINK` 预留阶段 2 |
-| `AssistantAccountStatus` | `ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED` | 公司号状态 |
+| `AssistantAccountStatus` | `ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED` | 公司号状态；`REQUIRES_LOGIN` 仅用于历史占位/待导入账号 |
 | `AssistantBindingStatus` | `ACTIVE`、`INVALID`、`DISABLED` | 绑定状态 |
 | `AssistantDeliveryStatus` | `PENDING`、`SENDING`、`ACCEPTED`、`FAILED`、`SKIPPED`、`EXPIRED`、`CANCELLED` | 站外交付状态 |
 
@@ -156,22 +156,24 @@ CHECK：两个保留期都在 `7..3650`。
 | --- | --- | --- | --- | --- |
 | `id` | uuid | 否 | `gen_random_uuid()` | 主键 |
 | `name` | varchar(64) | 否 | — | 管理端备注名，如 `公司号-01` |
-| `appId` | varchar(128) | 否 | — | GeWe 设备 ID，唯一 |
-| `wxid` | varchar(128) | 是 | `null` | 登录后回填 |
+| `appId` | varchar(128) | 否 | — | GeWe 控制台执行节点 ID，唯一；由管理员导入 |
+| `wxid` | varchar(128) | 是 | `null` | 公司号 wxid，从控制台复制 |
 | `nickname` | varchar(128) | 是 | `null` | 微信昵称 |
 | `avatarUrl` | text | 是 | `null` | 头像 |
-| `status` | `AssistantAccountStatus` | 否 | `OFFLINE` | 在线状态 |
-| `regionId` | varchar(16) | 是 | `null` | 登录区域 |
-| `proxyIpEncrypted` | text | 是 | `null` | 代理，含凭据时加密存储 |
+| `status` | `AssistantAccountStatus` | 否 | `OFFLINE` | 本地在线状态快照 |
+| `regionId` | varchar(16) | 是 | `null` | 历史字段；登录由控制台完成，系统不写入 |
+| `proxyIpEncrypted` | text | 是 | `null` | 历史字段；控制台登录代理不由系统管理 |
 | `enabled` | boolean | 否 | `true` | 是否允许派发 |
-| `lastOnlineAt` | timestamptz(6) | 是 | `null` | 最近在线 |
-| `lastLoginAt` | timestamptz(6) | 是 | `null` | 最近登录 |
+| `lastOnlineAt` | timestamptz(6) | 是 | `null` | 最近一次 checkOnline/发送成功确认在线的时间 |
+| `lastLoginAt` | timestamptz(6) | 是 | `null` | 历史字段；控制台登录时间不由系统同步 |
 | `lastErrorCode` | varchar(64) | 是 | `null` | 最近错误码 |
 | `lastErrorMessage` | varchar(255) | 是 | `null` | 最近错误摘要 |
 | `version` | int | 否 | `1` | — |
 | `createdAt` / `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
 索引：唯一 `appId`，`(status, enabled)`。
+
+账号登录、重连与退出在 GeWe 控制台完成。系统只保存管理员从控制台复制的 `appId`/`wxid`，导入或重新指向节点时调用 `checkOnline`；离线节点拒绝导入。`REQUIRES_LOGIN` 仅用于历史占位或尚未导入节点的账号，不参与发送。
 
 ### 4.2 `assistant_bindings`
 

@@ -13,8 +13,6 @@ import type {
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
-  AssistantLoginQrDto,
-  AssistantLoginStatusDto,
   AssistantTargetDto,
   AssistantTargetUpdateDto,
   AssistantTestSendDto,
@@ -92,14 +90,8 @@ export function createNotificationsApi(client: AxiosInstance) {
           client.post<AssistantAccountDto>('assistant/accounts', input, { errorPresentation: 'local', retry: false }),
         update: (id: string, input: AssistantAccountUpdateDto) =>
           client.patch<AssistantAccountDto>(path('assistant', 'accounts', id), input, { errorPresentation: 'local', retry: false }),
-        loginStart: (id: string) =>
-          client.post<AssistantLoginQrDto>(path('assistant', 'accounts', id, 'login'), {}, { errorPresentation: 'local', retry: false }),
-        loginStatus: (id: string, uuid: string, signal: AbortSignal) =>
-          client.get<AssistantLoginStatusDto>(path('assistant', 'accounts', id, 'login-status'), { errorPresentation: 'local', params: { uuid }, signal }),
-        reconnect: (id: string) =>
-          client.post<AssistantAccountDto>(path('assistant', 'accounts', id, 'reconnect'), {}, { errorPresentation: 'local', retry: false }),
-        logout: (id: string) =>
-          client.post<AssistantAccountDto>(path('assistant', 'accounts', id, 'logout'), {}, { errorPresentation: 'local', retry: false }),
+        checkStatus: (id: string) =>
+          client.post<AssistantAccountDto>(path('assistant', 'accounts', id, 'check'), {}, { errorPresentation: 'local', retry: false }),
         qrcode: (id: string, signal: AbortSignal) =>
           client.get<AssistantAccountQrDto>(path('assistant', 'accounts', id, 'qrcode'), { errorPresentation: 'local', signal }),
       },

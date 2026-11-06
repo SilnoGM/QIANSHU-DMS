@@ -28,7 +28,7 @@
 - 业务模块只调用一个统一接口 `SystemNotificationService.publish()`，不感知渠道。
 - 通知中心同时支持两个渠道：站内通知（`IN_APP`）与千树小助理（`ASSISTANT`，微信经 GeWe）。
 - 千树小助理只承担「站外提醒」：失败不影响业务事务，业务侧始终有站内或其他降级路径。
-- 管理端能配置渠道与公司号、维护员工绑定与群目标、编辑模板与渠道策略、查看发送记录、一键停发；回调引入后再提供回调记录。
+- 管理端能配置渠道、导入 GeWe 控制台已有节点、维护员工绑定与群目标、编辑模板与渠道策略、查看发送记录、一键停发；回调引入后再提供回调记录。
 - 数据模型为站内通知预留收件箱与已读体系；阶段 1 只启用千树小助理，站内渠道在阶段 3 上线。
 - 所有外部调用可审计、可观测、可限速、可停发。
 
@@ -151,7 +151,7 @@ await this.systemNotifications.publish(
 | `notification_settings` | 通知中心 | 全局设置 | `id='default'`、`notification_retention_days`、`delivery_retention_days`、`callback_retention_days`、`version`、`updated_by_user_id` |
 | `notification_channel_settings` | 通知中心 | 渠道开关与默认值 | `channel` 主键、`enabled`、`default_quiet_hours`、`version`、`updated_by_user_id` |
 | `assistant_deliveries` | 千树小助理 | 逐人或逐群发送尝试 | `notification_id`、`recipient_user_id`、`target_id`、`account_id`、`status`、`attempt_count`、`next_attempt_at`、`template_version`、`rendered_content`、`provider_msg_id`、`provider_new_msg_id`、`failure_code`、`accepted_at` |
-| `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一、`wxid`、`status`、`region_id`、`proxy_ip_encrypted`、`last_online_at`、`last_login_at`、`version` |
+| `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一（控制台节点 ID，由管理员导入）、`wxid`（控制台复制）、`status`、`region_id`/`proxy_ip_encrypted`（历史字段，登录由控制台完成）、`last_online_at`、`last_login_at`、`version` |
 | `assistant_bindings` | 千树小助理 | 员工与公司号绑定 | `user_id`、`account_id`、`wxid`、`wechat_nickname`、`status`、`bound_by_user_id`、`verified_at`、`verified_by_user_id`、`friend_checked_at`、`bound_at`；唯一 `(user_id, account_id)`、`(account_id, wxid)` |
 | `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一、`chatroom_id` 唯一、`name`、`purpose`、`internal_only`、`member_count`、`enabled`、`last_synced_at` |
 | `assistant_callback_events` | 千树小助理 | 回调原始记录（可选，后续） | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
@@ -328,12 +328,12 @@ RETURNING d.*;
 
 ### 5.8 账号离线与封禁
 
-- 账号状态：`ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED`。
-- 发送前检查账号状态；`ONLINE` 状态超过 60 秒未刷新时调用 `checkOnline`，结果缓存 30 秒。
+- 账号状态：`ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED`；`REQUIRES_LOGIN` 仅保留给历史占位账号。
+- 发送前读取本地账号状态；系统不主动登录、重连或退出，在线状态由发送结果与管理员手动「检查状态」更新。
 - 离线：交付保持 `PENDING` 并按离线退避；TTL 到期转 `EXPIRED`。
-- 需要重新登录：不再尝试发送，管理端显示红色状态与「重新扫码」入口。
-- 疑似封禁：连续多次登录失败或回调出现退出事件，账号置 `REQUIRES_LOGIN` 并告警；是否停用由管理员决定。
-- 阶段 1 无回调：掉线靠 `checkOnline` 每 60 秒轮询与发送失败发现，检测延迟最长约 60 秒；回调引入后改用事件驱动。
+- 待导入：`REQUIRES_LOGIN` 或 `pending-` 占位 appId 不参与发送；管理端显示红色状态与「更新节点」入口。
+- 疑似封禁：连续发送失败或控制台显示封禁时，账号置 `OFFLINE` 并告警；是否停用由管理员决定。
+- 阶段 1 无回调：掉线靠发送失败与手动 `checkOnline` 检查发现；账号恢复由 GeWe 控制台重连/重新扫码完成。
 - 账号不可用期间，通知不自动改走站内（站内渠道可能已关闭）；降级由业务侧主通道承担。
 
 ### 5.9 环境变量
@@ -484,7 +484,7 @@ export type AssistantTransportResult =
 千树小助理（`server/src/modules/notifications/assistant/`）：
 
 - `assistant-channel.controller.ts`：渠道配置、测试、启停。
-- `assistant-account.controller.ts`：账号 CRUD、扫码登录、重连、退出。
+- `assistant-account.controller.ts`：导入/更新控制台已有节点、`checkOnline` 状态检查、个人二维码。
 - `assistant-binding.controller.ts`：公司号好友列表、管理员绑定、测试消息验证、解绑、巡检。
 - `assistant-target.controller.ts`：群目标同步与维护。
 - `assistant-delivery.controller.ts`：单条站外交付重试。
@@ -557,7 +557,7 @@ views/system/notifications/
 - 页头 `FaPageHeader`，内容区 `FaPageMain`，错误 `FaAlert`，空态 `FaEmpty`。
 - 读请求带 `signal` 与 `errorPresentation: 'local'`；写请求 `retry: false`。
 - 列表竞态用请求版本号；分页/筛选用统一微任务合并器，沿用 `views/system/users/index.vue` 的写法。
-- 敏感操作（停发、退出登录、解绑、取消通知）二次确认。
+- 敏感操作（停发、重新指向 appId、解绑、取消通知）二次确认。
 
 ### 8.4 移动端
 
@@ -599,7 +599,7 @@ views/system/notifications/
 | `assistant-channel:read` | 渠道配置与概览 |
 | `assistant-channel:update` | 修改渠道、启停、测试发送 |
 | `assistant-account:read` | 账号列表与状态 |
-| `assistant-account:operate` | 新增账号、扫码登录、重连、退出 |
+| `assistant-account:operate` | 导入/更新节点、状态检查、启停 |
 | `assistant-binding:read` | 绑定列表、公司号好友列表 |
 | `assistant-binding:manage` | 管理员绑定、测试消息验证、解绑、好友巡检 |
 | `assistant-target:read` | 群目标列表 |
@@ -619,10 +619,8 @@ views/system/notifications/
 | `NOTIFICATION_POLICY_UPDATED` | 渠道策略或全局设置变更 | `eventType`、`channel`、`version` |
 | `NOTIFICATION_CANCELLED` | 取消站外交付 | `notificationId`、取消数量 |
 | `ASSISTANT_CHANNEL_UPDATED` | 修改渠道/启停 | 变更字段名，不含 Token |
-| `ASSISTANT_ACCOUNT_LOGIN_STARTED` | 发起扫码 | `accountId`、`appId` |
-| `ASSISTANT_ACCOUNT_LOGGED_IN` | 登录成功 | `accountId`、`wxid` 哈希 |
-| `ASSISTANT_ACCOUNT_LOGGED_OUT` | 主动退出/掉线 | `accountId`、原因码 |
-| `ASSISTANT_ACCOUNT_RECONNECTED` | 重连成功 | `accountId` |
+| `ASSISTANT_ACCOUNT_LOGGED_IN` | 导入或重新指向在线节点 | `accountId`、`appId`、`previousAppId`（更新时）、`mode`（`CONSOLE_IMPORT` / `CONSOLE_IMPORT_UPDATE`） |
+| `ASSISTANT_ACCOUNT_LOGIN_STARTED` / `ASSISTANT_ACCOUNT_LOGGED_OUT` / `ASSISTANT_ACCOUNT_RECONNECTED` | 历史枚举，当前流程不再产生 | — |
 | `ASSISTANT_BINDING_CREATED` | 管理员创建绑定 | `bindingId`、`userId`、`accountId`、`boundByUserId` |
 | `ASSISTANT_BINDING_VERIFIED` | 测试消息确认后置为已验证 | `bindingId`、`verifiedByUserId` |
 | `ASSISTANT_BINDING_REVOKED` | 解绑 | `bindingId`、操作者 |

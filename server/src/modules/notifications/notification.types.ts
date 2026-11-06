@@ -132,8 +132,6 @@ export const ASSISTANT_TRANSPORT = Symbol('ASSISTANT_TRANSPORT')
 export const ASSISTANT_TRANSPORT_OPTIONS = Symbol('ASSISTANT_TRANSPORT_OPTIONS')
 export const ASSISTANT_ADMIN_TRANSPORT = Symbol('ASSISTANT_ADMIN_TRANSPORT')
 
-export type AssistantLoginStatus = 'WAITING' | 'SCANNED' | 'ONLINE' | 'EXPIRED'
-
 export interface AssistantBriefContact {
   readonly wxid: string
   readonly nickname: string | null
@@ -142,27 +140,9 @@ export interface AssistantBriefContact {
   readonly avatarUrl: string | null
 }
 
-export interface AssistantLoginQr {
-  readonly appId: string
-  readonly uuid: string
-  readonly qrImgBase64: string
-  readonly expiresAt: string | null
-}
-
 export interface AssistantAdminTransport {
-  createLoginQrCode(input: {
-    readonly appId: string
-    readonly type: 'ipad' | 'mac'
-    readonly regionId: string
-    readonly proxyIp?: string | null
-  }): Promise<AssistantLoginQr>
-  checkLogin(input: {
-    readonly appId: string
-    readonly uuid: string
-  }): Promise<{ readonly status: AssistantLoginStatus, readonly wxid: string | null, readonly nickname: string | null, readonly avatarUrl: string | null }>
+  /** 只读探测节点在线状态；账号登录、重连和退出都在 GeWe 控制台完成。 */
   checkOnline(appId: string): Promise<boolean>
-  reconnect(appId: string): Promise<boolean>
-  logout(appId: string): Promise<void>
   fetchContactIds(appId: string): Promise<{ readonly friends: readonly string[], readonly chatrooms: readonly string[] }>
   fetchBriefInfo(appId: string, wxids: readonly string[]): Promise<readonly AssistantBriefContact[]>
   getOwnQrCode(appId: string): Promise<string>

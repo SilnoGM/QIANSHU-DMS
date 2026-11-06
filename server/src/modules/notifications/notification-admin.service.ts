@@ -288,7 +288,7 @@ export class NotificationAdminService {
       throw new ApiException(422, 'NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED', '当前只支持测试站外模板')
     }
     const account = await this.prisma.assistantAccount.findFirst({
-      where: { enabled: true },
+      where: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
       orderBy: { createdAt: 'asc' },
       select: { appId: true },
     })

@@ -167,7 +167,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         where: { id: delivery.account_id },
         select: { id: true, appId: true, enabled: true, status: true },
       })
-    if (account === null || !account.enabled || account.status === 'DISABLED' || account.status === 'REQUIRES_LOGIN') {
+    if (account === null || !account.enabled || account.status === 'DISABLED' || account.status === 'REQUIRES_LOGIN' || account.appId.startsWith('pending-')) {
       await this.failDelivery(delivery, 'ACCOUNT_DISABLED', '公司号不可用', false)
       await this.refreshNotificationStatus(notification.id)
       return

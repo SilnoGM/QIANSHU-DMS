@@ -10,8 +10,6 @@ import {
   ASSISTANT_TRANSPORT_OPTIONS,
   type AssistantAdminTransport,
   type AssistantBriefContact,
-  type AssistantLoginQr,
-  type AssistantLoginStatus,
 } from './notification.types'
 
 interface AssistantAdminTransportOptions {
@@ -67,70 +65,16 @@ export class GeweAssistantAdminTransport implements AssistantAdminTransport {
     return result.data
   }
 
-  async createLoginQrCode(input: {
-    readonly appId: string
-    readonly type: 'ipad' | 'mac'
-    readonly regionId: string
-    readonly proxyIp?: string | null
-  }): Promise<AssistantLoginQr> {
-    const data = asRecord(await this.post('/gewe/v2/api/login/getLoginQrCode', {
-      appId: input.appId,
-      type: input.type,
-      regionId: input.regionId,
-      ...(input.proxyIp ? { proxyIp: input.proxyIp } : {}),
-    }))
-    const appId = asString(data?.appId)
-    const uuid = asString(data?.uuid)
-    const qrImgBase64 = asString(data?.qrImgBase64)
-    if (appId === null || uuid === null || qrImgBase64 === null) {
-      throw new AssistantAdminError('ASSISTANT_LOGIN_QR_INVALID', 'UNKNOWN', 'GeWe 未返回完整二维码信息')
-    }
-    return { appId, uuid, qrImgBase64, expiresAt: null }
-  }
-
-  async checkLogin(input: {
-    readonly appId: string
-    readonly uuid: string
-  }): Promise<{ readonly status: AssistantLoginStatus, readonly wxid: string | null, readonly nickname: string | null, readonly avatarUrl: string | null }> {
-    const result = await postAssistantJson(this.config(), '/gewe/v2/api/login/checkLogin', {
-      appId: input.appId,
-      uuid: input.uuid,
-    }, {
-      fetchImpl: this.fetchImpl,
-      lookup: this.lookup,
-    })
-    if (!result.ok) {
-      if (/过期|expired/iu.test(result.message)) {
-        return { status: 'EXPIRED', wxid: null, nickname: null, avatarUrl: null }
-      }
-      throw new AssistantAdminError(result.code, result.kind, result.message)
-    }
-    const data = asRecord(result.data)
-    const status = Number(data?.status)
-    const loginInfo = asRecord(data?.loginInfo)
-    return {
-      status: status === 2 ? 'ONLINE' : status === 1 ? 'SCANNED' : 'WAITING',
-      wxid: asString(loginInfo?.wxid),
-      nickname: asString(data?.nickName) ?? asString(loginInfo?.nickName),
-      avatarUrl: asString(data?.headImgUrl),
-    }
-  }
-
   async checkOnline(appId: string): Promise<boolean> {
     const data = await this.post('/gewe/v2/api/login/checkOnline', { appId })
-    if (typeof data !== 'boolean') {
-      throw new AssistantAdminError('ASSISTANT_ONLINE_RESPONSE_INVALID', 'UNKNOWN', 'GeWe 在线状态响应无效')
+    if (typeof data === 'boolean') {
+      return data
     }
-    return data
-  }
-
-  async reconnect(appId: string): Promise<boolean> {
-    await this.post('/gewe/v2/api/login/reconnection', { appId })
-    return true
-  }
-
-  async logout(appId: string): Promise<void> {
-    await this.post('/gewe/v2/api/login/logout', { appId })
+    const record = asRecord(data)
+    if (typeof record?.online === 'boolean') {
+      return record.online
+    }
+    throw new AssistantAdminError('ASSISTANT_ONLINE_RESPONSE_INVALID', 'UNKNOWN', 'GeWe 在线状态响应无效')
   }
 
   async fetchContactIds(appId: string): Promise<{ readonly friends: readonly string[], readonly chatrooms: readonly string[] }> {

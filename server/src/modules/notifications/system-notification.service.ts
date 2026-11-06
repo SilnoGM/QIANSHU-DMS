@@ -317,7 +317,7 @@ export class SystemNotificationService {
         return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
       }
       const account = await tx.assistantAccount.findFirst({
-        where: { enabled: true },
+        where: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
         orderBy: { createdAt: 'asc' },
         select: { id: true },
       })
@@ -362,7 +362,7 @@ export class SystemNotificationService {
         userId: { in: userIds },
         status: 'ACTIVE',
         verifiedAt: { not: null },
-        account: { enabled: true },
+        account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
       },
       select: { userId: true, accountId: true },
       orderBy: { boundAt: 'asc' },
