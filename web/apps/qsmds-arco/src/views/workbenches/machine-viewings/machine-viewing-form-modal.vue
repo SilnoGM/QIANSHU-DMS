@@ -259,6 +259,7 @@ function submit(): void {
               :disabled="locked"
               :placeholder="t('machineViewing.form.monthPlaceholder')"
               :aria-label="t('machineViewing.form.monthPlaceholder')"
+              class="min-w-0 w-full"
             />
             <FaSelect
               v-model="dayValue"
@@ -266,6 +267,7 @@ function submit(): void {
               :disabled="locked"
               :placeholder="t('machineViewing.form.dayPlaceholder')"
               :aria-label="t('machineViewing.form.dayPlaceholder')"
+              class="min-w-0 w-full"
             />
             <FaSelect
               v-model="periodValue"
@@ -273,12 +275,14 @@ function submit(): void {
               :disabled="locked"
               :placeholder="t('machineViewing.form.periodPlaceholder')"
               :aria-label="t('machineViewing.form.periodPlaceholder')"
+              class="min-w-0 w-full"
             />
             <FaSelect
               v-model="hourValue"
               :options="hourOptions"
               :disabled="locked"
               :aria-label="t('machineViewing.form.hourPlaceholder')"
+              class="min-w-0 w-full"
             />
           </div>
           <div
