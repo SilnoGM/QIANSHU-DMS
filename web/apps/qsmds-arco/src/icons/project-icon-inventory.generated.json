@@ -1460,6 +1460,18 @@
     ]
   },
   {
+    "name": "i-lucide:calendar-check",
+    "label": "i-lucide:calendar-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-form-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-form-modal.vue"
+    ]
+  },
+  {
     "name": "i-lucide:calendar-clock",
     "label": "i-lucide:calendar-clock",
     "category": "通用图标",
@@ -1479,7 +1491,9 @@
       "apps/qsmds-arco/src/components/business/QsPersonalFundAccountCard/index.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
-      "apps/qsmds-arco/src/views/workbenches/containers/container-form-modal.vue"
+      "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-form-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/containers/container-form-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-form-modal.vue"
     ]
   },
   {
@@ -2797,7 +2811,9 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue",
+      "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-feedback-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-feedback-modal.vue"
     ]
   },
   {
@@ -3069,6 +3085,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/categories/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/operations/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/operations/personal-finance/withdrawals/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/index.vue",
@@ -3079,6 +3096,7 @@
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"
     ]

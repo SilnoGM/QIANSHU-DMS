@@ -1724,6 +1724,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'invoice-requests:return',
     'invoice-requests:review',
     'invoice-requests:settle',
+    'machine-viewings:create',
+    'machine-viewings:read',
     'network-nodes:read',
     'numbering-rules:create',
     'numbering-rules:disable',

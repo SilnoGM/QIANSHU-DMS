@@ -44,6 +44,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'invoice-requests:return',
   'invoice-requests:review',
   'invoice-requests:settle',
+  'machine-viewings:create',
+  'machine-viewings:read',
   'network-nodes:read',
   'numbering-rules:create',
   'numbering-rules:disable',
