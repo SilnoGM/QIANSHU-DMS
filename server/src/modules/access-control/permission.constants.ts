@@ -231,6 +231,18 @@ export const ADVERTISING_RECHARGE_PERMISSION_CODES = [
 export const NETWORK_NODES_PERMISSION_CODES = ['network-nodes:read'] as const
 
 /**
+ * 看机预约：运营登记并查看本人预约，采运只读全部。
+ *
+ * 「运营只看本人」复用发票申请的行级归属判定（`:read` 只保证能进接口，
+ * 是否跨用户由 `data-scope:all` 决定），因此不需要再拆 `:read-self`；
+ * 采运只授予读，不授予 create，避免同一页面出现两套可写口径。
+ */
+export const MACHINE_VIEWING_PERMISSION_CODES = [
+  'machine-viewings:read',
+  'machine-viewings:create',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -293,6 +305,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...DATA_SCOPE_PERMISSION_CODES,
   ...PROXY_NODE_PERMISSION_CODES,
   ...ADVERTISING_RECHARGE_PERMISSION_CODES,
+  ...MACHINE_VIEWING_PERMISSION_CODES,
   ...NETWORK_NODES_PERMISSION_CODES,
 ] as const
 

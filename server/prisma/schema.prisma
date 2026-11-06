@@ -197,6 +197,8 @@ enum AuditEventType {
   /// 装柜合并组的创建与释放。追加在末尾与数据库枚举顺序一致。
   PURCHASE_SHIPMENT_LOAD_GROUP_CREATED
   PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED
+  /// 看机预约登记事件。追加在末尾与数据库枚举顺序一致。
+  MACHINE_VIEWING_APPOINTMENT_CREATED
 
   @@map("audit_event_type")
 }
@@ -772,6 +774,7 @@ model User {
   proxyNodesAssignedBy              ProxyNode[]                     @relation("ProxyNodeAssigner")
   shipmentLoadGroupsCreated         ShipmentLoadGroup[]           @relation("ShipmentLoadGroupCreatedBy")
   shipmentLoadGroupsReleased        ShipmentLoadGroup[]           @relation("ShipmentLoadGroupReleasedBy")
+  machineViewingAppointmentsCreated MachineViewingAppointment[]   @relation("MachineViewingAppointmentCreator")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -3150,4 +3153,56 @@ model InvoiceRequestStatusHistory {
 
   @@index([requestId, occurredAt, id], map: "invoice_request_status_history_request_occurred_idx")
   @@map("invoice_request_status_history")
+}
+
+/// 看机地点：当前只有新北林口与台中龙井两个固定场地。
+enum MachineViewingSite {
+  NEW_TAIPEI_LINKOU
+  TAICHUNG_LONGJING
+
+  @@map("machine_viewing_site")
+}
+
+/// 看机机型：与采购机型口径一致的三个固定选项。
+enum MachineViewingMachineType {
+  MINI_TILLER
+  SHREDDER
+  INCINERATOR
+
+  @@map("machine_viewing_machine_type")
+}
+
+/// 预约时段只分上午/下午；小时另行存储，空值表示当天时段未定。
+enum MachineViewingPeriod {
+  AM
+  PM
+
+  @@map("machine_viewing_period")
+}
+
+/// 看机预约：运营登记客户到访意向，采运按预约时间跟进。
+///
+/// 需求只选择月/日，年份在创建时由服务端按上海自然日推断并固定写入
+/// `appointment_date`；此后跨年也不会改变已登记的预约日期。列表按该日期排序，
+/// 因此不需要额外保存月/日两个冗余字段。
+model MachineViewingAppointment {
+  id              String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  site            MachineViewingSite
+  machineType     MachineViewingMachineType   @map("machine_type")
+  appointmentDate DateTime                   @map("appointment_date") @db.Date
+  period          MachineViewingPeriod
+  hour            Int?
+  customerName    String                     @map("customer_name") @db.VarChar(128)
+  customerPhone   String?                    @map("customer_phone") @db.VarChar(64)
+  contactPerson   String                     @map("contact_person") @db.VarChar(64)
+  createdByUserId String                     @map("created_by_user_id") @db.Uuid
+  requestKeyHash  Bytes                      @map("request_key_hash") @db.ByteA
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  createdBy User @relation("MachineViewingAppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([createdByUserId, requestKeyHash], map: "machine_viewing_appointments_creator_request_key")
+  @@index([createdByUserId, createdAt(sort: Desc), id(sort: Desc)], map: "machine_viewing_appointments_creator_created_idx")
+  @@index([appointmentDate, period, hour, id], map: "machine_viewing_appointments_time_idx")
+  @@map("machine_viewing_appointments")
 }

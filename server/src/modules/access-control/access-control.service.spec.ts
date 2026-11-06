@@ -139,9 +139,11 @@ describe('permission constants', () => {
       'advertising-recharges:create',
       'advertising-recharges:read',
       'advertising-recharges:pay',
+      'machine-viewings:read',
+      'machine-viewings:create',
       'network-nodes:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 109)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 111)
   })
 })
 
