@@ -11,6 +11,14 @@ function Layout() {
  */
 const routes: RouteRecordRaw[] = [
   {
+    // 看机预约是单页，用 singleMenu 平铺成与分组并列的一级菜单，并放在菜单最前。
+    // 列表归属由服务端按 data-scope:all 判定：运营只看本人，采运看全部。
+    path: '/qs-operations/machine-viewings',
+    name: 'qsOperationsMachineViewings',
+    component: () => import('@/views/operations/machine-viewings/index.vue'),
+    meta: { title: '看机预约', icon: 'qs-date-time', singleMenu: true, auth: 'machine-viewings:read' },
+  },
+  {
     path: '/qs-operations/sales',
     name: 'qsOperationsSales',
     component: Layout,
@@ -165,14 +173,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '开票记录', icon: 'qs-invoice-records', auth: 'invoice-requests:read' },
       },
     ],
-  },
-  {
-    // 看机预约是单页，用 singleMenu 平铺成与分组并列的一级菜单。
-    // 列表归属由服务端按 data-scope:all 判定：运营只看本人，采运看全部。
-    path: '/qs-operations/machine-viewings',
-    name: 'qsOperationsMachineViewings',
-    component: () => import('@/views/operations/machine-viewings/index.vue'),
-    meta: { title: '看机预约', icon: 'qs-date-time', singleMenu: true, auth: 'machine-viewings:read' },
   },
   {
     // 运营只看本人财务数据，因此本人账户读取用独立权限 `fund-accounts:read-self`，

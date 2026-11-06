@@ -255,6 +255,19 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
   },
   children: [
     {
+      // 与运营工作台保持两个独立页面文件：本页只读采运关注的预约记录，
+      // 后续任一侧调整版式都不会影响另一侧。菜单放在采运工作台最前。
+      path: '/qs-purchase-transport/machine-viewings',
+      name: 'qsPurchaseTransportMachineViewings',
+      component: () => import('@/views/workbenches/machine-viewings/index.vue'),
+      meta: {
+        title: 'workbench.machineViewings',
+        icon: 'qs-date-time',
+        singleMenu: true,
+        auth: 'machine-viewings:read',
+      },
+    },
+    {
       path: '/qs-purchase-transport/reviews',
       name: 'qsPurchaseTransportReviews',
       component: () => import('@/views/workbenches/purchase-reviews/index.vue'),
@@ -335,19 +348,6 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         singleMenu: true,
         auth: 'proxy-nodes:manage',
         badge: [() => proxyNodeBadgeCounts.all.value, 'destructive'],
-      },
-    },
-    {
-      // 与运营工作台保持两个独立页面文件：本页只读采运关注的预约记录，
-      // 后续任一侧调整版式都不会影响另一侧。
-      path: '/qs-purchase-transport/machine-viewings',
-      name: 'qsPurchaseTransportMachineViewings',
-      component: () => import('@/views/workbenches/machine-viewings/index.vue'),
-      meta: {
-        title: 'workbench.machineViewings',
-        icon: 'qs-date-time',
-        singleMenu: true,
-        auth: 'machine-viewings:read',
       },
     },
   ],

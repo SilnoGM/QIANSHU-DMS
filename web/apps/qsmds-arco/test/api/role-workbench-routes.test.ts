@@ -100,7 +100,7 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
 
 test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes', 'qsPurchaseTransportMachineViewings'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportMachineViewings', 'qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
@@ -111,7 +111,8 @@ test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，�
   assert.equal(machineViewings?.meta?.icon, 'qs-date-time')
   assert.equal(machineViewings?.meta?.singleMenu, true)
   assert.match(String(machineViewings?.component), /workbenches\/machine-viewings\/index\.vue/u)
-  assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
+  assert.equal(routes[0]?.name, 'qsPurchaseTransportMachineViewings')
+  assert.equal(routes[2]?.meta?.auth, 'purchase-orders:read')
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
   assert.equal(storage?.meta?.title, '寄仓管理')
   assert.match(String(storage?.component), /workbenches\/purchase-storage\/index\.vue/u)
@@ -123,7 +124,7 @@ test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，�
   assert.equal(containers?.meta?.title, 'workbench.containers')
   assert.equal(containers?.meta?.icon, 'qs-container-management')
   assert.equal(typeof containers?.component, 'function')
-  assert.equal(routes[0]?.meta?.auth, 'purchase-orders:review')
+  assert.equal(routes[1]?.meta?.auth, 'purchase-orders:review')
 })
 
 test('财务分为实时收付、账单对账、发票管理和账户管理，叶子路由保留独立权限', () => {
