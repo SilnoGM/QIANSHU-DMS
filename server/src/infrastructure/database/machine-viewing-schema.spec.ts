@@ -11,6 +11,10 @@ const numberMigration = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261106130000_machine_viewing_appointment_number/migration.sql'),
   'utf8',
 )
+const legacySortMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261106140000_machine_viewing_legacy_number_sort/migration.sql'),
+  'utf8',
+)
 const permissionConstants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -147,6 +151,10 @@ describe('machine viewing appointment database contract', () => {
     )
     expect(numberMigration).toContain(`"status" = 'ENABLED'`)
     expect(numberMigration).toContain(`version."status" = 'ACTIVE'`)
+
+    // 历史测试行必须改成排序最低的哨兵编号，否则会压住所有真实编号。
+    expect(legacySortMigration).toContain(`WHERE "appointment_no" LIKE 'MV/LEGACY-%'`)
+    expect(legacySortMigration).toContain(`'MV/00000000-' || lpad(`)
   })
 
   it('keeps the permission catalog and seed roles in sync', () => {
