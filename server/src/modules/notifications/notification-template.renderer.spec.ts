@@ -115,5 +115,16 @@ describe('inspectNotificationTemplate', () => {
 
     expect(result.placeholders).toEqual(['a', 'b', 'c'])
     expect(result.undeclared).toEqual(['c'])
+    expect(result.singleBrace).toEqual([])
+  })
+
+  it('detects single-brace placeholders without treating them as valid placeholders', () => {
+    const result = inspectNotificationTemplate({
+      body: '采购单 {orderNo} {{buyerName}}',
+      allowed: [{ name: 'orderNo' }, { name: 'buyerName' }],
+    })
+
+    expect(result.placeholders).toEqual(['buyerName'])
+    expect(result.singleBrace).toEqual(['orderNo'])
   })
 })

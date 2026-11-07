@@ -41,6 +41,12 @@ const ownQrImage = ref('')
 const bindingOpen = ref(false)
 const bindingUserId = ref<string | undefined>(undefined)
 const bindingContactWxid = ref<string | undefined>(undefined)
+const reassignOpen = ref(false)
+const reassignSourceBinding = ref<AssistantBindingDto | null>(null)
+const reassignUserId = ref<string | undefined>(undefined)
+const targetEditOpen = ref(false)
+const targetEditId = ref<string | null>(null)
+const targetDraft = ref({ key: '', name: '', purpose: '' })
 
 const editingAccount = computed(() => accounts.value.find(account => account.id === editingAccountId.value) ?? null)
 const accountDialogTitle = computed(() => accountDialogMode.value === 'create' ? '导入公司号' : '更新公司号节点')
@@ -345,6 +351,46 @@ async function createBinding(): Promise<void> {
   }
 }
 
+async function openReassign(binding: AssistantBindingDto): Promise<void> {
+  reassignSourceBinding.value = binding
+  reassignUserId.value = undefined
+  reassignOpen.value = true
+  if (users.value.length > 0) {
+    return
+  }
+  try {
+    users.value = (await managementApi.users.list(
+      { page: 1, pageSize: 100, status: 'ACTIVE' },
+      new AbortController().signal,
+    )).data.items
+  }
+  catch (failure) {
+    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
+  }
+}
+
+async function submitReassign(): Promise<void> {
+  if (reassignSourceBinding.value === null || reassignUserId.value === undefined) {
+    toast.warning('请选择要改绑的员工')
+    return
+  }
+  busy.value = true
+  try {
+    await notificationsApi.assistant.bindings.reassign(reassignSourceBinding.value.id, {
+      userId: reassignUserId.value,
+    })
+    reassignOpen.value = false
+    toast.success('绑定已改绑，请重新发送测试消息完成验证')
+    await loadAll()
+  }
+  catch (failure) {
+    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
+  }
+  finally {
+    busy.value = false
+  }
+}
+
 async function verifyBinding(binding: AssistantBindingDto): Promise<void> {
   busy.value = true
   try {
@@ -395,6 +441,45 @@ async function syncTargets(): Promise<void> {
   try {
     targets.value = (await notificationsApi.assistant.targets.sync()).data
     toast.success('群目标已同步')
+  }
+  catch (failure) {
+    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
+  }
+  finally {
+    busy.value = false
+  }
+}
+
+function openTargetEdit(target: AssistantTargetDto): void {
+  targetEditId.value = target.id
+  targetDraft.value = {
+    key: target.key,
+    name: target.name,
+    purpose: target.purpose ?? '',
+  }
+  targetEditOpen.value = true
+}
+
+async function saveTargetEdit(): Promise<void> {
+  if (targetEditId.value === null) {
+    return
+  }
+  const key = targetDraft.value.key.trim()
+  const name = targetDraft.value.name.trim()
+  if (key.length === 0 || name.length === 0) {
+    toast.warning('请填写群目标 key 与名称')
+    return
+  }
+  busy.value = true
+  try {
+    const updated = (await notificationsApi.assistant.targets.update(targetEditId.value, {
+      key,
+      name,
+      purpose: targetDraft.value.purpose.trim() || null,
+    })).data
+    targets.value = targets.value.map(item => item.id === updated.id ? updated : item)
+    targetEditOpen.value = false
+    toast.success('群目标已更新')
   }
   catch (failure) {
     toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
@@ -577,6 +662,9 @@ onMounted(() => {
               <FaButton size="sm" :disabled="!canManageBinding || busy" @click="verifyBinding(row)">
                 发送测试
               </FaButton>
+              <FaButton variant="outline" size="sm" :disabled="!canManageBinding || busy" @click="openReassign(row)">
+                改绑
+              </FaButton>
               <FaButton variant="outline" size="sm" :disabled="!canManageBinding || busy" @click="revokeBinding(row)">
                 停用
               </FaButton>
@@ -630,6 +718,9 @@ onMounted(() => {
                 />
                 启用
               </label>
+              <FaButton variant="outline" size="sm" :disabled="!canManageTarget || busy" @click="openTargetEdit(target)">
+                编辑
+              </FaButton>
             </div>
           </div>
         </div>
@@ -706,6 +797,54 @@ onMounted(() => {
         </FaButton>
         <FaButton :loading="busy" :disabled="bindingUserId === undefined || bindingContactWxid === undefined" @click="createBinding">
           创建绑定
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal v-model="reassignOpen" title="改绑员工绑定" size="md" :submitting="busy" @update:model-value="reassignOpen = $event">
+      <div class="flex flex-col gap-3">
+        <p class="qs-type-meta text-muted-foreground m-0">
+          当前微信：{{ reassignSourceBinding?.wxidMasked ?? '—' }}。改绑后原验证状态会清空，需要重新发送测试消息。
+        </p>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">新员工</span>
+          <FaSelect v-model="reassignUserId" :options="userOptions" placeholder="选择员工" />
+        </label>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" :disabled="busy" @click="reassignOpen = false">
+          取消
+        </FaButton>
+        <FaButton :loading="busy" :disabled="reassignUserId === undefined" @click="submitReassign">
+          确认改绑
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal v-model="targetEditOpen" title="编辑群目标" size="md" :submitting="busy" @update:model-value="targetEditOpen = $event">
+      <div class="flex flex-col gap-3">
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">群目标 key</span>
+          <FaInput v-model="targetDraft.key" placeholder="finance" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">名称</span>
+          <FaInput v-model="targetDraft.name" placeholder="财务群" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">用途（可选）</span>
+          <FaInput v-model="targetDraft.purpose" placeholder="对账完成通知" />
+        </label>
+        <p class="qs-type-meta text-muted-foreground m-0">
+          修改 key 后，事件策略中引用旧 key 的 targetKeys 需要同步更新。
+        </p>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" :disabled="busy" @click="targetEditOpen = false">
+          取消
+        </FaButton>
+        <FaButton :loading="busy" :disabled="targetDraft.key.trim().length === 0 || targetDraft.name.trim().length === 0" @click="saveTargetEdit">
+          保存
         </FaButton>
       </template>
     </QsGenericModal>

@@ -72178,6 +72178,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -72269,9 +72295,16 @@
               ]
             },
             {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
+              ]
+            },
+            {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -72662,6 +72695,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -72758,9 +72817,16 @@
               ]
             },
             {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
+              ]
+            },
+            {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -72986,6 +73052,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -73090,9 +73182,16 @@
               ]
             },
             {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
+              ]
+            },
+            {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -73282,6 +73381,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -73373,13 +73498,21 @@
               "status": 422,
               "codes": [
                 "ASSISTANT_ACCOUNT_NOT_IMPORTED",
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
               ]
             },
             {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -73558,6 +73691,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -73648,13 +73807,21 @@
               "status": 422,
               "codes": [
                 "ASSISTANT_ACCOUNT_NOT_IMPORTED",
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
               ]
             },
             {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -73810,6 +73977,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -73893,14 +74086,22 @@
             {
               "status": 422,
               "codes": [
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "ASSISTANT_ACCOUNT_UNAVAILABLE",
                 "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
               ]
             },
             {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -74404,6 +74605,302 @@
         }
       }
     },
+    "/api/assistant/bindings/{id}/reassign": {
+      "patch": {
+        "operationId": "assistant_bindings_reassign",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantBindingReassignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantBindingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "assistant"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "ASSISTANT_BINDING_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "ASSISTANT_BINDING_USER_CONFLICT"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "ASSISTANT_BINDING_USER_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/assistant/bindings/{id}/verify": {
       "post": {
         "operationId": "assistant_bindings_verify",
@@ -74586,6 +75083,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -74676,13 +75199,21 @@
             {
               "status": 422,
               "codes": [
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
               ]
             },
             {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -75500,6 +76031,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -75584,14 +76141,22 @@
             {
               "status": 422,
               "codes": [
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "ASSISTANT_ACCOUNT_UNAVAILABLE",
                 "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
               ]
             },
             {
               "status": 503,
               "codes": [
                 "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -75765,6 +76330,32 @@
               }
             }
           },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "headers": {
               "X-Request-Id": {
@@ -75850,6 +76441,12 @@
               "status": 404,
               "codes": [
                 "ASSISTANT_TARGET_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "ASSISTANT_TARGET_KEY_EXISTS"
               ]
             },
             {
@@ -76517,6 +77114,9 @@
             {
               "status": 422,
               "codes": [
+                "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
+                "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
+                "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -76812,6 +77412,9 @@
             {
               "status": 422,
               "codes": [
+                "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
+                "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
+                "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -77274,6 +77877,32 @@
               }
             }
           },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "500": {
             "headers": {
               "X-Request-Id": {
@@ -77364,14 +77993,22 @@
             {
               "status": 422,
               "codes": [
+                "ASSISTANT_ACCOUNT_OFFLINE",
                 "ASSISTANT_ACCOUNT_UNAVAILABLE",
                 "NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED",
                 "VALIDATION_FAILED"
               ]
             },
             {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
+              ]
+            },
+            {
               "status": 503,
               "codes": [
+                "ASSISTANT_OUTBOUND_BLOCKED",
                 "ASSISTANT_UPSTREAM_UNAVAILABLE"
               ]
             }
@@ -121315,6 +121952,18 @@
           "wxid"
         ]
       },
+      "AssistantBindingReassignDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
       "AssistantBindingCheckDto": {
         "type": "object",
         "properties": {
@@ -121381,6 +122030,10 @@
       "AssistantTargetUpdateDto": {
         "type": "object",
         "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 128
+          },
           "name": {
             "type": "string",
             "maxLength": 128

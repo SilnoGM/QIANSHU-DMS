@@ -25,6 +25,7 @@ export type NotificationTemplateRenderResult =
   }
 
 const PLACEHOLDER_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/gu
+const SINGLE_BRACE_PATTERN = /(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})/gu
 
 function stringifyValue(value: string | number | null, maxLength: number): string {
   const raw = value === null ? '' : String(value)
@@ -135,9 +136,11 @@ export function inspectNotificationTemplate(input: {
 }): {
   readonly placeholders: readonly string[]
   readonly undeclared: readonly string[]
+  readonly singleBrace: readonly string[]
 } {
   const names = new Set(input.allowed.map(variable => variable.name))
   const placeholders = new Set<string>()
+  const singleBrace = new Set<string>()
   for (const text of [input.body, input.linkUrlTemplate ?? '']) {
     for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
       const name = match[1]
@@ -145,9 +148,16 @@ export function inspectNotificationTemplate(input: {
         placeholders.add(name)
       }
     }
+    for (const match of text.matchAll(SINGLE_BRACE_PATTERN)) {
+      const name = match[1]
+      if (name !== undefined) {
+        singleBrace.add(name)
+      }
+    }
   }
   return {
     placeholders: [...placeholders].sort(),
     undeclared: [...placeholders].filter(name => !names.has(name)).sort(),
+    singleBrace: [...singleBrace].sort(),
   }
 }

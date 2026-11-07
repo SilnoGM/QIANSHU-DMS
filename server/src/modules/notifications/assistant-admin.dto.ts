@@ -83,6 +83,10 @@ export class AssistantBindingCreateDto {
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() wechatNickname?: string
 }
 
+export class AssistantBindingReassignDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() userId!: string
+}
+
 export class AssistantBindingQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() query?: string
   @ApiPropertyOptional({ enum: ['ACTIVE', 'INVALID', 'DISABLED'] }) @IsOptional() @IsIn(['ACTIVE', 'INVALID', 'DISABLED']) status?: string
@@ -103,6 +107,7 @@ export class AssistantTargetDto {
 }
 
 export class AssistantTargetUpdateDto {
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @Matches(/\S/u) key?: string
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() name?: string
   @ApiPropertyOptional({ type: 'string', maxLength: 255, nullable: true }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsString() purpose?: string | null
   @ApiPropertyOptional() @IsOptional() @IsBoolean() internalOnly?: boolean

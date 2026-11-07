@@ -469,6 +469,7 @@ onMounted(() => {
         <label class="flex flex-col gap-1 md:col-span-2">
           <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
           <textarea v-model="templateDraft.bodyTemplate" rows="5" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
+          <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
         </label>
         <label class="flex flex-col gap-1 md:col-span-2">
           <span class="qs-type-compact-label">链接模板（可选）</span>

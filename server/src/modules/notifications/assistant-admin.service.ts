@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { AssistantConfiguration } from '../../config/assistant.config'
@@ -6,6 +6,7 @@ import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
+import { assistantAdminErrorToApiException } from './assistant-admin.errors'
 import {
   ASSISTANT_ADMIN_TRANSPORT,
   ASSISTANT_TRANSPORT,
@@ -21,6 +22,7 @@ import type {
   AssistantBindingDto,
   AssistantBindingPageDto,
   AssistantBindingQueryDto,
+  AssistantBindingReassignDto,
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
@@ -78,6 +80,8 @@ interface AccountRecord {
 
 @Injectable()
 export class AssistantAdminService {
+  private readonly logger = new Logger(AssistantAdminService.name)
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -88,10 +92,8 @@ export class AssistantAdminService {
 
   private mapUpstreamError(error: unknown): never {
     if (error instanceof AssistantAdminError) {
-      if (error.code === 'ASSISTANT_TOKEN_MISSING') {
-        throw new ApiException(503, 'ASSISTANT_NOT_CONFIGURED', '千树小助理未配置')
-      }
-      throw new ApiException(503, 'ASSISTANT_UPSTREAM_UNAVAILABLE', '千树小助理服务暂时不可用')
+      this.logger.warn(`assistant upstream failed code=${error.code} kind=${error.kind}`)
+      throw assistantAdminErrorToApiException(error)
     }
     throw error
   }
@@ -192,7 +194,7 @@ export class AssistantAdminService {
     await this.requireOnlineNode(account.appId)
     const result = await this.transport.sendText({ appId: account.appId, toWxid: 'filehelper', content: TEST_TEXT })
     if (!result.ok) {
-      throw new ApiException(503, 'ASSISTANT_UPSTREAM_UNAVAILABLE', '千树小助理服务暂时不可用')
+      this.mapUpstreamError(new AssistantAdminError(result.code, result.kind, result.message))
     }
     return { accepted: true }
   }
@@ -514,6 +516,79 @@ export class AssistantAdminService {
     }
   }
 
+  /**
+   * 把已存在的微信绑定改给另一个员工。wxid 不变，因此会清空原验证状态，
+   * 必须重新发送测试消息确认，避免把已验证的微信静默转给未确认的人。
+   */
+  async reassignBinding(context: AssistantAdminContext, id: string, input: AssistantBindingReassignDto): Promise<AssistantBindingDto> {
+    const binding = await this.prisma.assistantBinding.findUnique({
+      where: { id },
+      include: { user: { select: { displayName: true } }, account: { select: { name: true } } },
+    })
+    if (binding === null) {
+      throw new ApiException(404, 'ASSISTANT_BINDING_NOT_FOUND', '绑定不存在')
+    }
+    if (binding.userId === input.userId) {
+      return this.toBindingDto(binding)
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, status: true } })
+    if (user === null || user.status !== 'ACTIVE') {
+      throw new ApiException(422, 'ASSISTANT_BINDING_USER_INVALID', '员工不存在或已停用')
+    }
+    const conflict = await this.prisma.assistantBinding.findUnique({
+      where: { userId_accountId: { userId: user.id, accountId: binding.accountId } },
+      select: { id: true },
+    })
+    if (conflict !== null) {
+      throw new ApiException(409, 'ASSISTANT_BINDING_USER_CONFLICT', '该员工已绑定当前公司号')
+    }
+    try {
+      const updated = await this.prisma.$transaction(async transaction => {
+        const row = await transaction.assistantBinding.update({
+          where: { id },
+          data: {
+            userId: user.id,
+            boundByUserId: context.actorUserId,
+            status: 'ACTIVE',
+            verifiedAt: null,
+            verifiedByUserId: null,
+            friendCheckedAt: null,
+            boundAt: new Date(),
+          },
+          include: { user: { select: { displayName: true } }, account: { select: { name: true } } },
+        })
+        await this.audit.record(transaction, {
+          eventType: 'ASSISTANT_BINDING_REVOKED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'ASSISTANT_BINDING',
+          targetId: id,
+          metadata: { userId: binding.userId, reassignedToUserId: user.id, reason: 'REASSIGNED' },
+        })
+        await this.audit.record(transaction, {
+          eventType: 'ASSISTANT_BINDING_CREATED',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'ASSISTANT_BINDING',
+          targetId: id,
+          metadata: { userId: user.id, previousUserId: binding.userId, mode: 'REASSIGN' },
+        })
+        return row
+      })
+      return this.toBindingDto(updated)
+    }
+    catch (error) {
+      if ((error as { code?: string }).code === 'P2002') {
+        throw new ApiException(409, 'ASSISTANT_BINDING_USER_CONFLICT', '该员工已绑定当前公司号')
+      }
+      throw error
+    }
+  }
+
   async verifyBinding(context: AssistantAdminContext, id: string): Promise<AssistantBindingDto> {
     const binding = await this.prisma.assistantBinding.findUnique({
       where: { id },
@@ -528,7 +603,7 @@ export class AssistantAdminService {
       content: VERIFY_TEXT,
     })
     if (!result.ok) {
-      throw new ApiException(503, 'ASSISTANT_UPSTREAM_UNAVAILABLE', '千树小助理服务暂时不可用')
+      this.mapUpstreamError(new AssistantAdminError(result.code, result.kind, result.message))
     }
     const updated = await this.prisma.$transaction(async transaction => {
       const row = await transaction.assistantBinding.update({
@@ -683,15 +758,24 @@ export class AssistantAdminService {
     if (target === null) {
       throw new ApiException(404, 'ASSISTANT_TARGET_NOT_FOUND', '群目标不存在')
     }
-    const updated = await this.prisma.assistantTarget.update({
-      where: { id },
-      data: {
-        ...(input.name !== undefined ? { name: input.name.slice(0, 128) } : {}),
-        ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
-        ...(input.internalOnly !== undefined ? { internalOnly: input.internalOnly } : {}),
-        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-      },
-    })
-    return this.toTargetDto(updated)
+    try {
+      const updated = await this.prisma.assistantTarget.update({
+        where: { id },
+        data: {
+          ...(input.key !== undefined ? { key: input.key.trim().slice(0, 128) } : {}),
+          ...(input.name !== undefined ? { name: input.name.slice(0, 128) } : {}),
+          ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
+          ...(input.internalOnly !== undefined ? { internalOnly: input.internalOnly } : {}),
+          ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        },
+      })
+      return this.toTargetDto(updated)
+    }
+    catch (error) {
+      if ((error as { code?: string }).code === 'P2002') {
+        throw new ApiException(409, 'ASSISTANT_TARGET_KEY_EXISTS', '该群目标 key 已存在')
+      }
+      throw error
+    }
   }
 }

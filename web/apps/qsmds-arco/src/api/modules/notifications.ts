@@ -9,6 +9,7 @@ import type {
   AssistantBindingCreateDto,
   AssistantBindingDto,
   AssistantBindingPageDto,
+  AssistantBindingReassignDto,
   AssistantBindingsListData,
   AssistantChannelDto,
   AssistantChannelUpdateDto,
@@ -104,6 +105,8 @@ export function createNotificationsApi(client: AxiosInstance) {
           client.get<AssistantBindingPageDto>('assistant/bindings', { errorPresentation: 'local', params: query, signal }),
         create: (input: AssistantBindingCreateDto) =>
           client.post<AssistantBindingDto>('assistant/bindings', input, { errorPresentation: 'local', retry: false }),
+        reassign: (id: string, input: AssistantBindingReassignDto) =>
+          client.patch<AssistantBindingDto>(path('assistant', 'bindings', id, 'reassign'), input, { errorPresentation: 'local', retry: false }),
         verify: (id: string) =>
           client.post<AssistantBindingDto>(path('assistant', 'bindings', id, 'verify'), {}, { errorPresentation: 'local', retry: false }),
         remove: (id: string) =>

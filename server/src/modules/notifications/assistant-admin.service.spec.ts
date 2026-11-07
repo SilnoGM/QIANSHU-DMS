@@ -43,6 +43,23 @@ function accountRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function bindingRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'binding-1',
+    userId: 'old-user',
+    accountId: 'account-1',
+    wxid: 'wxid-user',
+    wechatNickname: '旧员工',
+    status: 'ACTIVE',
+    verifiedAt: new Date('2026-11-06T00:00:00.000Z'),
+    friendCheckedAt: null,
+    boundAt: new Date('2026-11-06T00:00:00.000Z'),
+    user: { displayName: '旧员工' },
+    account: { name: '公司号-01' },
+    ...overrides,
+  }
+}
+
 function service(
   prisma: Record<string, unknown>,
   transport = new FakeAssistantTransport(),
@@ -254,5 +271,91 @@ describe('AssistantAdminService', () => {
       userId: '00000000-0000-4000-8000-000000000001',
       wxid: 'wxid-user',
     })).rejects.toMatchObject({ code: 'ASSISTANT_BINDING_USER_INVALID' })
+  })
+
+  it('reassigns an existing binding and clears its verification', async () => {
+    const transaction = {
+      assistantBinding: {
+        update: jest.fn().mockResolvedValue(bindingRow({
+          userId: 'new-user',
+          boundByUserId: 'user-1',
+          verifiedAt: null,
+          user: { displayName: '新员工' },
+        })),
+      },
+    }
+    const prisma = {
+      assistantBinding: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(bindingRow())
+          .mockResolvedValueOnce(null),
+      },
+      user: { findUnique: jest.fn().mockResolvedValue({ id: 'new-user', status: 'ACTIVE' }) },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    }
+    const audit = { record: jest.fn() }
+
+    const result = await service(prisma, new FakeAssistantTransport(), adminTransport(), audit)
+      .reassignBinding(context, 'binding-1', { userId: 'new-user' })
+
+    expect(transaction.assistantBinding.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'binding-1' },
+      data: expect.objectContaining({
+        userId: 'new-user',
+        boundByUserId: 'user-1',
+        verifiedAt: null,
+        verifiedByUserId: null,
+        status: 'ACTIVE',
+      }),
+    }))
+    expect(audit.record).toHaveBeenCalledTimes(2)
+    expect(result.userId).toBe('new-user')
+  })
+
+  it('rejects reassigning a binding to a user already bound to the account', async () => {
+    const prisma = {
+      assistantBinding: {
+        findUnique: jest.fn()
+          .mockResolvedValueOnce(bindingRow())
+          .mockResolvedValueOnce({ id: 'other-binding' }),
+      },
+      user: { findUnique: jest.fn().mockResolvedValue({ id: 'new-user', status: 'ACTIVE' }) },
+    }
+
+    await expect(service(prisma).reassignBinding(context, 'binding-1', { userId: 'new-user' }))
+      .rejects.toMatchObject({ code: 'ASSISTANT_BINDING_USER_CONFLICT' })
+  })
+
+  it('updates the semantic target key and rejects a duplicate', async () => {
+    const target = {
+      id: 'target-1',
+      key: 'chatroom-1',
+      chatroomId: 'chatroom-1',
+      name: '测试群',
+      purpose: null,
+      internalOnly: false,
+      memberCount: null,
+      enabled: true,
+      lastSyncedAt: null,
+    }
+    const update = jest.fn().mockResolvedValue({ ...target, key: 'finance' })
+    const prisma = {
+      assistantTarget: {
+        findUnique: jest.fn().mockResolvedValue(target),
+        update,
+      },
+    }
+
+    const result = await service(prisma).updateTarget('target-1', { key: ' finance ' })
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'target-1' },
+      data: expect.objectContaining({ key: 'finance' }),
+    }))
+    expect(result.key).toBe('finance')
+
+    update.mockRejectedValueOnce({ code: 'P2002' })
+    await expect(service(prisma).updateTarget('target-1', { key: 'operations' }))
+      .rejects.toMatchObject({ code: 'ASSISTANT_TARGET_KEY_EXISTS' })
   })
 })

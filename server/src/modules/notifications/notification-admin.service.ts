@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { AssistantConfiguration } from '../../config/assistant.config'
@@ -6,6 +6,7 @@ import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
+import { assistantAdminErrorToApiException } from './assistant-admin.errors'
 import { inspectNotificationTemplate, renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
   ASSISTANT_TRANSPORT,
@@ -131,9 +132,12 @@ export class NotificationAdminService {
     @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport,
   ) {}
 
+  private readonly logger = new Logger(NotificationAdminService.name)
+
   private mapUpstreamError(error: unknown): never {
     if (error instanceof AssistantAdminError) {
-      throw new ApiException(503, 'ASSISTANT_UPSTREAM_UNAVAILABLE', '千树小助理服务暂时不可用')
+      this.logger.warn(`assistant upstream failed code=${error.code} kind=${error.kind}`)
+      throw assistantAdminErrorToApiException(error)
     }
     throw error
   }
@@ -157,6 +161,13 @@ export class NotificationAdminService {
       linkUrlTemplate: input.linkUrlTemplate ?? null,
       allowed: input.variables,
     })
+    if (inspected.singleBrace.length > 0) {
+      throw new ApiException(
+        422,
+        'NOTIFICATION_TEMPLATE_SINGLE_BRACE',
+        `模板占位符必须使用双花括号：${inspected.singleBrace.join('、')}`,
+      )
+    }
     if (inspected.undeclared.length > 0) {
       throw new ApiException(422, 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE', `模板包含未声明变量：${inspected.undeclared.join('、')}`)
     }

@@ -17,6 +17,7 @@ import {
   AssistantBindingDto,
   AssistantBindingPageDto,
   AssistantBindingQueryDto,
+  AssistantBindingReassignDto,
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
@@ -53,7 +54,9 @@ function context(request: object): AssistantAdminContext {
 }
 
 const upstreamErrors: ApiContractErrorOptions[] = [
-  { status: 503, codes: ['ASSISTANT_NOT_CONFIGURED', 'ASSISTANT_UPSTREAM_UNAVAILABLE'] },
+  { status: 503, codes: ['ASSISTANT_NOT_CONFIGURED', 'ASSISTANT_OUTBOUND_BLOCKED', 'ASSISTANT_UPSTREAM_UNAVAILABLE'] },
+  { status: 422, codes: ['ASSISTANT_ACCOUNT_OFFLINE'] },
+  { status: 429, codes: ['ASSISTANT_RATE_LIMITED'] },
 ]
 
 @ApiTags('assistant')
@@ -173,6 +176,18 @@ export class AssistantAdminController {
     return this.assistant.createBinding(context(request), input)
   }
 
+  @Patch('bindings/:id/reassign')
+  @RequirePermissions('assistant-binding:manage')
+  @ApiContractResponse({ status: 200, type: AssistantBindingDto })
+  @contract('assistant_bindings_reassign', true, [
+    { status: 404, codes: ['ASSISTANT_BINDING_NOT_FOUND'] },
+    { status: 409, codes: ['ASSISTANT_BINDING_USER_CONFLICT'] },
+    { status: 422, codes: ['ASSISTANT_BINDING_USER_INVALID'] },
+  ])
+  reassignBinding(@Param() params: AssistantIdParamDto, @Body() input: AssistantBindingReassignDto, @Req() request: object) {
+    return this.assistant.reassignBinding(context(request), params.id, input)
+  }
+
   @Post('bindings/:id/verify')
   @HttpCode(200)
   @RequirePermissions('assistant-binding:manage')
@@ -220,7 +235,10 @@ export class AssistantAdminController {
   @Patch('targets/:id')
   @RequirePermissions('assistant-target:manage')
   @ApiContractResponse({ status: 200, type: AssistantTargetDto })
-  @contract('assistant_targets_update', true, [{ status: 404, codes: ['ASSISTANT_TARGET_NOT_FOUND'] }])
+  @contract('assistant_targets_update', true, [
+    { status: 404, codes: ['ASSISTANT_TARGET_NOT_FOUND'] },
+    { status: 409, codes: ['ASSISTANT_TARGET_KEY_EXISTS'] },
+  ])
   updateTarget(@Param() params: AssistantIdParamDto, @Body() input: AssistantTargetUpdateDto) {
     return this.assistant.updateTarget(params.id, input)
   }

@@ -50,6 +50,19 @@ describe('NotificationAdminService', () => {
     })
   })
 
+  it('rejects a template that uses single-brace placeholders', async () => {
+    await expect(service({}).createTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      {
+        key: 'test.template',
+        channel: 'ASSISTANT',
+        name: '测试模板',
+        bodyTemplate: '采购单 {orderNo} 待审核',
+        variables: [{ name: 'orderNo', required: true }],
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_TEMPLATE_SINGLE_BRACE' })
+  })
+
   it('rejects an unregistered event type', async () => {
     await expect(service({}).upsertPolicy(
       { actorUserId: 'user-1', requestId: 'req-1' },

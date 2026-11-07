@@ -64,10 +64,10 @@
 ### 2.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】采购单 {orderNo} 待审核
-客户：{customerName}
-金额：{currencyCode} {totalAmount}
-明细：{lineCount} 行 / {partCount} 个货件
+【千树小助理】采购单 {{orderNo}} 待审核
+客户：{{customerName}}
+金额：{{currencyCode}} {{totalAmount}}
+明细：{{lineCount}} 行 / {{partCount}} 个货件
 请进入千树 DMS 处理。
 ```
 
@@ -125,11 +125,11 @@
 ### 3.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】顺联航对账批次 {batchNo} 已完成
-账单：{slhBillNo}
-明细：{reconciledMemberCount}/{memberCount} 行
-结算金额：¥{settlementTotalCny}
-资金批次：{fundPostingCount} 笔
+【千树小助理】顺联航对账批次 {{batchNo}} 已完成
+账单：{{slhBillNo}}
+明细：{{reconciledMemberCount}}/{{memberCount}} 行
+结算金额：¥{{settlementTotalCny}}
+资金批次：{{fundPostingCount}} 笔
 请进入千树 DMS 查看。
 ```
 
@@ -186,10 +186,10 @@
 ### 4.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】采购单 {orderNo} 货件到仓
-货件：{partNumbers}
-到仓时间：{receivedAt}
-客户：{customerName}
+【千树小助理】采购单 {{orderNo}} 货件到仓
+货件：{{partNumbers}}
+到仓时间：{{receivedAt}}
+客户：{{customerName}}
 请进入千树 DMS 处理。
 ```
 

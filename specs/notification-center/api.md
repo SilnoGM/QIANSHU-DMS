@@ -265,17 +265,24 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/assistant/contacts` | `assistant-binding:read` | `assistant_contacts_list` | 公司号好友列表，供管理员选择绑定对象 |
 | GET | `/api/assistant/bindings` | `assistant-binding:read` | `assistant_bindings_list` | 绑定列表 |
 | POST | `/api/assistant/bindings` | `assistant-binding:manage` | `assistant_bindings_create` | 管理员创建绑定（员工 + 好友 `wxid`） |
+| PATCH | `/api/assistant/bindings/:id/reassign` | `assistant-binding:manage` | `assistant_bindings_reassign` | 把现有微信绑定改给另一员工；清空原验证状态，需重新发送测试 |
 | POST | `/api/assistant/bindings/:id/verify` | `assistant-binding:manage` | `assistant_bindings_verify` | 发送测试消息并标记已验证 |
 | DELETE | `/api/assistant/bindings/:id` | `assistant-binding:manage` | `assistant_bindings_delete` | 解绑 |
 | POST | `/api/assistant/bindings/check` | `assistant-binding:manage` | `assistant_bindings_check` | 触发好友关系巡检 |
 | GET | `/api/assistant/targets` | `assistant-target:read` | `assistant_targets_list` | 群目标列表 |
-| POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群 |
-| PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 命名、启用停用 |
+| POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群；新群 key 默认使用 `chatroomId` |
+| PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 编辑语义 key、名称、用途、内部群与启停 |
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
 | GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
 | GET | `/api/assistant/callback-events/:id` | `assistant-callback:read` | `assistant_callback_events_get` | 回调详情；原始报文脱敏（可选） |
 
 账号登录、掉线重连与退出全部在 GeWe 控制台完成；系统不提供扫码登录、`reconnection` 或 `logout` 接口。系统只保存管理员从控制台复制的 `appId`/`wxid`，并在导入或重新指向节点时调用 `checkOnline` 校验；离线节点拒绝导入。旧版 `REQUIRES_LOGIN` 账号仅作为历史占位，需要在「更新节点」中补齐真实 `appId`。
+
+绑定改绑不会改变微信 `wxid`，但会清空 `verifiedAt`、`verifiedByUserId` 和 `friendCheckedAt`，必须重新发送测试消息。目标员工必须启用，且不能已经绑定同一公司号；冲突返回 409 `ASSISTANT_BINDING_USER_CONFLICT`。改绑审计由一条 `ASSISTANT_BINDING_REVOKED` 与一条 `ASSISTANT_BINDING_CREATED` 组成，metadata 标注 `mode = REASSIGN`。
+
+群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。
+
+上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 
 ### 4.3 关键响应示例
 

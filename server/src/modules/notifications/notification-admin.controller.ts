@@ -75,7 +75,10 @@ export class NotificationAdminController {
   @HttpCode(201)
   @RequirePermissions('notification-template:update')
   @ApiContractResponse({ status: 201, type: NotificationTemplateDto })
-  @contract('notifications_templates_create', true, [{ status: 409, codes: ['NOTIFICATION_TEMPLATE_EXISTS'] }])
+  @contract('notifications_templates_create', true, [
+    { status: 409, codes: ['NOTIFICATION_TEMPLATE_EXISTS'] },
+    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE'] },
+  ])
   createTemplate(@Body() input: NotificationTemplateCreateDto, @Req() request: object) {
     return this.notifications.createTemplate(context(request), input)
   }
@@ -83,7 +86,11 @@ export class NotificationAdminController {
   @Patch('templates/:id')
   @RequirePermissions('notification-template:update')
   @ApiContractResponse({ status: 200, type: NotificationTemplateDto })
-  @contract('notifications_templates_update', true, [{ status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] }, { status: 409, codes: ['NOTIFICATION_TEMPLATE_STATE_CHANGED'] }])
+  @contract('notifications_templates_update', true, [
+    { status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] },
+    { status: 409, codes: ['NOTIFICATION_TEMPLATE_STATE_CHANGED'] },
+    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE'] },
+  ])
   updateTemplate(@Param() params: NotificationUuidParamDto, @Body() input: NotificationTemplateUpdateDto, @Req() request: object) {
     return this.notifications.updateTemplate(context(request), params.id, input)
   }
@@ -101,7 +108,12 @@ export class NotificationAdminController {
   @HttpCode(200)
   @RequirePermissions('notification-template:update')
   @ApiContractResponse({ status: 200, type: AssistantTestSendDto })
-  @contract('notifications_templates_test', true, [{ status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] }, { status: 422, codes: ['ASSISTANT_ACCOUNT_UNAVAILABLE', 'NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED'] }, { status: 503, codes: ['ASSISTANT_UPSTREAM_UNAVAILABLE'] }])
+  @contract('notifications_templates_test', true, [
+    { status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_OFFLINE', 'ASSISTANT_ACCOUNT_UNAVAILABLE', 'NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED'] },
+    { status: 429, codes: ['ASSISTANT_RATE_LIMITED'] },
+    { status: 503, codes: ['ASSISTANT_OUTBOUND_BLOCKED', 'ASSISTANT_UPSTREAM_UNAVAILABLE'] },
+  ])
   testTemplate(@Param() params: NotificationUuidParamDto, @Body() input: NotificationTemplatePreviewDto) {
     return this.notifications.testTemplate(params.id, input)
   }

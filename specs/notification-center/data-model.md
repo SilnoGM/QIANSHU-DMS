@@ -204,8 +204,8 @@ CHECK：两个保留期都在 `7..3650`。
 | 字段 | 类型 | 可空 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
 | `id` | uuid | 否 | `gen_random_uuid()` | 主键 |
-| `key` | varchar(64) | 否 | — | 业务 key，如 `finance` |
-| `chatroomId` | varchar(128) | 否 | — | `xxx@chatroom` |
+| `key` | varchar(128) | 否 | — | 可编辑语义键，如 `finance`；新同步群默认等于 `chatroomId` |
+| `chatroomId` | varchar(128) | 否 | — | 同步身份，`xxx@chatroom`，不随 key 修改 |
 | `name` | varchar(128) | 否 | — | 群名 |
 | `purpose` | varchar(255) | 是 | `null` | 用途 |
 | `internalOnly` | boolean | 否 | `false` | 是否纯内部成员 |
@@ -215,6 +215,8 @@ CHECK：两个保留期都在 `7..3650`。
 | `createdAt` / `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
 索引：唯一 `key`、`chatroomId`；`(enabled, internalOnly)`；CHECK `memberCount IS NULL OR memberCount >= 0`。
+
+`key` 是管理员可编辑的语义键，`chatroomId` 是通讯录同步身份。修改 `key` 后必须同步更新引用旧 key 的渠道策略；同步群只按 `chatroomId` upsert 名称与时间，不会覆盖管理员改过的 key。
 
 ### 4.4 `assistant_deliveries`
 
