@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 页面源码契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
+import { qrImageSrc } from '../../src/views/system/notifications/qr-image'
+
 const indexSource = readFileSync(
   new URL('../../src/views/system/notifications/index.vue', import.meta.url),
   'utf8',
@@ -37,6 +39,7 @@ test('千树小助理面板从控制台导入节点，不提供扫码登录与�
   assert.match(assistantSource, /更新节点/u)
   assert.match(assistantSource, /个人二维码/u)
   assert.match(assistantSource, /启用派发/u)
+  assert.match(assistantSource, /qrImageSrc/u)
   assert.match(assistantSource, /发送测试/u)
   assert.match(assistantSource, /仅内部成员/u)
   assert.match(assistantSource, /<QsGenericTable/u)
@@ -46,6 +49,14 @@ test('千树小助理面板从控制台导入节点，不提供扫码登录与�
   assert.doesNotMatch(assistantSource, /accounts\.(?:loginStart|loginStatus|reconnect|logout)/u)
   assert.doesNotMatch(assistantSource, /<FaTable/u)
   assert.doesNotMatch(assistantSource, /#(?:[0-9a-fA-F]{3}){1,2}\b/u)
+})
+
+test('公司号个人二维码把裸 base64 转为 data URI', () => {
+  assert.equal(qrImageSrc('/9j/4AAQSkZJRg=='), 'data:image/jpeg;base64,/9j/4AAQSkZJRg==')
+  assert.equal(qrImageSrc(' iVBORw0KGgo='), 'data:image/png;base64,iVBORw0KGgo=')
+  assert.equal(qrImageSrc('R0lGODlhAQAB'), 'data:image/gif;base64,R0lGODlhAQAB')
+  assert.equal(qrImageSrc('UklGRgAAAABXRUJQ'), 'data:image/webp;base64,UklGRgAAAABXRUJQ')
+  assert.equal(qrImageSrc('data:image/png;base64,abc'), 'data:image/png;base64,abc')
 })
 
 test('通知规则面板包含模板预览与事件策略编辑', () => {

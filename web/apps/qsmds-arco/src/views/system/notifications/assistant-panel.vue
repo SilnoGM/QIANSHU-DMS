@@ -11,6 +11,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
+import { qrImageSrc } from './qr-image'
 
 const toast = useQsToast()
 const { auth } = useAppAuth()
@@ -287,10 +288,10 @@ async function setAccountEnabled(account: AssistantAccountDto, enabled: boolean)
 async function showOwnQr(account: AssistantAccountDto): Promise<void> {
   busy.value = true
   try {
-    ownQrImage.value = (await notificationsApi.assistant.accounts.qrcode(
+    ownQrImage.value = qrImageSrc((await notificationsApi.assistant.accounts.qrcode(
       account.id,
       new AbortController().signal,
-    )).data.qrCodeBase64
+    )).data.qrCodeBase64)
     ownQrOpen.value = true
   }
   catch (failure) {
