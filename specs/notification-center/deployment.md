@@ -7,7 +7,7 @@
 | 文档状态 | 部署清单，随阶段 1 实施更新 |
 | 关联文档 | [落地设计](./design.md)、[数据模型](./data-model.md)、[运维手册](./runbook.md) |
 | 适用环境 | 测试环境、生产环境 |
-| 最后更新 | 2026-10-28 |
+| 最后更新 | 2026-11-06 |
 
 ## 1. 前置条件
 
@@ -163,12 +163,173 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 
 ## 10. 阶段 3 站内通知
 
-- 迁移新增 `notification_inbox_items` 与索引；插入并启用 `IN_APP` 渠道配置行，同时种子三条站内模板。
-- 事件策略仍需管理员按环境配置；`IN_APP` 策略不能使用 `GROUP`，TTL 与静默时段必须为空。
-- 已实施收件箱接口、顶栏铃铛、`/notifications` 页面、30 秒未读数轮询、Web Locks 主标签轮询、桌面浏览器通知和已读/归档。
-- 保留期清理命令：`pnpm -C server notifications:cleanup`，建议每日低峰执行一次；命令自带 60 秒预算和分批删除，部署时加到 systemd timer 或现有定时任务。
-- 站内通知指标：`notification_inbox_unread`、`notification_inbox_list_latency_ms`、`notification_inbox_new_batch`；告警阈值按现网请求量配置。
+### 10.1 迁移与种子核对
+
+本阶段迁移为 `20261108100000_notification_inbox_items`。部署后先确认结构和种子，再做策略配置：
+
+```sql
+SELECT to_regclass('public.notification_inbox_items') IS NOT NULL AS inbox_table_exists;
+
+SELECT channel, enabled
+FROM notification_channel_settings
+WHERE channel = 'IN_APP';
+
+SELECT key, enabled
+FROM notification_templates
+WHERE channel = 'IN_APP'
+ORDER BY key;
+```
+
+预期：表存在；`IN_APP` 渠道 1 行且 `enabled = true`；三个模板 `invoice.review.pending`、`purchase.review.pending`、`shipment.arrived` 均启用。
+
+迁移只插入渠道配置和模板，不插入事件策略。策略必须按环境显式配置；`IN_APP` 策略不能使用 `GROUP`，`ttl_seconds` 与 `quiet_hours` 必须为空。
+
+### 10.2 测试环境策略
+
+测试环境按以下口径配置：采购审核、开票审核固定发给系统管理员角色；货件到仓沿用命令目标（`purchase-orders:read`）。执行前确认 `roles.code = 'system_admin'` 存在：
+
+```sql
+BEGIN;
+
+INSERT INTO notification_channel_policies (
+    event_type, channel, target_mode, target_config, template_key,
+    priority, ttl_seconds, quiet_hours, allow_sensitive, enabled, version
+)
+VALUES
+    (
+        'PURCHASE_REVIEW_PENDING', 'IN_APP', 'ROLE',
+        '{"roleCodes":["system_admin"]}'::jsonb, 'purchase.review.pending',
+        'HIGH', NULL, NULL, true, true, 1
+    ),
+    (
+        'INVOICE_REQUEST_REVIEW_PENDING', 'IN_APP', 'ROLE',
+        '{"roleCodes":["system_admin"]}'::jsonb, 'invoice.review.pending',
+        'HIGH', NULL, NULL, true, true, 1
+    ),
+    (
+        'SHIPMENT_ARRIVED', 'IN_APP', 'COMMAND_TARGET',
+        '{}'::jsonb, 'shipment.arrived',
+        'NORMAL', NULL, NULL, true, true, 1
+    )
+ON CONFLICT (event_type, channel) DO UPDATE SET
+    target_mode = EXCLUDED.target_mode,
+    target_config = EXCLUDED.target_config,
+    template_key = EXCLUDED.template_key,
+    priority = EXCLUDED.priority,
+    ttl_seconds = NULL,
+    quiet_hours = NULL,
+    allow_sensitive = EXCLUDED.allow_sensitive,
+    enabled = true,
+    version = notification_channel_policies.version + 1,
+    updated_at = CURRENT_TIMESTAMP;
+
+COMMIT;
+```
+
+核对：
+
+```sql
+SELECT event_type, channel, target_mode, target_config, template_key,
+       priority, ttl_seconds, quiet_hours, allow_sensitive, enabled
+FROM notification_channel_policies
+WHERE channel = 'IN_APP'
+ORDER BY event_type;
+```
+
+预期：三条 `IN_APP` 策略；采购/开票为 `ROLE`，货件到仓为 `COMMAND_TARGET`；`ttl_seconds` 与 `quiet_hours` 为空；`allow_sensitive = true`，站内模板才能展示客户名与金额。
+
+说明：
+
+- 使用角色而不是用户 UUID，避免测试库换管理员后策略失效；`system_admin` 是当前超级管理员角色码。
+- `SHIPMENT_ARRIVED` 的事件目标本身是 `purchase-orders:read`，因此 `COMMAND_TARGET` 与命令目标一致。
+- 若测试环境决定只让某个测试账号收采购/开票通知，把 `target_mode` 改为 `USERS`，并在 `target_config` 写 `{"userIds":["<测试用户 UUID>"]}`；不要把真实用户 UUID 写进仓库。
+- 该 SQL 只改 `IN_APP`，不会覆盖已有的 `ASSISTANT` 策略。
+
+### 10.3 保留期清理定时
+
+清理命令：
+
+```bash
+pnpm -C server notifications:cleanup
+```
+
+Docker 部署等价命令：
+
+```bash
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
+  run --rm server node dist/commands/notification-operations.js cleanup
+```
+
+命令输出一行 JSON，包含 `kind=notification_cleanup`、四类删除计数和 `timeBudgetReached`。命令自带 60 秒预算、每批 500 条；未归档站内条目保留 180 天，已归档保留 365 天；站外交付按 `notification_settings.deliveryRetentionDays`，逻辑通知仅在没有任何站内条目和交付时删除。
+
+建议每日低峰执行一次。使用与媒体清理相同的宿主 systemd timer 形态，新增一个 oneshot unit（示例，未写入仓库部署资产）：
+
+```ini
+[Unit]
+Description=Qianshu DMS Notification Retention Cleanup (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/notification-operations.js cleanup
+TimeoutStartSec=120s
+```
+
+```ini
+[Unit]
+Description=Run Qianshu DMS Notification Retention Cleanup Daily (Docker)
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+AccuracySec=1m
+Persistent=true
+Unit=qianshu-dms-notification-cleanup.service
+
+[Install]
+WantedBy=timers.target
+```
+
+安装后必须做一次手工运行并检查退出码：
+
+```bash
+sudo systemctl start qianshu-dms-notification-cleanup.service
+sudo systemctl status qianshu-dms-notification-cleanup.service --no-pager
+sudo journalctl -u qianshu-dms-notification-cleanup.service --since today
+```
+
+该命令当前没有数据库 advisory lock，部署时必须保证只有一个调度器运行；不要同时在两个主机或两个 timer 上启用。
+
+### 10.4 告警阈值
+
+站内指标目前以结构化日志输出（`kind=metric`），没有额外的 Prometheus exporter；若日志平台未接入，以下阈值只能作为巡检口径，不能宣称自动告警已生效。
+
+| 指标 | 建议阈值 | 级别 | 处置 |
+| --- | --- | --- | --- |
+| `notification_inbox_unread` | 单用户连续 15 分钟 `> 50` | P3 | 检查该用户是否长期未读；确认不是批量事件误发 |
+| `notification_inbox_list_latency_ms` | 15 分钟 p95 `> 500ms` | P2 | 检查 `notification_inbox_items` 索引、数据库负载与分页大小 |
+| `notification_inbox_new_batch` | 单次 `> 20` 且连续 5 分钟出现 | P2 | 检查是否事件风暴、重复发布或模板/策略误配 |
+| 清理命令 | 退出码非 0 或 `timeBudgetReached=true` 连续两次 | P2 | 检查数据库连接、锁等待与保留期；必要时拆分执行窗口 |
+| `notification_publish_total{result="FAILED"}` | 15 分钟失败率 `> 5%` | P2 | 检查模板变量、收件人解析与数据库错误 |
+| `assistant_delivery_total{status="FAILED"}` | 15 分钟失败率 `> 20%` | P1 | 按运维手册第 9.4 节处理 |
+
+阈值是测试环境起点，正式环境按实际用户量、轮询频率和日志平台能力调整；不要在没有指标采集的情况下把表格当成已配置告警。
+
+### 10.5 冒烟与浏览器验收
+
+1. 三个事件各触发一次，确认目标用户收到站内条目，其他用户不可见。
+2. 未读数、标记已读、全部已读、归档、取消归档、详情正文与业务域筛选正确。
+3. 顶栏铃铛显示未读数；点击「查看全部」进入 `/notifications`。
+4. 桌面通知开关：授予权限后显示测试通知；页面隐藏时新消息弹系统通知；点击通知跳到详情；页面可见时不弹。
+5. 两个标签页同时打开时，Web Locks 只让一个标签页轮询和弹通知；另一个只同步未读数。
+6. 浏览器用例入口：`QIANSHU_BROWSER_AUTH_SHARD=2/2 pnpm ci:browser-auth-e2e`。用例使用测试进程内改写的 `newItems` 游标模拟隐藏页新消息，不修改数据库。
+7. 停止轮询：退出登录或会话返回 401 后不再请求；重新登录后恢复。
+
+### 10.6 边界
+
 - 无新增环境变量、无新增基础设施；不启用 Web Push 或 Service Worker 推送。
-- 冒烟：三个事件产生站内条目；未读数、已读、全部已读、归档、取消归档正确；其他用户不可见。
-- 桌面浏览器通知是纯前端能力，无需服务端配置；权限由用户自行授予，页面关闭后不提醒。
-- 观察：未读数请求量、列表响应时间、归档清理任务；确认 30 秒轮询没有造成数据库压力。
+- 桌面浏览器通知是纯前端能力，权限由用户自行授予，页面关闭后不提醒。
+- 站内条目是发布时快照；后续模板或角色变化不影响已生成内容。
+- 观察未读数请求量、列表响应时间、归档清理任务；确认 30 秒轮询没有造成数据库压力。
