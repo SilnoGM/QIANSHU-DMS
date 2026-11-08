@@ -24,7 +24,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const status = ref<NotificationInboxStatus>('all')
-const domain = ref<NotificationInboxDomain | undefined>(undefined)
+const domain = ref<'all' | NotificationInboxDomain>('all')
 
 const detailOpen = ref(false)
 const detailLoading = ref(false)
@@ -36,7 +36,7 @@ const STATUS_OPTIONS = [
   { label: '已归档', value: 'archived' },
 ]
 const DOMAIN_OPTIONS = [
-  { label: '全部业务域', value: '' },
+  { label: '全部业务域', value: 'all' },
   { label: '采购', value: 'purchase' },
   { label: '资金', value: 'fund' },
   { label: '发票', value: 'invoice' },
@@ -82,7 +82,7 @@ async function load(): Promise<void> {
   try {
     const result = (await notificationsApi.inbox.list({
       status: status.value,
-      ...(domain.value === undefined ? {} : { domain: domain.value }),
+      ...(domain.value === 'all' ? {} : { domain: domain.value }),
       page: page.value,
       pageSize: pageSize.value,
     }, new AbortController().signal)).data
@@ -113,7 +113,7 @@ function changeDomain(value: unknown): void {
   if (typeof value !== 'string') {
     return
   }
-  domain.value = value.length === 0 ? undefined : value as NotificationInboxDomain
+  domain.value = value === 'all' ? 'all' : value as NotificationInboxDomain
   page.value = 1
 }
 
@@ -180,7 +180,7 @@ async function toggleArchive(item: NotificationInboxItemDto): Promise<void> {
 
 async function readAll(): Promise<void> {
   try {
-    const result = (await notificationsApi.inbox.readAll(domain.value)).data
+    const result = (await notificationsApi.inbox.readAll(domain.value === 'all' ? undefined : domain.value)).data
     toast.success(`已标记 ${result.updated} 条为已读`)
     await refreshAll()
   }
@@ -237,19 +237,25 @@ onMounted(async () => {
   <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档" />
   <FaPageMain>
     <div class="flex flex-wrap gap-2 items-center justify-between">
-      <div class="flex flex-wrap gap-2 items-center">
-        <FaSelect
-          :model-value="status"
-          :options="STATUS_OPTIONS"
-          class="w-32"
-          @update:model-value="changeStatus"
-        />
-        <FaSelect
-          :model-value="domain ?? ''"
-          :options="DOMAIN_OPTIONS"
-          class="w-36"
-          @update:model-value="changeDomain"
-        />
+      <div class="flex flex-wrap gap-3 items-center">
+        <label class="qs-type-meta text-muted-foreground flex gap-2 items-center">
+          状态
+          <FaSelect
+            :model-value="status"
+            :options="STATUS_OPTIONS"
+            class="w-32"
+            @update:model-value="changeStatus"
+          />
+        </label>
+        <label class="qs-type-meta text-muted-foreground flex gap-2 items-center">
+          业务域
+          <FaSelect
+            :model-value="domain"
+            :options="DOMAIN_OPTIONS"
+            class="w-36"
+            @update:model-value="changeDomain"
+          />
+        </label>
       </div>
       <FaButton variant="outline" size="sm" :disabled="store.unreadTotal === 0" @click="readAll">
         全部已读
@@ -269,7 +275,11 @@ onMounted(async () => {
         :columns="columns"
         :data="items"
         :addable="false"
+        :searchable="false"
+        :show-column-settings="false"
         :show-pagination="false"
+        :show-row-number="false"
+        :action-column="{ width: 240, minWidth: 240, align: 'right' }"
         row-key="id"
         :loading="loading"
         data-testid="notification-inbox-table"
