@@ -280,6 +280,8 @@ export interface SystemNotificationPublishResult {
 
 绑定改绑不会改变微信 `wxid`，但会清空 `verifiedAt`、`verifiedByUserId` 和 `friendCheckedAt`，必须重新发送测试消息。目标员工必须启用，且不能已经绑定同一公司号；冲突返回 409 `ASSISTANT_BINDING_USER_CONFLICT`。改绑审计由一条 `ASSISTANT_BINDING_REVOKED` 与一条 `ASSISTANT_BINDING_CREATED` 组成，metadata 标注 `mode = REASSIGN`。
 
+绑定列表、创建和改绑响应同时返回完整 `wxid` 与 `wxidMasked`：`wxid` 只用于管理员在页面核对和复制，日志、审计与错误信息仍不得写入完整 `wxid`。
+
 群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。
 
 上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。

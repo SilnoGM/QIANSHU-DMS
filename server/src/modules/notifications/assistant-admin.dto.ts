@@ -62,6 +62,7 @@ export class AssistantBindingDto {
   @ApiProperty() userName!: string
   @ApiProperty({ format: 'uuid' }) accountId!: string
   @ApiProperty() accountName!: string
+  @ApiProperty() wxid!: string
   @ApiProperty() wxidMasked!: string
   @ApiProperty({ type: 'string', nullable: true }) wechatNickname!: string | null
   @ApiProperty({ enum: ['ACTIVE', 'INVALID', 'DISABLED'] }) status!: string

@@ -123996,6 +123996,9 @@
           "accountName": {
             "type": "string"
           },
+          "wxid": {
+            "type": "string"
+          },
           "wxidMasked": {
             "type": "string"
           },
@@ -124032,6 +124035,7 @@
           "userName",
           "accountId",
           "accountName",
+          "wxid",
           "wxidMasked",
           "wechatNickname",
           "status",

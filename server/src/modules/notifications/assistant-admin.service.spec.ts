@@ -338,6 +338,25 @@ describe('AssistantAdminService', () => {
     expect(admin.getOwnQrCode).not.toHaveBeenCalled()
   })
 
+  it('returns the plaintext wxid in binding list responses', async () => {
+    const binding = bindingRow({ wxid: 'wxid_full_plaintext' })
+    const prisma = {
+      assistantBinding: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockResolvedValue([binding]),
+      },
+      $transaction: jest.fn(async (promises: Promise<unknown>[]) => Promise.all(promises)),
+    }
+
+    const result = await service(prisma).listBindings({ page: 1, pageSize: 20 })
+
+    expect(result.items[0]).toMatchObject({
+      wxid: 'wxid_full_plaintext',
+      wxidMasked: expect.stringContaining('*'),
+      wechatNickname: '旧员工',
+    })
+  })
+
   it('rejects a binding when the employee is missing or disabled', async () => {
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue(null) },

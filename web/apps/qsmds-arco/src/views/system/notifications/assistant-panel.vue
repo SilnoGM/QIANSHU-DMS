@@ -139,11 +139,11 @@ const contactOptions = computed(() => contacts.value.map(contact => ({
 })))
 
 const bindingColumns: QsGenericTableColumn<AssistantBindingDto>[] = [
-  { accessorKey: 'userName', id: 'userName', title: '员工', minWidth: 140 },
-  { accessorKey: 'accountName', id: 'accountName', title: '公司号', minWidth: 120 },
-  { accessorKey: 'wxidMasked', id: 'wxidMasked', title: '微信', width: 160 },
-  { accessorKey: 'wechatNickname', id: 'wechatNickname', title: '昵称', minWidth: 120 },
-  { accessorKey: 'status', id: 'status', title: '状态', width: 100 },
+  { accessorKey: 'userName', id: 'userName', title: '系统用户', minWidth: 140 },
+  { accessorKey: 'accountName', id: 'accountName', title: '所属微信节点', minWidth: 140 },
+  { accessorKey: 'wxid', id: 'wxid', title: '微信wxid', minWidth: 240, copyable: true, cellClass: 'qs-type-data' },
+  { accessorKey: 'wechatNickname', id: 'wechatNickname', title: '微信昵称', minWidth: 120 },
+  { accessorKey: 'status', id: 'status', title: '绑定状态', width: 100 },
   { accessorKey: 'verifiedAt', id: 'verifiedAt', title: '验证时间', width: 160 },
 ]
 

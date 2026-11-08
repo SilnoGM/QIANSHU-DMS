@@ -507,6 +507,7 @@ export class AssistantAdminService {
       userName: row.user.displayName,
       accountId: row.accountId,
       accountName: row.account.name,
+      wxid: row.wxid,
       wxidMasked: maskWxid(row.wxid) ?? '',
       wechatNickname: row.wechatNickname,
       status: row.status,
