@@ -22,8 +22,13 @@ const context = { actorUserId: 'user-1', requestId: 'req-1' }
 function adminTransport(online = true) {
   return {
     checkOnline: jest.fn().mockResolvedValue(online),
+    fetchBriefInfo: jest.fn().mockResolvedValue([]),
     getOwnQrCode: jest.fn(),
-  } as unknown as AssistantAdminTransport & { checkOnline: jest.Mock, getOwnQrCode: jest.Mock }
+  } as unknown as AssistantAdminTransport & {
+    checkOnline: jest.Mock
+    fetchBriefInfo: jest.Mock
+    getOwnQrCode: jest.Mock
+  }
 }
 
 function accountRow(overrides: Record<string, unknown> = {}) {
@@ -160,6 +165,77 @@ describe('AssistantAdminService', () => {
       }),
     )
     expect(result).toMatchObject({ appId: 'wx-app', status: 'ONLINE', enabled: true })
+  })
+
+  it('stores the real WeChat nickname and avatar returned by GeWe on import', async () => {
+    const created = accountRow({ nickname: '真实微信昵称', avatarUrl: 'https://wx.qlogo.cn/avatar.jpg' })
+    const transaction = {
+      assistantAccount: { create: jest.fn().mockResolvedValue(created) },
+    }
+    const prisma = {
+      assistantAccount: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    }
+    const admin = adminTransport(true)
+    admin.fetchBriefInfo.mockResolvedValue([{
+      wxid: 'wxid_bot',
+      nickname: '真实微信昵称',
+      remark: null,
+      alias: null,
+      avatarUrl: 'https://wx.qlogo.cn/avatar.jpg',
+    }])
+
+    await service(prisma, new FakeAssistantTransport(), admin).createAccount(context, {
+      name: '公司号-01',
+      appId: 'wx-app',
+      wxid: 'wxid_bot',
+      nickname: '手工昵称',
+    })
+
+    expect(admin.fetchBriefInfo).toHaveBeenCalledWith('wx-app', ['wxid_bot'])
+    expect(transaction.assistantAccount.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        nickname: '真实微信昵称',
+        avatarUrl: 'https://wx.qlogo.cn/avatar.jpg',
+      }),
+    })
+  })
+
+  it('refreshes the WeChat profile when checking node status', async () => {
+    const account = accountRow({ nickname: '旧昵称', avatarUrl: null })
+    const updated = accountRow({
+      nickname: '新微信昵称',
+      avatarUrl: 'https://wx.qlogo.cn/new-avatar.jpg',
+      version: 2,
+    })
+    const prisma = {
+      assistantAccount: {
+        findUnique: jest.fn().mockResolvedValue(account),
+        update: jest.fn().mockResolvedValue(updated),
+      },
+    }
+    const admin = adminTransport(true)
+    admin.fetchBriefInfo.mockResolvedValue([{
+      wxid: 'wxid_bot',
+      nickname: '新微信昵称',
+      remark: null,
+      alias: null,
+      avatarUrl: 'https://wx.qlogo.cn/new-avatar.jpg',
+    }])
+
+    const result = await service(prisma, new FakeAssistantTransport(), admin).checkAccountStatus('account-1')
+
+    expect(admin.fetchBriefInfo).toHaveBeenCalledWith('wx-app', ['wxid_bot'])
+    expect(prisma.assistantAccount.update).toHaveBeenCalledWith({
+      where: { id: 'account-1' },
+      data: expect.objectContaining({
+        nickname: '新微信昵称',
+        avatarUrl: 'https://wx.qlogo.cn/new-avatar.jpg',
+        status: 'ONLINE',
+      }),
+    })
+    expect(result.nickname).toBe('新微信昵称')
+    expect(result.avatarUrl).toBe('https://wx.qlogo.cn/new-avatar.jpg')
   })
 
   it('rejects importing a node that GeWe reports offline', async () => {

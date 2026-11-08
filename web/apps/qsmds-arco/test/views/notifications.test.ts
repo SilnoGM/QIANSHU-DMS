@@ -96,6 +96,8 @@ test('千树小助理面板从控制台导入节点，不提供扫码登录与�
   assert.match(assistantSource, /群管理/u)
   assert.match(assistantSource, /<FaAvatar/u)
   assert.match(assistantSource, /微信昵称/u)
+  assert.match(assistantSource, /未同步/u)
+  assert.doesNotMatch(assistantSource, /account\.nickname !== account\.name/u)
   assert.doesNotMatch(assistantSource, /account\.nickname \?\? account\.name \}\} ·/u)
   assert.doesNotMatch(assistantSource, /\{\{ account\.appId \}\}/u)
   assert.match(assistantSource, /导入公司号/u)

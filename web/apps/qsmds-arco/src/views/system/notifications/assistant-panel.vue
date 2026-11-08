@@ -592,8 +592,8 @@ onMounted(() => {
                         <FaIcon name="i-lucide:qr-code" class="size-4" aria-hidden="true" />
                       </FaButton>
                     </div>
-                    <p v-if="account.nickname !== null && account.nickname.trim() !== '' && account.nickname !== account.name" class="qs-type-meta text-muted-foreground m-0 mt-1">
-                      微信昵称：{{ account.nickname }}
+                    <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+                      微信昵称：{{ account.nickname?.trim() || '未同步' }}
                     </p>
                   </div>
                   <div v-if="!isPendingAccount(account)" class="flex shrink-0 gap-2 items-center">

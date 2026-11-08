@@ -137,6 +137,35 @@ export class AssistantAdminService {
     }
   }
 
+  /**
+   * 公司号的微信昵称与头像不能由系统伪造：读取 GeWe 联系人资料并返回快照。
+   * 资料同步是增强信息，失败不得阻断导入、状态检查或节点更新。
+   */
+  private async fetchAccountProfile(
+    appId: string,
+    wxid: string,
+  ): Promise<{ readonly nickname: string | null, readonly avatarUrl: string | null } | null> {
+    if (isPendingAppId(appId) || wxid.trim().length === 0) {
+      return null
+    }
+    try {
+      const contacts = await this.adminTransport.fetchBriefInfo(appId, [wxid])
+      const contact = contacts.find(item => item.wxid === wxid)
+      if (contact === undefined) {
+        return null
+      }
+      return {
+        nickname: contact.nickname?.trim() || null,
+        avatarUrl: contact.avatarUrl?.trim() || null,
+      }
+    }
+    catch (error) {
+      const code = error instanceof AssistantAdminError ? error.code : 'UNKNOWN'
+      this.logger.warn(`assistant account profile sync failed code=${code}`)
+      return null
+    }
+  }
+
   private async requireOnlineNode(appId: string): Promise<void> {
     if (!await this.checkOnline(appId)) {
       throw new ApiException(422, 'ASSISTANT_ACCOUNT_OFFLINE', '节点不在线，请先在 GeWe 控制台确认节点在线')
@@ -222,6 +251,8 @@ export class AssistantAdminService {
       throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
     }
     await this.requireOnlineNode(appId)
+    const profile = await this.fetchAccountProfile(appId, wxid)
+    const resolvedNickname = profile?.nickname ?? nickname
 
     try {
       const created = await this.prisma.$transaction(async transaction => {
@@ -230,7 +261,8 @@ export class AssistantAdminService {
             name: name.slice(0, 64),
             appId,
             wxid: wxid.slice(0, 128),
-            nickname: nickname === null ? null : nickname.slice(0, 128),
+            nickname: resolvedNickname === null ? null : resolvedNickname.slice(0, 128),
+            avatarUrl: profile?.avatarUrl ?? null,
             status: 'ONLINE',
             enabled: true,
             lastOnlineAt: new Date(),
@@ -291,6 +323,13 @@ export class AssistantAdminService {
       throw new ApiException(422, 'ASSISTANT_ACCOUNT_NOT_IMPORTED', '该账号尚未导入 GeWe 节点，请填写 appId 与 wxid')
     }
 
+    const changedWxid = nextWxid !== undefined && nextWxid !== account.wxid
+    const profileWxid = nextWxid ?? account.wxid
+    const profile = (changedAppId !== null || changedWxid) && profileWxid !== null
+      ? await this.fetchAccountProfile(changedAppId ?? account.appId, profileWxid)
+      : null
+    const resolvedNickname = profile?.nickname ?? nickname
+
     try {
       const updated = await this.prisma.$transaction(async transaction => {
         const result = await transaction.assistantAccount.updateMany({
@@ -308,7 +347,8 @@ export class AssistantAdminService {
                 }
               : {}),
             ...(nextWxid !== undefined ? { wxid: nextWxid.slice(0, 128) } : {}),
-            ...(nickname !== undefined ? { nickname: nickname === null ? null : nickname.slice(0, 128) } : {}),
+            ...(resolvedNickname !== undefined ? { nickname: resolvedNickname === null ? null : resolvedNickname.slice(0, 128) } : {}),
+            ...(profile?.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
             ...(changedAppId === null && input.enabled !== undefined ? { enabled: input.enabled } : {}),
             version: { increment: 1 },
           },
@@ -349,22 +389,28 @@ export class AssistantAdminService {
     const account = await this.requireAccount(id)
     this.assertImported(account)
     const online = await this.checkOnline(account.appId)
+    const profile = account.wxid === null
+      ? null
+      : await this.fetchAccountProfile(account.appId, account.wxid)
     const updated = await this.prisma.assistantAccount.update({
       where: { id },
-      data: online
-        ? {
-            status: 'ONLINE',
-            lastOnlineAt: new Date(),
-            lastErrorCode: null,
-            lastErrorMessage: null,
-            version: { increment: 1 },
-          }
-        : {
-            status: 'OFFLINE',
-            lastErrorCode: 'ASSISTANT_ACCOUNT_OFFLINE',
-            lastErrorMessage: '节点离线，请在 GeWe 控制台重连',
-            version: { increment: 1 },
-          },
+      data: {
+        ...(online
+          ? {
+              status: 'ONLINE' as const,
+              lastOnlineAt: new Date(),
+              lastErrorCode: null,
+              lastErrorMessage: null,
+            }
+          : {
+              status: 'OFFLINE' as const,
+              lastErrorCode: 'ASSISTANT_ACCOUNT_OFFLINE',
+              lastErrorMessage: '节点离线，请在 GeWe 控制台重连',
+            }),
+        ...(profile?.nickname ? { nickname: profile.nickname.slice(0, 128) } : {}),
+        ...(profile?.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+        version: { increment: 1 },
+      },
     })
     return this.toAccountDto(updated)
   }
