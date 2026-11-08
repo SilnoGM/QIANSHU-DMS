@@ -4,10 +4,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计稿，触发点已核对代码；待业务确认文案与字段 |
+| 文档状态 | 采购、开票、到仓三个事件已实现；对账事件保留为后续候选 |
 | 关联文档 | [落地设计](./design.md)、[接口契约](./api.md)、[数据模型](./data-model.md) |
-| 适用范围 | 阶段 1 的 3 个事件；阶段 2 的 4 个候选事件只列触发方向 |
-| 最后更新 | 2026-10-28 |
+| 适用范围 | 已实现采购审核、开票审核、货件到仓；阶段 2 候选事件只列触发方向 |
+| 最后更新 | 2026-11-06 |
 
 ## 1. 通用规则
 
@@ -15,8 +15,10 @@
 - 发布位置统一放在业务状态变更与审计写入之后、事务提交之前。
 - `publish()` 不抛业务异常：模板缺失、变量缺失、收件人为空只落失败/跳过记录，不阻断业务。
 - 每个事件必须有唯一 `dedupeKey`；重复触发返回原通知，不重复发送。
-- 阶段 1 的 3 个事件都允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
-- 文案中的 `{变量}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 已实现事件允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
+- 文案中的 `{{变量}}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 实际首批事件为采购审核、开票审核、货件到仓；`SLH_RECONCILIATION_COMPLETED` 章节保留为后续候选，当前没有业务发布点。
+- 站内模板通过 `20261108110000_notification_inbox_business_links` 接收业务标识变量：采购/到仓使用 `orderId`，开票使用 `invoiceRequestId`；详情链接分别打开采购、开票记录和到仓货件页面。
 
 ## 2. `PURCHASE_REVIEW_PENDING`
 
@@ -52,6 +54,7 @@
 | 变量 | 来源 | 敏感 | 说明 |
 | --- | --- | --- | --- |
 | `orderNo` | `issuance.number` | 否 | 采购单号 |
+| `orderId` | `created.id` | 否 | 采购单 UUID，用于站内详情链接 |
 | `vendorName` | 采购单的供货方字段：自定义名称或字典值解析后的显示名 | 否 | 模板变量名固定为 `vendorName`，不直接暴露内部字段名 |
 | `totalAmount` | `command.purchaseTotalAmount` | 是 | 采购总额 |
 | `currencyCode` | `command.currencyCode` | 否 | 币种 |
@@ -178,6 +181,7 @@
 | 变量 | 来源 | 敏感 | 说明 |
 | --- | --- | --- | --- |
 | `orderNo` | `WarehouseOrder.orderNo` | 否 | 采购单号 |
+| `orderId` | `order.id` | 否 | 采购单 UUID，用于站内详情链接 |
 | `partNumbers` | 本次 `partIds` 对应货件的 `partNumber`，按数字升序格式化为 `01、02` | 否 | 到仓货件 |
 | `receivedPartCount` | `partIds.length` | 否 | 本次到仓件数 |
 | `receivedAt` | `input.receivedAt ?? recordedAt`，按 `Asia/Shanghai` 格式化 | 否 | 到仓时间 |

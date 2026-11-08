@@ -4,19 +4,19 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计稿，关键决策已确认，待实施 |
+| 文档状态 | 设计稿；阶段 1 与站内通知核心已实施，未完成项见任务与部署清单 |
 | 方案定位 | 通知中心（系统通知）为统一能力；站内通知与千树小助理是两个渠道 |
 | 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[站内通知设计](./inapp.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco` |
-| 最后更新 | 2026-10-28 |
-| 实施边界 | 本文不含迁移 SQL、接口实现与页面代码；表结构、权限与迁移需单独评审批准 |
+| 最后更新 | 2026-11-06 |
+| 实施边界 | 本文保留设计决策；迁移、接口与页面代码已在 `feat/notification-center` 分支落地，未完成项见任务与部署清单 |
 
 ## 0. 已确认决策
 
 | 决策 | 结论 | 影响 |
 | --- | --- | --- |
 | 回调 | 阶段 1 不接；只有需要实时掉线/联系人事件时再引入，届时单独做 CSRF 安全评审 | 阶段 1 无公网回调入口，不改 `CsrfProtectionGuard` |
-| 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`SLH_RECONCILIATION_COMPLETED`（财务群）、`SHIPMENT_ARRIVED`（运营群） | 其余 4 个放阶段 2 |
+| 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`INVOICE_REQUEST_REVIEW_PENDING`（1:1）、`SHIPMENT_ARRIVED`（按策略） | 原对账完成候选改为开票审核；其余事件放阶段 2 |
 | 敏感内容 | 这 3 个事件允许金额与客户名称；1:1 与内部群都可发；群必须 `internal_only`，1:1 只发给已验证绑定 | 模板按事件 × 渠道开启 `allow_sensitive` |
 | 派发器 | 进程内循环 + 数据库租约；5 秒轮询、批量 20、租约 30 秒 | 不新增 systemd 服务，不引入 Redis |
 | 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息确认后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |

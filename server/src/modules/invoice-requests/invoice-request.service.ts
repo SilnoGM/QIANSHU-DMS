@@ -220,6 +220,7 @@ export class InvoiceRequestService {
           templateKey: 'invoice.review.pending',
           variables: {
             invoiceNo: created.invoiceNo,
+            invoiceRequestId: created.id,
             buyerName: payload.buyerName,
             totalAmount: payload.totalAmount.toString(),
             lineCount: payload.lines.length,
@@ -294,6 +295,7 @@ export class InvoiceRequestService {
           templateKey: 'invoice.review.pending',
           variables: {
             invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
             buyerName: payload.buyerName,
             totalAmount: payload.totalAmount.toString(),
             lineCount: payload.lines.length,

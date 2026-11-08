@@ -183,6 +183,7 @@ export class PurchaseOrderWarehouseReceiptService {
       templateKey: 'shipment.arrived',
       variables: {
         orderNo: order.orderNo,
+        orderId: order.id,
         partNumbers: parts.map(part => String(part.partNumber).padStart(2, '0')).join('、'),
         receivedPartCount: partIds.length,
         receivedAt: formatWarehouseTime(receivedAt),

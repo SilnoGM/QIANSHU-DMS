@@ -426,6 +426,7 @@ export class PurchaseOrderCommandService {
           templateKey: 'purchase.review.pending',
           variables: {
             orderNo: issuance.number,
+            orderId: created.id,
             vendorName: command.customSupplierName ?? command.supplierValue ?? '—',
             totalAmount: command.purchaseTotalAmount.toString(),
             currencyCode: command.currencyCode,

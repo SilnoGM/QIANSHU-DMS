@@ -2,9 +2,9 @@
 import type { InvoiceRequestStatusValue } from '../invoice-status.logic'
 import type { InvoiceRequestListItemDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -22,6 +22,7 @@ import { statusSwitchItems, statusTagClass } from '../invoice-status.logic'
 
 /** 开票记录（运营）：仅本人数据，六态筛选（始终带计数），只有「已退回」提供重新填写入口。 */
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const { auth } = useAppAuth()
 const currencyCatalog = useCurrencyCatalog()
@@ -95,6 +96,11 @@ function openDetail(row: InvoiceRequestListItemDto): void {
   detailOpen.value = true
 }
 
+function openDetailById(id: string): void {
+  detailId.value = id
+  detailOpen.value = true
+}
+
 function closeDetail(): void {
   detailOpen.value = false
   detailId.value = null
@@ -103,6 +109,12 @@ function closeDetail(): void {
 function refill(row: InvoiceRequestListItemDto): void {
   void router.push({ name: 'qsOperationsInvoicesCreate', query: { id: row.id } })
 }
+
+watch(() => route.query.id, (id) => {
+  if (typeof id === 'string' && id.length > 0) {
+    openDetailById(id)
+  }
+}, { immediate: true })
 
 onMounted(load)
 </script>

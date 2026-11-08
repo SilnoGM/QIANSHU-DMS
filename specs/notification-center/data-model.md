@@ -264,7 +264,7 @@ CHECK：两个保留期都在 `7..3650`。
 
 ## 5. 站内通知与回调预留表
 
-`notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`assistant_callback_events` 仍未创建。
+`notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`20261108110000_notification_inbox_business_links` 为三条站内模板追加业务标识变量与默认详情链接；`assistant_callback_events` 仍未创建。
 
 ### 5.1 `notification_inbox_items`
 

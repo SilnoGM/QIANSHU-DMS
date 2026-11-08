@@ -188,6 +188,18 @@ watch([enabled, canCreatePackaging, canReadShippingInfo, () => account.authEpoch
   packagingShipment.value = null
   closeShippingInfo()
 }, { flush: 'sync' })
+let openedQueryOrderId: string | null = null
+watch([enabled, () => route.query.orderId], ([isEnabled, orderId]) => {
+  if (typeof orderId !== 'string' || orderId.length === 0) {
+    openedQueryOrderId = null
+    return
+  }
+  if (!isEnabled || orderId === openedQueryOrderId) {
+    return
+  }
+  openedQueryOrderId = orderId
+  void openOrder(orderId)
+}, { immediate: true })
 onMounted(() => activated.value = true)
 onActivated(() => activated.value = true)
 onDeactivated(() => activated.value = false)

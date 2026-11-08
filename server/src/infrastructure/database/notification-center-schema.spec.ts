@@ -19,6 +19,10 @@ const inbox = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261108100000_notification_inbox_items/migration.sql'),
   'utf8',
 )
+const businessLinks = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261108110000_notification_inbox_business_links/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -109,6 +113,14 @@ describe('notification center database contract', () => {
     expect(inbox).toContain("'purchase.review.pending'")
     expect(inbox).toContain("'invoice.review.pending'")
     expect(inbox).toContain("'shipment.arrived'")
+  })
+
+  it('adds business detail links and their ID variables to the in-app templates', () => {
+    expect(businessLinks).toContain("'/qs-operations/purchase/purchase-orders?id={{orderId}}'")
+    expect(businessLinks).toContain("'/qs-operations/invoices/records?id={{invoiceRequestId}}'")
+    expect(businessLinks).toContain("'/qs-operations/warehouse-transport/warehouse-arrivals?orderId={{orderId}}'")
+    expect(businessLinks).toContain('"name":"orderId"')
+    expect(businessLinks).toContain('"name":"invoiceRequestId"')
   })
 
   it('adds exclusive delivery targets, partial unique indexes and seeds', () => {

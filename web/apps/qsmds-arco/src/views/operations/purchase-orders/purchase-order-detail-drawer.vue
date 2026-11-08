@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type {
   PurchaseOrderDetailDto,
-  PurchaseOrderListItemDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
@@ -17,7 +16,7 @@ defineOptions({ name: 'PurchaseOrderDetailDrawer' })
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
   modelValue: boolean
-  order: PurchaseOrderListItemDto | null
+  order: { readonly id: string } | null
 }>()
 
 const emit = defineEmits<{

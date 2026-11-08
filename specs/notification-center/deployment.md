@@ -165,7 +165,7 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 
 ### 10.1 迁移与种子核对
 
-本阶段迁移为 `20261108100000_notification_inbox_items`。部署后先确认结构和种子，再做策略配置：
+本阶段迁移为 `20261108100000_notification_inbox_items` 与 `20261108110000_notification_inbox_business_links`。部署后先确认结构、种子和业务详情链接，再做策略配置：
 
 ```sql
 SELECT to_regclass('public.notification_inbox_items') IS NOT NULL AS inbox_table_exists;
@@ -178,9 +178,14 @@ SELECT key, enabled
 FROM notification_templates
 WHERE channel = 'IN_APP'
 ORDER BY key;
+
+SELECT key, link_url_template
+FROM notification_templates
+WHERE channel = 'IN_APP'
+ORDER BY key;
 ```
 
-预期：表存在；`IN_APP` 渠道 1 行且 `enabled = true`；三个模板 `invoice.review.pending`、`purchase.review.pending`、`shipment.arrived` 均启用。
+预期：表存在；`IN_APP` 渠道 1 行且 `enabled = true`；三个模板 `invoice.review.pending`、`purchase.review.pending`、`shipment.arrived` 均启用，并分别带 `invoiceRequestId`/`orderId` 业务详情链接。
 
 迁移只插入渠道配置和模板，不插入事件策略。策略必须按环境显式配置；`IN_APP` 策略不能使用 `GROUP`，`ttl_seconds` 与 `quiet_hours` 必须为空。
 
