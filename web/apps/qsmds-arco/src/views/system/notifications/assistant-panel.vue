@@ -523,49 +523,45 @@ onMounted(() => {
           还没有公司号。先在 GeWe 控制台确认节点在线，再点击「导入公司号」。
         </div>
         <div v-else class="mt-4 gap-3 grid lg:grid-cols-2">
-          <div v-for="account in accounts" :key="account.id" class="p-3 border border-border rounded-lg">
-            <div class="flex flex-wrap gap-2 items-center justify-between">
-              <div>
-                <p class="qs-type-body-medium m-0">
-                  {{ account.name }}
-                </p>
-                <p class="qs-type-meta text-muted-foreground m-0">
-                  {{ account.nickname ?? account.name }} · {{ account.appId }}
-                </p>
+          <div v-for="account in accounts" :key="account.id" class="p-4 border border-border rounded-lg">
+            <div class="flex gap-3 items-start">
+              <FaAvatar
+                :src="account.avatarUrl ?? ''"
+                :fallback="account.nickname?.trim() || account.name"
+                class="text-base text-muted-foreground font-medium border border-border rounded-xl bg-muted shrink-0 size-12"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap gap-2 items-start justify-between">
+                  <div class="min-w-0">
+                    <p class="qs-type-body-medium m-0 truncate">
+                      {{ account.name }}
+                    </p>
+                    <p v-if="account.nickname !== null && account.nickname.trim() !== '' && account.nickname !== account.name" class="qs-type-meta text-muted-foreground m-0 mt-1">
+                      微信昵称：{{ account.nickname }}
+                    </p>
+                    <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+                      最后在线：{{ formatDate(account.lastOnlineAt) }}
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 flex-col gap-2 items-end">
+                    <FaTag variant="outline" :class="statusClass(account.status)">
+                      {{ statusLabel(account.status) }}
+                    </FaTag>
+                    <label v-if="!isPendingAccount(account)" class="qs-type-meta flex gap-2 items-center">
+                      <FaSwitch
+                        :model-value="account.enabled"
+                        :disabled="!canOperateAccount || busy"
+                        @update:model-value="setAccountEnabled(account, Boolean($event))"
+                      />
+                      启用派发
+                    </label>
+                  </div>
+                </div>
               </div>
-              <FaTag variant="outline" :class="statusClass(account.status)">
-                {{ statusLabel(account.status) }}
-              </FaTag>
             </div>
-            <div class="mt-2 flex flex-wrap gap-3 items-center justify-between">
-              <p class="qs-type-meta text-muted-foreground m-0">
-                最后在线：{{ formatDate(account.lastOnlineAt) }}
-              </p>
-              <label v-if="!isPendingAccount(account)" class="qs-type-meta flex gap-2 items-center">
-                <FaSwitch
-                  :model-value="account.enabled"
-                  :disabled="!canOperateAccount || busy"
-                  @update:model-value="setAccountEnabled(account, Boolean($event))"
-                />
-                启用派发
-              </label>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="openUpdateAccount(account)">
-                更新节点
-              </FaButton>
+            <div class="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
               <FaButton
                 v-if="!isPendingAccount(account)"
-                variant="outline"
-                size="sm"
-                :disabled="!canOperateAccount || busy"
-                @click="checkAccountStatus(account)"
-              >
-                检查状态
-              </FaButton>
-              <FaButton
-                v-if="!isPendingAccount(account)"
-                variant="outline"
                 size="sm"
                 :disabled="!canOperateAccount || busy"
                 @click="showOwnQr(account)"
@@ -581,6 +577,20 @@ onMounted(() => {
               >
                 发送测试
               </FaButton>
+              <div class="ml-auto flex flex-wrap gap-2">
+                <FaButton
+                  v-if="!isPendingAccount(account)"
+                  variant="outline"
+                  size="sm"
+                  :disabled="!canOperateAccount || busy"
+                  @click="checkAccountStatus(account)"
+                >
+                  检查状态
+                </FaButton>
+                <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="openUpdateAccount(account)">
+                  更新节点
+                </FaButton>
+              </div>
             </div>
           </div>
         </div>
