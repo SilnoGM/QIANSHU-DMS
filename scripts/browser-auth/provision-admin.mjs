@@ -966,6 +966,46 @@ const grants = [
         process.exit(1)
       }
     }
+
+    const adminUser = await client.query(
+      'SELECT id FROM users WHERE username = $1',
+      [process.env.QIANSHU_BROWSER_AUTH_ADMIN_USERNAME],
+    )
+    if (adminUser.rowCount !== 1) {
+      process.stderr.write('POST_MIGRATION_NOTIFICATION_FIXTURE')
+      process.exit(1)
+    }
+    const notification = await client.query(
+      [
+        'INSERT INTO notifications (',
+        'event_type, source_type, source_id, dedupe_key, template_key,',
+        'requested_channels, variables',
+        ') VALUES ($1, $2, $3, $4, $5, \'["IN_APP"]\'::jsonb, \'{}\'::jsonb)',
+        'RETURNING id',
+      ].join(' '),
+      [
+        'PURCHASE_REVIEW_PENDING',
+        'BROWSER_FIXTURE',
+        'browser-notification-fixture-v1',
+        'browser-notification-fixture-v1',
+        'purchase.review.pending',
+      ],
+    )
+    await client.query(
+      [
+        'INSERT INTO notification_inbox_items (',
+        'notification_id, user_id, event_type, template_version,',
+        'title_snapshot, body_snapshot',
+        ') VALUES ($1, $2, $3, 1, $4, $5)',
+      ].join(' '),
+      [
+        notification.rows[0].id,
+        adminUser.rows[0].id,
+        'PURCHASE_REVIEW_PENDING',
+        '[Browser] 通知夹具',
+        'Browser 通知正文',
+      ],
+    )
     await client.query('COMMIT')
   }
   catch {
