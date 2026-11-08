@@ -262,7 +262,12 @@ sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
 
 命令输出一行 JSON，包含 `kind=notification_cleanup`、四类删除计数和 `timeBudgetReached`。命令自带 60 秒预算、每批 500 条；未归档站内条目保留 180 天，已归档保留 365 天；站外交付按 `notification_settings.deliveryRetentionDays`，逻辑通知仅在没有任何站内条目和交付时删除。
 
-建议每日低峰执行一次。使用与媒体清理相同的宿主 systemd timer 形态，新增一个 oneshot unit（示例，未写入仓库部署资产）：
+建议每日低峰执行一次。仓库已提供与媒体清理相同形态的宿主 systemd 资产：
+
+- [`qianshu-dms-notification-cleanup.service`](../../deploy/docker/systemd/qianshu-dms-notification-cleanup.service)
+- [`qianshu-dms-notification-cleanup.timer`](../../deploy/docker/systemd/qianshu-dms-notification-cleanup.timer)
+
+以下为文件内容；安装命令见本节末尾。
 
 ```ini
 [Unit]
@@ -273,6 +278,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+# 与媒体清理相同的宿主 oneshot 形态；命令自带 60 秒预算与分批删除。
 WorkingDirectory=/srv/qianshu-dms
 ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/notification-operations.js cleanup
 TimeoutStartSec=120s
@@ -292,6 +298,21 @@ Unit=qianshu-dms-notification-cleanup.service
 WantedBy=timers.target
 ```
 
+安装、静态校验并启用：
+
+```bash
+sudo install -o root -g root -m 0644 \
+  <worktree>/deploy/docker/systemd/qianshu-dms-notification-cleanup.service \
+  <worktree>/deploy/docker/systemd/qianshu-dms-notification-cleanup.timer \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  /etc/systemd/system/qianshu-dms-notification-cleanup.service \
+  /etc/systemd/system/qianshu-dms-notification-cleanup.timer
+sudo systemctl enable --now qianshu-dms-notification-cleanup.timer
+systemctl list-timers qianshu-dms-notification-cleanup.timer
+```
+
 安装后必须做一次手工运行并检查退出码：
 
 ```bash
@@ -300,7 +321,7 @@ sudo systemctl status qianshu-dms-notification-cleanup.service --no-pager
 sudo journalctl -u qianshu-dms-notification-cleanup.service --since today
 ```
 
-该命令当前没有数据库 advisory lock，部署时必须保证只有一个调度器运行；不要同时在两个主机或两个 timer 上启用。
+该命令当前没有数据库 advisory lock，部署时必须保证只有一个调度器运行；不要同时在两个主机或两个 timer 上启用。仓库资产尚未在测试机安装，也没有执行 `systemd-analyze verify`。
 
 ### 10.4 告警阈值
 

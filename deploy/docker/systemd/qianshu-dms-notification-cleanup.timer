@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qianshu DMS Notification Retention Cleanup Daily (Docker)
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+AccuracySec=1m
+Persistent=true
+Unit=qianshu-dms-notification-cleanup.service
+
+[Install]
+WantedBy=timers.target
