@@ -13,6 +13,10 @@ const assistantPageSource = readFileSync(
   new URL('../../src/views/system/notifications/assistant.vue', import.meta.url),
   'utf8',
 )
+const channelSwitchSource = readFileSync(
+  new URL('../../src/views/system/notifications/channel-switch.vue', import.meta.url),
+  'utf8',
+)
 const policiesPageSource = readFileSync(
   new URL('../../src/views/system/notifications/policies.vue', import.meta.url),
   'utf8',
@@ -80,10 +84,16 @@ test('通知中心拆分为 GeWe 助理、通知策略和通知记录三个独�
 })
 
 test('千树小助理面板从控制台导入节点，不提供扫码登录与退出', () => {
+  assert.match(assistantPageSource, /<FaPageHeader[\s\S]*<ChannelSwitch/u)
+  assert.match(channelSwitchSource, /assistant\.channel\.update/u)
+  assert.match(channelSwitchSource, /<FaSwitch/u)
+  assert.doesNotMatch(channelSwitchSource, /保存/u)
+  assert.doesNotMatch(assistantSource, /saveChannel|channelEnabled|<h3[^>]*>\s*渠道/u)
   assert.match(assistantSource, /导入公司号/u)
   assert.match(assistantSource, /检查状态/u)
   assert.match(assistantSource, /更新节点/u)
   assert.match(assistantSource, /个人二维码/u)
+  assert.match(assistantSource, /个人二维码[\s\S]*发送测试/u)
   assert.match(assistantSource, /启用派发/u)
   assert.match(assistantSource, /qrImageSrc/u)
   assert.match(assistantSource, /发送测试/u)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AssistantAccountDto, AssistantBindingDto, AssistantChannelDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
+import type { AssistantAccountDto, AssistantBindingDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
 import { computed, onMounted, ref } from 'vue'
@@ -24,8 +24,6 @@ const canManageTarget = computed(() => auth('assistant-target:manage'))
 const loading = ref(true)
 const error = ref<string | null>(null)
 const busy = ref(false)
-const channel = ref<AssistantChannelDto | null>(null)
-const channelEnabled = ref(false)
 const accounts = ref<AssistantAccountDto[]>([])
 const bindings = ref<AssistantBindingDto[]>([])
 const targets = ref<AssistantTargetDto[]>([])
@@ -124,14 +122,11 @@ async function loadAll(): Promise<void> {
   error.value = null
   try {
     const signal = new AbortController().signal
-    const [channelResult, accountResult, bindingResult, targetResult] = await Promise.all([
-      notificationsApi.assistant.channel.get(signal),
+    const [accountResult, bindingResult, targetResult] = await Promise.all([
       notificationsApi.assistant.accounts.list(signal),
       notificationsApi.assistant.bindings.list({ page: 1, pageSize: 50 }, signal),
       notificationsApi.assistant.targets.list(signal),
     ])
-    channel.value = channelResult.data
-    channelEnabled.value = channelResult.data.enabled
     accounts.value = accountResult.data
     bindings.value = bindingResult.data.items
     targets.value = targetResult.data
@@ -141,26 +136,6 @@ async function loadAll(): Promise<void> {
   }
   finally {
     loading.value = false
-  }
-}
-
-async function saveChannel(): Promise<void> {
-  if (channel.value === null) {
-    return
-  }
-  busy.value = true
-  try {
-    channel.value = (await notificationsApi.assistant.channel.update({
-      enabled: channelEnabled.value,
-      expectedVersion: channel.value.version,
-    })).data
-    toast.success(channel.value.enabled ? '千树小助理已启用' : '千树小助理已停用')
-  }
-  catch (failure) {
-    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
-  }
-  finally {
-    busy.value = false
   }
 }
 
@@ -529,28 +504,6 @@ onMounted(() => {
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <h3 class="qs-type-body-medium m-0">
-              渠道
-            </h3>
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ channel?.tokenConfigured ? 'Token 已配置' : 'Token 未配置，无法发送' }} · 关闭后所有站外交付停止派发
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaSwitch v-model="channelEnabled" :disabled="!canUpdateChannel || busy" />
-            <FaButton size="sm" :disabled="!canUpdateChannel || busy" @click="saveChannel">
-              保存
-            </FaButton>
-            <FaButton variant="outline" size="sm" :disabled="!canUpdateChannel || busy" @click="testChannel">
-              测试发送
-            </FaButton>
-          </div>
-        </div>
-      </section>
-
-      <section class="p-4 border border-border rounded-lg bg-background">
-        <div class="flex flex-wrap gap-3 items-center justify-between">
-          <div>
-            <h3 class="qs-type-body-medium m-0">
               公司号
             </h3>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
@@ -614,6 +567,15 @@ onMounted(() => {
                 @click="showOwnQr(account)"
               >
                 个人二维码
+              </FaButton>
+              <FaButton
+                v-if="!isPendingAccount(account)"
+                variant="outline"
+                size="sm"
+                :disabled="!canUpdateChannel || busy"
+                @click="testChannel"
+              >
+                发送测试
               </FaButton>
             </div>
           </div>

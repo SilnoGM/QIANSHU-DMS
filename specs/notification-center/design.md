@@ -499,7 +499,7 @@ export type AssistantTransportResult =
 
 | 页面 | 路由 | 内容 |
 | --- | --- | --- |
-| GeWe助理 | `/system/notifications/assistant` | 渠道配置、公司号、管理员绑定（含改绑）、群目标（含编辑 key） |
+| GeWe助理 | `/system/notifications/assistant` | 渠道开关（页头右侧）、公司号（含个人二维码与发送测试）、管理员绑定（含改绑）、群目标（含编辑 key） |
 | 通知策略 | `/system/notifications/policies` | 模板（按渠道）与事件 × 渠道策略 |
 | 通知记录 | `/system/notifications/records` | 概览、近 24 小时状态与发送记录 |
 
@@ -536,6 +536,8 @@ export type AssistantTransportResult =
 - 通知记录：`notification-record:read`。
 
 导航图标使用品牌资产 `qs-gewe-assistant`、`qs-notification-policy`、`qs-notification-records`；新增图标必须放入 `src/assets/icons/`、登记 `brand-icons.json`，并重跑 `node web/scripts/generate-icon-inventory.mjs`。导航图标不能使用 `i-lucide:*`。
+
+GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发送测试放在公司号卡片的个人二维码旁边。
 
 ### 8.3 页面结构
 
