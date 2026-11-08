@@ -656,6 +656,33 @@
     "source": "brand"
   },
   {
+    "name": "qs-gewe-assistant",
+    "label": "GeWe助理",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / GeWe助理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-notification-policy",
+    "label": "通知策略",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / 通知策略"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-notification-records",
+    "label": "通知记录",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / 通知记录"
+    ],
+    "source": "brand"
+  },
+  {
     "name": "app-toolbar-collapse",
     "label": "app-toolbar-collapse",
     "category": "通用图标",
@@ -2513,8 +2540,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/personal-fund-account-card.vue",
-      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
-      "apps/qsmds-arco/src/views/system/notifications/index.vue"
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts"
     ]
   },
   {
@@ -2681,6 +2707,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
       "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/overview-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/records-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/rules-panel.vue",

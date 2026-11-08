@@ -582,5 +582,29 @@
     "usages": [
       "通知中心"
     ]
+  },
+  {
+    "name": "qs-gewe-assistant",
+    "label": "GeWe助理",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / GeWe助理"
+    ]
+  },
+  {
+    "name": "qs-notification-policy",
+    "label": "通知策略",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / 通知策略"
+    ]
+  },
+  {
+    "name": "qs-notification-records",
+    "label": "通知记录",
+    "category": "系统",
+    "usages": [
+      "系统管理 / 通知中心 / 通知记录"
+    ]
   }
 ]

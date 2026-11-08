@@ -495,16 +495,15 @@ export type AssistantTransportResult =
 
 ### 8.2 管理端信息架构
 
-单一路由 `/system/notifications`，页面标题「通知中心」，用 `FaTabs` 分页签：
+系统管理下的「通知中心」是分组菜单，包含三个独立页面，不再使用单页 `FaTabs`：
 
-| 页签 | 内容 | 阶段 |
+| 页面 | 路由 | 内容 |
 | --- | --- | --- |
-| 概览 | 渠道状态、公司号在线、今日发送/失败/未读、队列积压 | 1 |
-| 站内通知 | 站内渠道配置与消息治理（见 [站内通知设计](./inapp.md)） | 3，阶段 1 隐藏 |
-| 千树小助理 | 渠道配置、公司号、管理员绑定（含改绑）、群目标（含编辑 key） | 1 |
-| 通知规则 | 模板（按渠道）与事件 × 渠道策略 | 1 |
-| 发送记录 | 逻辑通知、渠道汇总、逐人交付、重试/取消 | 1 |
-| 回调记录 | 回调列表与原始报文 | 可选，回调引入后 |
+| GeWe助理 | `/system/notifications/assistant` | 渠道配置、公司号、管理员绑定（含改绑）、群目标（含编辑 key） |
+| 通知策略 | `/system/notifications/policies` | 模板（按渠道）与事件 × 渠道策略 |
+| 通知记录 | `/system/notifications/records` | 概览、近 24 小时状态与发送记录 |
+
+父级 `/system/notifications` 只承担分组和权限并集，直接访问时由 `index.vue` 按权限跳转到第一个可用子页面。
 
 路由元数据：
 
@@ -512,42 +511,45 @@ export type AssistantTransportResult =
 {
   path: '/system/notifications',
   name: 'systemNotifications',
-  component: () => import('@/views/system/notifications/index.vue'),
+  component: Layout,
   meta: {
     title: '通知中心',
     icon: 'qs-notification',
     auth: [
       'notification-record:read',
       'notification-template:read',
+      'notification-policy:read',
       'assistant-channel:read',
+      'assistant-account:read',
     ],
-    singleMenu: true,
   },
+  children: [
+    // assistant / policies / records 三个叶子，各自声明读取权限
+  ],
 }
 ```
 
-`meta.auth` 使用 any-of：只有发送记录权限的财务也能进入页面，但只看得到「发送记录」页签。页签内部再按各自权限显示。回调引入后再把 `assistant-callback:read` 加入 auth。
+子页面权限：
 
-图标必须新增品牌资产：`src/assets/icons/qs-notification.svg`、`brand-icons.json` 登记、重跑 `node web/scripts/generate-icon-inventory.mjs`。千树小助理页签如需图标，同时新增 `qs-assistant.svg`；导航图标不能用 `i-lucide:*`。
+- GeWe助理：`assistant-channel:read` 或 `assistant-account:read`。
+- 通知策略：`notification-template:read` 或 `notification-policy:read`。
+- 通知记录：`notification-record:read`。
+
+导航图标使用品牌资产 `qs-gewe-assistant`、`qs-notification-policy`、`qs-notification-records`；新增图标必须放入 `src/assets/icons/`、登记 `brand-icons.json`，并重跑 `node web/scripts/generate-icon-inventory.mjs`。导航图标不能使用 `i-lucide:*`。
 
 ### 8.3 页面结构
 
 ```
 views/system/notifications/
-├── index.vue                    # FaTabs + 页签编排 + 权限
-├── notifications.logic.ts       # 权限动作、查询构造、状态映射、错误提取
+├── index.vue                    # 旧入口的权限感知跳转
+├── assistant.vue                # GeWe助理页面壳
+├── policies.vue                 # 通知策略页面壳
+├── records.vue                  # 通知记录页面壳（概览 + 发送记录）
 ├── overview-panel.vue
-├── inbox-panel.vue              # 阶段 3
 ├── assistant-panel.vue          # 渠道、账号、绑定、群目标
 ├── rules-panel.vue              # 模板 + 事件 × 渠道策略
 ├── records-panel.vue            # 逻辑通知与逐人交付
-├── callback-panel.vue
-└── components/
-    ├── qr-login-modal.vue
-    ├── binding-code-modal.vue
-    ├── template-editor-modal.vue
-    ├── channel-policy-editor-modal.vue
-    └── notification-detail-drawer.vue
+└── qr-image.ts
 ```
 
 约定：

@@ -9,6 +9,18 @@ const indexSource = readFileSync(
   new URL('../../src/views/system/notifications/index.vue', import.meta.url),
   'utf8',
 )
+const assistantPageSource = readFileSync(
+  new URL('../../src/views/system/notifications/assistant.vue', import.meta.url),
+  'utf8',
+)
+const policiesPageSource = readFileSync(
+  new URL('../../src/views/system/notifications/policies.vue', import.meta.url),
+  'utf8',
+)
+const recordsPageSource = readFileSync(
+  new URL('../../src/views/system/notifications/records.vue', import.meta.url),
+  'utf8',
+)
 const assistantSource = readFileSync(
   new URL('../../src/views/system/notifications/assistant-panel.vue', import.meta.url),
   'utf8',
@@ -42,15 +54,29 @@ const pollingSource = readFileSync(
   'utf8',
 )
 
-test('通知中心页面使用统一页头、页签与四个面板', () => {
-  assert.match(indexSource, /<FaPageHeader/u)
-  assert.match(indexSource, /<FaPageMain/u)
-  assert.match(indexSource, /<FaTabs/u)
-  assert.match(indexSource, /OverviewPanel/u)
-  assert.match(indexSource, /AssistantPanel/u)
-  assert.match(indexSource, /RulesPanel/u)
-  assert.match(indexSource, /RecordsPanel/u)
-  assert.match(indexSource, /data-testid="notification-center-tabs"/u)
+test('通知中心拆分为 GeWe 助理、通知策略和通知记录三个独立页面', () => {
+  // 旧入口保留权限感知跳转，不再承载四个页签。
+  assert.match(indexSource, /router\.replace/u)
+  assert.match(indexSource, /systemNotificationRecords/u)
+  assert.match(indexSource, /systemNotificationAssistant/u)
+  assert.match(indexSource, /systemNotificationPolicies/u)
+  assert.doesNotMatch(indexSource, /<FaTabs/u)
+  assert.doesNotMatch(indexSource, /data-testid="notification-center-tabs"/u)
+
+  assert.match(assistantPageSource, /<FaPageHeader/u)
+  assert.match(assistantPageSource, /title="GeWe助理"/u)
+  assert.match(assistantPageSource, /<AssistantPanel/u)
+
+  assert.match(policiesPageSource, /<FaPageHeader/u)
+  assert.match(policiesPageSource, /title="通知策略"/u)
+  assert.match(policiesPageSource, /<RulesPanel/u)
+
+  assert.match(recordsPageSource, /<FaPageHeader/u)
+  assert.match(recordsPageSource, /title="通知记录"/u)
+  assert.match(recordsPageSource, /<OverviewPanel/u)
+  assert.match(recordsPageSource, /<RecordsPanel/u)
+  assert.match(recordsPageSource, /概览/u)
+  assert.match(recordsPageSource, /发送记录/u)
 })
 
 test('千树小助理面板从控制台导入节点，不提供扫码登录与退出', () => {

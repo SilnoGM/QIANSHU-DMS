@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<g fill="none" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+<rect x="10" y="7" width="40" height="50" rx="5" fill="#F7F8F4"/>
+<path d="M18 19H42M18 27H42M18 35H32"/>
+<circle cx="44" cy="44" r="10" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)"/>
+<path d="M44 38V44L48 47" stroke="oklch(var(--primary))"/>
+<path d="M54 10V18" stroke="oklch(var(--primary))"/>
+</g>
+</svg>
