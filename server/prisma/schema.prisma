@@ -802,6 +802,7 @@ model User {
   assistantBindingsCreated          AssistantBinding[]            @relation("AssistantBindingBoundBy")
   assistantBindingsVerified         AssistantBinding[]            @relation("AssistantBindingVerifiedBy")
   assistantDeliveries               AssistantDelivery[]           @relation("AssistantDeliveryRecipient")
+  notificationInboxItems            NotificationInboxItem[]       @relation("NotificationInboxItemUser")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -3349,6 +3350,7 @@ model Notification {
 
   requestedBy User?               @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   deliveries  AssistantDelivery[]
+  inboxItems NotificationInboxItem[]
 
   @@index([eventType, publishedAt(sort: Desc)], map: "notifications_event_type_published_idx")
   @@index([sourceType, sourceId], map: "notifications_source_idx")
@@ -3422,7 +3424,31 @@ model NotificationSettings {
   @@map("notification_settings")
 }
 
-/// 渠道级开关与默认静默时段。阶段 1 只有 ASSISTANT 一行。
+/// 站内收件箱条目：每个逻辑通知对每个收件人生成一条快照。
+model NotificationInboxItem {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId   String    @map("notification_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  eventType        String    @map("event_type") @db.VarChar(64)
+  templateVersion  Int       @map("template_version")
+  titleSnapshot    String    @map("title_snapshot") @db.Text
+  bodySnapshot     String    @map("body_snapshot") @db.Text
+  linkUrlSnapshot  String?   @map("link_url_snapshot") @db.Text
+  readAt           DateTime? @map("read_at") @db.Timestamptz(6)
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  user         User         @relation("NotificationInboxItemUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([notificationId, userId], map: "notification_inbox_items_notification_user_key")
+  @@index([userId, archivedAt, createdAt(sort: Desc)], map: "notification_inbox_items_user_archived_created_idx")
+  @@index([userId, eventType, createdAt(sort: Desc)], map: "notification_inbox_items_user_event_created_idx")
+  @@index([userId, readAt, archivedAt], map: "notification_inbox_items_user_read_archived_idx")
+  @@map("notification_inbox_items")
+}
+
+/// 渠道级开关与默认静默时段。ASSISTANT 可配静默；IN_APP 不使用静默与 TTL。
 model NotificationChannelSettings {
   channel           NotificationChannel @id
   enabled           Boolean             @default(false)

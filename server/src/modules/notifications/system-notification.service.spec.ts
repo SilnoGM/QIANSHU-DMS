@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言调用参数。 */
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { SystemNotificationService } from './system-notification.service'
 import type { SystemNotificationPublishCommand } from './notification.types'
@@ -126,6 +127,7 @@ describe('SystemNotificationService.publish', () => {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
       },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
     }
     const service = new SystemNotificationService({} as PrismaService)
 
@@ -146,6 +148,57 @@ describe('SystemNotificationService.publish', () => {
     expect(transaction.notification.update).toHaveBeenCalledWith({
       where: { id: 'n3' },
       data: { status: 'PENDING' },
+    })
+  })
+
+  it('creates in-app inbox items inside the business transaction', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n4' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+        channel: 'IN_APP',
+        targetMode: 'USERS',
+        targetConfig: { userIds: ['user-1'] },
+        ttlSeconds: null,
+      })]) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template({
+        channel: 'IN_APP',
+        titleTemplate: '采购单 {{orderNo}} 待审核',
+        bodyTemplate: '采购单 {{orderNo}} 待审核',
+        linkUrlTemplate: null,
+      })) },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      notificationInboxItem: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(1),
+      },
+      assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const service = new SystemNotificationService({} as PrismaService)
+
+    const result = await service.publish(command, { transaction: transaction as never })
+
+    expect(result.channels).toEqual([
+      { channel: 'IN_APP', status: 'CREATED', recipientCount: 1, skippedCount: 0 },
+    ])
+    expect(transaction.notificationInboxItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        notificationId: 'n4',
+        userId: 'user-1',
+        eventType: 'PURCHASE_REVIEW_PENDING',
+        titleSnapshot: '采购单 CG-1 待审核',
+        bodySnapshot: '采购单 CG-1 待审核',
+        linkUrlSnapshot: null,
+      })],
+      skipDuplicates: true,
+    })
+    expect(transaction.notification.update).toHaveBeenCalledWith({
+      where: { id: 'n4' },
+      data: { status: 'COMPLETED', completedAt: expect.any(Date) },
     })
   })
 })

@@ -152,12 +152,14 @@ export class NotificationAdminService {
 
   private validateTemplate(input: {
     readonly bodyTemplate: string
+    readonly titleTemplate?: string | null
     readonly linkUrlTemplate?: string | null
     readonly messageKind?: string
     readonly variables: readonly { readonly name: string }[]
   }): void {
     const inspected = inspectNotificationTemplate({
       body: input.bodyTemplate,
+      titleTemplate: input.titleTemplate ?? null,
       linkUrlTemplate: input.linkUrlTemplate ?? null,
       allowed: input.variables,
     })
@@ -227,10 +229,12 @@ export class NotificationAdminService {
       throw new ApiException(409, 'NOTIFICATION_TEMPLATE_STATE_CHANGED', '模板已变化，请刷新后重试')
     }
     const bodyTemplate = input.bodyTemplate ?? existing.bodyTemplate
+    const titleTemplate = input.titleTemplate !== undefined ? input.titleTemplate : existing.titleTemplate
     const linkUrlTemplate = input.linkUrlTemplate !== undefined ? input.linkUrlTemplate : existing.linkUrlTemplate
     const variables = input.variables ?? templateVariables(existing.variables)
     this.validateTemplate({
       bodyTemplate,
+      titleTemplate,
       linkUrlTemplate,
       messageKind: input.messageKind ?? existing.messageKind,
       variables,

@@ -15,6 +15,10 @@ const audit = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261106162000_notification_center_audit_events/migration.sql'),
   'utf8',
 )
+const inbox = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261108100000_notification_inbox_items/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -78,7 +82,7 @@ describe('notification center database contract', () => {
     }
   })
 
-  it('declares the ten phase-1 tables', () => {
+  it('declares the phase-1 tables plus the in-app inbox', () => {
     for (const name of [
       'Notification',
       'NotificationTemplate',
@@ -90,11 +94,21 @@ describe('notification center database contract', () => {
       'AssistantTarget',
       'AssistantDelivery',
       'AssistantDispatchLease',
+      'NotificationInboxItem',
     ]) {
       expect(() => block('model', name)).not.toThrow()
     }
-    expect(schema).not.toContain('model NotificationInboxItem')
     expect(schema).not.toContain('model AssistantCallbackEvent')
+  })
+
+  it('creates and seeds the in-app inbox', () => {
+    expect(inbox).toContain('CREATE TABLE "notification_inbox_items"')
+    expect(inbox).toContain('notification_inbox_items_notification_user_key')
+    expect(inbox).toContain('notification_inbox_items_user_archived_created_idx')
+    expect(inbox).toContain("VALUES ('IN_APP', true)")
+    expect(inbox).toContain("'purchase.review.pending'")
+    expect(inbox).toContain("'invoice.review.pending'")
+    expect(inbox).toContain("'shipment.arrived'")
   })
 
   it('adds exclusive delivery targets, partial unique indexes and seeds', () => {

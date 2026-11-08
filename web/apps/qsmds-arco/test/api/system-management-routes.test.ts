@@ -9,6 +9,7 @@ import userRolesRoutes, {
 } from '../../src/router/modules/admin.user-roles'
 import applicationSettingsRoute from '../../src/router/modules/application.settings'
 import basicDataRoutes from '../../src/router/modules/basic.data'
+import notificationCenterRoute from '../../src/router/modules/notification.center'
 import productManagementRoutes from '../../src/router/modules/product.management'
 import supplierPaymentProfilesRoute from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
@@ -95,6 +96,11 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
     systemNotificationsRoute.meta?.auth,
     ['notification-record:read', 'notification-template:read', 'assistant-channel:read'],
   )
+  assert.equal(notificationCenterRoute.path, 'notifications')
+  assert.equal(notificationCenterRoute.name, 'notificationCenter')
+  assert.equal(notificationCenterRoute.meta?.menu, false)
+  assert.equal(notificationCenterRoute.meta?.auth, undefined)
+  assert.match(routesSource, /NotificationCenter,/u)
 
   // 原「权限体系」分组已解散：管理页面不再位于系统管理主路由内。
   const systemManagementSection = asyncRoutesSource.slice(

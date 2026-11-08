@@ -1,79 +1,119 @@
-import appApi from '@/api/modules/app'
+import type { NotificationInboxItemDto } from '@/api/generated/types.gen'
 
-export const useAppNotificationStore = defineStore(
-  'appNotification',
-  () => {
-    interface TypeItem {
-      name: string
-      icon: string
-      unRead: number // 未读数
+import notificationsApi from '@/api/modules/notifications'
+
+/**
+ * 顶栏铃铛的站内通知状态。列表只在打开面板时刷新；未读数按 30 秒轮询，
+ * 页面隐藏时暂停，恢复可见/聚焦时立即补拉。
+ */
+export const useAppNotificationStore = defineStore('appNotification', () => {
+  const unreadTotal = ref(0)
+  const recent = ref<NotificationInboxItemDto[]>([])
+  const loading = ref(false)
+
+  let started = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let visibilityListener: (() => void) | null = null
+  let focusListener: (() => void) | null = null
+
+  async function refreshUnread(): Promise<void> {
+    try {
+      unreadTotal.value = (await notificationsApi.inbox.unreadCount(new AbortController().signal)).data.total
     }
+    catch {
+      // 铃铛轮询失败不弹错，避免打断当前页面；下一次轮询或聚焦会重试。
+    }
+  }
 
-    // 消息类型，可自定义新增或移除（至少保留一个，即使你不需要）
-    const types = ref<TypeItem[]>([
-      { name: 'message', icon: 'i-icon-park-twotone:mail', unRead: 0 },
-      { name: 'approval', icon: 'i-icon-park-twotone:seal', unRead: 0 },
-      { name: 'default', icon: 'i-icon-park-twotone:application-two', unRead: 0 },
-    ])
-    // 未读总计
-    const total = computed(() => {
-      return types.value.reduce((acc, item) => acc + item.unRead, 0)
-    })
+  async function refreshRecent(): Promise<void> {
+    loading.value = true
+    try {
+      recent.value = (await notificationsApi.inbox.list({
+        status: 'all',
+        page: 1,
+        pageSize: 5,
+      }, new AbortController().signal)).data.items
+    }
+    catch {
+      // 面板错误由页面自行处理；铃铛保留上一次成功列表。
+    }
+    finally {
+      loading.value = false
+    }
+  }
 
-    const list = ref<{
-      [key in TypeItem['name']]: {
-        id: number | string
-        title: string
-        datetime: string
-        read: boolean
-      }[]
-    }>({})
+  async function markRead(id: string): Promise<void> {
+    await notificationsApi.inbox.read(id)
+    const now = new Date().toISOString()
+    recent.value = recent.value.map(item => item.id === id ? { ...item, readAt: now } : item)
+    await refreshUnread()
+  }
 
-    // 模拟单条已读
-    function setRead(type: TypeItem['name'], id: number | string) {
-      const item = list.value[type]?.find(item => item.id === id)
-      if (item) {
-        item.read = true
-        const typeItem = types.value.find(item => item.name === type)
-        if (typeItem && typeItem.unRead > 0) {
-          typeItem.unRead--
-        }
+  async function readAll(): Promise<void> {
+    await notificationsApi.inbox.readAll()
+    const now = new Date().toISOString()
+    recent.value = recent.value.map(item => item.readAt === null ? { ...item, readAt: now } : item)
+    await refreshUnread()
+  }
+
+  function schedule(): void {
+    if (!started) {
+      return
+    }
+    const jitter = globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! % 6_000
+    const delay = 30_000 + jitter - 3_000
+    timer = setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshUnread()
+      }
+      schedule()
+    }, delay)
+  }
+
+  function startPolling(): void {
+    if (started) {
+      return
+    }
+    started = true
+    void refreshUnread()
+    visibilityListener = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshUnread()
       }
     }
-    // 模拟全部已读
-    function setAllRead(type: TypeItem['name']) {
-      list.value[type].forEach((item) => {
-        item.read = true
-      })
-      const typeItem = types.value.find(item => item.name === type)
-      if (typeItem && typeItem.unRead > 0) {
-        typeItem.unRead = 0
-      }
+    focusListener = () => {
+      void refreshUnread()
     }
+    document.addEventListener('visibilitychange', visibilityListener)
+    window.addEventListener('focus', focusListener)
+    schedule()
+  }
 
-    function init() {
-      appApi.notificationUnread().then((res) => {
-        Object.keys(res.data).forEach((key) => {
-          const item = types.value.find(item => item.name === key)
-          if (item) {
-            item.unRead = res.data[key]
-          }
-        })
-      })
-      appApi.notificationList().then((res) => {
-        Object.keys(res.data).forEach((key) => {
-          list.value[key] = res.data[key]
-        })
-      })
+  function stopPolling(): void {
+    started = false
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
     }
+    if (visibilityListener !== null) {
+      document.removeEventListener('visibilitychange', visibilityListener)
+      visibilityListener = null
+    }
+    if (focusListener !== null) {
+      window.removeEventListener('focus', focusListener)
+      focusListener = null
+    }
+  }
 
-    return {
-      types,
-      total,
-      list,
-      setRead,
-      setAllRead,
-      init,
-    }
-  },
-)
+  return {
+    unreadTotal,
+    recent,
+    loading,
+    refreshUnread,
+    refreshRecent,
+    markRead,
+    readAll,
+    startPolling,
+    stopPolling,
+  }
+})

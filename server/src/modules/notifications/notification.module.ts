@@ -5,6 +5,8 @@ import { AssistantAdminController } from './assistant-admin.controller'
 import { AssistantAdminService } from './assistant-admin.service'
 import { NotificationAdminController } from './notification-admin.controller'
 import { NotificationAdminService } from './notification-admin.service'
+import { NotificationInboxController } from './notification-inbox.controller'
+import { NotificationInboxService } from './notification-inbox.service'
 import { AssistantDispatchService } from './assistant-dispatch.service'
 import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
@@ -14,16 +16,17 @@ import { SystemNotificationService } from './system-notification.service'
 /**
  * 通知中心基础模块。
  *
- * 阶段 1 只提供发布入口与千树小助理派发；管理端 Controller 与站内渠道在后续批次接入。
+ * 发布入口、千树小助理派发、站内收件箱与管理端共用同一通知域。
  * PrismaModule 与 ConfigModule 都是全局模块，不需要在这里重复导入。
  */
 @Module({
   imports: [AuthModule],
-  controllers: [AssistantAdminController, NotificationAdminController],
+  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController],
   providers: [
     SystemNotificationService,
     AssistantAdminService,
     NotificationAdminService,
+    NotificationInboxService,
     GeweAssistantTransport,
     GeweAssistantAdminTransport,
     {

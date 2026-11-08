@@ -9,7 +9,7 @@
 | 适用范围 | 阶段 1 的 Prisma 模型、迁移、权限与审计枚举 |
 | 最后更新 | 2026-10-28 |
 
-本文是阶段 1 的逐字段模型。阶段 1 只创建千树小助理真正使用的表；`notification_inbox_items`（阶段 3）与 `assistant_callback_events`（引入回调时）**不在阶段 1 迁移中创建**，字段只在第 8 节冻结，避免空表与无用列。
+本文是通知中心的逐字段模型。阶段 1 先创建千树小助理表；`notification_inbox_items` 已于 2026-11-08 随站内通知迁移创建；`assistant_callback_events`（引入回调时）仍未创建。
 
 ## 1. 通用约定
 
@@ -146,7 +146,7 @@ CHECK：两个保留期都在 `7..3650`。
 | `updatedByUserId` | uuid | 是 | `null` | FK `users(id)` |
 | `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
-阶段 1 只插入 `ASSISTANT` 一行，`enabled = false`、默认静默 `20:00–08:00 Asia/Shanghai`；`IN_APP` 行在阶段 3 插入。
+`ASSISTANT` 行由阶段 1 插入，默认静默 `20:00–08:00 Asia/Shanghai`；`IN_APP` 行已随站内通知迁移插入并启用，默认静默与 TTL 为空。
 
 ## 4. 千树小助理表
 
@@ -262,11 +262,11 @@ CHECK：两个保留期都在 `7..3650`。
 
 迁移时插入一行：`INSERT INTO assistant_dispatch_leases (id) VALUES ('assistant-dispatch') ON CONFLICT DO NOTHING`。
 
-## 5. 阶段 3 / 回调预留表
+## 5. 站内通知与回调预留表
 
-以下表**不在阶段 1 迁移中创建**。
+`notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`assistant_callback_events` 仍未创建。
 
-### 5.1 `notification_inbox_items`（阶段 3）
+### 5.1 `notification_inbox_items`
 
 `id`、`notificationId`、`userId`、`eventType`、`templateVersion`、`titleSnapshot`、`bodySnapshot`、`linkUrlSnapshot`、`readAt`、`archivedAt`、`createdAt`。
 
@@ -378,6 +378,6 @@ ASSISTANT_DELIVERY_RESENT
 - [ ] 唯一索引、部分唯一索引、CHECK 均存在，`notification-schema.spec.ts` 断言通过。
 - [ ] 15 个权限码与 `system_admin` 授权存在，权限一致性测试通过。
 - [ ] `AuditEventType` 新值存在，审计写入测试通过。
-- [ ] `notification_channel_settings` 只有 `ASSISTANT` 行，`enabled = false`。
+- [ ] `notification_channel_settings` 有 `ASSISTANT` 与 `IN_APP` 两行。
 - [ ] `assistant_dispatch_leases` 有 `assistant-dispatch` 单行。
-- [ ] 没有创建 `notification_inbox_items` 与 `assistant_callback_events`。
+- [ ] `notification_inbox_items` 已创建；`assistant_callback_events` 仍未创建。

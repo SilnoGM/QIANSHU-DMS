@@ -164,8 +164,10 @@ export class SystemNotificationService {
     const selectedPolicies = requestedChannels === null
       ? policies
       : policies.filter(policy => requestedChannels.has(policy.channel))
-    const primaryPolicy = selectedPolicies.find(policy => policy.channel === 'ASSISTANT')
-    const expiresAt = this.resolveExpiresAt(command, primaryPolicy?.ttlSeconds ?? null, now)
+    const primaryPolicy = selectedPolicies.find(policy => policy.channel === 'ASSISTANT') ?? selectedPolicies[0]
+    const expiresAt = primaryPolicy?.channel === 'ASSISTANT'
+      ? this.resolveExpiresAt(command, primaryPolicy.ttlSeconds, now)
+      : null
     const priority = command.priority ?? primaryPolicy?.priority ?? 'NORMAL'
     const variables = sanitizeVariables(command.variables)
 
@@ -204,8 +206,20 @@ export class SystemNotificationService {
 
     const channelResults: ResolvedChannelResult[] = []
     for (const policy of selectedPolicies) {
+      if (policy.channel === 'IN_APP') {
+        const channelResult = await this.createInAppItems(transaction, {
+          notificationId: notification.id,
+          policy,
+          command,
+          variables,
+          now,
+          warnings,
+        })
+        channelResults.push(channelResult)
+        continue
+      }
       if (policy.channel !== 'ASSISTANT') {
-        warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: `渠道 ${policy.channel} 尚未实现` })
+        warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: `渠道 ${String(policy.channel)} 尚未实现` })
         continue
       }
 
@@ -267,7 +281,12 @@ export class SystemNotificationService {
     const pending = await transaction.assistantDelivery.count({
       where: { notificationId: notification.id, status: 'PENDING' },
     })
-    const status = pending > 0 ? 'PENDING' : total > 0 ? 'SKIPPED' : 'FAILED'
+    const inboxTotal = await transaction.notificationInboxItem.count({ where: { notificationId: notification.id } })
+    const status = pending > 0
+      ? 'PENDING'
+      : total > 0
+        ? inboxTotal > 0 ? 'PARTIAL' : 'SKIPPED'
+        : inboxTotal > 0 ? 'COMPLETED' : 'FAILED'
     if (status === 'PENDING') {
       await transaction.notification.update({
         where: { id: notification.id },
@@ -284,6 +303,102 @@ export class SystemNotificationService {
       channels: channelResults,
       warnings,
     }
+  }
+
+  /**
+   * 站内渠道在业务事务内写收件箱快照；不依赖 worker、不设置 TTL。
+   * 目标解析与站外一致：GROUP 对 IN_APP 非法，其余模式复用同一套用户解析。
+   */
+  private async createInAppItems(
+    transaction: Transaction,
+    input: {
+      readonly notificationId: string
+      readonly policy: {
+        readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
+        readonly targetConfig: Prisma.JsonValue
+        readonly allowSensitive: boolean
+      }
+      readonly command: SystemNotificationPublishCommand
+      readonly variables: Readonly<Record<string, string | number | null>>
+      readonly now: Date
+      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
+    },
+  ): Promise<ResolvedChannelResult> {
+    const setting = await transaction.notificationChannelSettings.findUnique({
+      where: { channel: 'IN_APP' },
+      select: { enabled: true },
+    })
+    if (setting === null || !setting.enabled) {
+      input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '站内通知渠道未启用' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
+    }
+    if (input.policy.targetMode === 'GROUP') {
+      input.warnings.push({ code: 'NO_RECIPIENT', message: '站内通知不能使用群目标' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'TARGET_DISABLED' }
+    }
+
+    const template = await transaction.notificationTemplate.findUnique({
+      where: { key_channel: { key: input.command.templateKey, channel: 'IN_APP' } },
+    })
+    if (template === null || !template.enabled) {
+      input.warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站内模板不存在或已停用' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    }
+
+    const allowed = parseTemplateVariables(template.variables)
+    const title = renderNotificationTemplate({
+      body: template.titleTemplate?.trim() || template.name,
+      variables: input.variables,
+      allowed,
+      allowSensitive: input.policy.allowSensitive,
+      maxLength: 200,
+    })
+    const body = renderNotificationTemplate({
+      body: template.bodyTemplate,
+      linkUrlTemplate: template.linkUrlTemplate,
+      variables: input.variables,
+      allowed,
+      allowSensitive: input.policy.allowSensitive,
+      maxLength: template.maxLength,
+    })
+    if (!title.ok || !body.ok) {
+      input.warnings.push({
+        code: 'TEMPLATE_VARIABLE_MISSING',
+        message: !title.ok ? title.message : !body.ok ? body.message : '站内模板渲染失败',
+      })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    }
+    if (body.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
+      input.warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
+    }
+
+    const target = input.policy.targetMode === 'COMMAND_TARGET'
+      ? input.command.target
+      : this.targetFromPolicy(input.policy)
+    if (target === null) {
+      input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到站内收件人' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+    }
+    const userIds = await this.resolveUsers(transaction, target)
+    if (userIds.length === 0) {
+      input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到站内收件人' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+    }
+
+    await transaction.notificationInboxItem.createMany({
+      data: userIds.map(userId => ({
+        notificationId: input.notificationId,
+        userId,
+        eventType: input.command.eventType.slice(0, 64),
+        templateVersion: template.version,
+        titleSnapshot: title.content,
+        bodySnapshot: body.content,
+        linkUrlSnapshot: body.linkUrl,
+        createdAt: input.now,
+      })),
+      skipDuplicates: true,
+    })
+    return { channel: 'IN_APP', status: 'CREATED', recipientCount: userIds.length, skippedCount: 0 }
   }
 
   private async createAssistantDeliveries(

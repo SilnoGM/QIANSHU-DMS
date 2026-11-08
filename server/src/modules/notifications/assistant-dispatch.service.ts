@@ -325,7 +325,15 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     const expired = counts.get('EXPIRED') ?? 0
     const skipped = counts.get('SKIPPED') ?? 0
     const total = accepted + expired + skipped + (counts.get('FAILED') ?? 0) + (counts.get('CANCELLED') ?? 0) + pending
+    const inboxTotal = await this.prisma.notificationInboxItem.count({ where: { notificationId } })
     if (total === 0) {
+      if (inboxTotal === 0) {
+        return
+      }
+      await this.prisma.notification.update({
+        where: { id: notificationId },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      })
       return
     }
 
@@ -340,16 +348,16 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       status = 'PARTIAL'
     }
     else if (expired > 0) {
-      status = 'EXPIRED'
+      status = inboxTotal > 0 ? 'PARTIAL' : 'EXPIRED'
     }
     else if (skipped === total) {
-      status = 'SKIPPED'
+      status = inboxTotal > 0 ? 'PARTIAL' : 'SKIPPED'
     }
     else if (counts.get('CANCELLED') === total) {
-      status = 'CANCELLED'
+      status = inboxTotal > 0 ? 'PARTIAL' : 'CANCELLED'
     }
     else {
-      status = 'FAILED'
+      status = inboxTotal > 0 ? 'PARTIAL' : 'FAILED'
     }
 
     await this.prisma.notification.update({

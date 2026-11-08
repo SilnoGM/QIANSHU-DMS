@@ -1,27 +1,38 @@
 <script setup lang="ts">
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
-
 defineOptions({
   name: 'ToolbarNotification',
 })
 
-const toast = useQsToast()
+const Panel = defineAsyncComponent(() => import('./panel.vue'))
+const store = useAppNotificationStore()
+const open = ref(false)
 
-function showNoticePending(): void {
-  toast.info('通知功能将在后续版本中上线')
-}
+onMounted(() => {
+  store.startPolling()
+})
+
+onBeforeUnmount(() => {
+  store.stopPolling()
+})
 </script>
 
 <template>
-  <FaButton
-    variant="ghost"
-    size="icon-sm"
-    class="animation"
-    aria-label="通知"
-    @click="showNoticePending"
-  >
-    <FaIcon name="i-ri:notification-3-line" class="icon size-4" />
-  </FaButton>
+  <FaPopover v-model:open="open" class="p-0">
+    <FaButton variant="ghost" size="icon-sm" class="animation" aria-label="通知">
+      <FaBadge
+        v-if="store.unreadTotal > 0"
+        :value="store.unreadTotal > 99 ? '99+' : store.unreadTotal"
+        variant="destructive"
+        badge-class="scale-80"
+      >
+        <FaIcon name="i-ri:notification-3-line" class="icon size-4" />
+      </FaBadge>
+      <FaIcon v-else name="i-ri:notification-3-line" class="icon size-4" />
+    </FaButton>
+    <template #panel>
+      <Panel v-if="open" @close="open = false" />
+    </template>
+  </FaPopover>
 </template>
 
 <style scoped>

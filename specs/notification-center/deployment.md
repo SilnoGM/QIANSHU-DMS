@@ -87,7 +87,7 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 3. 在 GeWe 控制台确认公司号节点在线，复制 `appId` 与 `wxid`；在「公司号 > 导入公司号」填入，确认状态 `ONLINE` 且「启用派发」开启。系统不提供扫码登录、重连或退出。
 4. 「渠道 > 测试」向公司号自己的文件传输助手发一条测试消息，不打扰员工。
 5. 「群目标 > 同步群」：同步财务群、运营群，设置 key 与用途，勾选 `internalOnly`。
-6. 「通知规则」：确认 3 个事件的模板与策略已存在；阶段 1 只启用 `ASSISTANT`，`IN_APP` 关闭。
+6. 「通知规则」：确认 3 个事件的模板与策略已存在；`ASSISTANT` 与 `IN_APP` 可同时启用，站内策略的 `targetMode` 不能是 `GROUP`，TTL 与静默时段必须为空。
 7. 「员工绑定」：为审核人完成绑定 → 测试消息 → 已验证；为测试员工完成同样流程。
 8. 确认未验证绑定数为 0、失效绑定数为 0。
 
@@ -161,7 +161,9 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 
 ## 10. 阶段 3 站内通知
 
-- 迁移新增 `notification_inbox_items` 与索引；插入 `IN_APP` 渠道配置行并启用。
+- 迁移新增 `notification_inbox_items` 与索引；插入并启用 `IN_APP` 渠道配置行，同时种子三条站内模板。
+- 事件策略仍需管理员按环境配置；`IN_APP` 策略不能使用 `GROUP`，TTL 与静默时段必须为空。
+- 已实施收件箱接口、顶栏铃铛、`/notifications` 页面、30 秒未读数轮询和已读/归档；桌面浏览器通知与保留期清理尚未实施。
 - 无新增环境变量、无新增基础设施；不启用 Web Push 或 Service Worker 推送。
 - 冒烟：三个事件产生站内条目；未读数、已读、全部已读、归档、取消归档正确；其他用户不可见。
 - 桌面浏览器通知是纯前端能力，无需服务端配置；权限由用户自行授予，页面关闭后不提醒。

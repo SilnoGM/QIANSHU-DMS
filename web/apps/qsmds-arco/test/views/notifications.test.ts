@@ -21,6 +21,22 @@ const recordsSource = readFileSync(
   new URL('../../src/views/system/notifications/records-panel.vue', import.meta.url),
   'utf8',
 )
+const inboxSource = readFileSync(
+  new URL('../../src/views/notifications/index.vue', import.meta.url),
+  'utf8',
+)
+const bellSource = readFileSync(
+  new URL('../../src/layouts/components/Topbar/Toolbar/Notification/index.vue', import.meta.url),
+  'utf8',
+)
+const bellPanelSource = readFileSync(
+  new URL('../../src/layouts/components/Topbar/Toolbar/Notification/panel.vue', import.meta.url),
+  'utf8',
+)
+const inboxStoreSource = readFileSync(
+  new URL('../../src/store/modules/app/notification.ts', import.meta.url),
+  'utf8',
+)
 
 test('通知中心页面使用统一页头、页签与四个面板', () => {
   assert.match(indexSource, /<FaPageHeader/u)
@@ -59,6 +75,20 @@ test('公司号个人二维码把裸 base64 转为 data URI', () => {
   assert.equal(qrImageSrc('R0lGODlhAQAB'), 'data:image/gif;base64,R0lGODlhAQAB')
   assert.equal(qrImageSrc('UklGRgAAAABXRUJQ'), 'data:image/webp;base64,UklGRgAAAABXRUJQ')
   assert.equal(qrImageSrc('data:image/png;base64,abc'), 'data:image/png;base64,abc')
+})
+
+test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
+  assert.match(inboxSource, /通知中心/u)
+  assert.match(inboxSource, /notificationsApi\.inbox\.list/u)
+  assert.match(inboxSource, /notificationsApi\.inbox\.readAll/u)
+  assert.match(inboxSource, /notificationsApi\.inbox\.archive/u)
+  assert.match(inboxSource, /<FaDrawer/u)
+  assert.match(bellSource, /startPolling/u)
+  assert.match(bellSource, /unreadTotal/u)
+  assert.match(bellPanelSource, /查看全部/u)
+  assert.match(bellPanelSource, /全部已读/u)
+  assert.match(inboxStoreSource, /30_000/u)
+  assert.match(inboxStoreSource, /visibilitychange/u)
 })
 
 test('通知规则面板包含模板预览与事件策略编辑', () => {

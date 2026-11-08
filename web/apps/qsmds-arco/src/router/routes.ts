@@ -11,6 +11,7 @@ import ComponentLibraryRoutes, {
 } from './modules/component.library'
 import { financeLegacyRedirects } from './modules/finance-legacy-redirects'
 import { managementLegacyRedirects } from './modules/management-legacy-redirects'
+import NotificationCenter from './modules/notification.center'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement from './modules/product.management'
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
@@ -74,6 +75,7 @@ const systemRoutes: RouteRecordRaw[] = [
           breadcrumb: false,
         },
       },
+      NotificationCenter,
     ],
   },
 ]

@@ -20,6 +20,11 @@ import type {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
   NotificationChannelPolicyUpdateDto,
+  NotificationInboxDetailDto,
+  NotificationInboxNewDto,
+  NotificationInboxPageDto,
+  NotificationInboxReadAllResultDto,
+  NotificationInboxUnreadCountDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
   NotificationRecordPageDto,
@@ -34,6 +39,8 @@ import api from '../index'
 
 export type AssistantBindingListQuery = NonNullable<AssistantBindingsListData['query']>
 export type NotificationRecordListQuery = NonNullable<NotificationsRecordsListData['query']>
+export type NotificationInboxDomain = 'purchase' | 'fund' | 'invoice' | 'reconciliation' | 'shipment'
+export type NotificationInboxStatus = 'all' | 'unread' | 'archived'
 
 function path(...segments: string[]): string {
   return segments.map(segment => encodeURIComponent(segment)).join('/')
@@ -74,6 +81,26 @@ export function createNotificationsApi(client: AxiosInstance) {
         client.get<NotificationRecordDetailDto>(path('notifications', 'records', id), { errorPresentation: 'local', signal }),
       cancel: (id: string) =>
         client.post<NotificationCancelResultDto>(path('notifications', 'records', id, 'cancel'), {}, { errorPresentation: 'local', retry: false }),
+    },
+    inbox: {
+      list: (query: { status: NotificationInboxStatus, domain?: NotificationInboxDomain, page: number, pageSize: number }, signal: AbortSignal) =>
+        client.get<NotificationInboxPageDto>('notifications/me/inbox', { errorPresentation: 'local', params: query, signal }),
+      unreadCount: (signal: AbortSignal) =>
+        client.get<NotificationInboxUnreadCountDto>('notifications/me/inbox/unread-count', { errorPresentation: 'local', signal }),
+      newItems: (cursor: string | undefined, signal: AbortSignal) =>
+        client.get<NotificationInboxNewDto>('notifications/me/inbox/new', { errorPresentation: 'local', params: { limit: 20, ...(cursor === undefined ? {} : { cursor }) }, signal }),
+      get: (id: string, signal: AbortSignal) =>
+        client.get<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id), { errorPresentation: 'local', signal }),
+      read: (id: string) =>
+        client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'read'), {}, { errorPresentation: 'local', retry: false }),
+      unread: (id: string) =>
+        client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'unread'), {}, { errorPresentation: 'local', retry: false }),
+      readAll: (domain?: NotificationInboxDomain) =>
+        client.post<NotificationInboxReadAllResultDto>('notifications/me/inbox/read-all', domain === undefined ? {} : { domain }, { errorPresentation: 'local', retry: false }),
+      archive: (id: string) =>
+        client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'archive'), {}, { errorPresentation: 'local', retry: false }),
+      unarchive: (id: string) =>
+        client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'unarchive'), {}, { errorPresentation: 'local', retry: false }),
     },
     assistant: {
       channel: {

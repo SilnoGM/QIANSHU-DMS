@@ -131,6 +131,7 @@ export function renderNotificationTemplate(input: {
  */
 export function inspectNotificationTemplate(input: {
   readonly body: string
+  readonly titleTemplate?: string | null
   readonly linkUrlTemplate?: string | null
   readonly allowed: readonly NotificationTemplateVariable[]
 }): {
@@ -141,7 +142,7 @@ export function inspectNotificationTemplate(input: {
   const names = new Set(input.allowed.map(variable => variable.name))
   const placeholders = new Set<string>()
   const singleBrace = new Set<string>()
-  for (const text of [input.body, input.linkUrlTemplate ?? '']) {
+  for (const text of [input.body, input.titleTemplate ?? '', input.linkUrlTemplate ?? '']) {
     for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
       const name = match[1]
       if (name !== undefined) {

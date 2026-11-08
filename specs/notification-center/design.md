@@ -250,7 +250,7 @@ PENDING ──► SENDING ──► ACCEPTED
 6. 站外：为每个用户或群创建 `assistant_deliveries`；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
 7. 汇总通知状态。
 
-阶段 1 的渠道设置只插入并启用 `ASSISTANT`；`IN_APP` 行在阶段 1 不插入，发布请求 `IN_APP` 时返回 `CHANNEL_NOT_CONFIGURED`，不创建收件箱条目。阶段 3 再插入并启用。阶段 1 只配置 3 个事件；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
+阶段 1 先插入并启用 `ASSISTANT`；站内通知迁移已插入并启用 `IN_APP`，并为采购审核、开票审核、货件到仓创建站内模板。事件策略仍由管理员按环境配置；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
 
 ### 5.2 派发器形态与单实例保证
 

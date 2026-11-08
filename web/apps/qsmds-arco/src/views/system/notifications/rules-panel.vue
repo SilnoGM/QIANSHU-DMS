@@ -462,6 +462,10 @@ onMounted(() => {
           <span class="qs-type-compact-label">名称</span>
           <FaInput v-model="templateDraft.name" placeholder="采购审核待办" />
         </label>
+        <label class="flex flex-col gap-1 md:col-span-2">
+          <span class="qs-type-compact-label">标题（站内通知使用）</span>
+          <FaInput v-model="templateDraft.titleTemplate" placeholder="采购单 {{ orderNo }} 待审核" />
+        </label>
         <label class="flex flex-col gap-1">
           <span class="qs-type-compact-label">消息类型</span>
           <FaSelect v-model="templateDraft.messageKind" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
