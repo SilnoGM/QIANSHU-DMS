@@ -485,27 +485,31 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <FaAlert v-if="error !== null" variant="destructive" :title="error">
-      <template #actions>
-        <FaButton variant="outline" size="sm" @click="loadAll">
-          重试
-        </FaButton>
-      </template>
-    </FaAlert>
+  <div class="flex flex-col">
+    <FaPageMain v-if="error !== null">
+      <FaAlert variant="destructive" :title="error">
+        <template #actions>
+          <FaButton variant="outline" size="sm" @click="loadAll">
+            重试
+          </FaButton>
+        </template>
+      </FaAlert>
+    </FaPageMain>
 
-    <div v-else-if="loading" class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
-      <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-      正在加载千树小助理配置…
-    </div>
+    <FaPageMain v-else-if="loading">
+      <div class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
+        <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
+        正在加载千树小助理配置…
+      </div>
+    </FaPageMain>
 
     <template v-else>
-      <section class="p-4 border border-border rounded-lg bg-background">
+      <FaPageMain class="mb-2! mt-2!">
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <h3 class="qs-type-body-medium m-0">
-              公司号
-            </h3>
+            <h2 class="qs-type-section-title m-0">
+              GeWe节点
+            </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               节点登录、掉线与重连都在 GeWe 控制台完成；这里只导入 appId 与 wxid，并检查在线状态。
             </p>
@@ -580,14 +584,14 @@ onMounted(() => {
             </div>
           </div>
         </div>
-      </section>
+      </FaPageMain>
 
-      <section class="p-4 border border-border rounded-lg bg-background">
+      <FaPageMain class="my-2!">
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <h3 class="qs-type-body-medium m-0">
-              员工绑定
-            </h3>
+            <h2 class="qs-type-section-title m-0">
+              用户微信绑定
+            </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               绑定完全由管理员维护；只有已验证绑定能接收金额与客户名称。
             </p>
@@ -633,14 +637,14 @@ onMounted(() => {
             </div>
           </template>
         </QsGenericTable>
-      </section>
+      </FaPageMain>
 
-      <section class="p-4 border border-border rounded-lg bg-background">
+      <FaPageMain class="my-2!">
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
-            <h3 class="qs-type-body-medium m-0">
-              群目标
-            </h3>
+            <h2 class="qs-type-section-title m-0">
+              群管理
+            </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               敏感内容只能发到「仅内部成员」的群；同步只包含已保存到通讯录的群。
             </p>
@@ -686,7 +690,7 @@ onMounted(() => {
             </div>
           </div>
         </div>
-      </section>
+      </FaPageMain>
     </template>
 
     <QsGenericModal

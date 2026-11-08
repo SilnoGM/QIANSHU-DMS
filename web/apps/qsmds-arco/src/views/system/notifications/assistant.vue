@@ -12,7 +12,5 @@ defineOptions({ name: 'SystemNotificationAssistant' })
   >
     <ChannelSwitch />
   </FaPageHeader>
-  <FaPageMain>
-    <AssistantPanel />
-  </FaPageMain>
+  <AssistantPanel />
 </template>
