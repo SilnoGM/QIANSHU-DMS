@@ -538,7 +538,7 @@ onMounted(() => {
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <h2 class="qs-type-section-title m-0">
-              GeWe节点
+              微信节点
             </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
               节点登录、掉线与重连都在 GeWe 控制台完成；这里只导入 appId 与 wxid，并检查在线状态。
