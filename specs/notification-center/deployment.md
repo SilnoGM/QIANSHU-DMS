@@ -117,7 +117,9 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 - `notification_publish_total{event_type,channel,result}`
 - `assistant_delivery_total{status,failure_code}`
 - `assistant_account_status{status}`
-- `notification_inbox_unread{user_scope}`（阶段 3）
+- `notification_inbox_unread{scope=self}`
+- `notification_inbox_list_latency_ms{scope=self}`
+- `notification_inbox_new_batch{scope=self}`
 
 告警：
 
@@ -163,7 +165,9 @@ SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'not
 
 - 迁移新增 `notification_inbox_items` 与索引；插入并启用 `IN_APP` 渠道配置行，同时种子三条站内模板。
 - 事件策略仍需管理员按环境配置；`IN_APP` 策略不能使用 `GROUP`，TTL 与静默时段必须为空。
-- 已实施收件箱接口、顶栏铃铛、`/notifications` 页面、30 秒未读数轮询和已读/归档；桌面浏览器通知与保留期清理尚未实施。
+- 已实施收件箱接口、顶栏铃铛、`/notifications` 页面、30 秒未读数轮询、Web Locks 主标签轮询、桌面浏览器通知和已读/归档。
+- 保留期清理命令：`pnpm -C server notifications:cleanup`，建议每日低峰执行一次；命令自带 60 秒预算和分批删除，部署时加到 systemd timer 或现有定时任务。
+- 站内通知指标：`notification_inbox_unread`、`notification_inbox_list_latency_ms`、`notification_inbox_new_batch`；告警阈值按现网请求量配置。
 - 无新增环境变量、无新增基础设施；不启用 Web Push 或 Service Worker 推送。
 - 冒烟：三个事件产生站内条目；未读数、已读、全部已读、归档、取消归档正确；其他用户不可见。
 - 桌面浏览器通知是纯前端能力，无需服务端配置；权限由用户自行授予，页面关闭后不提醒。

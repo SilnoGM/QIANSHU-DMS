@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -82,7 +82,13 @@ function decodeCursor(raw: string | undefined): InboxCursor | null {
  */
 @Injectable()
 export class NotificationInboxService {
+  private readonly logger = new Logger(NotificationInboxService.name)
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private metric(name: string, value: number, labels: Record<string, string> = {}): void {
+    this.logger.log(JSON.stringify({ kind: 'metric', labels, metric: name, value }))
+  }
 
   private toItem(row: InboxRow): NotificationInboxItemDto {
     return {
@@ -123,6 +129,7 @@ export class NotificationInboxService {
   }
 
   async list(userId: string, query: NotificationInboxQueryDto): Promise<NotificationInboxPageDto> {
+    const startedAt = Date.now()
     const where = this.baseWhere(userId, query)
     const [total, rows] = await Promise.all([
       this.prisma.notificationInboxItem.count({ where }),
@@ -133,6 +140,7 @@ export class NotificationInboxService {
         take: query.pageSize,
       }),
     ])
+    this.metric('notification_inbox_list_latency_ms', Date.now() - startedAt, { scope: 'self' })
     return {
       items: rows.map(row => this.toItem(row)),
       page: query.page,
@@ -145,6 +153,7 @@ export class NotificationInboxService {
     const total = await this.prisma.notificationInboxItem.count({
       where: { userId, readAt: null, archivedAt: null },
     })
+    this.metric('notification_inbox_unread', total, { scope: 'self' })
     return { total }
   }
 
@@ -245,6 +254,7 @@ export class NotificationInboxService {
     const nextCursor = last === undefined
       ? encodeCursor(cursor)
       : encodeCursor({ createdAt: last.createdAt, id: last.id })
+    this.metric('notification_inbox_new_batch', items.length, { scope: 'self' })
     return {
       items: items.map(row => this.toNewItem(row)),
       unreadTotal,

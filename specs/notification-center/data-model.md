@@ -348,7 +348,7 @@ ASSISTANT_DELIVERY_RESENT
 2. 创建共享表：`notifications`、`notification_templates`、`notification_channel_policies`、`notification_settings`、`notification_channel_settings`。
 3. 创建渠道表：`assistant_accounts`、`assistant_bindings`、`assistant_targets`、`assistant_deliveries`、`assistant_dispatch_leases`。
 4. 补充 CHECK、部分唯一索引、普通索引。
-5. 插入种子：`notification_settings` 单例、`notification_channel_settings` 的 `ASSISTANT` 行、`assistant_dispatch_leases` 单行。
+5. 插入种子：`notification_settings` 单例、`notification_channel_settings` 的 `ASSISTANT` 与 `IN_APP` 行、三条站内模板、`assistant_dispatch_leases` 单行。
 6. 权限迁移（可独立文件）。
 7. 审计枚举迁移（可独立文件，先于使用它的代码）。
 8. 用隔离 schema 重放全部迁移，再跑 `prisma migrate status`。
@@ -357,12 +357,12 @@ ASSISTANT_DELIVERY_RESENT
 
 ## 9. 保留期与清理
 
-`server/src/commands/notification-operations.ts cleanup` 每日执行：
+`pnpm -C server notifications:cleanup` 每日执行（已实现，60 秒预算、每批 500 条）：
 
 1. 删除超过 `deliveryRetentionDays` 的 `assistant_deliveries`。
-2. 删除超过 `notificationRetentionDays` 且没有未完成交付的 `notifications`。
-3. 回调引入后删除超过 30 天的 `assistant_callback_events`。
-4. 阶段 3 的 `notification_inbox_items` 按用户归档或 1 年清理。
+2. 删除未归档超过 180 天、已归档超过 1 年的 `notification_inbox_items`。
+3. 删除超过 `notificationRetentionDays` 且没有剩余收件箱条目或交付的 `notifications`。
+4. 回调引入后再增加 `assistant_callback_events` 清理。
 
 实现要求：
 

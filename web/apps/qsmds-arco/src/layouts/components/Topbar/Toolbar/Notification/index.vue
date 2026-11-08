@@ -5,7 +5,12 @@ defineOptions({
 
 const Panel = defineAsyncComponent(() => import('./panel.vue'))
 const store = useAppNotificationStore()
+const accountStore = useAppAccountStore()
 const open = ref(false)
+
+watch(() => accountStore.userId, (userId) => {
+  store.initDesktop(userId)
+}, { immediate: true })
 
 onMounted(() => {
   store.startPolling()

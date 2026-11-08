@@ -197,7 +197,13 @@ async function openFromQuery(): Promise<void> {
   try {
     detailOpen.value = true
     detailLoading.value = true
-    detail.value = (await notificationsApi.inbox.get(id, new AbortController().signal)).data
+    const loaded = (await notificationsApi.inbox.get(id, new AbortController().signal)).data
+    if (loaded.readAt === null) {
+      await notificationsApi.inbox.read(loaded.id)
+      loaded.readAt = new Date().toISOString()
+      await store.refreshUnread()
+    }
+    detail.value = loaded
   }
   catch (failure) {
     toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
@@ -220,6 +226,16 @@ function openLink(): void {
   else {
     window.open(link, '_blank', 'noopener,noreferrer')
   }
+}
+
+async function toggleDesktop(value: unknown): Promise<void> {
+  const enabled = Boolean(value)
+  const ok = await store.setDesktopEnabled(enabled)
+  if (!ok) {
+    toast.error('浏览器未授权桌面通知，请在浏览器设置中允许')
+    return
+  }
+  toast.success(enabled ? '桌面通知已开启' : '桌面通知已关闭')
 }
 
 watch(status, () => void load())
@@ -261,6 +277,27 @@ onMounted(async () => {
         全部已读
       </FaButton>
     </div>
+
+    <section v-if="store.desktopSupported" class="mt-4 p-4 border border-border rounded-lg bg-background">
+      <div class="flex flex-wrap gap-3 items-center justify-between">
+        <div>
+          <h3 class="qs-type-body-medium m-0">
+            桌面通知
+          </h3>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            仅在本浏览器页面打开时提醒；页面关闭后不会推送，不做 Web Push。
+          </p>
+        </div>
+        <FaSwitch
+          :model-value="store.desktopEnabled"
+          :disabled="store.desktopPermission === 'denied'"
+          @update:model-value="toggleDesktop"
+        />
+      </div>
+      <p v-if="store.desktopPermission === 'denied'" class="qs-type-meta text-destructive m-0 mt-2">
+        桌面通知已被浏览器阻止，请在站点权限设置中重新允许。
+      </p>
+    </section>
 
     <FaAlert v-if="error !== null" variant="destructive" :title="error" class="mt-4">
       <template #actions>
