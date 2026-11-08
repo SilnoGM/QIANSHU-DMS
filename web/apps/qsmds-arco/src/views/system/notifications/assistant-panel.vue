@@ -99,6 +99,20 @@ function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status
 }
 
+function isOnlineStatus(status: string): boolean {
+  return status === 'ONLINE' || status === 'ACTIVE'
+}
+
+function statusDotClass(status: string): string {
+  if (isOnlineStatus(status)) {
+    return 'bg-emerald-500'
+  }
+  if (status === 'REQUIRES_LOGIN' || status === 'INVALID') {
+    return 'bg-amber-500'
+  }
+  return 'bg-slate-400'
+}
+
 function isPendingAccount(account: AssistantAccountDto): boolean {
   return account.appId.startsWith('pending-') || account.status === 'REQUIRES_LOGIN'
 }
@@ -539,13 +553,27 @@ onMounted(() => {
           还没有公司号。先在 GeWe 控制台确认节点在线，再点击「导入公司号」。
         </div>
         <div v-else class="mt-4 gap-3 grid lg:grid-cols-2">
-          <div v-for="account in accounts" :key="account.id" class="p-4 border border-border rounded-lg">
+          <div v-for="account in accounts" :key="account.id" class="p-4 border border-border rounded-lg overflow-hidden">
             <div class="flex gap-3 items-start">
-              <FaAvatar
-                :src="account.avatarUrl ?? ''"
-                :fallback="account.nickname?.trim() || account.name"
-                class="text-base text-muted-foreground font-medium border border-border rounded-xl bg-muted shrink-0 size-12"
-              />
+              <span class="shrink-0 relative">
+                <FaAvatar
+                  :src="account.avatarUrl ?? ''"
+                  :fallback="account.nickname?.trim() || account.name"
+                  class="text-lg text-muted-foreground font-medium border border-border rounded-lg bg-muted size-16"
+                />
+                <span
+                  class="border-2 border-background rounded-full size-3.5 absolute -bottom-0.5 -right-0.5"
+                  :class="statusDotClass(account.status)"
+                  :title="`节点状态：${statusLabel(account.status)}`"
+                  :aria-label="`节点状态：${statusLabel(account.status)}`"
+                  role="img"
+                >
+                  <span
+                    v-if="isOnlineStatus(account.status)"
+                    class="rounded-full bg-emerald-400 opacity-40 inset-0 absolute animate-ping"
+                  />
+                </span>
+              </span>
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap gap-2 items-start justify-between">
                   <div class="min-w-0">
@@ -568,23 +596,18 @@ onMounted(() => {
                       微信昵称：{{ account.nickname }}
                     </p>
                   </div>
-                  <div class="flex shrink-0 flex-col gap-2 items-end">
-                    <FaTag variant="outline" :class="statusClass(account.status)">
-                      {{ statusLabel(account.status) }}
-                    </FaTag>
-                    <label v-if="!isPendingAccount(account)" class="qs-type-meta flex gap-2 items-center">
-                      <FaSwitch
-                        :model-value="account.enabled"
-                        :disabled="!canOperateAccount || busy"
-                        @update:model-value="setAccountEnabled(account, Boolean($event))"
-                      />
-                      启用派发
-                    </label>
+                  <div v-if="!isPendingAccount(account)" class="flex shrink-0 gap-2 items-center">
+                    <span class="qs-type-meta text-muted-foreground">启用派发</span>
+                    <FaSwitch
+                      :model-value="account.enabled"
+                      :disabled="!canOperateAccount || busy"
+                      @update:model-value="setAccountEnabled(account, Boolean($event))"
+                    />
                   </div>
                 </div>
               </div>
             </div>
-            <div class="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center justify-between">
+            <div class="mt-3 px-4 py-2 bg-slate-50/70 flex flex-wrap gap-2 items-center justify-between -mx-4 -mb-4 dark:bg-slate-900/40">
               <p class="qs-type-meta text-muted-foreground m-0">
                 最后在线：{{ formatDate(account.lastOnlineAt) }}
               </p>
@@ -593,14 +616,17 @@ onMounted(() => {
                   v-if="!isPendingAccount(account)"
                   variant="outline"
                   size="sm"
+                  class="text-xs! font-normal! px-2! h-7!"
                   :disabled="!canOperateAccount || busy"
                   @click="checkAccountStatus(account)"
                 >
+                  <FaIcon name="i-lucide:refresh-cw" class="size-3.5" aria-hidden="true" />
                   检查状态
                 </FaButton>
                 <FaDropdown :items="accountMenuItems(account)" align="end">
-                  <FaButton variant="outline" size="sm" :disabled="busy">
+                  <FaButton variant="outline" size="sm" class="text-xs! font-normal! px-2! h-7!" :disabled="busy">
                     更多操作
+                    <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
                   </FaButton>
                 </FaDropdown>
               </div>
