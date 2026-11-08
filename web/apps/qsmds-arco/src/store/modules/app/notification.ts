@@ -1,10 +1,18 @@
 import type { NotificationInboxItemDto, NotificationInboxNewItemDto } from '@/api/generated/types.gen'
 
 import notificationsApi from '@/api/modules/notifications'
+import {
+  collectNotificationPages,
+  desktopRetryDelay,
+  shouldYieldLeadership,
+  unreadPollDelay,
+  unreadRetryDelay,
+} from './notification-polling'
 
 const CHANNEL_NAME = 'qianshu-notification-inbox'
 const DESKTOP_PREFERENCE_PREFIX = 'qianshu.notification.desktop.'
 const DESKTOP_SEEN_LIMIT = 200
+const RECENT_NOTIFICATION_LIMIT = 10
 
 interface LockManagerLike {
   request: (
@@ -60,12 +68,20 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
   let releaseLeader: (() => void) | null = null
   let visibilityListener: (() => void) | null = null
   let focusListener: (() => void) | null = null
+  let leadershipPending = false
+  let unreadFailureCount = 0
+  let unreadRequest: Promise<void> | null = null
+  let unreadRequestToken: object | null = null
+  let unreadAbortController: AbortController | null = null
 
   let desktopUserId = ''
   let desktopTimer: ReturnType<typeof setTimeout> | null = null
+  let desktopRetryTimer: ReturnType<typeof setTimeout> | null = null
   let desktopPolling = false
   let desktopCursor: string | undefined
   let desktopInitialized = false
+  let desktopFailureCount = 0
+  let desktopAbortController: AbortController | null = null
   const desktopSeen = new Set<string>()
   const desktopNotifications: Notification[] = []
 
@@ -98,23 +114,59 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
   }
 
-  async function fetchUnread(): Promise<void> {
-    try {
-      unreadTotal.value = (await notificationsApi.inbox.unreadCount(new AbortController().signal)).data.total
-      if (leader) {
-        broadcast({ type: 'unread', total: unreadTotal.value })
-      }
+  /**
+   * 未读数只保留一个在途请求。成功清零失败计数，失败按退避递增；
+   * stopPolling 会 abort 当前请求并阻止迟到响应改动已退出会话的状态。
+   */
+  function fetchUnread(): Promise<void> {
+    if (unreadRequest !== null) {
+      return unreadRequest
     }
-    catch (failure) {
-      if (isUnauthorized(failure)) {
-        stopPolling()
+    const controller = new AbortController()
+    const token = {}
+    unreadAbortController = controller
+    unreadRequestToken = token
+    const request = (async () => {
+      try {
+        const total = (await notificationsApi.inbox.unreadCount(controller.signal)).data.total
+        if (controller.signal.aborted || !started) {
+          return
+        }
+        const changed = total !== unreadTotal.value
+        unreadTotal.value = total
+        unreadFailureCount = 0
+        if (leader && changed) {
+          broadcast({ type: 'unread', total })
+        }
       }
-    }
+      catch (failure) {
+        if (controller.signal.aborted || !started) {
+          return
+        }
+        if (isUnauthorized(failure)) {
+          stopPolling()
+          return
+        }
+        unreadFailureCount += 1
+      }
+      finally {
+        if (unreadAbortController === controller) {
+          unreadAbortController = null
+        }
+        if (unreadRequestToken === token) {
+          unreadRequestToken = null
+          unreadRequest = null
+        }
+      }
+    })()
+    unreadRequest = request
+    return request
   }
 
   async function refreshUnread(): Promise<void> {
     if (leader) {
       await fetchUnread()
+      schedule()
       return
     }
     if (channel !== null) {
@@ -130,7 +182,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       recent.value = (await notificationsApi.inbox.list({
         status: 'all',
         page: 1,
-        pageSize: 5,
+        pageSize: RECENT_NOTIFICATION_LIMIT,
       }, new AbortController().signal)).data.items
     }
     catch (failure) {
@@ -178,14 +230,22 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       return
     }
     clearTimer()
-    const jitter = globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! % 6_000
-    const delay = 30_000 + jitter - 3_000
+    const delay = unreadFailureCount === 0
+      ? unreadPollDelay(globalThis.crypto.getRandomValues(new Uint32Array(1))[0]!)
+      : unreadRetryDelay(unreadFailureCount)
     timer = setTimeout(() => {
-      if (document.visibilityState === 'visible') {
-        void fetchUnread()
-      }
-      schedule()
+      void pollUnread()
     }, delay)
+  }
+
+  async function pollUnread(): Promise<void> {
+    if (!started || !leader) {
+      return
+    }
+    if (document.visibilityState === 'visible') {
+      await fetchUnread()
+    }
+    schedule()
   }
 
   function becomeLeader(): void {
@@ -194,8 +254,11 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
     leader = true
     isLeader.value = true
-    void fetchUnread()
-    schedule()
+    void fetchUnread().finally(() => {
+      if (leader) {
+        schedule()
+      }
+    })
     if (desktopEnabled.value) {
       void startDesktopPolling()
     }
@@ -208,12 +271,26 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     stopDesktopPolling()
   }
 
+  function yieldLeadership(): void {
+    if (!leader) {
+      return
+    }
+    const release = releaseLeader
+    releaseLeader = null
+    resignLeader()
+    release?.()
+  }
+
   function acquireLeadership(): void {
+    if (!started || leader || leadershipPending) {
+      return
+    }
     const locks = (navigator as Navigator & { locks?: LockManagerLike }).locks
     if (locks === undefined) {
       becomeLeader()
       return
     }
+    leadershipPending = true
     void locks.request(CHANNEL_NAME, { mode: 'exclusive' }, async () => {
       if (!started) {
         return
@@ -227,6 +304,8 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       if (started) {
         becomeLeader()
       }
+    }).finally(() => {
+      leadershipPending = false
     })
   }
 
@@ -248,6 +327,9 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       if (!data.enabled) {
         stopDesktopPolling()
         closeDesktopNotifications()
+        if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+          yieldLeadership()
+        }
       }
       else {
         void startDesktopPolling()
@@ -289,6 +371,9 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       desktopPermission.value = 'default'
       stopDesktopPolling()
       closeDesktopNotifications()
+      if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+        yieldLeadership()
+      }
       return
     }
     desktopPermission.value = Notification.permission
@@ -298,6 +383,9 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
     else {
       stopDesktopPolling()
+      if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+        yieldLeadership()
+      }
     }
   }
 
@@ -308,6 +396,9 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       broadcast({ type: 'desktop', enabled: false })
       stopDesktopPolling()
       closeDesktopNotifications()
+      if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+        yieldLeadership()
+      }
       return true
     }
     if (!desktopSupported.value) {
@@ -373,37 +464,84 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
   }
 
+  function clearDesktopTimer(): void {
+    if (desktopTimer !== null) {
+      clearTimeout(desktopTimer)
+      desktopTimer = null
+    }
+  }
+
+  function clearDesktopRetry(): void {
+    if (desktopRetryTimer !== null) {
+      clearTimeout(desktopRetryTimer)
+      desktopRetryTimer = null
+    }
+  }
+
+  function scheduleDesktopRetry(): void {
+    if (!desktopEnabled.value || !desktopSupported.value || !leader) {
+      return
+    }
+    clearDesktopRetry()
+    desktopRetryTimer = setTimeout(() => {
+      desktopRetryTimer = null
+      void startDesktopPolling()
+    }, desktopRetryDelay(desktopFailureCount))
+  }
+
   function scheduleDesktop(): void {
     if (!desktopEnabled.value || !desktopPolling || !leader) {
       return
     }
-    if (desktopTimer !== null) {
-      clearTimeout(desktopTimer)
-    }
-    const jitter = globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! % 6_000
+    clearDesktopTimer()
+    const delay = desktopFailureCount === 0
+      ? unreadPollDelay(globalThis.crypto.getRandomValues(new Uint32Array(1))[0]!)
+      : desktopRetryDelay(desktopFailureCount)
     desktopTimer = setTimeout(() => {
-      void pollDesktop()
-      scheduleDesktop()
-    }, 30_000 + jitter - 3_000)
+      void runDesktopPoll()
+    }, delay)
+  }
+
+  async function runDesktopPoll(): Promise<void> {
+    await pollDesktop()
+    scheduleDesktop()
   }
 
   async function startDesktopPolling(): Promise<void> {
+    clearDesktopRetry()
     if (!desktopEnabled.value || !desktopSupported.value || desktopPermission.value !== 'granted' || !leader || desktopPolling) {
       return
     }
     desktopPolling = true
     if (!desktopInitialized) {
+      const controller = new AbortController()
+      desktopAbortController = controller
       try {
-        const first = await notificationsApi.inbox.newItems(undefined, new AbortController().signal)
+        const first = await notificationsApi.inbox.newItems(undefined, controller.signal)
+        if (controller.signal.aborted || !desktopPolling) {
+          return
+        }
         desktopCursor = first.data.nextCursor
         desktopInitialized = true
+        desktopFailureCount = 0
       }
       catch (failure) {
+        if (controller.signal.aborted) {
+          return
+        }
         desktopPolling = false
         if (isUnauthorized(failure)) {
           stopPolling()
+          return
         }
+        desktopFailureCount += 1
+        scheduleDesktopRetry()
         return
+      }
+      finally {
+        if (desktopAbortController === controller) {
+          desktopAbortController = null
+        }
       }
     }
     scheduleDesktop()
@@ -413,23 +551,33 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     desktopPolling = false
     desktopInitialized = false
     desktopCursor = undefined
-    if (desktopTimer !== null) {
-      clearTimeout(desktopTimer)
-      desktopTimer = null
-    }
+    desktopFailureCount = 0
+    desktopAbortController?.abort()
+    desktopAbortController = null
+    clearDesktopTimer()
+    clearDesktopRetry()
   }
 
   async function pollDesktop(): Promise<void> {
     if (!desktopEnabled.value || !desktopPolling || !leader || desktopCursor === undefined) {
       return
     }
+    const controller = new AbortController()
+    desktopAbortController = controller
     try {
-      const result = await notificationsApi.inbox.newItems(desktopCursor, new AbortController().signal)
-      desktopCursor = result.data.nextCursor
-      unreadTotal.value = result.data.unreadTotal
+      const result = await collectNotificationPages(
+        desktopCursor,
+        cursor => notificationsApi.inbox.newItems(cursor, controller.signal).then(response => response.data),
+      )
+      if (controller.signal.aborted || !desktopPolling || !leader) {
+        return
+      }
+      desktopCursor = result.cursor
+      desktopFailureCount = 0
+      unreadTotal.value = result.unreadTotal
       broadcast({ type: 'unread', total: unreadTotal.value })
       const hidden = document.visibilityState === 'hidden' || !document.hasFocus()
-      for (const item of result.data.items) {
+      for (const item of result.items) {
         if (desktopSeen.has(item.id)) {
           continue
         }
@@ -442,8 +590,18 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       }
     }
     catch (failure) {
+      if (controller.signal.aborted) {
+        return
+      }
       if (isUnauthorized(failure)) {
         stopPolling()
+        return
+      }
+      desktopFailureCount += 1
+    }
+    finally {
+      if (desktopAbortController === controller) {
+        desktopAbortController = null
       }
     }
   }
@@ -459,13 +617,25 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
     visibilityListener = () => {
       if (document.visibilityState === 'visible') {
+        unreadFailureCount = 0
+        if (!leader) {
+          acquireLeadership()
+        }
         void refreshUnread()
         if (desktopEnabled.value) {
           void startDesktopPolling()
         }
+        return
+      }
+      if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+        yieldLeadership()
       }
     }
     focusListener = () => {
+      unreadFailureCount = 0
+      if (!leader) {
+        acquireLeadership()
+      }
       void refreshUnread()
       if (desktopEnabled.value) {
         void startDesktopPolling()
@@ -480,6 +650,11 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     started = false
     leader = false
     isLeader.value = false
+    unreadFailureCount = 0
+    unreadAbortController?.abort()
+    unreadAbortController = null
+    unreadRequest = null
+    unreadRequestToken = null
     clearTimer()
     stopDesktopPolling()
     closeDesktopNotifications()

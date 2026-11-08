@@ -10,12 +10,18 @@ declare global {
   const AuthSynchronizationQueue: typeof import('../store/modules/app/auth-synchronization-queue').AuthSynchronizationQueue
   const EffectScope: typeof import('vue').EffectScope
   const LatestVersionTaskQueue: typeof import('../store/modules/app/auth-synchronization-queue').LatestVersionTaskQueue
+  const NOTIFICATION_DESKTOP_MAX_PAGES: typeof import('../store/modules/app/notification-polling').NOTIFICATION_DESKTOP_MAX_PAGES
+  const NOTIFICATION_UNREAD_BASE_DELAY_MS: typeof import('../store/modules/app/notification-polling').NOTIFICATION_UNREAD_BASE_DELAY_MS
+  const NOTIFICATION_UNREAD_JITTER_MS: typeof import('../store/modules/app/notification-polling').NOTIFICATION_UNREAD_JITTER_MS
+  const NOTIFICATION_UNREAD_JITTER_OFFSET_MS: typeof import('../store/modules/app/notification-polling').NOTIFICATION_UNREAD_JITTER_OFFSET_MS
+  const NOTIFICATION_UNREAD_MAX_BACKOFF_MS: typeof import('../store/modules/app/notification-polling').NOTIFICATION_UNREAD_MAX_BACKOFF_MS
   const ProfileLifecycleCoordinator: typeof import('../store/modules/app/profile-lifecycle').ProfileLifecycleCoordinator
   const ProfileMutationResultUnknownError: typeof import('../store/modules/app/profile-lifecycle').ProfileMutationResultUnknownError
   const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const StaleProfileStateError: typeof import('../store/modules/app/profile-lifecycle').StaleProfileStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const buildRegisteredRoutes: typeof import('../store/modules/app/route.logic').buildRegisteredRoutes
+  const collectNotificationPages: typeof import('../store/modules/app/notification-polling').collectNotificationPages
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
@@ -27,6 +33,7 @@ declare global {
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
   const deleteMiddleRouteComponent: typeof import('../store/modules/app/route.logic').deleteMiddleRouteComponent
+  const desktopRetryDelay: typeof import('../store/modules/app/notification-polling').desktopRetryDelay
   const effectScope: typeof import('vue').effectScope
   const filterAccessibleMenus: typeof import('../store/modules/app/menu.logic').filterAccessibleMenus
   const getActivePinia: typeof import('pinia').getActivePinia
@@ -83,6 +90,7 @@ declare global {
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
   const shouldRequestAuthRouteReconciliation: typeof import('../store/modules/app/auth-retry-navigation').shouldRequestAuthRouteReconciliation
+  const shouldYieldLeadership: typeof import('../store/modules/app/notification-polling').shouldYieldLeadership
   const storeToRefs: typeof import('pinia').storeToRefs
   const toForcedAuthNavigation: typeof import('../store/modules/app/auth-retry-navigation').toForcedAuthNavigation
   const toRaw: typeof import('vue').toRaw
@@ -90,6 +98,8 @@ declare global {
   const toRefs: typeof import('vue').toRefs
   const toValue: typeof import('vue').toValue
   const triggerRef: typeof import('vue').triggerRef
+  const unreadPollDelay: typeof import('../store/modules/app/notification-polling').unreadPollDelay
+  const unreadRetryDelay: typeof import('../store/modules/app/notification-polling').unreadRetryDelay
   const unref: typeof import('vue').unref
   const useAppAccountStore: typeof import('../store/modules/app/account').useAppAccountStore
   const useAppAuth: typeof import('../composables/app/auth').useAppAuth
@@ -149,6 +159,9 @@ declare global {
   // @ts-ignore
   export type { LatestVersionTaskQueue, AuthSynchronizationQueue } from '../store/modules/app/auth-synchronization-queue'
   import('../store/modules/app/auth-synchronization-queue')
+  // @ts-ignore
+  export type { NotificationNewPage, CollectedNotificationNewPages } from '../store/modules/app/notification-polling'
+  import('../store/modules/app/notification-polling')
   // @ts-ignore
   export type { StaleProfileStateError, ProfileMutationResultUnknownError, ProfileLifecycleCoordinator, ProfileState, ProfileLifecycleState, ProfileIdentity, ProfileLifecycleDependencies, LoadProfileOptions } from '../store/modules/app/profile-lifecycle'
   import('../store/modules/app/profile-lifecycle')
