@@ -1041,39 +1041,12 @@
     ]
   },
   {
-    "name": "i-icon-park-twotone:application-two",
-    "label": "i-icon-park-twotone:application-two",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/store/modules/app/notification.ts"
-    ]
-  },
-  {
-    "name": "i-icon-park-twotone:mail",
-    "label": "i-icon-park-twotone:mail",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/store/modules/app/notification.ts"
-    ]
-  },
-  {
     "name": "i-icon-park-twotone:planet",
     "label": "i-icon-park-twotone:planet",
     "category": "通用图标",
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/layouts/components/views/link.vue"
-    ]
-  },
-  {
-    "name": "i-icon-park-twotone:seal",
-    "label": "i-icon-park-twotone:seal",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/store/modules/app/notification.ts"
     ]
   },
   {

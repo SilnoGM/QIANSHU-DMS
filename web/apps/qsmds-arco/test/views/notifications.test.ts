@@ -37,6 +37,10 @@ const inboxStoreSource = readFileSync(
   new URL('../../src/store/modules/app/notification.ts', import.meta.url),
   'utf8',
 )
+const pollingSource = readFileSync(
+  new URL('../../src/store/modules/app/notification-polling.ts', import.meta.url),
+  'utf8',
+)
 
 test('通知中心页面使用统一页头、页签与四个面板', () => {
   assert.match(indexSource, /<FaPageHeader/u)
@@ -87,6 +91,10 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(inboxSource, /:show-column-settings="false"/u)
   assert.match(inboxSource, /:action-column=/u)
   assert.match(inboxSource, /桌面通知/u)
+  assert.match(inboxSource, /@row-click="handleRowClick"/u)
+  assert.match(inboxSource, /筛选通知/u)
+  assert.match(inboxSource, /当前浏览器不支持桌面通知/u)
+  assert.match(inboxSource, /:empty-title="emptyTitle"/u)
   assert.doesNotMatch(inboxSource, /搜索当前业务数据/u)
   assert.match(inboxSource, /<FaDrawer/u)
   assert.match(bellSource, /startPolling/u)
@@ -94,11 +102,15 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(bellSource, /unreadTotal/u)
   assert.match(bellPanelSource, /查看全部/u)
   assert.match(bellPanelSource, /全部已读/u)
-  assert.match(inboxStoreSource, /30_000/u)
+  assert.match(bellPanelSource, /refreshUnread/u)
+  assert.match(inboxStoreSource, /RECENT_NOTIFICATION_LIMIT = 10/u)
+  assert.match(inboxStoreSource, /unreadRetryDelay/u)
+  assert.match(pollingSource, /NOTIFICATION_UNREAD_BASE_DELAY_MS = 30_000/u)
   assert.match(inboxStoreSource, /visibilitychange/u)
   assert.match(inboxStoreSource, /BroadcastChannel/u)
   assert.match(inboxStoreSource, /locks/u)
   assert.match(inboxStoreSource, /status === 401/u)
+  assert.match(inboxStoreSource, /shouldYieldLeadership/u)
 })
 
 test('通知规则面板包含模板预览与事件策略编辑', () => {

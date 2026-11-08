@@ -82,7 +82,7 @@ test('认证、产品媒体、销售订单、采购订单、地区、字典与�
 
   assert.equal(
     scripts['test:browser:auth'],
-    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs apps/qsmds-arco/test/browser/notifications.browser.test.mjs',
   )
   assert.equal(
     scripts['test:browser:auth:shard-1'],
@@ -90,7 +90,7 @@ test('认证、产品媒体、销售订单、采购订单、地区、字典与�
   )
   assert.equal(
     scripts['test:browser:auth:shard-2'],
-    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs apps/qsmds-arco/test/browser/notifications.browser.test.mjs',
   )
   assert.equal(
     scripts['test:browser:regions'],

@@ -57,6 +57,7 @@ function handleViewAll(): void {
 }
 
 onMounted(() => {
+  void store.refreshUnread()
   void store.refreshRecent()
 })
 </script>

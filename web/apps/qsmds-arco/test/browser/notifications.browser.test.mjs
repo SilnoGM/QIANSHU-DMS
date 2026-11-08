@@ -161,6 +161,23 @@ async function clickVisibleButton(page, text) {
   })()`)
 }
 
+async function clickNotificationRow(page, title) {
+  const serialized = JSON.stringify(title)
+  await page.waitFor(`(() => [...document.querySelectorAll('tr')].some(row => (
+    row.textContent?.includes(${serialized})
+    && row.getClientRects().length > 0
+  )))()`)
+  await page.evaluate(`(() => {
+    const row = [...document.querySelectorAll('tr')].find(candidate => (
+      candidate.textContent?.includes(${serialized})
+      && candidate.getClientRects().length > 0
+    ))
+    if (!row) throw new Error('notification row unavailable')
+    row.click()
+    return true
+  })()`)
+}
+
 async function clickVisibleAriaButton(page, label) {
   const serialized = JSON.stringify(label)
   await page.waitFor(`(() => [...document.querySelectorAll('button')].some((button) => (
@@ -218,10 +235,18 @@ test('通知页、铃铛、隐藏页桌面通知与多标签选主可用', {
   `)
 
   await page.navigate(`${configuration.baseUrl}/`)
-  const login = await page.evaluate(apiExpression('/api/auth/login', 'POST', {
+  let login = await page.evaluate(apiExpression('/api/auth/login', 'POST', {
     password: configuration.password,
     username: configuration.username,
   }))
+  if (login.status === 409) {
+    const logout = await page.evaluate(apiExpression('/api/auth/logout', 'POST'))
+    assert.equal(logout.status, 200)
+    login = await page.evaluate(apiExpression('/api/auth/login', 'POST', {
+      password: configuration.password,
+      username: configuration.username,
+    }))
+  }
   assert.equal(login.status, 200)
 
   const target = new URL(configuration.baseUrl)
@@ -239,7 +264,7 @@ test('通知页、铃铛、隐藏页桌面通知与多标签选主可用', {
   await clickVisibleButton(page, '查看全部')
   await page.waitFor(`location.hash === '#/notifications' && document.body.innerText.includes(${JSON.stringify('[Browser] 通知夹具')})`)
 
-  await clickVisibleButton(page, '查看')
+  await clickNotificationRow(page, '[Browser] 通知夹具')
   await page.waitFor(`document.body.innerText.includes('Browser 通知正文')`)
   await clickVisibleButton(page, '归档')
   await page.waitFor(`!document.body.innerText.includes(${JSON.stringify('[Browser] 通知夹具')})`)
@@ -338,6 +363,20 @@ test('通知页、铃铛、隐藏页桌面通知与多标签选主可用', {
   assert.equal(clicked, true)
   await page.waitFor(`location.hash === ${JSON.stringify(`#/notifications?id=${fixtureId}`)}`)
   await page.waitFor(`document.body.innerText.includes('Browser 通知正文')`)
+  await page.waitFor(`${leaderExpression()} === true`)
+
+  // 关闭桌面通知后，隐藏主标签应让出 Web Lock，由可见标签接手轮询。
+  const disabled = await page.evaluate(`(() => {
+    const section = [...document.querySelectorAll('section')].find(candidate => (
+      candidate.textContent?.includes('桌面通知')
+    ))
+    const button = section?.querySelector('[role="switch"]') ?? section?.querySelector('button')
+    if (!button) return false
+    button.click()
+    return true
+  })()`)
+  assert.equal(disabled, true)
+  await secondPage.waitFor(`${leaderExpression()} === true`)
 
   const deniedPage = await browser.newPage()
   await deniedPage.setViewport(1280, 900)

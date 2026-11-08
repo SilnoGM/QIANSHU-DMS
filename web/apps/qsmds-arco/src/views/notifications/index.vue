@@ -3,11 +3,13 @@ import type { NotificationInboxDetailDto, NotificationInboxItemDto } from '@/api
 import type { NotificationInboxDomain, NotificationInboxStatus } from '@/api/modules/notifications'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
+import { useMediaQuery } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 
 import { getApiClientErrorMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 
 defineOptions({ name: 'NotificationCenter' })
@@ -29,6 +31,8 @@ const domain = ref<'all' | NotificationInboxDomain>('all')
 const detailOpen = ref(false)
 const detailLoading = ref(false)
 const detail = ref<NotificationInboxDetailDto | null>(null)
+const filtersOpen = ref(false)
+const isDesktopViewport = useMediaQuery('(min-width: 768px)')
 
 const STATUS_OPTIONS = [
   { label: '全部', value: 'all' },
@@ -75,6 +79,17 @@ const columns: QsGenericTableColumn<NotificationInboxItemDto>[] = [
   { accessorKey: 'createdAt', id: 'createdAt', title: '时间', width: 170 },
   { accessorKey: 'readAt', id: 'readAt', title: '状态', width: 100 },
 ]
+
+const emptyTitle = computed(() => (
+  status.value === 'all' && domain.value === 'all'
+    ? '暂无通知'
+    : '当前筛选没有通知'
+))
+const emptyDescription = computed(() => (
+  status.value === 'all' && domain.value === 'all'
+    ? '有新通知时会出现在这里。'
+    : '调整状态或业务域筛选后重试。'
+))
 
 async function load(): Promise<void> {
   loading.value = true
@@ -128,7 +143,7 @@ function changePageSize(next: number): void {
   void load()
 }
 
-async function openDetail(item: NotificationInboxItemDto): Promise<void> {
+async function openDetail(item: NotificationInboxItemDto, options: { readonly preferLink?: boolean } = {}): Promise<void> {
   detailOpen.value = true
   detailLoading.value = true
   detail.value = null
@@ -138,7 +153,13 @@ async function openDetail(item: NotificationInboxItemDto): Promise<void> {
       item.readAt = new Date().toISOString()
       await store.refreshUnread()
     }
-    detail.value = (await notificationsApi.inbox.get(item.id, new AbortController().signal)).data
+    const loaded = (await notificationsApi.inbox.get(item.id, new AbortController().signal)).data
+    if (options.preferLink === true && loaded.linkUrl !== null) {
+      detailOpen.value = false
+      navigateToLink(loaded.linkUrl)
+      return
+    }
+    detail.value = loaded
   }
   catch (failure) {
     toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
@@ -147,6 +168,14 @@ async function openDetail(item: NotificationInboxItemDto): Promise<void> {
   finally {
     detailLoading.value = false
   }
+}
+
+function handleRowClick(item: NotificationInboxItemDto, _index: number, event: MouseEvent): void {
+  const target = event.target
+  if (target instanceof Element && target.closest('button,a,input,select,textarea,[role="button"]') !== null) {
+    return
+  }
+  void openDetail(item, { preferLink: true })
 }
 
 async function markUnread(item: NotificationInboxItemDto): Promise<void> {
@@ -214,18 +243,22 @@ async function openFromQuery(): Promise<void> {
   }
 }
 
-function openLink(): void {
-  const link = detail.value?.linkUrl
-  if (!link) {
-    return
-  }
-  detailOpen.value = false
+function navigateToLink(link: string): void {
   if (link.startsWith('/')) {
     void router.push(link)
   }
   else {
     window.open(link, '_blank', 'noopener,noreferrer')
   }
+}
+
+function openLink(): void {
+  const link = detail.value?.linkUrl
+  if (!link) {
+    return
+  }
+  detailOpen.value = false
+  navigateToLink(link)
 }
 
 async function toggleDesktop(value: unknown): Promise<void> {
@@ -253,7 +286,7 @@ onMounted(async () => {
   <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档" />
   <FaPageMain>
     <div class="flex flex-wrap gap-2 items-center justify-between">
-      <div class="flex flex-wrap gap-3 items-center">
+      <div class="flex-wrap gap-3 hidden items-center md:flex">
         <label class="qs-type-meta text-muted-foreground flex gap-2 items-center">
           状态
           <FaSelect
@@ -273,9 +306,14 @@ onMounted(async () => {
           />
         </label>
       </div>
-      <FaButton variant="outline" size="sm" :disabled="store.unreadTotal === 0" @click="readAll">
-        全部已读
-      </FaButton>
+      <div class="flex gap-2 items-center md:ml-auto">
+        <FaButton variant="outline" size="sm" class="min-h-11 md:hidden" @click="filtersOpen = true">
+          筛选
+        </FaButton>
+        <FaButton variant="outline" size="sm" class="min-h-11" :disabled="store.unreadTotal === 0" @click="readAll">
+          全部已读
+        </FaButton>
+      </div>
     </div>
 
     <section v-if="store.desktopSupported" class="mt-4 p-4 border border-border rounded-lg bg-background">
@@ -298,6 +336,14 @@ onMounted(async () => {
         桌面通知已被浏览器阻止，请在站点权限设置中重新允许。
       </p>
     </section>
+    <section v-else-if="isDesktopViewport" class="mt-4 p-4 border border-border rounded-lg bg-background">
+      <h3 class="qs-type-body-medium m-0">
+        桌面通知
+      </h3>
+      <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+        当前浏览器不支持桌面通知。
+      </p>
+    </section>
 
     <FaAlert v-if="error !== null" variant="destructive" :title="error" class="mt-4">
       <template #actions>
@@ -317,9 +363,12 @@ onMounted(async () => {
         :show-pagination="false"
         :show-row-number="false"
         :action-column="{ width: 240, minWidth: 240, align: 'right' }"
+        :empty-title="emptyTitle"
+        :empty-description="emptyDescription"
         row-key="id"
         :loading="loading"
         data-testid="notification-inbox-table"
+        @row-click="handleRowClick"
       >
         <template #cell-domain="{ row }">
           {{ domainLabel(row.original.domain) }}
@@ -369,6 +418,37 @@ onMounted(async () => {
         />
       </nav>
     </div>
+
+    <QsGenericDrawer
+      v-model="filtersOpen"
+      title="筛选通知"
+      placement="bottom"
+      size="lg"
+    >
+      <div class="pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col gap-4">
+        <label class="flex flex-col gap-2">
+          <span class="qs-type-compact-label">状态</span>
+          <FaSelect
+            :model-value="status"
+            :options="STATUS_OPTIONS"
+            class="min-h-11 w-full"
+            @update:model-value="changeStatus"
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="qs-type-compact-label">业务域</span>
+          <FaSelect
+            :model-value="domain"
+            :options="DOMAIN_OPTIONS"
+            class="min-h-11 w-full"
+            @update:model-value="changeDomain"
+          />
+        </label>
+        <FaButton class="min-h-11" @click="filtersOpen = false">
+          完成
+        </FaButton>
+      </div>
+    </QsGenericDrawer>
 
     <FaDrawer v-model="detailOpen" title="通知详情" side="right" :footer="false">
       <div v-if="detailLoading" class="text-muted-foreground p-4">
