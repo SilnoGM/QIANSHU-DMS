@@ -33,10 +33,22 @@ type InboxRow = {
   readonly createdAt: Date
 }
 
-interface InboxCursor {
+type InboxNewRow = {
+  readonly id: string
+  readonly eventType: string
+  readonly titleSnapshot: string
+  readonly bodySnapshot: string
+  readonly linkUrlSnapshot: string | null
   readonly createdAt: Date
+  readonly createdAtCursor: string
+}
+
+interface InboxCursor {
+  readonly createdAt: string
   readonly id: string
 }
+
+const CURSOR_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6}Z$/u
 
 function iso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
@@ -53,7 +65,7 @@ function domainEventTypes(domain: string | undefined): string[] | null {
 
 function encodeCursor(cursor: InboxCursor): string {
   return Buffer.from(JSON.stringify({
-    createdAt: cursor.createdAt.toISOString(),
+    createdAt: cursor.createdAt,
     id: cursor.id,
   })).toString('base64url')
 }
@@ -64,9 +76,15 @@ function decodeCursor(raw: string | undefined): InboxCursor | null {
   }
   try {
     const record = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Record<string, unknown>
-    const createdAt = typeof record.createdAt === 'string' ? new Date(record.createdAt) : null
+    const createdAt = typeof record.createdAt === 'string' ? record.createdAt : null
     const id = typeof record.id === 'string' ? record.id : null
-    if (createdAt === null || Number.isNaN(createdAt.getTime()) || id === null || !UUID_PATTERN.test(id)) {
+    if (
+      createdAt === null
+      || !CURSOR_TIMESTAMP_PATTERN.test(createdAt)
+      || Number.isNaN(new Date(createdAt).getTime())
+      || id === null
+      || !UUID_PATTERN.test(id)
+    ) {
       throw new Error('invalid cursor')
     }
     return { createdAt, id }
@@ -229,34 +247,49 @@ export class NotificationInboxService {
       return {
         items: [],
         unreadTotal,
-        nextCursor: encodeCursor({ createdAt: now, id: MIN_UUID }),
+        nextCursor: encodeCursor({ createdAt: now.toISOString(), id: MIN_UUID }),
         hasMore: false,
         serverTime: now.toISOString(),
       }
     }
 
-    const rows = await this.prisma.notificationInboxItem.findMany({
-      where: {
-        userId,
-        readAt: null,
-        archivedAt: null,
-        OR: [
-          { createdAt: { gt: cursor.createdAt } },
-          { createdAt: cursor.createdAt, id: { gt: cursor.id } },
-        ],
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: query.limit + 1,
-    })
+    // created_at 是 timestamptz(6)，而 JS Date 只能保留毫秒。游标必须使用
+    // 数据库文本微秒值参与元组比较，否则同一秒内带微秒的消息会被反复返回。
+    const rows = await this.prisma.$queryRaw<InboxNewRow[]>(Prisma.sql`
+      SELECT
+        "id",
+        "event_type" AS "eventType",
+        "title_snapshot" AS "titleSnapshot",
+        "body_snapshot" AS "bodySnapshot",
+        "link_url_snapshot" AS "linkUrlSnapshot",
+        "created_at" AS "createdAt",
+        to_char("created_at" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAtCursor"
+      FROM "notification_inbox_items"
+      WHERE "user_id" = ${userId}::uuid
+        AND "read_at" IS NULL
+        AND "archived_at" IS NULL
+        AND ("created_at", "id") > (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)
+      ORDER BY "created_at" ASC, "id" ASC
+      LIMIT ${query.limit + 1}
+    `)
     const hasMore = rows.length > query.limit
     const items = rows.slice(0, query.limit)
     const last = items.at(-1)
     const nextCursor = last === undefined
       ? encodeCursor(cursor)
-      : encodeCursor({ createdAt: last.createdAt, id: last.id })
+      : encodeCursor({ createdAt: last.createdAtCursor, id: last.id })
     this.metric('notification_inbox_new_batch', items.length, { scope: 'self' })
     return {
-      items: items.map(row => this.toNewItem(row)),
+      items: items.map(row => this.toNewItem({
+        id: row.id,
+        eventType: row.eventType,
+        titleSnapshot: row.titleSnapshot,
+        bodySnapshot: row.bodySnapshot,
+        linkUrlSnapshot: row.linkUrlSnapshot,
+        readAt: null,
+        archivedAt: null,
+        createdAt: row.createdAt,
+      })),
       unreadTotal,
       nextCursor,
       hasMore,

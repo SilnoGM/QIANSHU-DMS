@@ -169,4 +169,33 @@ describe('Notification inbox API with PostgreSQL', () => {
       .expect(200)
     expect(bobList.body.items.map((item: { id: string }) => item.id)).toEqual([bobItem.item.id])
   })
+
+  it('advances the new-item cursor across database microsecond timestamps', async () => {
+    const user = await createUser('cursor')
+    const first = await request(application.getHttpServer())
+      .get('/api/notifications/me/inbox/new')
+      .set('Cookie', user.cookie)
+      .expect(200)
+    expect(first.body.items).toEqual([])
+
+    const created = await createInboxNotification(user.user.id, '微秒游标通知')
+    await prisma.$executeRaw`
+      UPDATE "notification_inbox_items"
+      SET "created_at" = date_trunc('milliseconds', "created_at") + INTERVAL '123 microseconds'
+      WHERE "id" = ${created.item.id}::uuid
+    `
+    const cursor = encodeURIComponent(first.body.nextCursor as string)
+    const firstPoll = await request(application.getHttpServer())
+      .get(`/api/notifications/me/inbox/new?cursor=${cursor}`)
+      .set('Cookie', user.cookie)
+      .expect(200)
+    expect(firstPoll.body.items.map((item: { id: string }) => item.id)).toEqual([created.item.id])
+
+    const nextCursor = encodeURIComponent(firstPoll.body.nextCursor as string)
+    const secondPoll = await request(application.getHttpServer())
+      .get(`/api/notifications/me/inbox/new?cursor=${nextCursor}`)
+      .set('Cookie', user.cookie)
+      .expect(200)
+    expect(secondPoll.body.items).toEqual([])
+  })
 })
