@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AssistantAccountDto, AssistantBindingDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
 import { computed, onMounted, ref } from 'vue'
@@ -100,6 +101,21 @@ function statusLabel(status: string): string {
 
 function isPendingAccount(account: AssistantAccountDto): boolean {
   return account.appId.startsWith('pending-') || account.status === 'REQUIRES_LOGIN'
+}
+
+function accountMenuItems(account: AssistantAccountDto): ActionMenuItem[][] {
+  return [[
+    {
+      disabled: isPendingAccount(account) || !canUpdateChannel.value || busy.value,
+      handle: () => void testChannel(),
+      label: '发送测试',
+    },
+    {
+      disabled: !canOperateAccount.value || busy.value,
+      handle: () => openUpdateAccount(account),
+      label: '更新节点',
+    },
+  ]]
 }
 
 const userOptions = computed(() => users.value.map(user => ({ label: `${user.displayName}（${user.username}）`, value: user.id })))
@@ -533,14 +549,23 @@ onMounted(() => {
               <div class="flex-1 min-w-0">
                 <div class="flex flex-wrap gap-2 items-start justify-between">
                   <div class="min-w-0">
-                    <p class="qs-type-body-medium m-0 truncate">
-                      {{ account.name }}
-                    </p>
+                    <div class="flex gap-1 min-w-0 items-center">
+                      <p class="qs-type-body-medium m-0 flex-1 min-w-0 truncate">
+                        {{ account.name }}
+                      </p>
+                      <FaButton
+                        v-if="!isPendingAccount(account)"
+                        variant="ghost"
+                        size="icon-sm"
+                        class="shrink-0"
+                        :aria-label="`查看 ${account.name} 的个人二维码`"
+                        @click="showOwnQr(account)"
+                      >
+                        <FaIcon name="i-lucide:qr-code" class="size-4" aria-hidden="true" />
+                      </FaButton>
+                    </div>
                     <p v-if="account.nickname !== null && account.nickname.trim() !== '' && account.nickname !== account.name" class="qs-type-meta text-muted-foreground m-0 mt-1">
                       微信昵称：{{ account.nickname }}
-                    </p>
-                    <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-                      最后在线：{{ formatDate(account.lastOnlineAt) }}
                     </p>
                   </div>
                   <div class="flex shrink-0 flex-col gap-2 items-end">
@@ -559,25 +584,11 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            <div class="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center">
-              <FaButton
-                v-if="!isPendingAccount(account)"
-                size="sm"
-                :disabled="!canOperateAccount || busy"
-                @click="showOwnQr(account)"
-              >
-                个人二维码
-              </FaButton>
-              <FaButton
-                v-if="!isPendingAccount(account)"
-                variant="outline"
-                size="sm"
-                :disabled="!canUpdateChannel || busy"
-                @click="testChannel"
-              >
-                发送测试
-              </FaButton>
-              <div class="ml-auto flex flex-wrap gap-2">
+            <div class="mt-3 pt-3 border-t flex flex-wrap gap-2 items-center justify-between">
+              <p class="qs-type-meta text-muted-foreground m-0">
+                最后在线：{{ formatDate(account.lastOnlineAt) }}
+              </p>
+              <div class="flex flex-wrap gap-2 items-center">
                 <FaButton
                   v-if="!isPendingAccount(account)"
                   variant="outline"
@@ -587,9 +598,11 @@ onMounted(() => {
                 >
                   检查状态
                 </FaButton>
-                <FaButton variant="outline" size="sm" :disabled="!canOperateAccount || busy" @click="openUpdateAccount(account)">
-                  更新节点
-                </FaButton>
+                <FaDropdown :items="accountMenuItems(account)" align="end">
+                  <FaButton variant="outline" size="sm" :disabled="busy">
+                    更多操作
+                  </FaButton>
+                </FaDropdown>
               </div>
             </div>
           </div>

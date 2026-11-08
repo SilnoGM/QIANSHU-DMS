@@ -3135,6 +3135,15 @@
     ]
   },
   {
+    "name": "i-lucide:qr-code",
+    "label": "i-lucide:qr-code",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue"
+    ]
+  },
+  {
     "name": "i-lucide:receipt-text",
     "label": "i-lucide:receipt-text",
     "category": "通用图标",
