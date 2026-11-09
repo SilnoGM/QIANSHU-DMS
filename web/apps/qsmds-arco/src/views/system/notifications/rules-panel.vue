@@ -38,6 +38,8 @@ interface TemplateVariableDraft {
   sensitive: boolean
 }
 
+type TemplateDomain = 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM'
+
 const templateOpen = ref(false)
 const templateMode = ref<'create' | 'edit'>('create')
 const templateBaseline = ref('')
@@ -46,6 +48,7 @@ const templateDraft = ref({
   key: '',
   channel: 'ASSISTANT' as 'IN_APP' | 'ASSISTANT',
   name: '',
+  domain: 'SYSTEM' as TemplateDomain,
   messageKind: 'TEXT' as 'TEXT' | 'LINK',
   titleTemplate: '',
   bodyTemplate: '',
@@ -129,7 +132,32 @@ const PRIORITY_LABELS: Record<string, string> = {
   NORMAL: '普通',
   HIGH: '高',
 }
+const TEMPLATE_DOMAIN_OPTIONS: Array<{ label: string, value: TemplateDomain }> = [
+  { label: '销售域', value: 'SALES' },
+  { label: '采购域', value: 'PURCHASE' },
+  { label: '货件运输域', value: 'SHIPMENT' },
+  { label: '财务域', value: 'FINANCE' },
+  { label: '发票域', value: 'INVOICE' },
+  { label: '对账域', value: 'RECONCILIATION' },
+  { label: '系统', value: 'SYSTEM' },
+]
+const TEMPLATE_DOMAIN_LABELS: Record<string, string> = Object.fromEntries(
+  TEMPLATE_DOMAIN_OPTIONS.map(option => [option.value, option.label]),
+)
+const EVENT_DOMAIN_MAP: Record<string, TemplateDomain> = {
+  PURCHASE_REVIEW_PENDING: 'PURCHASE',
+  INVOICE_REQUEST_REVIEW_PENDING: 'INVOICE',
+  SLH_RECONCILIATION_COMPLETED: 'RECONCILIATION',
+  SHIPMENT_ARRIVED: 'SHIPMENT',
+  FUND_WITHDRAWAL_REVIEW_PENDING: 'FINANCE',
+  PACKAGING_COST_PAYMENT_PENDING: 'FINANCE',
+  PURCHASE_PAYABLE_PENDING: 'FINANCE',
+}
 const EVENT_LABELS: Record<string, string> = Object.fromEntries(EVENT_OPTIONS.map(option => [option.value, option.label]))
+const TEMPLATE_DOMAIN_FILTER_OPTIONS = [
+  { label: '全部业务域', value: 'ALL' },
+  ...TEMPLATE_DOMAIN_OPTIONS,
+]
 const CHANNEL_FILTER_OPTIONS = [
   { label: '全部渠道', value: 'ALL' },
   ...CHANNEL_OPTIONS,
@@ -140,6 +168,7 @@ const STATUS_FILTER_OPTIONS = [
   { label: '停用', value: 'DISABLED' },
 ]
 const templateKeyword = ref('')
+const templateDomainFilter = ref('ALL')
 const templateChannelFilter = ref('ALL')
 const templateStatusFilter = ref('ALL')
 const policyKeyword = ref('')
@@ -229,6 +258,7 @@ async function ensurePolicyOptions(): Promise<void> {
 const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
   { accessorKey: 'name', id: 'name', title: '名称', minWidth: 120 },
   { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
+  { accessorKey: 'domain', id: 'domain', title: '业务域', width: 120 },
   { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
   { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
   { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
@@ -254,9 +284,22 @@ const policyTargetModeOptions = computed(() => policyChannel.value === 'IN_APP'
   : TARGET_MODE_OPTIONS)
 const policyExisting = computed(() => policies.value.find(policy =>
   policy.eventType === policyEventType.value && policy.channel === policyChannel.value) ?? null)
+const selectedPolicyTemplate = computed(() => templates.value.find(template =>
+  template.channel === policyChannel.value && template.key === policyDraft.value.templateKey) ?? null)
+const policyEventDomain = computed<TemplateDomain>(() => EVENT_DOMAIN_MAP[policyEventType.value] ?? 'SYSTEM')
+const policyTemplateDomainMismatch = computed(() => {
+  const template = selectedPolicyTemplate.value
+  return template !== null
+    && template.domain !== 'SYSTEM'
+    && policyEventDomain.value !== 'SYSTEM'
+    && template.domain !== policyEventDomain.value
+})
 const filteredTemplates = computed(() => {
   const keyword = templateKeyword.value.trim().toLowerCase()
   return templates.value.filter((template) => {
+    if (templateDomainFilter.value !== 'ALL' && template.domain !== templateDomainFilter.value) {
+      return false
+    }
     if (templateChannelFilter.value !== 'ALL' && template.channel !== templateChannelFilter.value) {
       return false
     }
@@ -269,7 +312,7 @@ const filteredTemplates = computed(() => {
     if (keyword.length === 0) {
       return true
     }
-    return [template.key, template.name, formatChannel(template.channel)]
+    return [template.key, template.name, formatChannel(template.channel), templateDomainLabel(template.domain)]
       .some(value => value.toLowerCase().includes(keyword))
   })
 })
@@ -337,6 +380,23 @@ function messageKindClass(kind: string): string {
   return kind === 'LINK'
     ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
     : 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
+}
+
+function templateDomainLabel(domain: string): string {
+  return TEMPLATE_DOMAIN_LABELS[domain] ?? domain
+}
+
+function templateDomainClass(domain: string): string {
+  const classes: Record<string, string> = {
+    SALES: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+    PURCHASE: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    SHIPMENT: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300',
+    FINANCE: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    INVOICE: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+    RECONCILIATION: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+    SYSTEM: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300',
+  }
+  return classes[domain] ?? classes.SYSTEM
 }
 
 async function load(): Promise<void> {
@@ -409,6 +469,7 @@ function openCreateTemplate(): void {
     key: '',
     channel: 'ASSISTANT',
     name: '',
+    domain: 'SYSTEM',
     messageKind: 'TEXT',
     titleTemplate: '',
     bodyTemplate: '',
@@ -429,6 +490,7 @@ function openEditTemplate(template: NotificationTemplateDto): void {
     key: template.key,
     channel: template.channel as 'IN_APP' | 'ASSISTANT',
     name: template.name,
+    domain: template.domain,
     messageKind: template.messageKind as 'TEXT' | 'LINK',
     titleTemplate: template.titleTemplate ?? '',
     bodyTemplate: template.bodyTemplate,
@@ -510,6 +572,7 @@ async function saveTemplate(): Promise<void> {
         key: templateDraft.value.key,
         channel: templateDraft.value.channel,
         name: templateDraft.value.name,
+        domain: templateDraft.value.domain,
         messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
@@ -522,6 +585,7 @@ async function saveTemplate(): Promise<void> {
     else {
       await notificationsApi.templates.update(templateDraft.value.id, {
         name: templateDraft.value.name,
+        domain: templateDraft.value.domain,
         messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
@@ -849,7 +913,7 @@ onMounted(() => {
               v-model="templateKeyword"
               type="search"
               clearable
-              class="w-56"
+              class="w-48"
               placeholder="模板键或名称"
               aria-label="搜索模板"
             >
@@ -857,6 +921,7 @@ onMounted(() => {
                 <FaIcon name="i-lucide:search" />
               </template>
             </FaInput>
+            <FaSelect v-model="templateDomainFilter" :options="TEMPLATE_DOMAIN_FILTER_OPTIONS" class="w-32" aria-label="模板业务域" />
             <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="模板渠道" />
             <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="模板状态" />
           </div>
@@ -869,6 +934,11 @@ onMounted(() => {
         <template #cell-messageKind="{ row }">
           <FaTag variant="outline" :class="messageKindClass(row.original.messageKind)">
             {{ messageKindLabel(row.original.messageKind) }}
+          </FaTag>
+        </template>
+        <template #cell-domain="{ row }">
+          <FaTag variant="outline" :class="templateDomainClass(row.original.domain)">
+            {{ templateDomainLabel(row.original.domain) }}
           </FaTag>
         </template>
         <template #cell-updatedByInfo="{ row }">
@@ -926,7 +996,7 @@ onMounted(() => {
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
-              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
+              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · {{ templateDomainLabel(row.domain) }} · 版本 {{ row.version }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
             </p>
             <div class="flex flex-wrap gap-2 items-center">
               <FaSwitch
@@ -1135,6 +1205,10 @@ onMounted(() => {
         <span class="qs-type-compact-label">名称</span>
         <FaInput v-model="templateDraft.name" placeholder="采购审核待办" />
       </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">业务域</span>
+        <FaSelect v-model="templateDraft.domain" :options="TEMPLATE_DOMAIN_OPTIONS" />
+      </label>
       <label class="flex flex-col gap-1 md:col-span-2">
         <span class="qs-type-compact-label">标题（站内通知使用）</span>
         <FaInput v-model="templateDraft.titleTemplate" placeholder="采购单 {{ orderNo }} 待审核" />
@@ -1294,6 +1368,9 @@ onMounted(() => {
         <span class="qs-type-compact-label">模板</span>
         <FaSelect v-model="policyDraft.templateKey" :options="templateKeyOptions" placeholder="选择模板" />
       </label>
+      <p v-if="policyTemplateDomainMismatch && selectedPolicyTemplate !== null" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
+        模板所属业务域（{{ templateDomainLabel(selectedPolicyTemplate.domain) }}）与事件业务域（{{ templateDomainLabel(policyEventDomain) }}）不一致，请确认。
+      </p>
       <p v-if="policyOptionsLoading" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
         正在加载员工、角色、权限与群目标选项…
       </p>

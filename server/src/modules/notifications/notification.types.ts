@@ -39,7 +39,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   SHIPMENT_ARRIVED: 'shipment',
   FUND_WITHDRAWAL_REVIEW_PENDING: 'fund',
   PACKAGING_COST_PAYMENT_PENDING: 'fund',
-  PURCHASE_PAYABLE_PENDING: 'purchase',
+  PURCHASE_PAYABLE_PENDING: 'fund',
 })
 
 export type NotificationTarget =

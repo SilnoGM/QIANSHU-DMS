@@ -125027,6 +125027,18 @@
           "name": {
             "type": "string"
           },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "SYSTEM"
+            ]
+          },
           "messageKind": {
             "type": "string",
             "enum": [
@@ -125074,6 +125086,7 @@
           "key",
           "channel",
           "name",
+          "domain",
           "messageKind",
           "titleTemplate",
           "bodyTemplate",
@@ -125103,6 +125116,19 @@
           "name": {
             "type": "string",
             "maxLength": 128
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "SYSTEM"
+            ],
+            "default": "SYSTEM"
           },
           "messageKind": {
             "type": "string",
@@ -125153,6 +125179,18 @@
           "name": {
             "type": "string",
             "maxLength": 128
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "SYSTEM"
+            ]
           },
           "messageKind": {
             "type": "string",

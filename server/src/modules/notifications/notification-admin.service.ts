@@ -66,6 +66,7 @@ function toTemplateDto(template: {
   readonly key: string
   readonly channel: string
   readonly name: string
+  readonly domain: string
   readonly messageKind: string
   readonly titleTemplate: string | null
   readonly bodyTemplate: string
@@ -82,6 +83,7 @@ function toTemplateDto(template: {
     key: template.key,
     channel: template.channel,
     name: template.name,
+    domain: template.domain,
     messageKind: template.messageKind,
     titleTemplate: template.titleTemplate,
     bodyTemplate: template.bodyTemplate,
@@ -194,6 +196,7 @@ export class NotificationAdminService {
             key: input.key,
             channel: input.channel,
             name: input.name.slice(0, 128),
+            domain: (input.domain ?? 'SYSTEM') as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM',
             messageKind: input.messageKind ?? 'TEXT',
             titleTemplate: input.titleTemplate ?? null,
             bodyTemplate: input.bodyTemplate,
@@ -252,6 +255,9 @@ export class NotificationAdminService {
         where: { id },
         data: {
           ...(input.name !== undefined ? { name: input.name.slice(0, 128) } : {}),
+          ...(input.domain !== undefined
+            ? { domain: input.domain as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM' }
+            : {}),
           ...(input.messageKind !== undefined ? { messageKind: input.messageKind } : {}),
           ...(input.titleTemplate !== undefined ? { titleTemplate: input.titleTemplate } : {}),
           ...(input.bodyTemplate !== undefined ? { bodyTemplate: input.bodyTemplate } : {}),

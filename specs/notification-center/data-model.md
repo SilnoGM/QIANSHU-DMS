@@ -73,6 +73,7 @@
 | `key` | varchar(64) | 否 | — | 逻辑模板键 |
 | `channel` | `NotificationChannel` | 否 | — | 每个渠道一份 |
 | `name` | varchar(128) | 否 | — | 管理端显示名 |
+| `domain` | `NotificationTemplateDomain` | 否 | `SYSTEM` | 业务域，只能选一个；付款类统一归财务 |
 | `messageKind` | `NotificationTemplateKind` | 否 | `TEXT` | 阶段 1 只用 `TEXT` |
 | `titleTemplate` | text | 是 | `null` | `LINK` 用 |
 | `bodyTemplate` | text | 否 | — | 正文 |
@@ -89,6 +90,7 @@
 
 - 唯一 `(key, channel)`。
 - `(channel, enabled)`。
+- `(domain, enabled)`。
 - CHECK：`maxLength BETWEEN 1 AND 5000`。
 - CHECK：`messageKind = 'LINK'` 时 `linkUrlTemplate IS NOT NULL`。
 

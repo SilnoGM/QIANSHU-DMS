@@ -3301,6 +3301,18 @@ enum NotificationTemplateKind {
   @@map("notification_template_kind")
 }
 
+enum NotificationTemplateDomain {
+  SALES
+  PURCHASE
+  SHIPMENT
+  FINANCE
+  INVOICE
+  RECONCILIATION
+  SYSTEM
+
+  @@map("notification_template_domain")
+}
+
 enum AssistantAccountStatus {
   ONLINE
   OFFLINE
@@ -3365,6 +3377,7 @@ model NotificationTemplate {
   key             String                   @db.VarChar(64)
   channel         NotificationChannel
   name            String                   @db.VarChar(128)
+  domain          NotificationTemplateDomain @default(SYSTEM)
   messageKind     NotificationTemplateKind @default(TEXT) @map("message_kind")
   titleTemplate   String?                  @map("title_template") @db.Text
   bodyTemplate    String                   @map("body_template") @db.Text
@@ -3383,6 +3396,7 @@ model NotificationTemplate {
 
   @@unique([key, channel], map: "notification_templates_key_channel_key")
   @@index([channel, enabled], map: "notification_templates_channel_enabled_idx")
+  @@index([domain, enabled], map: "notification_templates_domain_enabled_idx")
   @@map("notification_templates")
 }
 
