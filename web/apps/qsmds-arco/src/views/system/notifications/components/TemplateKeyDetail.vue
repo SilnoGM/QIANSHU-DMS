@@ -58,10 +58,11 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
     </p>
   </div>
 
-  <div v-else class="p-4 flex flex-col gap-4 h-full min-w-0 sm:p-5">
+  <div v-else class="p-4 flex flex-col gap-4 min-w-0 sm:p-5">
     <div class="flex flex-wrap gap-3 items-start justify-between">
       <div class="min-w-0">
         <div class="flex flex-wrap gap-2 items-center">
+          <span class="qs-type-body-medium text-foreground">{{ group.displayName }}</span>
           <FaTag variant="outline" :class="templateDomainClass(group.domain)">
             {{ templateDomainLabel(group.domain) }}
           </FaTag>
@@ -80,20 +81,30 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
           </template>
         </p>
       </div>
-      <FaButton
-        v-if="missingChannel !== ''"
-        variant="outline"
-        size="sm"
-        class="border-dashed"
-        :disabled="!canUpdate || busy"
-        @click="emit('add', missingChannel)"
-      >
-        <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
-        新增渠道模板
-      </FaButton>
+      <div class="flex flex-wrap gap-2 items-center">
+        <FaTag
+          variant="outline"
+          :class="group.channelCount === 2
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'"
+        >
+          {{ group.channelCount === 2 ? '渠道已配齐' : '缺少 1 个渠道' }}
+        </FaTag>
+        <FaButton
+          v-if="missingChannel !== ''"
+          variant="outline"
+          size="sm"
+          class="border-dashed"
+          :disabled="!canUpdate || busy"
+          @click="emit('add', missingChannel)"
+        >
+          <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
+          新增渠道模板
+        </FaButton>
+      </div>
     </div>
 
-    <div class="gap-4 grid lg:flex-1 lg:grid-cols-2 lg:min-h-0">
+    <div class="gap-4 grid items-start lg:grid-cols-2">
       <TemplateChannelCard
         channel="ASSISTANT"
         :template="group.assistant"

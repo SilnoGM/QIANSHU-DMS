@@ -34,7 +34,7 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
 </script>
 
 <template>
-  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 h-full min-w-0 overflow-hidden">
+  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0">
     <div class="flex gap-2 items-center justify-between">
       <div class="flex gap-2 min-w-0 items-center">
         <span class="rounded-md flex shrink-0 size-7 items-center justify-center" :class="channelIconClass">
@@ -67,22 +67,26 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </span>
       </div>
 
-      <div class="p-3 border border-border rounded-md bg-muted/30 flex flex-1 flex-col gap-2 min-h-28 overflow-hidden">
-        <p class="qs-type-body m-0 flex-1 min-h-0 whitespace-pre-wrap [overflow-wrap:anywhere] overflow-hidden">
+      <div class="p-3 pb-5 border border-border rounded-md bg-muted/30">
+        <p class="qs-type-body m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
           <span
             v-for="(segment, index) in previewSegments"
             :key="index"
             :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
           >{{ segment.text }}</span>
         </p>
-        <p v-if="template.linkUrlTemplate" class="qs-type-meta text-muted-foreground m-0 shrink-0 break-all">
-          链接：
+      </div>
+
+      <div v-if="template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-center">
+        <FaIcon name="i-lucide:external-link" class="text-muted-foreground shrink-0 size-3.5" aria-hidden="true" />
+        <span class="qs-type-meta text-muted-foreground shrink-0">跳转链接</span>
+        <span class="text-xs text-foreground font-mono min-w-0 truncate" :title="template.linkUrlTemplate">
           <span
             v-for="(segment, index) in linkSegments"
             :key="index"
-            :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
+            :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5' : ''"
           >{{ segment.text }}</span>
-        </p>
+        </span>
       </div>
 
       <div class="mt-auto pt-3 border-t border-border flex flex-wrap gap-2 items-center justify-between">
@@ -97,6 +101,7 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
           <FaButton
             variant="outline"
             size="sm"
+            class="text-primary border-primary/30 bg-primary/5 hover:bg-primary/10"
             :disabled="!canUpdate || busy"
             @click="emit('edit', template)"
           >
