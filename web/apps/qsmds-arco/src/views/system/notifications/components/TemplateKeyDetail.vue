@@ -58,7 +58,7 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
     </p>
   </div>
 
-  <div v-else class="p-4 flex flex-col gap-4 min-w-0 sm:p-5">
+  <div v-else class="p-4 flex flex-col gap-4 h-full min-w-0 sm:p-5">
     <div class="flex flex-wrap gap-3 items-start justify-between">
       <div class="min-w-0">
         <div class="flex flex-wrap gap-2 items-center">
@@ -93,7 +93,7 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
       </FaButton>
     </div>
 
-    <div class="gap-4 grid lg:grid-cols-2">
+    <div class="gap-4 grid lg:flex-1 lg:grid-cols-2 lg:min-h-0">
       <TemplateChannelCard
         channel="ASSISTANT"
         :template="group.assistant"

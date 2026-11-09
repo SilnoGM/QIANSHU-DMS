@@ -313,7 +313,7 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(templateCardSource, /splitTemplateBody/u)
   assert.match(templateCardSource, /linkSegments/u)
   assert.match(templateCardSource, /系统内置/u)
-  assert.match(templateCardSource, /line-clamp-4/u)
+  assert.match(templateCardSource, /min-h-28/u)
   assert.match(templateCardSource, /QsPersonDisplay/u)
   assert.match(templateCardSource, /编辑模板/u)
   assert.match(templateCardSource, /预览/u)

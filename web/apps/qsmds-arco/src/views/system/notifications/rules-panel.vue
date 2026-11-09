@@ -881,7 +881,7 @@ onMounted(() => {
       </div>
 
       <div
-        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:max-h-[560px]"
+        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:h-[640px]"
         data-testid="notification-template-master-detail"
       >
         <TemplateDomainRail
@@ -891,7 +891,7 @@ onMounted(() => {
           @select="selectedTemplateKey = $event"
           @update:search="templateSearch = $event"
         />
-        <div class="min-h-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-y-auto">
+        <div class="h-full min-h-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-y-auto">
           <TemplateKeyDetail
             :group="selectedTemplateGroup"
             :can-update="canUpdateTemplate"

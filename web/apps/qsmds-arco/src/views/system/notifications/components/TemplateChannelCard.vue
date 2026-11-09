@@ -34,7 +34,7 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
 </script>
 
 <template>
-  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0">
+  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 h-full min-w-0 overflow-hidden">
     <div class="flex gap-2 items-center justify-between">
       <div class="flex gap-2 min-w-0 items-center">
         <span class="rounded-md flex shrink-0 size-7 items-center justify-center" :class="channelIconClass">
@@ -67,15 +67,15 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </span>
       </div>
 
-      <div class="p-3 border border-border rounded-md bg-muted/30 min-h-20">
-        <p class="qs-type-body m-0 whitespace-pre-wrap [overflow-wrap:anywhere] line-clamp-4">
+      <div class="p-3 border border-border rounded-md bg-muted/30 flex flex-1 flex-col gap-2 min-h-28 overflow-hidden">
+        <p class="qs-type-body m-0 flex-1 min-h-0 whitespace-pre-wrap [overflow-wrap:anywhere] overflow-hidden">
           <span
             v-for="(segment, index) in previewSegments"
             :key="index"
             :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
           >{{ segment.text }}</span>
         </p>
-        <p v-if="template.linkUrlTemplate" class="qs-type-meta text-muted-foreground m-0 mt-2 break-all">
+        <p v-if="template.linkUrlTemplate" class="qs-type-meta text-muted-foreground m-0 shrink-0 break-all">
           链接：
           <span
             v-for="(segment, index) in linkSegments"
