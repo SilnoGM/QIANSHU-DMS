@@ -823,23 +823,6 @@ onMounted(() => {
         </FaButton>
       </div>
 
-      <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <FaInput
-          v-model="templateKeyword"
-          type="search"
-          clearable
-          class="flex-1 w-full"
-          placeholder="模板键或名称"
-          aria-label="搜索模板"
-        >
-          <template #start>
-            <FaIcon name="i-lucide:search" />
-          </template>
-        </FaInput>
-        <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="模板渠道" />
-        <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="模板状态" />
-      </div>
-
       <QsGenericTable
         class="mt-4"
         :columns="templateColumns"
@@ -850,6 +833,24 @@ onMounted(() => {
         row-key="id"
         data-testid="notification-template-table"
       >
+        <template #query-leading>
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaInput
+              v-model="templateKeyword"
+              type="search"
+              clearable
+              class="w-56"
+              placeholder="模板键或名称"
+              aria-label="搜索模板"
+            >
+              <template #start>
+                <FaIcon name="i-lucide:search" />
+              </template>
+            </FaInput>
+            <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="模板渠道" />
+            <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="模板状态" />
+          </div>
+        </template>
         <template #cell-channel="{ row }">
           <FaTag variant="outline" :class="channelTagClass(row.original.channel)">
             {{ formatChannel(row.original.channel) }}
@@ -967,23 +968,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <FaInput
-          v-model="policyKeyword"
-          type="search"
-          clearable
-          class="flex-1 w-full"
-          placeholder="事件、模板键或目标"
-          aria-label="搜索事件策略"
-        >
-          <template #start>
-            <FaIcon name="i-lucide:search" />
-          </template>
-        </FaInput>
-        <FaSelect v-model="policyChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="策略渠道" />
-        <FaSelect v-model="policyStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="策略状态" />
-      </div>
-
       <QsGenericTable
         class="mt-4"
         :columns="policyColumns"
@@ -994,6 +978,24 @@ onMounted(() => {
         row-key="id"
         data-testid="notification-policy-table"
       >
+        <template #query-leading>
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaInput
+              v-model="policyKeyword"
+              type="search"
+              clearable
+              class="w-56"
+              placeholder="事件、模板键或目标"
+              aria-label="搜索事件策略"
+            >
+              <template #start>
+                <FaIcon name="i-lucide:search" />
+              </template>
+            </FaInput>
+            <FaSelect v-model="policyChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="策略渠道" />
+            <FaSelect v-model="policyStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="策略状态" />
+          </div>
+        </template>
         <template #cell-eventType="{ row }">
           {{ formatEventType(row.original.eventType) }}
         </template>
