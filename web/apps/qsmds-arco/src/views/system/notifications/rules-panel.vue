@@ -1079,103 +1079,135 @@ onMounted(() => {
   </template>
 
   <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
-    <div class="gap-3 grid md:grid-cols-2">
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">模板键</span>
-        <FaInput v-model="templateDraft.key" :disabled="templateMode === 'edit'" placeholder="purchase.review.pending" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">渠道</span>
-        <FaSelect v-model="templateDraft.channel" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">名称</span>
-        <FaInput v-model="templateDraft.name" placeholder="采购审核待办" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">业务域</span>
-        <FaSelect
-          v-model="templateDraft.domain"
-          :options="TEMPLATE_DOMAIN_OPTIONS"
-          :disabled="templateOtherChannel !== null"
-        />
-        <span v-if="templateOtherChannel !== null" class="qs-type-meta text-muted-foreground">
-          同一模板键在{{ formatChannel(templateOtherChannel.channel) }}已使用「{{ templateDomainLabel(templateOtherChannel.domain) }}」，业务域已锁定。
-        </span>
-      </label>
-      <label class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">标题（站内通知使用）</span>
-        <FaInput v-model="templateDraft.titleTemplate" placeholder="采购单 {{ orderNo }} 待审核" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">消息类型</span>
-        <FaSelect v-model="templateDraft.messageKind" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
-      </label>
-      <label class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
-        <textarea v-model="templateDraft.bodyTemplate" rows="5" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
-        <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
-      </label>
-      <label class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">链接模板（可选）</span>
-        <FaInput v-model="templateDraft.linkUrlTemplate" placeholder="/operations/purchase-orders/{{ orderId }}" />
-      </label>
-      <div class="flex flex-col gap-2 md:col-span-2">
+    <div class="flex flex-col gap-5">
+      <section class="flex flex-col gap-3">
+        <h3 class="qs-type-body-medium m-0">
+          基础信息
+        </h3>
+        <div class="gap-3 grid md:grid-cols-2">
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">模板键</span>
+            <FaInput v-model="templateDraft.key" class="w-full" :disabled="templateMode === 'edit'" placeholder="purchase.review.pending" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">渠道</span>
+            <FaSelect v-model="templateDraft.channel" class="w-full" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">名称</span>
+            <FaInput v-model="templateDraft.name" class="w-full" placeholder="采购审核待办" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">业务域</span>
+            <FaSelect
+              v-model="templateDraft.domain"
+              class="w-full"
+              :options="TEMPLATE_DOMAIN_OPTIONS"
+              :disabled="templateOtherChannel !== null"
+            />
+            <span v-if="templateOtherChannel !== null" class="qs-type-meta text-muted-foreground">
+              同一模板键在{{ formatChannel(templateOtherChannel.channel) }}已使用「{{ templateDomainLabel(templateOtherChannel.domain) }}」，业务域已锁定。
+            </span>
+          </label>
+          <p v-if="templateMode === 'edit'" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
+            模板键与渠道创建后不可修改；需要换渠道请新建对应模板。
+          </p>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">消息类型</span>
+            <FaSelect v-model="templateDraft.messageKind" class="w-full" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">最大长度</span>
+            <FaInput v-model.number="templateDraft.maxLength" class="w-full" type="number" min="1" max="5000" />
+            <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
+          </label>
+          <div class="flex flex-wrap gap-4 items-end md:col-span-2">
+            <label v-if="templateDraft.channel === 'IN_APP'" class="flex flex-1 flex-col gap-1 min-w-0">
+              <span class="qs-type-compact-label">标题（站内通知使用）</span>
+              <FaInput v-model="templateDraft.titleTemplate" class="w-full" placeholder="采购单 {{ orderNo }} 待审核" />
+            </label>
+            <label class="qs-type-meta pb-2 flex gap-2 items-center">
+              <FaSwitch v-model="templateDraft.enabled" />
+              启用
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-4 border-t border-border flex flex-col gap-3">
+        <h3 class="qs-type-body-medium m-0">
+          消息内容
+        </h3>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
+          <textarea v-model="templateDraft.bodyTemplate" rows="7" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
+          <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
+        </label>
+        <label v-if="templateDraft.messageKind === 'LINK'" class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">链接模板</span>
+          <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
+        </label>
+      </section>
+
+      <section class="pt-4 border-t border-border flex flex-col gap-2">
         <div class="flex items-center justify-between">
-          <span class="qs-type-compact-label">变量白名单</span>
+          <h3 class="qs-type-body-medium m-0">
+            变量白名单
+          </h3>
           <FaButton variant="outline" size="sm" @click="addTemplateVariable">
             添加变量
           </FaButton>
         </div>
+        <p v-if="templateVariableError !== null" class="qs-type-meta text-destructive m-0">
+          {{ templateVariableError }}
+        </p>
         <p v-if="templateDraft.variables.length === 0" class="qs-type-meta text-muted-foreground m-0">
           还没有变量。正文只允许使用这里声明的变量。
         </p>
-        <div
-          v-for="(variable, index) in templateDraft.variables"
-          :key="index"
-          class="gap-2 grid items-end md:grid-cols-[minmax(0,1fr)_96px_auto_auto_auto]"
-        >
-          <label class="flex flex-col gap-1">
+        <div v-else class="border border-border rounded-lg overflow-x-auto">
+          <div class="px-3 py-2 bg-muted/40 gap-2 grid grid-cols-[minmax(0,1fr)_88px_64px_64px_32px] min-w-[520px] items-center">
             <span class="qs-type-compact-label">变量名</span>
-            <FaInput v-model="variable.name" placeholder="orderNo" />
-          </label>
-          <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">最大长度</span>
-            <FaInput v-model.number="variable.maxLength" type="number" min="1" max="200" />
-          </label>
-          <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
-            <FaSwitch v-model="variable.required" />
-            必填
-          </label>
-          <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
-            <FaSwitch v-model="variable.sensitive" />
-            敏感
-          </label>
-          <FaButton
-            variant="ghost"
-            size="icon-sm"
-            :aria-label="`删除变量 ${variable.name || index + 1}`"
-            @click="removeTemplateVariable(index)"
+            <span class="qs-type-compact-label text-center">必填</span>
+            <span class="qs-type-compact-label text-center">敏感</span>
+            <span />
+          </div>
+          <div
+            v-for="(variable, index) in templateDraft.variables"
+            :key="index"
+            class="px-3 py-2 border-t border-border/60 gap-2 grid grid-cols-[minmax(0,1fr)_88px_64px_64px_32px] min-w-[520px] items-center"
           >
-            <FaIcon name="i-lucide:trash-2" class="size-4" aria-hidden="true" />
-          </FaButton>
+            <FaInput
+              v-model="variable.name"
+              class="w-full"
+              :aria-label="`第 ${index + 1} 个变量的变量名`"
+              placeholder="orderNo"
+            />
+            <FaInput
+              v-model.number="variable.maxLength"
+              class="w-full"
+              type="number"
+              min="1"
+              max="200"
+              :aria-label="`第 ${index + 1} 个变量的最大长度`"
+            />
+            <FaSwitch v-model="variable.required" class="justify-self-center" :aria-label="`第 ${index + 1} 个变量必填`" />
+            <FaSwitch v-model="variable.sensitive" class="justify-self-center" :aria-label="`第 ${index + 1} 个变量敏感`" />
+            <FaButton
+              variant="ghost"
+              size="icon-sm"
+              class="justify-self-center"
+              :aria-label="`删除变量 ${variable.name || index + 1}`"
+              @click="removeTemplateVariable(index)"
+            >
+              <FaIcon name="i-lucide:trash-2" class="size-4" aria-hidden="true" />
+            </FaButton>
+          </div>
         </div>
         <p class="qs-type-meta text-muted-foreground m-0">
           变量名只允许字母、数字和下划线；正文中的 &#123;&#123;name&#125;&#125; 必须在这里声明。
         </p>
-        <p v-if="templateVariableError !== null" class="qs-type-meta text-destructive m-0">
-          {{ templateVariableError }}
-        </p>
-      </div>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">最大长度</span>
-        <FaInput v-model.number="templateDraft.maxLength" type="number" min="1" max="5000" />
-        <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
-      </label>
-      <label class="qs-type-meta flex gap-2 items-center">
-        <FaSwitch v-model="templateDraft.enabled" />
-        启用
-      </label>
+      </section>
     </div>
     <template #footer>
       <FaButton variant="outline" :disabled="busy" @click="templateOpen = false">
