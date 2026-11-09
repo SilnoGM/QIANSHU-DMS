@@ -5,7 +5,6 @@ import { computed } from 'vue'
 
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import {
-  formatNotificationDateTime,
   messageKindLabel,
   splitTemplateBody,
 } from '../template-key-grouping.logic'
@@ -99,11 +98,8 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </span>
       </div>
 
-      <div class="mt-auto pt-3 border-t border-border flex flex-wrap gap-2 items-center justify-between">
-        <div class="flex flex-col gap-0.5 min-w-0">
-          <QsPersonDisplay :display-name="template.updatedByName?.trim() || '系统内置'" size="sm" />
-          <span class="qs-type-meta text-muted-foreground">{{ formatNotificationDateTime(template.updatedAt) }}</span>
-        </div>
+      <div class="mt-auto pb-2 pt-2 border-t border-border flex flex-wrap gap-2 items-center justify-between -mb-4">
+        <QsPersonDisplay :display-name="template.updatedByName?.trim() || '系统内置'" size="sm" />
         <div class="flex flex-wrap gap-2">
           <FaButton variant="outline" size="sm" @click="emit('preview', template)">
             预览
