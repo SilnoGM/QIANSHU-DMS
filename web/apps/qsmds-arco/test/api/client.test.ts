@@ -292,6 +292,28 @@ test('multipart 写请求不被通用 Client 覆盖为 JSON Content-Type', async
   assert.equal(captured?.headers.get('X-Qianshu-CSRF'), '1')
 })
 
+test('无 body 的 DELETE 补空 JSON，已有 body 的 DELETE 保持不变', async () => {
+  const configs: InternalAxiosRequestConfig[] = []
+  const client = createApiClient({
+    adapter: async (config) => {
+      configs.push(config)
+      return createResponse(config, { ok: true })
+    },
+    baseURL: '/api/',
+    hooks: createHookRecorder().hooks,
+  })
+
+  await client.delete('/assistant/bindings/binding-1')
+  await client.delete('/products/product-1/media/media-1', {
+    data: { reason: 'REMOVED' },
+  })
+
+  assert.equal(configs[0]?.data, '{}')
+  assert.equal(configs[0]?.headers.get('Content-Type'), 'application/json')
+  assert.equal(configs[0]?.headers.get('X-Qianshu-CSRF'), '1')
+  assert.equal(configs[1]?.data, '{"reason":"REMOVED"}')
+})
+
 test('确定的 AUTHENTICATION_REQUIRED 才清理身份，403 只提示权限不足', async () => {
   for (const status of [401, 403]) {
     const recorder = createHookRecorder()
