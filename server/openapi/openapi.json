@@ -77774,6 +77774,7 @@
             {
               "status": 422,
               "codes": [
+                "NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT",
                 "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
                 "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
                 "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",
@@ -78072,6 +78073,7 @@
             {
               "status": 422,
               "codes": [
+                "NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT",
                 "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
                 "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
                 "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",

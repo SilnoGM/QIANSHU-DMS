@@ -77,7 +77,7 @@ export class NotificationAdminController {
   @ApiContractResponse({ status: 201, type: NotificationTemplateDto })
   @contract('notifications_templates_create', true, [
     { status: 409, codes: ['NOTIFICATION_TEMPLATE_EXISTS'] },
-    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE'] },
+    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE', 'NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT'] },
   ])
   createTemplate(@Body() input: NotificationTemplateCreateDto, @Req() request: object) {
     return this.notifications.createTemplate(context(request), input)
@@ -89,7 +89,7 @@ export class NotificationAdminController {
   @contract('notifications_templates_update', true, [
     { status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] },
     { status: 409, codes: ['NOTIFICATION_TEMPLATE_STATE_CHANGED'] },
-    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE'] },
+    { status: 422, codes: ['NOTIFICATION_TEMPLATE_LINK_REQUIRED', 'NOTIFICATION_TEMPLATE_SINGLE_BRACE', 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE', 'NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT'] },
   ])
   updateTemplate(@Param() params: NotificationUuidParamDto, @Body() input: NotificationTemplateUpdateDto, @Req() request: object) {
     return this.notifications.updateTemplate(context(request), params.id, input)

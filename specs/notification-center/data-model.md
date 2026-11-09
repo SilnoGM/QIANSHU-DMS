@@ -91,6 +91,7 @@
 - 唯一 `(key, channel)`。
 - `(channel, enabled)`。
 - `(domain, enabled)`。
+- 触发器：同一 `key` 在两个渠道必须使用同一 `domain`。
 - CHECK：`maxLength BETWEEN 1 AND 5000`。
 - CHECK：`messageKind = 'LINK'` 时 `linkUrlTemplate IS NOT NULL`。
 

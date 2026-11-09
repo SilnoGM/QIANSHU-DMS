@@ -96,6 +96,45 @@ describe('NotificationAdminService', () => {
     )).rejects.toMatchObject({ code: 'NOTIFICATION_POLICY_TARGET_INVALID' })
   })
 
+  it('rejects a template domain that conflicts with the other channel', async () => {
+    const createPrisma = {
+      notificationTemplate: { findFirst: jest.fn().mockResolvedValue({ domain: 'FINANCE' }) },
+    }
+    await expect(service(createPrisma).createTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      {
+        key: 'purchase.review.pending',
+        channel: 'ASSISTANT',
+        name: '采购审核提醒',
+        domain: 'PURCHASE',
+        bodyTemplate: '采购单待审核',
+        variables: [],
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT' })
+
+    const updatePrisma = {
+      notificationTemplate: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'template-1',
+          key: 'purchase.review.pending',
+          channel: 'ASSISTANT',
+          version: 1,
+          messageKind: 'TEXT',
+          titleTemplate: null,
+          bodyTemplate: '采购单待审核',
+          linkUrlTemplate: null,
+          variables: [],
+        }),
+        findFirst: jest.fn().mockResolvedValue({ domain: 'FINANCE' }),
+      },
+    }
+    await expect(service(updatePrisma).updateTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      'template-1',
+      { domain: 'PURCHASE', expectedVersion: 1 },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT' })
+  })
+
   it('returns the updater name from template and policy toggle responses', async () => {
     const updatedAt = new Date('2026-11-09T08:00:00.000Z')
     const template = {

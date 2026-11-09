@@ -10,7 +10,7 @@ import type {
 import type { QsGenericTableGrouping } from '@/components/business/QsGenericTable/grouping'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import { getApiClientFailureMessage } from '@/api/errors'
 import managementApi from '@/api/modules/management'
@@ -336,6 +336,23 @@ const templateGrouping: QsGenericTableGrouping<TemplateGroupRow> = {
   getRows: group => group.groupRows,
   getLabel: group => templateDomainLabel(group.domain),
 }
+const templateOtherChannel = computed(() => {
+  const key = templateDraft.value.key.trim()
+  if (key.length === 0) {
+    return null
+  }
+  return templates.value.find(template =>
+    template.key === key && template.channel !== templateDraft.value.channel) ?? null
+})
+watch(
+  () => [templateDraft.value.key, templateDraft.value.channel],
+  () => {
+    if (!templateOpen.value || templateMode.value !== 'create' || templateOtherChannel.value === null) {
+      return
+    }
+    templateDraft.value.domain = templateOtherChannel.value.domain
+  },
+)
 const filteredPolicies = computed(() => {
   const keyword = policyKeyword.value.trim().toLowerCase()
   return policies.value.filter((policy) => {
@@ -605,7 +622,7 @@ async function saveTemplate(): Promise<void> {
     else {
       await notificationsApi.templates.update(templateDraft.value.id, {
         name: templateDraft.value.name,
-        domain: templateDraft.value.domain,
+        ...(templateOtherChannel.value === null ? { domain: templateDraft.value.domain } : {}),
         messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
@@ -1238,7 +1255,14 @@ onMounted(() => {
       </label>
       <label class="flex flex-col gap-1">
         <span class="qs-type-compact-label">业务域</span>
-        <FaSelect v-model="templateDraft.domain" :options="TEMPLATE_DOMAIN_OPTIONS" />
+        <FaSelect
+          v-model="templateDraft.domain"
+          :options="TEMPLATE_DOMAIN_OPTIONS"
+          :disabled="templateOtherChannel !== null"
+        />
+        <span v-if="templateOtherChannel !== null" class="qs-type-meta text-muted-foreground">
+          同一模板键在{{ formatChannel(templateOtherChannel.channel) }}已使用「{{ templateDomainLabel(templateOtherChannel.domain) }}」，业务域已锁定。
+        </span>
       </label>
       <label class="flex flex-col gap-1 md:col-span-2">
         <span class="qs-type-compact-label">标题（站内通知使用）</span>

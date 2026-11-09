@@ -279,6 +279,7 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /messageKindLabel/u)
   assert.match(rulesSource, /action-column/u)
   assert.match(rulesSource, /TEMPLATE_DOMAIN_OPTIONS/u)
+  assert.match(rulesSource, /templateOtherChannel/u)
   assert.match(rulesSource, /templateDomainFilter/u)
   assert.match(rulesSource, /templateDomainLabel/u)
   assert.match(rulesSource, /policyTemplateDomainMismatch/u)

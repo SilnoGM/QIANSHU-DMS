@@ -187,8 +187,24 @@ export class NotificationAdminService {
     }
   }
 
+  private async assertTemplateDomainConsistent(
+    key: string,
+    channel: 'IN_APP' | 'ASSISTANT',
+    domain: string,
+  ): Promise<void> {
+    const other = await this.prisma.notificationTemplate.findFirst({
+      where: { key, channel: { not: channel } },
+      select: { domain: true },
+    })
+    if (other !== null && other.domain !== domain) {
+      throw new ApiException(422, 'NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT', '同一模板键在不同渠道必须使用同一业务域')
+    }
+  }
+
   async createTemplate(context: NotificationAdminContext, input: NotificationTemplateCreateDto): Promise<NotificationTemplateDto> {
     this.validateTemplate(input)
+    const domain = input.domain ?? 'SYSTEM'
+    await this.assertTemplateDomainConsistent(input.key, input.channel, domain)
     try {
       const created = await this.prisma.$transaction(async transaction => {
         const row = await transaction.notificationTemplate.create({
@@ -196,7 +212,7 @@ export class NotificationAdminService {
             key: input.key,
             channel: input.channel,
             name: input.name.slice(0, 128),
-            domain: (input.domain ?? 'SYSTEM') as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM',
+            domain: domain as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM',
             messageKind: input.messageKind ?? 'TEXT',
             titleTemplate: input.titleTemplate ?? null,
             bodyTemplate: input.bodyTemplate,
@@ -238,6 +254,13 @@ export class NotificationAdminService {
     }
     if (existing.version !== input.expectedVersion) {
       throw new ApiException(409, 'NOTIFICATION_TEMPLATE_STATE_CHANGED', '模板已变化，请刷新后重试')
+    }
+    if (input.domain !== undefined) {
+      await this.assertTemplateDomainConsistent(
+        existing.key,
+        existing.channel,
+        input.domain,
+      )
     }
     const bodyTemplate = input.bodyTemplate ?? existing.bodyTemplate
     const titleTemplate = input.titleTemplate !== undefined ? input.titleTemplate : existing.titleTemplate
