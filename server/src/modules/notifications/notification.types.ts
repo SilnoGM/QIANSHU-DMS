@@ -125,6 +125,7 @@ export interface AssistantTransport {
     readonly appId: string
     readonly toWxid: string
     readonly content: string
+    readonly ats?: string
   }): Promise<AssistantTransportResult>
 }
 

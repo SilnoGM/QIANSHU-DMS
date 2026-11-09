@@ -14,6 +14,7 @@ import {
   type AssistantAdminTransport,
   type AssistantBriefContact,
   type AssistantChatroomInfo,
+  type AssistantChatroomMember,
   type AssistantTransport,
 } from './notification.types'
 import type {
@@ -31,6 +32,8 @@ import type {
   AssistantContactDto,
   AssistantTargetDto,
   AssistantTargetMemberDto,
+  AssistantTargetMentionMessageDto,
+  AssistantTargetMentionMessageResultDto,
   AssistantTargetUpdateDto,
 } from './assistant-admin.dto'
 
@@ -937,6 +940,92 @@ export class AssistantAdminService {
     catch (error) {
       this.mapUpstreamError(error)
     }
+  }
+
+  async sendTargetMentionMessage(
+    context: AssistantAdminContext,
+    id: string,
+    input: AssistantTargetMentionMessageDto,
+  ): Promise<AssistantTargetMentionMessageResultDto> {
+    const content = input.content.trim()
+    if (content.length === 0) {
+      throw new ApiException(422, 'ASSISTANT_TARGET_MESSAGE_INVALID', '消息内容不能为空')
+    }
+    if (content.length > 1000) {
+      throw new ApiException(422, 'ASSISTANT_TARGET_MESSAGE_INVALID', '消息内容不能超过 1000 个字符')
+    }
+    const target = await this.prisma.assistantTarget.findUnique({
+      where: { id },
+      select: { chatroomId: true, enabled: true },
+    })
+    if (target === null) {
+      throw new ApiException(404, 'ASSISTANT_TARGET_NOT_FOUND', '群目标不存在')
+    }
+    if (!target.enabled) {
+      throw new ApiException(422, 'ASSISTANT_TARGET_DISABLED', '群目标已停用，不能发送消息')
+    }
+    const channel = await this.prisma.notificationChannelSettings.findUnique({
+      where: { channel: 'ASSISTANT' },
+      select: { enabled: true },
+    })
+    if (channel?.enabled !== true) {
+      throw new ApiException(422, 'ASSISTANT_CHANNEL_DISABLED', '千树小助理渠道已停发')
+    }
+    const account = await this.prisma.assistantAccount.findFirst({
+      where: ACTIVE_ACCOUNT_WHERE,
+      orderBy: { createdAt: 'asc' },
+      select: { appId: true },
+    })
+    if (account === null) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_UNAVAILABLE', '没有可用的公司号')
+    }
+    let members: readonly AssistantChatroomMember[]
+    try {
+      members = await this.adminTransport.fetchChatroomMembers(account.appId, target.chatroomId)
+    }
+    catch (error) {
+      this.mapUpstreamError(error)
+    }
+    const member = members.find(item => item.wxid === input.memberWxid)
+    if (member === undefined) {
+      throw new ApiException(422, 'ASSISTANT_TARGET_MEMBER_NOT_FOUND', '该成员不在当前群中')
+    }
+    const mentionName = member.displayName?.trim() || member.nickname?.trim()
+    if (mentionName === undefined || mentionName.length === 0) {
+      throw new ApiException(422, 'ASSISTANT_TARGET_MEMBER_UNAVAILABLE', '无法获取该成员的群内昵称')
+    }
+    const result = await this.transport.sendText({
+      appId: account.appId,
+      toWxid: target.chatroomId,
+      content: `@${mentionName} ${content}`,
+      ats: member.wxid,
+    })
+    if (!result.ok) {
+      this.mapUpstreamError(new AssistantAdminError(result.code, result.kind, result.message))
+    }
+    try {
+      await this.prisma.$transaction(async transaction => {
+        await this.audit.record(transaction, {
+          eventType: 'ASSISTANT_TARGET_MESSAGE_SENT',
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'ASSISTANT_TARGET',
+          targetId: id,
+          metadata: {
+            memberWxid: maskWxid(member.wxid) ?? '',
+            contentLength: content.length,
+            msgId: result.msgId,
+          },
+        })
+      })
+    }
+    catch {
+      // 消息已经发出，审计失败不能让调用方重试造成重复发送。
+      this.logger.warn('assistant target message audit failed')
+    }
+    return { accepted: true }
   }
 
   async updateTarget(id: string, input: AssistantTargetUpdateDto): Promise<AssistantTargetDto> {

@@ -75,6 +75,19 @@ const flippedMembersLoading = ref(false)
 const flippedMembersError = ref<string | null>(null)
 const memberDetailOpen = ref(false)
 const memberDetail = ref<AssistantTargetMemberDto | null>(null)
+const memberDetailTarget = ref<AssistantTargetDto | null>(null)
+const mentionOpen = ref(false)
+const mentionContent = ref('')
+const mentionError = ref<string | null>(null)
+const mentionSubmitting = ref(false)
+const MENTION_CONTENT_LIMIT = 1000
+const canSubmitMention = computed(() => !mentionSubmitting.value
+  && mentionContent.value.trim().length > 0
+  && mentionContent.value.length <= MENTION_CONTENT_LIMIT)
+const canMentionMember = computed(() => {
+  const member = memberDetail.value
+  return member !== null && Boolean(member.displayName?.trim() || member.nickname?.trim())
+})
 const groupMembersOpen = ref(false)
 const groupMembersTarget = ref<AssistantTargetDto | null>(null)
 const groupMembers = ref<AssistantTargetMemberDto[]>([])
@@ -324,9 +337,51 @@ function closeTargetFlip(): void {
   flippedMembersLoading.value = false
 }
 
-function openMemberDetail(member: AssistantTargetMemberDto): void {
+function openMemberDetail(member: AssistantTargetMemberDto, target: AssistantTargetDto): void {
   memberDetail.value = member
+  memberDetailTarget.value = target
   memberDetailOpen.value = true
+}
+
+function openMentionMessage(): void {
+  if (memberDetail.value === null || memberDetailTarget.value === null) {
+    return
+  }
+  mentionContent.value = ''
+  mentionError.value = null
+  mentionOpen.value = true
+}
+
+async function submitMentionMessage(): Promise<void> {
+  const member = memberDetail.value
+  const target = memberDetailTarget.value
+  const content = mentionContent.value.trim()
+  if (member === null || target === null || content.length === 0) {
+    mentionError.value = '消息内容不能为空'
+    return
+  }
+  if (content.length > MENTION_CONTENT_LIMIT) {
+    mentionError.value = `消息内容不能超过 ${MENTION_CONTENT_LIMIT} 个字符`
+    return
+  }
+  mentionSubmitting.value = true
+  mentionError.value = null
+  try {
+    await notificationsApi.assistant.targets.mentionMessage(target.id, {
+      memberWxid: member.wxid,
+      content,
+    })
+    // 先释放提交态再关闭；QsGenericModal 在提交期会拒绝受控关闭。
+    mentionSubmitting.value = false
+    mentionOpen.value = false
+    toast.success('消息已发送')
+  }
+  catch (failure) {
+    mentionError.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
+  }
+  finally {
+    mentionSubmitting.value = false
+  }
 }
 
 async function loadGroupMembers(target: AssistantTargetDto): Promise<void> {
@@ -1179,7 +1234,7 @@ onMounted(() => {
                         class="p-0.5 border-2 border-transparent rounded-full inline-flex size-10 transition-colors items-center justify-center justify-self-center focus-visible:outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-primary/40"
                         :title="memberDisplayName(member)"
                         :aria-label="`查看成员：${memberDisplayName(member)}`"
-                        @click="openMemberDetail(member)"
+                        @click="openMemberDetail(member, target)"
                       >
                         <FaAvatar
                           :src="member.avatarUrl ?? ''"
@@ -1468,6 +1523,69 @@ onMounted(() => {
       <template #footer>
         <FaButton variant="outline" @click="memberDetailOpen = false">
           关闭
+        </FaButton>
+        <FaButton
+          v-if="canManageTarget"
+          :disabled="!canMentionMember"
+          :title="canMentionMember ? undefined : '该成员没有可用的群昵称'"
+          @click="openMentionMessage"
+        >
+          @TA消息
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal
+      v-model="mentionOpen"
+      title="发送 @TA 消息"
+      size="md"
+      :submitting="mentionSubmitting"
+      :z-index="2100"
+      @update:model-value="mentionOpen = $event"
+    >
+      <div class="flex flex-col gap-3">
+        <div class="p-3 rounded-lg bg-slate-50 flex gap-2.5 items-center dark:bg-slate-900/40">
+          <FaAvatar
+            :src="memberDetail?.avatarUrl ?? ''"
+            :fallback="memberDetail === null ? '' : memberDisplayName(memberDetail)"
+            class="text-sm text-muted-foreground font-medium border border-border rounded-full bg-muted shrink-0 size-9"
+          />
+          <div class="flex-1 min-w-0">
+            <p class="qs-type-meta text-muted-foreground m-0 truncate">
+              发送到：{{ memberDetailTarget?.name ?? '—' }}
+            </p>
+            <p class="qs-type-body-medium m-0 mt-0.5 truncate">
+              并 @{{ memberDetail === null ? '—' : memberDisplayName(memberDetail) }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <div class="flex gap-2 items-center justify-between">
+            <span class="qs-type-compact-label">消息内容</span>
+            <span class="qs-type-meta text-muted-foreground">{{ mentionContent.length }} / {{ MENTION_CONTENT_LIMIT }}</span>
+          </div>
+          <FaTextarea
+            v-model="mentionContent"
+            :rows="4"
+            :maxlength="MENTION_CONTENT_LIMIT"
+            placeholder="输入要发送的消息内容"
+          />
+          <p class="qs-type-meta text-muted-foreground m-0">
+            发送时会自动在内容前加上 @群内昵称，群昵称变化时以上游实际昵称为准。
+          </p>
+        </div>
+
+        <p v-if="mentionError !== null" class="qs-type-meta text-destructive m-0">
+          {{ mentionError }}
+        </p>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" :disabled="mentionSubmitting" @click="mentionOpen = false">
+          取消
+        </FaButton>
+        <FaButton :loading="mentionSubmitting" :disabled="!canSubmitMention" @click="submitMentionMessage">
+          确认发送
         </FaButton>
       </template>
     </QsGenericModal>

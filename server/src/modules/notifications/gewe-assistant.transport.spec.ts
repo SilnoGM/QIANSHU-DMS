@@ -66,6 +66,40 @@ describe('GeweAssistantTransport', () => {
     }
   })
 
+  it('includes ats when mentioning a group member', async () => {
+    const calls: Array<{ readonly init?: RequestInit }> = []
+    const fetchImpl: typeof fetch = (_input, init) => {
+      calls.push({ init })
+      return Promise.resolve(new Response(JSON.stringify({
+        ret: 200,
+        msg: '操作成功',
+        data: { msgId: 13, newMsgId: '9154432039' },
+      }), { status: 200 }))
+    }
+    const transport = new GeweAssistantTransport(configService(configuration()), {
+      fetchImpl,
+      lookup: publicLookup,
+    })
+
+    await transport.sendText({
+      appId: 'wx-app',
+      toWxid: 'room-1@chatroom',
+      content: '@张三 请确认',
+      ats: 'wxid-member',
+    })
+
+    const body = calls[0]?.init?.body
+    expect(typeof body).toBe('string')
+    if (typeof body === 'string') {
+      expect(JSON.parse(body)).toEqual({
+        appId: 'wx-app',
+        toWxid: 'room-1@chatroom',
+        content: '@张三 请确认',
+        ats: 'wxid-member',
+      })
+    }
+  })
+
   it('classifies an offline response', async () => {
     const transport = new GeweAssistantTransport(configService(configuration()), {
       fetchImpl: jsonFetch({ ret: 503, msg: '节点离线' }, 503),

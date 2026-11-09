@@ -17,6 +17,8 @@ import type {
   AssistantContactDto,
   AssistantTargetDto,
   AssistantTargetMemberDto,
+  AssistantTargetMentionMessageDto,
+  AssistantTargetMentionMessageResultDto,
   AssistantTargetUpdateDto,
   AssistantTestSendDto,
   NotificationCancelResultDto,
@@ -148,6 +150,8 @@ export function createNotificationsApi(client: AxiosInstance) {
           client.get<AssistantTargetDto[]>('assistant/targets', { errorPresentation: 'local', signal }),
         members: (id: string, signal: AbortSignal) =>
           client.get<AssistantTargetMemberDto[]>(path('assistant', 'targets', id, 'members'), { errorPresentation: 'local', signal }),
+        mentionMessage: (id: string, input: AssistantTargetMentionMessageDto) =>
+          client.post<AssistantTargetMentionMessageResultDto>(path('assistant', 'targets', id, 'mention-message'), input, { errorPresentation: 'local', retry: false }),
         sync: () =>
           client.post<AssistantTargetDto[]>('assistant/targets/sync', {}, { errorPresentation: 'local', retry: false }),
         update: (id: string, input: AssistantTargetUpdateDto) =>

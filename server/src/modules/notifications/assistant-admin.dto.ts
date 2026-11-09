@@ -130,6 +130,15 @@ export class AssistantTargetMemberDto {
   @ApiProperty({ enum: ['OWNER', 'ADMIN', 'MEMBER'] }) role!: string
 }
 
+export class AssistantTargetMentionMessageDto {
+  @ApiProperty({ maxLength: 128 }) @IsString() @MaxLength(128) @Matches(/\S/u) memberWxid!: string
+  @ApiProperty({ maxLength: 1000 }) @IsString() content!: string
+}
+
+export class AssistantTargetMentionMessageResultDto {
+  @ApiProperty() accepted!: boolean
+}
+
 export class AssistantTestSendDto {
   @ApiProperty() accepted!: boolean
 }

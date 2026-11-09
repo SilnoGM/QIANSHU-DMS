@@ -76488,6 +76488,342 @@
         }
       }
     },
+    "/api/assistant/targets/{id}/mention-message": {
+      "post": {
+        "operationId": "assistant_targets_mention_message",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantTargetMentionMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantTargetMentionMessageResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "assistant"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "ASSISTANT_TARGET_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "ASSISTANT_ACCOUNT_OFFLINE",
+                "ASSISTANT_ACCOUNT_UNAVAILABLE",
+                "ASSISTANT_CHANNEL_DISABLED",
+                "ASSISTANT_TARGET_DISABLED",
+                "ASSISTANT_TARGET_MEMBER_NOT_FOUND",
+                "ASSISTANT_TARGET_MEMBER_UNAVAILABLE",
+                "ASSISTANT_TARGET_MESSAGE_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "ASSISTANT_RATE_LIMITED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "ASSISTANT_NOT_CONFIGURED",
+                "ASSISTANT_OUTBOUND_BLOCKED",
+                "ASSISTANT_UPSTREAM_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/assistant/targets/{id}": {
       "patch": {
         "operationId": "assistant_targets_update",
@@ -81904,7 +82240,8 @@
                 "ASSISTANT_BINDING_VERIFIED",
                 "ASSISTANT_BINDING_REVOKED",
                 "ASSISTANT_BINDING_INVALIDATED",
-                "ASSISTANT_DELIVERY_RESENT"
+                "ASSISTANT_DELIVERY_RESENT",
+                "ASSISTANT_TARGET_MESSAGE_SENT"
               ]
             }
           },
@@ -124552,6 +124889,34 @@
           "role"
         ]
       },
+      "AssistantTargetMentionMessageDto": {
+        "type": "object",
+        "properties": {
+          "memberWxid": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "memberWxid",
+          "content"
+        ]
+      },
+      "AssistantTargetMentionMessageResultDto": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ]
+      },
       "AssistantTargetUpdateDto": {
         "type": "object",
         "properties": {
@@ -125664,7 +126029,8 @@
               "ASSISTANT_BINDING_VERIFIED",
               "ASSISTANT_BINDING_REVOKED",
               "ASSISTANT_BINDING_INVALIDATED",
-              "ASSISTANT_DELIVERY_RESENT"
+              "ASSISTANT_DELIVERY_RESENT",
+              "ASSISTANT_TARGET_MESSAGE_SENT"
             ]
           },
           "outcome": {

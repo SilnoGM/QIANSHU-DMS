@@ -26,6 +26,8 @@ import {
   AssistantIdParamDto,
   AssistantTargetDto,
   AssistantTargetMemberDto,
+  AssistantTargetMentionMessageDto,
+  AssistantTargetMentionMessageResultDto,
   AssistantTargetUpdateDto,
   AssistantTestSendDto,
 } from './assistant-admin.dto'
@@ -249,6 +251,33 @@ export class AssistantAdminController {
   ])
   listTargetMembers(@Param() params: AssistantIdParamDto) {
     return this.assistant.listTargetMembers(params.id)
+  }
+
+  @Post('targets/:id/mention-message')
+  @HttpCode(200)
+  @RequirePermissions('assistant-target:manage')
+  @ApiContractResponse({ status: 200, type: AssistantTargetMentionMessageResultDto })
+  @contract('assistant_targets_mention_message', true, [
+    { status: 404, codes: ['ASSISTANT_TARGET_NOT_FOUND'] },
+    {
+      status: 422,
+      codes: [
+        'ASSISTANT_CHANNEL_DISABLED',
+        'ASSISTANT_TARGET_DISABLED',
+        'ASSISTANT_TARGET_MEMBER_NOT_FOUND',
+        'ASSISTANT_TARGET_MEMBER_UNAVAILABLE',
+        'ASSISTANT_TARGET_MESSAGE_INVALID',
+        'ASSISTANT_ACCOUNT_UNAVAILABLE',
+      ],
+    },
+    ...upstreamErrors,
+  ])
+  sendTargetMentionMessage(
+    @Param() params: AssistantIdParamDto,
+    @Body() input: AssistantTargetMentionMessageDto,
+    @Req() request: object,
+  ) {
+    return this.assistant.sendTargetMentionMessage(context(request), params.id, input)
   }
 
   @Patch('targets/:id')

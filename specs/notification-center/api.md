@@ -272,6 +272,7 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/assistant/targets` | `assistant-target:read` | `assistant_targets_list` | 群目标列表 |
 | POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群；新群 key 默认使用 `chatroomId` |
 | GET | `/api/assistant/targets/:id/members` | `assistant-target:read` | `assistant_targets_members` | 按需读取群成员与群主/管理员角色，不落库 |
+| POST | `/api/assistant/targets/:id/mention-message` | `assistant-target:manage` | `assistant_targets_mention_message` | 向群发送自由文本并 @ 指定成员 |
 | PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 编辑语义 key、名称、用途、内部群与启停 |
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
 | GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
@@ -288,6 +289,8 @@ export interface SystemNotificationPublishResult {
 群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。同步群会为前 100 个群调用 GeWe `getChatroomInfo` 刷新名称、头像与 `memberCount`（成员列表长度）；单个群详情被拒绝或返回未知业务错误时跳过该群的详情字段，离线、限流、超时和网络失败仍使整批同步失败。群目标响应包含 `avatarUrl`、`memberCount`、`lastSyncedAt`，列表读取不访问 GeWe。
 
 `GET /api/assistant/targets/:id/members` 按需调用 GeWe `getChatroomMemberList`，返回成员 `wxid`、微信昵称、群内昵称、头像、邀请人昵称和角色（`OWNER`/`ADMIN`/`MEMBER`，由 `chatroomOwner`/`adminWxid` 匹配）。GeWe 该接口没有分页参数，返回数量以上游为准。成员列表不落库、不写审计，关闭页面即丢弃；没有可用公司号返回 422 `ASSISTANT_ACCOUNT_UNAVAILABLE`，群目标不存在返回 404 `ASSISTANT_TARGET_NOT_FOUND`，其余上游错误复用统一的 422/429/503 映射。成员是否内部员工不由系统判断。
+
+`POST /api/assistant/targets/:id/mention-message` 请求体为 `{ "memberWxid": "wxid_xxx", "content": "..." }`：内容去空白后 1–1000 字，超限或为空返回 422 `ASSISTANT_TARGET_MESSAGE_INVALID`。群目标停用返回 422 `ASSISTANT_TARGET_DISABLED`，渠道停发返回 422 `ASSISTANT_CHANNEL_DISABLED`，成员不在群内返回 422 `ASSISTANT_TARGET_MEMBER_NOT_FOUND`。服务端按当前群成员资料取 `displayName`（为空回退 `nickName`），自动拼接 `@群内昵称 内容` 并传 `ats=memberWxid`；成功后写 `ASSISTANT_TARGET_MESSAGE_SENT` 审计（成员 wxid 掩码、内容长度、msgId，不写正文）。该发送不创建通知或 `assistant_deliveries` 记录，属于管理员手动外发。
 
 上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 

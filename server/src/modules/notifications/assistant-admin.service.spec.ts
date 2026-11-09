@@ -693,6 +693,70 @@ describe('AssistantAdminService', () => {
       .rejects.toMatchObject({ code: 'ASSISTANT_ACCOUNT_UNAVAILABLE' })
   })
 
+  it('sends a group mention message with the current group nickname', async () => {
+    const audit = { record: jest.fn() }
+    const transaction = { audit }
+    const prisma = {
+      assistantTarget: {
+        findUnique: jest.fn().mockResolvedValue({ chatroomId: 'room-1@chatroom', enabled: true }),
+      },
+      notificationChannelSettings: {
+        findUnique: jest.fn().mockResolvedValue({ enabled: true }),
+      },
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue(accountRow()) },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    }
+    const admin = adminTransport()
+    admin.fetchChatroomMembers.mockResolvedValue([{
+      wxid: 'wxid-member',
+      nickname: '张三',
+      displayName: '群内张三',
+      avatarUrl: null,
+      inviterName: null,
+      role: 'MEMBER',
+    }])
+    const transport = new FakeAssistantTransport()
+
+    const result = await service(prisma, transport, admin, audit).sendTargetMentionMessage(context, 'target-1', {
+      memberWxid: 'wxid-member',
+      content: '  请确认一下  ',
+    })
+
+    expect(transport.calls).toEqual([{
+      appId: 'wx-app',
+      toWxid: 'room-1@chatroom',
+      content: '@群内张三 请确认一下',
+      ats: 'wxid-member',
+    }])
+    expect(audit.record).toHaveBeenCalledWith(transaction, expect.objectContaining({
+      eventType: 'ASSISTANT_TARGET_MESSAGE_SENT',
+      targetId: 'target-1',
+      metadata: expect.objectContaining({ contentLength: 5 }),
+    }))
+    expect(result).toEqual({ accepted: true })
+  })
+
+  it('rejects mention messages for disabled targets or channels without sending', async () => {
+    const transport = new FakeAssistantTransport()
+    const disabledTarget = {
+      assistantTarget: { findUnique: jest.fn().mockResolvedValue({ chatroomId: 'room-1@chatroom', enabled: false }) },
+    }
+    await expect(service(disabledTarget, transport).sendTargetMentionMessage(context, 'target-1', {
+      memberWxid: 'wxid-member',
+      content: '测试',
+    })).rejects.toMatchObject({ code: 'ASSISTANT_TARGET_DISABLED' })
+
+    const disabledChannel = {
+      assistantTarget: { findUnique: jest.fn().mockResolvedValue({ chatroomId: 'room-1@chatroom', enabled: true }) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: false }) },
+    }
+    await expect(service(disabledChannel, transport).sendTargetMentionMessage(context, 'target-1', {
+      memberWxid: 'wxid-member',
+      content: '测试',
+    })).rejects.toMatchObject({ code: 'ASSISTANT_CHANNEL_DISABLED' })
+    expect(transport.calls).toEqual([])
+  })
+
   it('updates the semantic target key and rejects a duplicate', async () => {
     const target = {
       id: 'target-1',

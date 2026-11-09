@@ -43,6 +43,7 @@ export class GeweAssistantTransport implements AssistantTransport {
     readonly appId: string
     readonly toWxid: string
     readonly content: string
+    readonly ats?: string
   }): Promise<AssistantTransportResult> {
     const config = this.configService.get<AssistantConfiguration>('assistant')
     if (config === undefined) {
@@ -53,6 +54,7 @@ export class GeweAssistantTransport implements AssistantTransport {
       appId: input.appId,
       toWxid: input.toWxid,
       content: input.content,
+      ...(input.ats !== undefined ? { ats: input.ats } : {}),
     }, {
       fetchImpl: this.fetchImpl,
       lookup: this.lookup,

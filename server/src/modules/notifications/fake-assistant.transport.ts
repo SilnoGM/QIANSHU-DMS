@@ -2,7 +2,7 @@ import type { AssistantTransport, AssistantTransportResult } from './notificatio
 
 /** 测试替身：记录调用并按队列返回预设结果，绝不访问网络。 */
 export class FakeAssistantTransport implements AssistantTransport {
-  readonly calls: Array<{ readonly appId: string, readonly toWxid: string, readonly content: string }> = []
+  readonly calls: Array<{ readonly appId: string, readonly toWxid: string, readonly content: string, readonly ats?: string }> = []
   private readonly results: AssistantTransportResult[]
 
   constructor(results: readonly AssistantTransportResult[] = []) {
@@ -13,6 +13,7 @@ export class FakeAssistantTransport implements AssistantTransport {
     readonly appId: string
     readonly toWxid: string
     readonly content: string
+    readonly ats?: string
   }): Promise<AssistantTransportResult> {
     this.calls.push({ ...input })
     return Promise.resolve(this.results.shift() ?? {

@@ -543,6 +543,8 @@ GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发�
 
 「更多」包含「查看成员」「查看群组」「编辑信息」。查看成员会把卡片翻转到反面：反面展示群成员头像网格，头像加载失败回退昵称首字，滚动区域隐藏滚动条，头像 hover 显示主题绿色边框；点击头像打开单个成员详情弹窗，展示头像、群内昵称、微信昵称、角色、明文 wxid（可复制）和可解析的邀请人。「返回」翻回正面，同一时间只允许一张卡片处于反面。查看群组打开成员列表弹窗，支持昵称/wxid 搜索并提示「成员是否内部员工需人工核对」。成员数据按需从 GeWe 获取，不落库、不写审计。
 
+成员详情对有 `assistant-target:manage` 的用户展示「@TA消息」：发送弹窗上限 1000 字，服务端按当前群昵称自动拼接 `@群内昵称 内容` 并传递 `ats=wxid`；群目标停用或渠道停发时拒绝发送。发送成功写审计，不创建通知或交付记录。
+
 ### 8.3 页面结构
 
 ```
@@ -634,6 +636,7 @@ views/system/notifications/
 | `ASSISTANT_BINDING_REVOKED` | 解绑；改绑时记录旧归属 | `bindingId`、操作者；改绑带 `reassignedToUserId`、`reason = REASSIGNED` |
 | `ASSISTANT_BINDING_INVALIDATED` | 巡检失效 | `bindingId`、原因 |
 | `ASSISTANT_DELIVERY_RESENT` | 手动重试 | `notificationId`、`deliveryId` |
+| `ASSISTANT_TARGET_MESSAGE_SENT` | 管理员在群目标发送 @TA 消息 | `targetId`、掩码成员 wxid、内容长度、`msgId`；不记录正文 |
 | `ASSISTANT_CHANNEL_DISABLED` / `ENABLED` | 停发/恢复 | 操作者、原因 |
 
 审计约束：
