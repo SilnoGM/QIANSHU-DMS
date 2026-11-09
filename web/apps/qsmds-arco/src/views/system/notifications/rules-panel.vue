@@ -306,15 +306,14 @@ const policyCoverage = computed(() => EVENT_OPTIONS.map(event => ({
   })),
 })))
 
+function changePolicyEvent(value: string): void {
+  policyEventType.value = value
+  syncPolicyCombination()
+}
+
 function changePolicyChannel(value: string): void {
   policyChannel.value = value as 'IN_APP' | 'ASSISTANT'
-  if (policyChannel.value === 'IN_APP' && policyDraft.value.targetMode === 'GROUP') {
-    policyDraft.value.targetMode = 'COMMAND_TARGET'
-  }
-  if (policyDraft.value.templateKey.length > 0
-    && !templates.value.some(template => template.channel === policyChannel.value && template.key === policyDraft.value.templateKey)) {
-    policyDraft.value.templateKey = ''
-  }
+  syncPolicyCombination()
 }
 
 function formatChannel(channel: string): string {
@@ -649,12 +648,9 @@ const policyTtlHint = computed(() => {
     : '范围 60–604800 秒（1 分钟–7 天）'
 })
 
-function openPolicy(policy?: NotificationChannelPolicyDto, preset?: { eventType: string, channel: 'IN_APP' | 'ASSISTANT' }): void {
-  policyEditingExisting.value = policy !== undefined
-  policyEventType.value = policy?.eventType ?? preset?.eventType ?? 'PURCHASE_REVIEW_PENDING'
-  policyChannel.value = (policy?.channel as 'IN_APP' | 'ASSISTANT' | undefined) ?? preset?.channel ?? 'ASSISTANT'
+function createPolicyDraft(policy?: NotificationChannelPolicyDto) {
   const quiet = readQuietHours(policy?.quietHours)
-  policyDraft.value = {
+  return {
     targetMode: policy?.targetMode ?? 'COMMAND_TARGET',
     targetConfig: readPolicyTargetConfig(policy?.targetConfig),
     templateKey: policy?.templateKey ?? '',
@@ -668,6 +664,24 @@ function openPolicy(policy?: NotificationChannelPolicyDto, preset?: { eventType:
     enabled: policy?.enabled ?? true,
     expectedVersion: policy?.version ?? 0,
   }
+}
+
+function syncPolicyCombination(): void {
+  if (policyEditingExisting.value) {
+    return
+  }
+  const existing = policies.value.find(policy =>
+    policy.eventType === policyEventType.value && policy.channel === policyChannel.value)
+  policyDraft.value = createPolicyDraft(existing)
+}
+
+function openPolicy(policy?: NotificationChannelPolicyDto, preset?: { eventType: string, channel: 'IN_APP' | 'ASSISTANT' }): void {
+  policyEditingExisting.value = policy !== undefined
+  policyEventType.value = policy?.eventType ?? preset?.eventType ?? 'PURCHASE_REVIEW_PENDING'
+  policyChannel.value = (policy?.channel as 'IN_APP' | 'ASSISTANT' | undefined) ?? preset?.channel ?? 'ASSISTANT'
+  const existing = policy ?? policies.value.find(item =>
+    item.eventType === policyEventType.value && item.channel === policyChannel.value)
+  policyDraft.value = createPolicyDraft(existing)
   policyBaseline.value = JSON.stringify(policyDraft.value)
   void ensurePolicyOptions()
   policyOpen.value = true
@@ -1177,7 +1191,12 @@ onMounted(() => {
       <div class="gap-3 grid md:grid-cols-2">
         <label class="flex flex-col gap-1">
           <span class="qs-type-compact-label">事件</span>
-          <FaSelect v-model="policyEventType" :options="EVENT_OPTIONS" :disabled="policyEditingExisting" />
+          <FaSelect
+            :model-value="policyEventType"
+            :options="EVENT_OPTIONS"
+            :disabled="policyEditingExisting"
+            @update:model-value="changePolicyEvent(String($event))"
+          />
         </label>
         <label class="flex flex-col gap-1">
           <span class="qs-type-compact-label">渠道</span>
