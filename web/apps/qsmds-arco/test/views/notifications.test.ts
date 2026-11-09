@@ -136,6 +136,8 @@ test('千树小助理面板从控制台导入节点，不提供扫码登录与�
   assert.match(assistantSource, /2xl:grid-cols-6/u)
   assert.match(assistantSource, /bindingMenuItems/u)
   assert.match(assistantSource, /好友巡检[\s\S]*checkBindings/u)
+  assert.match(assistantSource, /class="text-white bg-amber-500 hover:bg-amber-600"[\s\S]{0,120}好友巡检/u)
+  assert.match(assistantSource, /好友巡检[\s\S]{0,160}新增绑定/u)
   assert.match(assistantSource, /@click="openVerify\(binding\)"/u)
   assert.match(assistantSource, /randomVerifyContent/u)
   assert.match(assistantSource, /regenerateVerifyContent/u)

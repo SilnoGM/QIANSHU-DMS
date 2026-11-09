@@ -754,11 +754,16 @@ onMounted(() => {
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
+            <FaButton
+              size="sm"
+              class="text-white bg-amber-500 hover:bg-amber-600"
+              :disabled="!canManageBinding || busy"
+              @click="checkBindings"
+            >
+              好友巡检
+            </FaButton>
             <FaButton size="sm" :disabled="!canManageBinding || busy" @click="openBinding">
               新增绑定
-            </FaButton>
-            <FaButton variant="outline" size="sm" :disabled="!canManageBinding || busy" @click="checkBindings">
-              好友巡检
             </FaButton>
           </div>
         </div>
