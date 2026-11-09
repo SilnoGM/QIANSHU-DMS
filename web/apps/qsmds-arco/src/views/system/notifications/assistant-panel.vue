@@ -75,16 +75,6 @@ function formatDate(value: string | null): string {
   return value === null ? '—' : dateTimeFormatter.format(new Date(value))
 }
 
-function statusClass(status: string): string {
-  if (status === 'ONLINE' || status === 'ACTIVE') {
-    return 'border-primary/30 bg-primary/10 text-primary'
-  }
-  if (status === 'REQUIRES_LOGIN' || status === 'INVALID') {
-    return 'border-destructive/30 bg-destructive/10 text-destructive'
-  }
-  return 'border-border bg-muted text-muted-foreground'
-}
-
 const STATUS_LABELS: Record<string, string> = {
   ONLINE: '在线',
   OFFLINE: '离线',
@@ -669,61 +659,70 @@ onMounted(() => {
           class="mt-4 gap-3 grid grid-cols-1 2xl:grid-cols-6 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 xl:grid-cols-5"
           data-testid="assistant-binding-grid"
         >
-          <div v-for="binding in bindings" :key="binding.id" class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0">
+          <div v-for="binding in bindings" :key="binding.id" class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0 overflow-hidden">
             <div class="flex gap-2.5 items-start">
-              <FaAvatar
-                :src="binding.wechatAvatarUrl ?? ''"
-                :fallback="binding.wechatNickname?.trim() || binding.userName"
-                class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted shrink-0 size-10"
-              />
+              <span class="shrink-0 relative">
+                <FaAvatar
+                  :src="binding.wechatAvatarUrl ?? ''"
+                  :fallback="binding.wechatNickname?.trim() || binding.userName"
+                  class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted size-10"
+                />
+                <span
+                  class="border-2 border-background rounded-full size-3 absolute -bottom-0.5 -right-0.5"
+                  :class="statusDotClass(binding.status)"
+                  :title="`绑定状态：${statusLabel(binding.status)}`"
+                  :aria-label="`绑定状态：${statusLabel(binding.status)}`"
+                  role="img"
+                />
+              </span>
               <div class="flex-1 min-w-0">
-                <div class="flex gap-2 items-start justify-between">
-                  <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="binding.userName">
-                    {{ binding.userName }}
-                  </p>
-                  <FaTag variant="outline" :class="statusClass(binding.status)">
-                    {{ statusLabel(binding.status) }}
-                  </FaTag>
-                </div>
+                <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="binding.userName">
+                  {{ binding.userName }}
+                </p>
                 <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate" :title="binding.wechatNickname ?? ''">
-                  微信昵称：{{ binding.wechatNickname?.trim() || '未同步' }}
+                  昵称：{{ binding.wechatNickname?.trim() || '未同步' }}
                 </p>
               </div>
             </div>
 
-            <div class="flex gap-1 min-w-0 items-center">
-              <span class="qs-type-compact-label shrink-0">wxid</span>
-              <span class="qs-type-data flex-1 min-w-0 truncate" :title="binding.wxid">
+            <div class="px-2.5 py-1 rounded-md bg-slate-50 flex gap-1.5 min-w-0 items-center dark:bg-slate-900/40">
+              <span class="text-xs text-slate-500 font-mono flex-1 min-w-0 truncate dark:text-slate-400" :title="binding.wxid">
                 {{ binding.wxid }}
               </span>
               <CopyCellButton :text="binding.wxid" label="微信wxid" always-visible />
             </div>
 
             <dl class="m-0 flex flex-col gap-1">
-              <div class="flex gap-1 min-w-0">
-                <dt class="qs-type-compact-label shrink-0">
+              <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                <dt class="text-slate-400 shrink-0">
                   所属节点
                 </dt>
-                <dd class="qs-type-meta m-0 min-w-0 truncate" :title="binding.accountName">
+                <dd class="text-slate-600 m-0 text-right min-w-0 truncate dark:text-slate-300" :title="binding.accountName">
                   {{ binding.accountName }}
                 </dd>
               </div>
-              <div class="flex gap-1 min-w-0">
-                <dt class="qs-type-compact-label shrink-0">
+              <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                <dt class="text-slate-400 shrink-0">
                   验证时间
                 </dt>
-                <dd class="qs-type-meta m-0">
+                <dd class="text-slate-600 m-0 dark:text-slate-300">
                   {{ formatDate(binding.verifiedAt) }}
                 </dd>
               </div>
             </dl>
 
-            <div class="mt-auto pt-2 border-t flex gap-2 items-center">
-              <FaButton size="sm" :disabled="!canManageBinding || busy" @click="verifyBinding(binding)">
+            <div class="mt-auto px-3 py-2 bg-slate-50/70 flex gap-2 items-center -mx-3 -mb-3 dark:bg-slate-900/40">
+              <FaButton
+                variant="outline"
+                size="sm"
+                class="text-primary border-primary/20 bg-primary/5 flex-1 text-xs! font-normal! hover:bg-primary/10"
+                :disabled="!canManageBinding || busy"
+                @click="verifyBinding(binding)"
+              >
                 发送测试
               </FaButton>
               <FaDropdown :items="bindingMenuItems(binding)" align="end">
-                <FaButton variant="outline" size="sm" :disabled="busy">
+                <FaButton variant="outline" size="sm" class="text-xs! text-slate-600! font-normal! dark:text-slate-300!" :disabled="busy">
                   更多
                   <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
                 </FaButton>
