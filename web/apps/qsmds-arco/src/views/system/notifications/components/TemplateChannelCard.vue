@@ -83,7 +83,7 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </div>
       </div>
 
-      <div v-if="template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-start">
+      <div v-if="template.messageKind === 'LINK' && template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-start">
         <FaIcon name="i-lucide:external-link" class="text-muted-foreground shrink-0 size-3.5" aria-hidden="true" />
         <span class="qs-type-meta text-muted-foreground shrink-0">跳转链接</span>
         <span

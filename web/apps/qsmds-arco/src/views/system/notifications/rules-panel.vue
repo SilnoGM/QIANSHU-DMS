@@ -551,6 +551,7 @@ async function saveTemplate(): Promise<void> {
   busy.value = true
   try {
     const variables = normalizedTemplateVariables()
+    const linkUrlTemplate = templateDraft.value.messageKind === 'LINK' ? templateDraft.value.linkUrlTemplate || null : null
     if (templateMode.value === 'create') {
       await notificationsApi.templates.create({
         key: templateDraft.value.key,
@@ -560,7 +561,7 @@ async function saveTemplate(): Promise<void> {
         messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
-        linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
+        linkUrlTemplate,
         variables,
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
@@ -573,7 +574,7 @@ async function saveTemplate(): Promise<void> {
         messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
-        linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
+        linkUrlTemplate,
         variables,
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
@@ -617,7 +618,7 @@ async function preview(): Promise<void> {
       variables: parseVariables(previewVariables.value),
     })).data
     previewContent.value = result.content
-    previewLink.value = result.linkUrl
+    previewLink.value = previewTemplate.value.messageKind === 'LINK' ? result.linkUrl : null
     previewTruncated.value = result.truncated
     previewWarnings.value = result.warnings
   }
