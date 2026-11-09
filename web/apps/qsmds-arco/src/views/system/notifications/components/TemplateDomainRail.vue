@@ -41,7 +41,7 @@ watch(() => props.search, (value) => {
 </script>
 
 <template>
-  <div class="border-b border-border flex flex-col h-full min-h-0 lg:border-b-0 lg:border-r">
+  <div class="border-b border-border flex flex-col h-full min-h-0 overflow-hidden lg:border-b-0 lg:border-r">
     <div class="p-3 border-b border-border">
       <FaInput
         v-model="searchModel"
@@ -57,7 +57,7 @@ watch(() => props.search, (value) => {
       </FaInput>
     </div>
 
-    <div class="flex-1 min-h-0 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+    <div class="overscroll-contain flex-1 min-h-0 [scrollbar-width:none] overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden">
       <div v-if="!hasGroups" class="qs-type-meta text-muted-foreground p-4">
         没有匹配的模板键。
       </div>
@@ -73,12 +73,12 @@ watch(() => props.search, (value) => {
           <span class="qs-type-meta text-muted-foreground">({{ group.keyCount }} 个模板键 · {{ group.channelCount }} 个渠道)</span>
         </button>
 
-        <div v-if="!collapsedDomains.has(group.domain)" class="pb-1">
+        <div v-if="!collapsedDomains.has(group.domain)" class="px-2 pb-1">
           <button
             v-for="keyGroup in group.keys"
             :key="keyGroup.key"
             type="button"
-            class="mx-2 my-0.5 px-2.5 py-2 text-left rounded-md flex gap-2 w-auto transition-colors items-start"
+            class="my-0.5 px-2.5 py-2 text-left rounded-md flex gap-2 w-full transition-colors items-start"
             :class="selectedKey === keyGroup.key
               ? 'bg-primary/8 text-primary'
               : 'hover:bg-muted/50'"
