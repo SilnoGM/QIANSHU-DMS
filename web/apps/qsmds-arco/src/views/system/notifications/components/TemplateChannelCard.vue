@@ -67,14 +67,21 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </span>
       </div>
 
-      <div class="p-3 pb-5 border border-border rounded-md bg-muted/30">
-        <p class="qs-type-body m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-          <span
-            v-for="(segment, index) in previewSegments"
-            :key="index"
-            :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
-          >{{ segment.text }}</span>
-        </p>
+      <div class="p-3 border border-border rounded-md bg-muted/30">
+        <div
+          class="template-preview-scroll overscroll-contain max-h-[240px] overflow-y-auto"
+          role="region"
+          tabindex="0"
+          aria-label="模板正文预览"
+        >
+          <p class="qs-type-body m-0 pb-5 whitespace-pre-wrap [overflow-wrap:anywhere]">
+            <span
+              v-for="(segment, index) in previewSegments"
+              :key="index"
+              :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
+            >{{ segment.text }}</span>
+          </p>
+        </div>
       </div>
 
       <div v-if="template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-start">
@@ -130,3 +137,23 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
     </div>
   </article>
 </template>
+
+<style scoped>
+.template-preview-scroll {
+  scrollbar-color: oklch(var(--border)) transparent;
+  scrollbar-width: thin;
+}
+
+.template-preview-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.template-preview-scroll::-webkit-scrollbar-thumb {
+  background: oklch(var(--border));
+  border-radius: 9999px;
+}
+
+.template-preview-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+</style>
