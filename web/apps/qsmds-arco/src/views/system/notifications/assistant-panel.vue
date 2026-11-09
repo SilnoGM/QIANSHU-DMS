@@ -67,7 +67,6 @@ const targetEditId = ref<string | null>(null)
 const targetDraft = ref({ key: '', name: '', purpose: '' })
 type TargetFilter = 'all' | 'disabled' | 'external' | 'internal'
 const targetFilter = ref<TargetFilter>('all')
-const targetKeyword = ref('')
 
 const editingAccount = computed(() => accounts.value.find(account => account.id === editingAccountId.value) ?? null)
 const accountDialogTitle = computed(() => accountDialogMode.value === 'create' ? '导入公司号' : '更新公司号节点')
@@ -93,7 +92,6 @@ const targetFilterItems = computed(() => [
   { value: 'disabled', label: '已停用', count: targets.value.filter(target => !target.enabled).length },
 ])
 const filteredTargets = computed(() => {
-  const keyword = targetKeyword.value.trim().toLowerCase()
   return targets.value.filter((target) => {
     if (targetFilter.value === 'internal' && !target.internalOnly) {
       return false
@@ -104,11 +102,7 @@ const filteredTargets = computed(() => {
     if (targetFilter.value === 'disabled' && target.enabled) {
       return false
     }
-    if (keyword.length === 0) {
-      return true
-    }
-    return [target.name, target.purpose ?? '', target.key, target.chatroomId]
-      .some(value => value.toLowerCase().includes(keyword))
+    return true
   })
 })
 
@@ -861,37 +855,22 @@ onMounted(() => {
               敏感内容只能发到「仅内部成员」的群；同步只包含已保存到通讯录的群。
             </p>
           </div>
-          <FaButton variant="outline" size="sm" :disabled="!canManageTarget || busy" @click="syncTargets">
-            同步群
+          <FaButton size="sm" :disabled="!canManageTarget || busy" @click="syncTargets">
+            同步群组
           </FaButton>
         </div>
 
         <div v-if="targets.length === 0" class="qs-type-meta text-muted-foreground mt-4">
-          还没有群目标。先同步群，再标记用途与内部群。
+          还没有群目标。先同步群组，再标记用途与内部群。
         </div>
         <div v-else class="mt-4 flex flex-col gap-3">
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="min-w-0 lg:flex-1">
-              <QsStatusSwitchToolbar
-                :model-value="targetFilter"
-                :items="targetFilterItems"
-                aria-label="群目标筛选"
-                @update:model-value="targetFilter = $event as TargetFilter"
-              />
-            </div>
-            <FaInput
-              v-model="targetKeyword"
-              type="search"
-              clearable
-              class="shrink-0 w-full lg:w-80"
-              placeholder="群名称、用途、key 或 chatroomId"
-              aria-label="搜索群目标"
-            >
-              <template #start>
-                <FaIcon name="i-lucide:search" />
-              </template>
-            </FaInput>
-          </div>
+          <QsStatusSwitchToolbar
+            :model-value="targetFilter"
+            :items="targetFilterItems"
+            aria-label="群目标筛选"
+            stretch
+            @update:model-value="targetFilter = $event as TargetFilter"
+          />
 
           <div v-if="filteredTargets.length === 0" class="qs-type-meta text-muted-foreground">
             没有匹配的群目标。
