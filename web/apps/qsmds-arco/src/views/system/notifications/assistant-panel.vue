@@ -115,6 +115,9 @@ function statusDotClass(status: string): string {
   if (isOnlineStatus(status)) {
     return 'bg-emerald-500'
   }
+  if (status === 'OFFLINE' || status === 'DISABLED') {
+    return 'bg-red-500'
+  }
   if (status === 'REQUIRES_LOGIN' || status === 'INVALID') {
     return 'bg-amber-500'
   }
@@ -123,6 +126,12 @@ function statusDotClass(status: string): string {
 
 function isPendingAccount(account: AssistantAccountDto): boolean {
   return account.appId.startsWith('pending-') || account.status === 'REQUIRES_LOGIN'
+}
+
+function verifyButtonClass(status: string): string {
+  return status === 'DISABLED'
+    ? 'text-destructive border-destructive/30 bg-destructive/5 hover:bg-destructive/10'
+    : 'text-primary border-primary/20 bg-primary/5 hover:bg-primary/10'
 }
 
 function accountMenuItems(account: AssistantAccountDto): ActionMenuItem[][] {
@@ -772,7 +781,8 @@ onMounted(() => {
               <FaButton
                 variant="outline"
                 size="sm"
-                class="text-primary border-primary/20 bg-primary/5 flex-1 text-xs! font-normal! hover:bg-primary/10"
+                class="flex-1 text-xs! font-normal!"
+                :class="verifyButtonClass(binding.status)"
                 :disabled="!canManageBinding || busy"
                 @click="openVerify(binding)"
               >
