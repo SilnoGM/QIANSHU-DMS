@@ -1144,7 +1144,7 @@ onMounted(() => {
           <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
         </label>
         <label v-if="templateDraft.messageKind === 'LINK'" class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">链接模板</span>
+          <span class="qs-type-compact-label">跳转链接模板</span>
           <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
         </label>
       </section>

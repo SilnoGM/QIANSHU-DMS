@@ -279,6 +279,7 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /min-w-\[520px\]/u)
   assert.match(rulesSource, /templateDraft\.channel === 'IN_APP'/u)
   assert.match(rulesSource, /templateDraft\.messageKind === 'LINK'/u)
+  assert.match(rulesSource, /跳转链接模板/u)
   assert.match(rulesSource, /previewWarnings/u)
   assert.match(rulesSource, /previewTruncated/u)
   assert.match(rulesSource, /canCloseTemplateModal/u)
