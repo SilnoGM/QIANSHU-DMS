@@ -24,6 +24,7 @@ import type {
   AssistantBindingPageDto,
   AssistantBindingQueryDto,
   AssistantBindingReassignDto,
+  AssistantBindingVerifyDto,
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
@@ -37,7 +38,8 @@ export interface AssistantAdminContext {
 }
 
 const TEST_TEXT = '【千树小助理】通道自检：这是一条测试消息，无需处理。'
-const VERIFY_TEXT = '【千树小助理】绑定验证：这是一条测试消息，请确认已收到。'
+const BINDING_TEST_COOLDOWN_MS = 30_000
+const BINDING_TEST_CONTENT_LIMIT = 500
 const PENDING_APP_ID_PREFIX = 'pending-'
 
 /** 仅已从 GeWe 控制台导入、处于启用状态且不是占位 appId 的账号才能参与发送。 */
@@ -643,7 +645,18 @@ export class AssistantAdminService {
     }
   }
 
-  async verifyBinding(context: AssistantAdminContext, id: string): Promise<AssistantBindingDto> {
+  async verifyBinding(
+    context: AssistantAdminContext,
+    id: string,
+    input: AssistantBindingVerifyDto,
+  ): Promise<AssistantBindingDto> {
+    const content = input.content.trim()
+    if (content.length === 0) {
+      throw new ApiException(422, 'ASSISTANT_BINDING_CONTENT_INVALID', '测试内容不能为空')
+    }
+    if (content.length > BINDING_TEST_CONTENT_LIMIT) {
+      throw new ApiException(422, 'ASSISTANT_BINDING_CONTENT_INVALID', `测试内容不能超过 ${BINDING_TEST_CONTENT_LIMIT} 个字符`)
+    }
     const binding = await this.prisma.assistantBinding.findUnique({
       where: { id },
       include: { account: { select: { appId: true } }, user: { select: { displayName: true } } },
@@ -651,10 +664,27 @@ export class AssistantAdminService {
     if (binding === null) {
       throw new ApiException(404, 'ASSISTANT_BINDING_NOT_FOUND', '绑定不存在')
     }
+
+    const now = new Date()
+    const cutoff = new Date(now.getTime() - BINDING_TEST_COOLDOWN_MS)
+    const reserved = await this.prisma.assistantBinding.updateMany({
+      where: {
+        id,
+        OR: [
+          { lastTestSentAt: null },
+          { lastTestSentAt: { lte: cutoff } },
+        ],
+      },
+      data: { lastTestSentAt: now },
+    })
+    if (reserved.count === 0) {
+      throw new ApiException(429, 'ASSISTANT_BINDING_TEST_COOLDOWN', '测试消息发送过于频繁，请稍后再试')
+    }
+
     const result = await this.transport.sendText({
       appId: binding.account.appId,
       toWxid: binding.wxid,
-      content: VERIFY_TEXT,
+      content,
     })
     if (!result.ok) {
       this.mapUpstreamError(new AssistantAdminError(result.code, result.kind, result.message))

@@ -330,6 +330,76 @@ describe('AssistantAdminService', () => {
     expect(result.status).toBe('OFFLINE')
   })
 
+  it('sends custom verify content after reserving the binding cooldown', async () => {
+    const binding = bindingRow()
+    const transaction = {
+      assistantBinding: { update: jest.fn().mockResolvedValue(binding) },
+      audit: { record: jest.fn() },
+    }
+    const prisma = {
+      assistantBinding: {
+        findUnique: jest.fn().mockResolvedValue(binding),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    }
+    const transport = new FakeAssistantTransport()
+
+    const result = await service(prisma, transport).verifyBinding(context, 'binding-1', {
+      content: '  自定义测试内容  ',
+    })
+
+    expect(prisma.assistantBinding.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'binding-1',
+        OR: [
+          { lastTestSentAt: null },
+          { lastTestSentAt: { lte: expect.any(Date) } },
+        ],
+      },
+      data: { lastTestSentAt: expect.any(Date) },
+    })
+    expect(transport.calls).toEqual([
+      expect.objectContaining({ appId: 'wx-app', toWxid: 'wxid-user', content: '自定义测试内容' }),
+    ])
+    expect(transaction.assistantBinding.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'binding-1' },
+      data: expect.objectContaining({ status: 'ACTIVE', verifiedAt: expect.any(Date) }),
+    }))
+    expect(result.userName).toBe('旧员工')
+  })
+
+  it('rejects empty or oversized verify content before reserving the cooldown', async () => {
+    const prisma = {
+      assistantBinding: { findUnique: jest.fn(), updateMany: jest.fn() },
+    }
+    const transport = new FakeAssistantTransport()
+    const assistant = service(prisma, transport)
+
+    await expect(assistant.verifyBinding(context, 'binding-1', { content: '   ' }))
+      .rejects.toMatchObject({ code: 'ASSISTANT_BINDING_CONTENT_INVALID' })
+    await expect(assistant.verifyBinding(context, 'binding-1', { content: 'x'.repeat(501) }))
+      .rejects.toMatchObject({ code: 'ASSISTANT_BINDING_CONTENT_INVALID' })
+    expect(prisma.assistantBinding.findUnique).not.toHaveBeenCalled()
+    expect(transport.calls).toEqual([])
+  })
+
+  it('rejects verify requests during the binding cooldown without sending', async () => {
+    const binding = bindingRow()
+    const prisma = {
+      assistantBinding: {
+        findUnique: jest.fn().mockResolvedValue(binding),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    }
+    const transport = new FakeAssistantTransport()
+
+    await expect(service(prisma, transport).verifyBinding(context, 'binding-1', {
+      content: '冷却中的测试内容',
+    })).rejects.toMatchObject({ code: 'ASSISTANT_BINDING_TEST_COOLDOWN' })
+    expect(transport.calls).toEqual([])
+  })
+
   it('refuses to issue a personal QR before the node is imported', async () => {
     const prisma = {
       assistantAccount: { findUnique: jest.fn().mockResolvedValue(accountRow({ appId: 'pending-legacy' })) },

@@ -3502,6 +3502,7 @@ model AssistantBinding {
   verifiedAt        DateTime?              @map("verified_at") @db.Timestamptz(6)
   verifiedByUserId  String?                @map("verified_by_user_id") @db.Uuid
   friendCheckedAt   DateTime?              @map("friend_checked_at") @db.Timestamptz(6)
+  lastTestSentAt    DateTime?              @map("last_test_sent_at") @db.Timestamptz(6)
   boundAt           DateTime               @default(now()) @map("bound_at") @db.Timestamptz(6)
   updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

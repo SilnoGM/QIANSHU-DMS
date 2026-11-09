@@ -42,6 +42,25 @@ const bindingContactWxid = ref<string | undefined>(undefined)
 const reassignOpen = ref(false)
 const reassignSourceBinding = ref<AssistantBindingDto | null>(null)
 const reassignUserId = ref<string | undefined>(undefined)
+const verifyOpen = ref(false)
+const verifyTarget = ref<AssistantBindingDto | null>(null)
+const verifyContent = ref('')
+const verifyError = ref<string | null>(null)
+const verifySubmitting = ref(false)
+const VERIFY_CONTENT_LIMIT = 500
+const canSubmitVerify = computed(() => !verifySubmitting.value
+  && verifyContent.value.trim().length > 0
+  && verifyContent.value.length <= VERIFY_CONTENT_LIMIT)
+const verifyRecipientLabel = computed(() => {
+  const binding = verifyTarget.value
+  if (binding === null) {
+    return '—'
+  }
+  const nickname = binding.wechatNickname?.trim()
+  return nickname === undefined || nickname.length === 0
+    ? binding.userName
+    : `${binding.userName}（微信昵称：${nickname}）`
+})
 const targetEditOpen = ref(false)
 const targetEditId = ref<string | null>(null)
 const targetDraft = ref({ key: '', name: '', purpose: '' })
@@ -392,18 +411,56 @@ async function submitReassign(): Promise<void> {
   }
 }
 
-async function verifyBinding(binding: AssistantBindingDto): Promise<void> {
-  busy.value = true
+function randomVerifyToken(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replaceAll('-', '').slice(0, 8)
+  }
+  const bytes = new Uint8Array(4)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function randomVerifyContent(): string {
+  return `【千树小助理】测试消息 ${randomVerifyToken()}，请确认收到。`
+}
+
+function openVerify(binding: AssistantBindingDto): void {
+  verifyTarget.value = binding
+  verifyContent.value = randomVerifyContent()
+  verifyError.value = null
+  verifyOpen.value = true
+}
+
+function regenerateVerifyContent(): void {
+  verifyContent.value = randomVerifyContent()
+}
+
+async function submitVerify(): Promise<void> {
+  const binding = verifyTarget.value
+  const content = verifyContent.value.trim()
+  if (binding === null || content.length === 0) {
+    verifyError.value = '测试内容不能为空'
+    return
+  }
+  if (content.length > VERIFY_CONTENT_LIMIT) {
+    verifyError.value = `测试内容不能超过 ${VERIFY_CONTENT_LIMIT} 个字符`
+    return
+  }
+  verifySubmitting.value = true
+  verifyError.value = null
   try {
-    await notificationsApi.assistant.bindings.verify(binding.id)
-    toast.success('测试消息已发送，请在员工确认后标记为已验证')
+    await notificationsApi.assistant.bindings.verify(binding.id, { content })
+    // 先释放提交态再关闭；QsGenericModal 在提交期会拒绝受控关闭。
+    verifySubmitting.value = false
+    verifyOpen.value = false
+    toast.success('测试消息已发送，并已标记为已验证')
     await loadAll()
   }
   catch (failure) {
-    toast.error(getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0]))
+    verifyError.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
   }
   finally {
-    busy.value = false
+    verifySubmitting.value = false
   }
 }
 
@@ -717,7 +774,7 @@ onMounted(() => {
                 size="sm"
                 class="text-primary border-primary/20 bg-primary/5 flex-1 text-xs! font-normal! hover:bg-primary/10"
                 :disabled="!canManageBinding || busy"
-                @click="verifyBinding(binding)"
+                @click="openVerify(binding)"
               >
                 发送测试
               </FaButton>
@@ -876,6 +933,43 @@ onMounted(() => {
         </FaButton>
         <FaButton :loading="busy" :disabled="reassignUserId === undefined" @click="submitReassign">
           确认改绑
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal v-model="verifyOpen" title="发送测试消息" size="md" :submitting="verifySubmitting" @update:model-value="verifyOpen = $event">
+      <div class="flex flex-col gap-3">
+        <p class="qs-type-meta text-muted-foreground m-0">
+          发送至 {{ verifyRecipientLabel }}。发送成功后会标记为已验证。
+        </p>
+        <div class="flex flex-col gap-1">
+          <div class="flex gap-2 items-center justify-between">
+            <span class="qs-type-compact-label">测试内容</span>
+            <FaButton variant="outline" size="sm" :disabled="verifySubmitting" @click="regenerateVerifyContent">
+              随机内容
+            </FaButton>
+          </div>
+          <FaTextarea
+            v-model="verifyContent"
+            :rows="4"
+            :maxlength="VERIFY_CONTENT_LIMIT"
+            placeholder="输入发送给该微信的测试内容"
+          />
+          <div class="flex gap-2 items-center justify-between">
+            <span class="qs-type-meta text-muted-foreground">{{ verifyContent.length }} / {{ VERIFY_CONTENT_LIMIT }}</span>
+            <span class="qs-type-meta text-muted-foreground">同一绑定 30 秒内只能发送一次</span>
+          </div>
+        </div>
+        <p v-if="verifyError !== null" class="qs-type-meta text-destructive m-0">
+          {{ verifyError }}
+        </p>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" :disabled="verifySubmitting" @click="verifyOpen = false">
+          取消
+        </FaButton>
+        <FaButton :loading="verifySubmitting" :disabled="!canSubmitVerify" @click="submitVerify">
+          确认发送
         </FaButton>
       </template>
     </QsGenericModal>

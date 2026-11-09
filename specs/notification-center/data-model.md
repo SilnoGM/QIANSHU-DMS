@@ -187,9 +187,10 @@ CHECK：两个保留期都在 `7..3650`。
 | `wechatAvatarUrl` | text | 是 | `null` | 微信头像快照；好友巡检按需刷新，空值表示未同步 |
 | `status` | `AssistantBindingStatus` | 否 | `ACTIVE` | — |
 | `boundByUserId` | uuid | 否 | — | 管理员，FK `users(id)` |
-| `verifiedAt` | timestamptz(6) | 是 | `null` | 测试消息确认时间 |
-| `verifiedByUserId` | uuid | 是 | `null` | 确认管理员，FK `users(id)` |
+| `verifiedAt` | timestamptz(6) | 是 | `null` | 测试消息发送成功时间 |
+| `verifiedByUserId` | uuid | 是 | `null` | 发起测试的管理员，FK `users(id)` |
 | `friendCheckedAt` | timestamptz(6) | 是 | `null` | 最近好友巡检 |
+| `lastTestSentAt` | timestamptz(6) | 是 | `null` | 最近一次发起测试发送；30 秒冷却基准 |
 | `boundAt` | timestamptz(6) | 否 | `now()` | — |
 | `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 

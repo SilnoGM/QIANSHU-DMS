@@ -18,6 +18,7 @@ import {
   AssistantBindingPageDto,
   AssistantBindingQueryDto,
   AssistantBindingReassignDto,
+  AssistantBindingVerifyDto,
   AssistantChannelDto,
   AssistantChannelUpdateDto,
   AssistantContactDto,
@@ -192,9 +193,14 @@ export class AssistantAdminController {
   @HttpCode(200)
   @RequirePermissions('assistant-binding:manage')
   @ApiContractResponse({ status: 200, type: AssistantBindingDto })
-  @contract('assistant_bindings_verify', true, [{ status: 404, codes: ['ASSISTANT_BINDING_NOT_FOUND'] }, ...upstreamErrors])
-  verifyBinding(@Param() params: AssistantIdParamDto, @Req() request: object) {
-    return this.assistant.verifyBinding(context(request), params.id)
+  @contract('assistant_bindings_verify', true, [
+    { status: 404, codes: ['ASSISTANT_BINDING_NOT_FOUND'] },
+    { status: 422, codes: ['ASSISTANT_BINDING_CONTENT_INVALID'] },
+    { status: 429, codes: ['ASSISTANT_BINDING_TEST_COOLDOWN'] },
+    ...upstreamErrors,
+  ])
+  verifyBinding(@Param() params: AssistantIdParamDto, @Body() input: AssistantBindingVerifyDto, @Req() request: object) {
+    return this.assistant.verifyBinding(context(request), params.id, input)
   }
 
   @Delete('bindings/:id')

@@ -19,7 +19,7 @@
 | 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`INVOICE_REQUEST_REVIEW_PENDING`（1:1）、`SHIPMENT_ARRIVED`（按策略） | 原对账完成候选改为开票审核；其余事件放阶段 2 |
 | 敏感内容 | 这 3 个事件允许金额与客户名称；1:1 与内部群都可发；群必须 `internal_only`，1:1 只发给已验证绑定 | 模板按事件 × 渠道开启 `allow_sensitive` |
 | 派发器 | 进程内循环 + 数据库租约；5 秒轮询、批量 20、租约 30 秒 | 不新增 systemd 服务，不引入 Redis |
-| 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息确认后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |
+| 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息发送成功后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |
 
 ## 1. 目标与非目标
 
@@ -209,7 +209,7 @@ PENDING ──► SENDING ──► ACCEPTED
 - `event_type`、`template_key` 不做外键，允许模板或策略缺失时仍写入失败记录；一致性由发布校验和管理端约束保证。
 - 渠道策略约束：`channel = 'IN_APP'` 时 `target_mode != 'GROUP'`、`ttl_seconds` 与 `quiet_hours` 必须为空；`channel = 'ASSISTANT'` 时 `GROUP` 合法且 TTL 必填。
 - 敏感内容约束：`allow_sensitive = true` 且 `target_mode = 'GROUP'` 时，只能选择 `internal_only = true` 的群；1:1 投递只发给 `verified_at` 非空的绑定。
-- 绑定唯一性：`(user_id, account_id)` 与 `(account_id, wxid)`；`verified_at` 为空表示尚未完成测试消息确认。
+- 绑定唯一性：`(user_id, account_id)` 与 `(account_id, wxid)`；`verified_at` 为空表示尚未发送测试消息。
 - 不使用软删除；用 `status` 与时间戳表达生命周期。
 
 ### 4.4 模板与内容
@@ -450,7 +450,7 @@ export type AssistantTransportResult =
 
 ### 7.5 绑定不由回调驱动
 
-绑定完全由管理员在后台完成：选择员工、从公司号好友列表选择微信、发送测试消息、员工确认后标记 `verified_at`。回调不处理绑定码，也不需要绑定码表。
+绑定完全由管理员在后台完成：选择员工、从公司号好友列表选择微信、提交自定义测试内容发送；发送成功即标记 `verified_at`。回调不处理绑定码，也不需要绑定码表。
 
 约束：
 
@@ -537,7 +537,7 @@ export type AssistantTransportResult =
 
 导航图标使用品牌资产 `qs-gewe-assistant`、`qs-notification-policy`、`qs-notification-records`；新增图标必须放入 `src/assets/icons/`、登记 `brand-icons.json`，并重跑 `node web/scripts/generate-icon-inventory.mjs`。导航图标不能使用 `i-lucide:*`。
 
-GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发送测试放在公司号卡片的个人二维码旁边。
+GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发送测试放在公司号卡片的个人二维码旁边。绑定卡片的「发送测试」打开内容弹窗：默认填入随机内容，可手动编辑（最多 500 字）或点「随机内容」重新生成；发送成功即标记已验证，同一绑定 30 秒内只能发送一次。
 
 ### 8.3 页面结构
 
@@ -581,7 +581,7 @@ views/system/notifications/
 
 - 员工**不需要**安装任何客户端，也不把自己的微信登录到 GeWe。
 - 员工侧**没有绑定入口**；绑定、解绑、换号全部由管理员在后台完成。员工只需要在微信里添加公司号并接收消息。
-- 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 发送测试消息 → 员工确认后标记 `verified_at`。
+- 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 提交测试内容发送 → 发送成功即标记 `verified_at`（同一绑定 30 秒冷却）。
 - 阶段 3 的站内通知入口在顶栏铃铛与 `/notifications` 页面；单列表 + 业务域筛选，30 秒轮询，聚焦与操作后立即刷新；未读数只返回总数。详见 [站内通知设计](./inapp.md)。
 - 桌面浏览器通知为可选增强：通知页开关、仅桌面端、页面隐藏时逐条弹、允许带详情；不做 Web Push。
 - 员工在微信里看到的发送者名称是**公司号微信自己的昵称**，不是系统里的「千树小助理」标签。上线时要把公司号昵称与头像设置为「千树小助理」，否则员工看到的是「公司号-01」。
@@ -626,7 +626,7 @@ views/system/notifications/
 | `ASSISTANT_ACCOUNT_LOGGED_IN` | 导入或重新指向在线节点 | `accountId`、`appId`、`previousAppId`（更新时）、`mode`（`CONSOLE_IMPORT` / `CONSOLE_IMPORT_UPDATE`） |
 | `ASSISTANT_ACCOUNT_LOGIN_STARTED` / `ASSISTANT_ACCOUNT_LOGGED_OUT` / `ASSISTANT_ACCOUNT_RECONNECTED` | 历史枚举，当前流程不再产生 | — |
 | `ASSISTANT_BINDING_CREATED` | 管理员创建绑定；改绑时记录新归属 | `bindingId`、`userId`、`accountId`、`boundByUserId`；改绑带 `mode = REASSIGN`、`previousUserId` |
-| `ASSISTANT_BINDING_VERIFIED` | 测试消息确认后置为已验证 | `bindingId`、`verifiedByUserId` |
+| `ASSISTANT_BINDING_VERIFIED` | 测试消息发送成功后置为已验证 | `bindingId`、`verifiedByUserId` |
 | `ASSISTANT_BINDING_REVOKED` | 解绑；改绑时记录旧归属 | `bindingId`、操作者；改绑带 `reassignedToUserId`、`reason = REASSIGNED` |
 | `ASSISTANT_BINDING_INVALIDATED` | 巡检失效 | `bindingId`、原因 |
 | `ASSISTANT_DELIVERY_RESENT` | 手动重试 | `notificationId`、`deliveryId` |
@@ -644,7 +644,7 @@ views/system/notifications/
 - **Token**：只从环境读取；管理端只返回 `configured` 与掩码；不进日志、不进审计、不进前端产物。
 - **Base URL**：强制 HTTPS；host 白名单；拒绝私网、回环、保留地址；禁止重定向；固定 DNS 解析结果。
 - **回调**：路径密钥常量时间比较；1 MiB 上限；每分钟 60 次/IP；只接受 JSON；内容按不可信输入处理。
-- **绑定**：仅管理员操作；绑定后发送测试消息，员工确认后才写 `verified_at`；只有已验证绑定可接收敏感内容；解绑、换号写审计。
+- **绑定**：仅管理员操作；绑定后提交自定义测试内容发送，发送成功即写 `verified_at`（同一绑定 30 秒冷却）；只有已验证绑定可接收敏感内容；解绑、换号写审计。
 - **敏感内容**：仅阶段 1 的 3 个事件开启 `allow_sensitive`；1:1 只发已验证绑定；群必须 `internal_only`；手机号、地址、证件号仍脱敏。
 - **内容**：模板变量白名单；不接受外部自由文本；不渲染 HTML。
 - **日志**：统一脱敏 `token`、`secret`、`content`、`wxid`、`phone`；错误对象只保留 `ret/msg`。

@@ -74926,6 +74926,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantBindingVerifyDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "headers": {
@@ -75200,12 +75210,14 @@
               "status": 422,
               "codes": [
                 "ASSISTANT_ACCOUNT_OFFLINE",
+                "ASSISTANT_BINDING_CONTENT_INVALID",
                 "VALIDATION_FAILED"
               ]
             },
             {
               "status": 429,
               "codes": [
+                "ASSISTANT_BINDING_TEST_COOLDOWN",
                 "ASSISTANT_RATE_LIMITED"
               ]
             },
@@ -124106,6 +124118,18 @@
         },
         "required": [
           "userId"
+        ]
+      },
+      "AssistantBindingVerifyDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "content"
         ]
       },
       "AssistantBindingCheckDto": {

@@ -89,6 +89,10 @@ export class AssistantBindingReassignDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID() userId!: string
 }
 
+export class AssistantBindingVerifyDto {
+  @ApiProperty({ maxLength: 500 }) @IsString() content!: string
+}
+
 export class AssistantBindingQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() query?: string
   @ApiPropertyOptional({ enum: ['ACTIVE', 'INVALID', 'DISABLED'] }) @IsOptional() @IsIn(['ACTIVE', 'INVALID', 'DISABLED']) status?: string
