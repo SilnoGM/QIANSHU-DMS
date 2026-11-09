@@ -82,13 +82,19 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
         </p>
       </div>
       <div class="flex flex-wrap gap-2 items-center">
-        <FaTag
-          variant="outline"
-          :class="group.channelCount === 2
-            ? 'border-primary/30 bg-primary/10 text-primary'
-            : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'"
+        <span
+          v-if="group.channelCount === 2"
+          class="qs-type-meta text-muted-foreground inline-flex gap-1 items-center"
         >
-          {{ group.channelCount === 2 ? '渠道已配齐' : '缺少 1 个渠道' }}
+          <FaIcon name="i-lucide:check" class="text-emerald-600 size-3.5 dark:text-emerald-400" aria-hidden="true" />
+          渠道已配齐 (2/2)
+        </span>
+        <FaTag
+          v-else
+          variant="outline"
+          class="text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300"
+        >
+          缺少 1 个渠道
         </FaTag>
         <FaButton
           v-if="missingChannel !== ''"
@@ -104,7 +110,7 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
       </div>
     </div>
 
-    <div class="gap-4 grid items-start lg:grid-cols-2">
+    <div class="gap-4 grid lg:grid-cols-2">
       <TemplateChannelCard
         channel="ASSISTANT"
         :template="group.assistant"

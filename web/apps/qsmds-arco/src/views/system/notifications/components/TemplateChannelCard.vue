@@ -34,7 +34,7 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
 </script>
 
 <template>
-  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0">
+  <article class="p-4 border border-border rounded-lg bg-background flex flex-col gap-3 h-full min-w-0">
     <div class="flex gap-2 items-center justify-between">
       <div class="flex gap-2 min-w-0 items-center">
         <span class="rounded-md flex shrink-0 size-7 items-center justify-center" :class="channelIconClass">
@@ -77,10 +77,13 @@ const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTempl
         </p>
       </div>
 
-      <div v-if="template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-center">
+      <div v-if="template.linkUrlTemplate" class="px-3 py-2 border border-border rounded-md bg-background flex gap-2 min-w-0 items-start">
         <FaIcon name="i-lucide:external-link" class="text-muted-foreground shrink-0 size-3.5" aria-hidden="true" />
         <span class="qs-type-meta text-muted-foreground shrink-0">跳转链接</span>
-        <span class="text-xs text-foreground font-mono min-w-0 truncate" :title="template.linkUrlTemplate">
+        <span
+          class="text-[11px] text-foreground leading-4 font-mono flex-1 min-w-0 whitespace-normal break-all"
+          :title="template.linkUrlTemplate"
+        >
           <span
             v-for="(segment, index) in linkSegments"
             :key="index"
