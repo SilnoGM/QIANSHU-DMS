@@ -7,6 +7,7 @@ import type {
   RoleDto,
   UserDto,
 } from '@/api/generated/types.gen'
+import type { QsGenericTableGrouping } from '@/components/business/QsGenericTable/grouping'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
 import { computed, onMounted, ref } from 'vue'
@@ -39,6 +40,10 @@ interface TemplateVariableDraft {
 }
 
 type TemplateDomain = 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM'
+
+interface TemplateGroupRow extends NotificationTemplateDto {
+  groupRows: TemplateGroupRow[]
+}
 
 const templateOpen = ref(false)
 const templateMode = ref<'create' | 'edit'>('create')
@@ -255,7 +260,7 @@ async function ensurePolicyOptions(): Promise<void> {
   policyOptionsLoading.value = false
 }
 
-const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
+const templateColumns: QsGenericTableColumn<TemplateGroupRow>[] = [
   { accessorKey: 'name', id: 'name', title: '名称', minWidth: 120 },
   { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
   { accessorKey: 'domain', id: 'domain', title: '业务域', width: 120 },
@@ -316,6 +321,21 @@ const filteredTemplates = computed(() => {
       .some(value => value.toLowerCase().includes(keyword))
   })
 })
+const templateGroups = computed<TemplateGroupRow[]>(() => {
+  return TEMPLATE_DOMAIN_OPTIONS.flatMap((option) => {
+    const domainTemplates = filteredTemplates.value.filter(template => template.domain === option.value)
+    if (domainTemplates.length === 0) {
+      return []
+    }
+    const rows: TemplateGroupRow[] = domainTemplates.map(template => ({ ...template, groupRows: [] }))
+    const first = rows[0]
+    return first === undefined ? [] : [{ ...first, groupRows: rows }]
+  })
+})
+const templateGrouping: QsGenericTableGrouping<TemplateGroupRow> = {
+  getRows: group => group.groupRows,
+  getLabel: group => templateDomainLabel(group.domain),
+}
 const filteredPolicies = computed(() => {
   const keyword = policyKeyword.value.trim().toLowerCase()
   return policies.value.filter((policy) => {
@@ -899,7 +919,8 @@ onMounted(() => {
       <QsGenericTable
         class="mt-4"
         :columns="templateColumns"
-        :data="filteredTemplates"
+        :data="templateGroups"
+        :grouping="templateGrouping"
         :addable="false"
         :searchable="false"
         :action-column="{ width: 180, minWidth: 180 }"
@@ -924,6 +945,14 @@ onMounted(() => {
             <FaSelect v-model="templateDomainFilter" :options="TEMPLATE_DOMAIN_FILTER_OPTIONS" class="w-32" aria-label="模板业务域" />
             <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="模板渠道" />
             <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="模板状态" />
+          </div>
+        </template>
+        <template #group-header="{ row, rows }">
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaTag variant="outline" :class="templateDomainClass(row.domain)">
+              {{ templateDomainLabel(row.domain) }}
+            </FaTag>
+            <span class="qs-type-meta text-muted-foreground">{{ rows.length }} 个模板</span>
           </div>
         </template>
         <template #cell-channel="{ row }">
