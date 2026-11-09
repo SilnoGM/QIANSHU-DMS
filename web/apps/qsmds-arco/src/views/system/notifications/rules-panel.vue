@@ -231,8 +231,7 @@ const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
   { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
   { accessorKey: 'channel', id: 'channel', title: '渠道', width: 110 },
   { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
-  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 150 },
-  { accessorKey: 'updatedByName', id: 'updatedByName', title: '更新人', width: 100 },
+  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 140 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
@@ -242,8 +241,7 @@ const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
   { accessorKey: 'templateKey', id: 'templateKey', title: '模板', minWidth: 160 },
   { accessorKey: 'priority', id: 'priority', title: '优先级', width: 80 },
   { accessorKey: 'ttlSeconds', id: 'ttlSeconds', title: 'TTL', width: 100 },
-  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 150 },
-  { accessorKey: 'updatedByName', id: 'updatedByName', title: '更新人', width: 100 },
+  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 140 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 
@@ -859,11 +857,11 @@ onMounted(() => {
         <template #cell-messageKind="{ row }">
           {{ row.original.messageKind === 'LINK' ? '链接' : '文本' }}
         </template>
-        <template #cell-updatedAt="{ row }">
-          {{ formatDateTime(row.original.updatedAt) }}
-        </template>
-        <template #cell-updatedByName="{ row }">
-          {{ row.original.updatedByName ?? '—' }}
+        <template #cell-updatedByInfo="{ row }">
+          <div class="leading-4 flex flex-col min-w-0">
+            <span class="truncate">{{ row.original.updatedByName ?? '—' }}</span>
+            <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
+          </div>
         </template>
         <template #cell-enabled="{ row }">
           <div class="flex gap-2 items-center">
@@ -901,7 +899,7 @@ onMounted(() => {
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
-              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
+              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
             </p>
             <div class="flex gap-2">
               <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
@@ -1016,11 +1014,11 @@ onMounted(() => {
         <template #cell-ttlSeconds="{ row }">
           {{ formatTtl(row.original.ttlSeconds) }}
         </template>
-        <template #cell-updatedAt="{ row }">
-          {{ formatDateTime(row.original.updatedAt) }}
-        </template>
-        <template #cell-updatedByName="{ row }">
-          {{ row.original.updatedByName ?? '—' }}
+        <template #cell-updatedByInfo="{ row }">
+          <div class="leading-4 flex flex-col min-w-0">
+            <span class="truncate">{{ row.original.updatedByName ?? '—' }}</span>
+            <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
+          </div>
         </template>
         <template #cell-enabled="{ row }">
           <div class="flex gap-2 items-center">
@@ -1053,7 +1051,7 @@ onMounted(() => {
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
-              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
+              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
             </p>
             <div>
               <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">

@@ -272,6 +272,8 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /formatEventType/u)
   assert.match(rulesSource, /formatTtl/u)
   assert.match(rulesSource, /updatedAt/u)
+  assert.match(rulesSource, /updatedByInfo/u)
+  assert.match(rulesSource, /#cell-updatedByInfo/u)
   assert.match(rulesSource, /<QsGenericTable/u)
   assert.match(rulesSource, /<QsGenericModal/u)
   assert.doesNotMatch(rulesSource, /<FaTable/u)
