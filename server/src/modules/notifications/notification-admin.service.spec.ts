@@ -95,4 +95,91 @@ describe('NotificationAdminService', () => {
       },
     )).rejects.toMatchObject({ code: 'NOTIFICATION_POLICY_TARGET_INVALID' })
   })
+
+  it('returns the updater name from template and policy toggle responses', async () => {
+    const updatedAt = new Date('2026-11-09T08:00:00.000Z')
+    const template = {
+      id: 'template-1',
+      key: 'invoice.review.pending',
+      channel: 'ASSISTANT',
+      name: '开票审核提醒',
+      messageKind: 'TEXT',
+      titleTemplate: null,
+      bodyTemplate: '开票申请待审核',
+      linkUrlTemplate: null,
+      variables: [],
+      maxLength: 2000,
+      enabled: true,
+      version: 1,
+      updatedAt,
+      updatedBy: { displayName: '超级管理员' },
+    }
+    const templateTransaction = {
+      notificationTemplate: {
+        update: jest.fn().mockResolvedValue({ ...template, enabled: false }),
+      },
+    }
+    const templatePrisma = {
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template) },
+      $transaction: jest.fn(async (callback: (tx: typeof templateTransaction) => Promise<unknown>) => callback(templateTransaction)),
+    }
+
+    const templateResult = await service(templatePrisma).updateTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      'template-1',
+      { enabled: false, expectedVersion: 1 },
+    )
+
+    expect(templateTransaction.notificationTemplate.update).toHaveBeenCalledWith(expect.objectContaining({
+      include: { updatedBy: { select: { displayName: true } } },
+    }))
+    expect(templateResult.updatedByName).toBe('超级管理员')
+
+    const policy = {
+      id: 'policy-1',
+      eventType: 'PURCHASE_REVIEW_PENDING',
+      channel: 'ASSISTANT',
+      targetMode: 'COMMAND_TARGET',
+      targetConfig: {},
+      templateKey: 'purchase.review.pending',
+      priority: 'NORMAL',
+      ttlSeconds: 86_400,
+      quietHours: null,
+      allowSensitive: false,
+      enabled: true,
+      version: 1,
+      updatedAt,
+      updatedBy: { displayName: '超级管理员' },
+    }
+    const policyTransaction = {
+      notificationChannelPolicy: {
+        upsert: jest.fn().mockResolvedValue({ ...policy, enabled: false }),
+      },
+    }
+    const policyPrisma = {
+      notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(policy) },
+      $transaction: jest.fn(async (callback: (tx: typeof policyTransaction) => Promise<unknown>) => callback(policyTransaction)),
+    }
+
+    const policyResult = await service(policyPrisma).upsertPolicy(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      'PURCHASE_REVIEW_PENDING',
+      'ASSISTANT',
+      {
+        targetMode: 'COMMAND_TARGET',
+        targetConfig: {},
+        templateKey: 'purchase.review.pending',
+        priority: 'NORMAL',
+        ttlSeconds: 86_400,
+        allowSensitive: false,
+        enabled: false,
+        expectedVersion: 1,
+      },
+    )
+
+    expect(policyTransaction.notificationChannelPolicy.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      include: { updatedBy: { select: { displayName: true } } },
+    }))
+    expect(policyResult.updatedByName).toBe('超级管理员')
+  })
 })

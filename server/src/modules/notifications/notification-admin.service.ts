@@ -204,6 +204,7 @@ export class NotificationAdminService {
             createdByUserId: context.actorUserId,
             updatedByUserId: context.actorUserId,
           },
+          include: { updatedBy: { select: { displayName: true } } },
         })
         await this.audit.record(transaction, {
           eventType: 'NOTIFICATION_TEMPLATE_UPDATED',
@@ -261,6 +262,7 @@ export class NotificationAdminService {
           version: { increment: 1 },
           updatedByUserId: context.actorUserId,
         },
+        include: { updatedBy: { select: { displayName: true } } },
       })
       await this.audit.record(transaction, {
         eventType: 'NOTIFICATION_TEMPLATE_UPDATED',
@@ -431,6 +433,7 @@ export class NotificationAdminService {
           enabled: data.enabled,
           updatedByUserId: context.actorUserId,
         },
+        include: { updatedBy: { select: { displayName: true } } },
       })
       await this.audit.record(transaction, {
         eventType: 'NOTIFICATION_POLICY_UPDATED',
