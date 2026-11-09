@@ -143,7 +143,7 @@ export interface SystemNotificationPublishResult {
 
 当渠道策略 `allow_sensitive = true` 且 `target_mode = GROUP` 时，只能选择 `internal_only = true` 的群；`COMMAND_TARGET` 的 1:1 只发给 `verified_at` 非空的绑定。
 
-这条规则把「谁应该知道」和「发到哪里」分开：业务模块只知道人，群路由属于千树小助理的渠道配置。
+这条规则把「谁应该知道」和「发到哪里」分开：业务模块只知道人，群路由属于千树小助理的渠道配置。渠道策略查询响应包含 `updatedAt`，供管理端展示最近更新时间。
 
 ### 2.5 收件人解析
 

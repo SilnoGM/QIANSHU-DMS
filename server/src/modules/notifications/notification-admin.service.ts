@@ -106,6 +106,7 @@ function toPolicyDto(policy: {
   readonly allowSensitive: boolean
   readonly enabled: boolean
   readonly version: number
+  readonly updatedAt: Date
 }): NotificationChannelPolicyDto {
   return {
     id: policy.id,
@@ -120,6 +121,7 @@ function toPolicyDto(policy: {
     allowSensitive: policy.allowSensitive,
     enabled: policy.enabled,
     version: policy.version,
+    updatedAt: policy.updatedAt.toISOString(),
   }
 }
 

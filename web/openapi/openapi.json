@@ -125288,6 +125288,10 @@
           },
           "version": {
             "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [
@@ -125302,7 +125306,8 @@
           "quietHours",
           "allowSensitive",
           "enabled",
-          "version"
+          "version",
+          "updatedAt"
         ]
       },
       "NotificationChannelPolicyUpdateDto": {

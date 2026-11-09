@@ -88,6 +88,7 @@ export class NotificationChannelPolicyDto {
   @ApiProperty() allowSensitive!: boolean
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer' }) version!: number
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string
 }
 
 export class NotificationChannelPolicyUpdateDto {
