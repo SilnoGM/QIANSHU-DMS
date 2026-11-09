@@ -31,7 +31,6 @@ export class NotificationTemplateDto {
   @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) channel!: string
   @ApiProperty() name!: string
   @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
-  @ApiProperty({ enum: ['TEXT', 'LINK'] }) messageKind!: string
   @ApiProperty({ type: 'string', nullable: true }) titleTemplate!: string | null
   @ApiProperty() bodyTemplate!: string
   @ApiProperty({ type: 'string', nullable: true }) linkUrlTemplate!: string | null
@@ -48,7 +47,6 @@ export class NotificationTemplateCreateDto {
   @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) @IsIn(['IN_APP', 'ASSISTANT']) channel!: 'IN_APP' | 'ASSISTANT'
   @ApiProperty({ maxLength: 128 }) @IsString() @Matches(/\S/u) name!: string
   @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS, default: 'SYSTEM' }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
-  @ApiPropertyOptional({ enum: ['TEXT', 'LINK'] }) @IsOptional() @IsIn(['TEXT', 'LINK']) messageKind?: 'TEXT' | 'LINK'
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
   @ApiProperty() @IsString() @Matches(/\S/u) bodyTemplate!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
@@ -60,7 +58,6 @@ export class NotificationTemplateCreateDto {
 export class NotificationTemplateUpdateDto {
   @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() name?: string
   @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
-  @ApiPropertyOptional({ enum: ['TEXT', 'LINK'] }) @IsOptional() @IsIn(['TEXT', 'LINK']) messageKind?: 'TEXT' | 'LINK'
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
   @ApiPropertyOptional() @IsOptional() @IsString() bodyTemplate?: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null

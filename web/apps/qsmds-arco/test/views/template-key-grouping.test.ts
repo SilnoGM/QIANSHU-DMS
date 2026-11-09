@@ -18,7 +18,6 @@ function template(overrides: Partial<NotificationTemplateDto> & Pick<Notificatio
     channel: overrides.channel,
     name: overrides.key,
     domain: 'PURCHASE',
-    messageKind: 'TEXT',
     titleTemplate: null,
     bodyTemplate: '正文',
     linkUrlTemplate: null,

@@ -30,7 +30,6 @@ function template(overrides: Record<string, unknown> = {}) {
     id: 'template-1',
     key: 'purchase.review.pending',
     channel: 'ASSISTANT',
-    messageKind: 'TEXT',
     bodyTemplate: '采购单 {{orderNo}} 待审核',
     linkUrlTemplate: null,
     variables: [{ name: 'orderNo', required: true }],

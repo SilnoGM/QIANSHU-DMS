@@ -71,10 +71,6 @@ export function templateDomainClass(domain: string): string {
   return classes[domain] ?? classes.SYSTEM
 }
 
-export function messageKindLabel(kind: string): string {
-  return kind === 'LINK' ? '链接' : '文本'
-}
-
 export function templateKeyDisplayName(
   assistant: NotificationTemplateDto | null,
   inApp: NotificationTemplateDto | null,

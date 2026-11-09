@@ -125041,13 +125041,6 @@
               "SYSTEM"
             ]
           },
-          "messageKind": {
-            "type": "string",
-            "enum": [
-              "TEXT",
-              "LINK"
-            ]
-          },
           "titleTemplate": {
             "type": "string",
             "nullable": true
@@ -125089,7 +125082,6 @@
           "channel",
           "name",
           "domain",
-          "messageKind",
           "titleTemplate",
           "bodyTemplate",
           "linkUrlTemplate",
@@ -125131,13 +125123,6 @@
               "SYSTEM"
             ],
             "default": "SYSTEM"
-          },
-          "messageKind": {
-            "type": "string",
-            "enum": [
-              "TEXT",
-              "LINK"
-            ]
           },
           "titleTemplate": {
             "type": "string",
@@ -125192,13 +125177,6 @@
               "INVOICE",
               "RECONCILIATION",
               "SYSTEM"
-            ]
-          },
-          "messageKind": {
-            "type": "string",
-            "enum": [
-              "TEXT",
-              "LINK"
             ]
           },
           "titleTemplate": {

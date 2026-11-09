@@ -60,7 +60,6 @@ const templateDraft = ref({
   channel: 'ASSISTANT' as 'IN_APP' | 'ASSISTANT',
   name: '',
   domain: 'SYSTEM' as TemplateDomain,
-  messageKind: 'TEXT' as 'TEXT' | 'LINK',
   titleTemplate: '',
   bodyTemplate: '',
   linkUrlTemplate: '',
@@ -427,7 +426,6 @@ function openCreateTemplate(): void {
     channel: 'ASSISTANT',
     name: '',
     domain: 'SYSTEM',
-    messageKind: 'TEXT',
     titleTemplate: '',
     bodyTemplate: '',
     linkUrlTemplate: '',
@@ -448,7 +446,6 @@ function openCreateTemplateForChannel(group: TemplateKeyGroup, channel: 'ASSISTA
     channel,
     name: '',
     domain: group.domain,
-    messageKind: 'TEXT',
     titleTemplate: '',
     bodyTemplate: '',
     linkUrlTemplate: '',
@@ -475,7 +472,6 @@ function openEditTemplate(template: NotificationTemplateDto): void {
     channel: template.channel as 'IN_APP' | 'ASSISTANT',
     name: template.name,
     domain: template.domain,
-    messageKind: template.messageKind as 'TEXT' | 'LINK',
     titleTemplate: template.titleTemplate ?? '',
     bodyTemplate: template.bodyTemplate,
     linkUrlTemplate: template.linkUrlTemplate ?? '',
@@ -551,17 +547,15 @@ async function saveTemplate(): Promise<void> {
   busy.value = true
   try {
     const variables = normalizedTemplateVariables()
-    const linkUrlTemplate = templateDraft.value.messageKind === 'LINK' ? templateDraft.value.linkUrlTemplate || null : null
     if (templateMode.value === 'create') {
       await notificationsApi.templates.create({
         key: templateDraft.value.key,
         channel: templateDraft.value.channel,
         name: templateDraft.value.name,
         domain: templateDraft.value.domain,
-        messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
-        linkUrlTemplate,
+        linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
@@ -571,10 +565,9 @@ async function saveTemplate(): Promise<void> {
       await notificationsApi.templates.update(templateDraft.value.id, {
         name: templateDraft.value.name,
         ...(templateOtherChannel.value === null ? { domain: templateDraft.value.domain } : {}),
-        messageKind: templateDraft.value.messageKind,
         bodyTemplate: templateDraft.value.bodyTemplate,
         titleTemplate: templateDraft.value.titleTemplate || null,
-        linkUrlTemplate,
+        linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
@@ -618,7 +611,7 @@ async function preview(): Promise<void> {
       variables: parseVariables(previewVariables.value),
     })).data
     previewContent.value = result.content
-    previewLink.value = previewTemplate.value.messageKind === 'LINK' ? result.linkUrl : null
+    previewLink.value = result.linkUrl
     previewTruncated.value = result.truncated
     previewWarnings.value = result.warnings
   }
@@ -1114,10 +1107,6 @@ onMounted(() => {
             模板键与渠道创建后不可修改；需要换渠道请新建对应模板。
           </p>
           <label class="flex flex-col gap-1">
-            <span class="qs-type-compact-label">消息类型</span>
-            <FaSelect v-model="templateDraft.messageKind" class="w-full" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
-          </label>
-          <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">最大长度</span>
             <FaInput v-model.number="templateDraft.maxLength" class="w-full" type="number" min="1" max="5000" />
             <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
@@ -1144,9 +1133,10 @@ onMounted(() => {
           <textarea v-model="templateDraft.bodyTemplate" rows="7" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
           <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
         </label>
-        <label v-if="templateDraft.messageKind === 'LINK'" class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">跳转链接模板</span>
+        <label class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">跳转链接模板（可选）</span>
           <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
+          <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
         </label>
       </section>
 

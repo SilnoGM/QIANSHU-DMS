@@ -3294,13 +3294,6 @@ enum NotificationTargetMode {
   @@map("notification_target_mode")
 }
 
-enum NotificationTemplateKind {
-  TEXT
-  LINK
-
-  @@map("notification_template_kind")
-}
-
 enum NotificationTemplateDomain {
   SALES
   PURCHASE
@@ -3378,7 +3371,6 @@ model NotificationTemplate {
   channel         NotificationChannel
   name            String                   @db.VarChar(128)
   domain          NotificationTemplateDomain @default(SYSTEM)
-  messageKind     NotificationTemplateKind @default(TEXT) @map("message_kind")
   titleTemplate   String?                  @map("title_template") @db.Text
   bodyTemplate    String                   @map("body_template") @db.Text
   linkUrlTemplate String?                  @map("link_url_template") @db.Text

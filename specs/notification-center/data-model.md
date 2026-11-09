@@ -29,7 +29,6 @@
 | `NotificationPriority` | `NORMAL`、`HIGH` | `HIGH` 可突破静默时段 |
 | `NotificationStatus` | `PENDING`、`COMPLETED`、`PARTIAL`、`FAILED`、`SKIPPED`、`EXPIRED`、`CANCELLED` | 逻辑通知状态 |
 | `NotificationTargetMode` | `COMMAND_TARGET`、`USERS`、`ROLE`、`PERMISSION`、`GROUP` | 渠道策略的目标模式 |
-| `NotificationTemplateKind` | `TEXT`、`LINK` | 阶段 1 只用 `TEXT`，`LINK` 预留阶段 2 |
 | `AssistantAccountStatus` | `ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED` | 公司号状态；`REQUIRES_LOGIN` 仅用于历史占位/待导入账号 |
 | `AssistantBindingStatus` | `ACTIVE`、`INVALID`、`DISABLED` | 绑定状态 |
 | `AssistantDeliveryStatus` | `PENDING`、`SENDING`、`ACCEPTED`、`FAILED`、`SKIPPED`、`EXPIRED`、`CANCELLED` | 站外交付状态 |
@@ -74,10 +73,9 @@
 | `channel` | `NotificationChannel` | 否 | — | 每个渠道一份 |
 | `name` | varchar(128) | 否 | — | 管理端显示名 |
 | `domain` | `NotificationTemplateDomain` | 否 | `SYSTEM` | 业务域，只能选一个；付款类统一归财务 |
-| `messageKind` | `NotificationTemplateKind` | 否 | `TEXT` | 阶段 1 只用 `TEXT` |
-| `titleTemplate` | text | 是 | `null` | `LINK` 用 |
+| `titleTemplate` | text | 是 | `null` | 站内通知标题 |
 | `bodyTemplate` | text | 否 | — | 正文 |
-| `linkUrlTemplate` | text | 是 | `null` | `LINK` 用 |
+| `linkUrlTemplate` | text | 是 | `null` | 可选跳转链接模板；站内通知详情页使用，占位符受变量白名单约束 |
 | `variables` | jsonb | 否 | `[]` | 变量白名单：`[{name, required, maxLength, sensitive}]` |
 | `maxLength` | int | 否 | `2000` | 渲染后上限 |
 | `enabled` | boolean | 否 | `true` | — |
@@ -93,7 +91,7 @@
 - `(domain, enabled)`。
 - 触发器：同一 `key` 在两个渠道必须使用同一 `domain`。
 - CHECK：`maxLength BETWEEN 1 AND 5000`。
-- CHECK：`messageKind = 'LINK'` 时 `linkUrlTemplate IS NOT NULL`。
+- 模板不再区分文本/链接类型；`linkUrlTemplate` 为可选字段，有值时展示跳转入口。
 
 ### 3.3 `notification_channel_policies`
 

@@ -119,7 +119,6 @@ describe('NotificationAdminService', () => {
           key: 'purchase.review.pending',
           channel: 'ASSISTANT',
           version: 1,
-          messageKind: 'TEXT',
           titleTemplate: null,
           bodyTemplate: '采购单待审核',
           linkUrlTemplate: null,
@@ -142,7 +141,6 @@ describe('NotificationAdminService', () => {
       key: 'invoice.review.pending',
       channel: 'ASSISTANT',
       name: '开票审核提醒',
-      messageKind: 'TEXT',
       titleTemplate: null,
       bodyTemplate: '开票申请待审核',
       linkUrlTemplate: null,
@@ -173,6 +171,7 @@ describe('NotificationAdminService', () => {
       include: { updatedBy: { select: { displayName: true } } },
     }))
     expect(templateResult.updatedByName).toBe('超级管理员')
+    expect(templateResult).not.toHaveProperty('messageKind')
 
     const policy = {
       id: 'policy-1',

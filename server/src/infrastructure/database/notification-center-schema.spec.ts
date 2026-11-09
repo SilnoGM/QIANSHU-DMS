@@ -75,19 +75,19 @@ function block(kind: 'model' | 'enum', name: string): string {
 }
 
 describe('notification center database contract', () => {
-  it('declares the eight enums with snake_case storage names', () => {
+  it('declares the seven enums with snake_case storage names', () => {
     for (const [name, map] of [
       ['NotificationChannel', 'notification_channel'],
       ['NotificationPriority', 'notification_priority'],
       ['NotificationStatus', 'notification_status'],
       ['NotificationTargetMode', 'notification_target_mode'],
-      ['NotificationTemplateKind', 'notification_template_kind'],
       ['AssistantAccountStatus', 'assistant_account_status'],
       ['AssistantBindingStatus', 'assistant_binding_status'],
       ['AssistantDeliveryStatus', 'assistant_delivery_status'],
     ] as const) {
       expect(block('enum', name)).toContain(`@@map("${map}")`)
     }
+    expect(schema).not.toContain('NotificationTemplateKind')
   })
 
   it('declares the phase-1 tables plus the in-app inbox', () => {

@@ -67,7 +67,6 @@ function toTemplateDto(template: {
   readonly channel: string
   readonly name: string
   readonly domain: string
-  readonly messageKind: string
   readonly titleTemplate: string | null
   readonly bodyTemplate: string
   readonly linkUrlTemplate: string | null
@@ -84,7 +83,6 @@ function toTemplateDto(template: {
     channel: template.channel,
     name: template.name,
     domain: template.domain,
-    messageKind: template.messageKind,
     titleTemplate: template.titleTemplate,
     bodyTemplate: template.bodyTemplate,
     linkUrlTemplate: template.linkUrlTemplate,
@@ -163,7 +161,6 @@ export class NotificationAdminService {
     readonly bodyTemplate: string
     readonly titleTemplate?: string | null
     readonly linkUrlTemplate?: string | null
-    readonly messageKind?: string
     readonly variables: readonly { readonly name: string }[]
   }): void {
     const inspected = inspectNotificationTemplate({
@@ -181,9 +178,6 @@ export class NotificationAdminService {
     }
     if (inspected.undeclared.length > 0) {
       throw new ApiException(422, 'NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE', `模板包含未声明变量：${inspected.undeclared.join('、')}`)
-    }
-    if (input.messageKind === 'LINK' && (input.linkUrlTemplate === undefined || input.linkUrlTemplate === null || input.linkUrlTemplate.trim().length === 0)) {
-      throw new ApiException(422, 'NOTIFICATION_TEMPLATE_LINK_REQUIRED', '链接模板必须提供 linkUrlTemplate')
     }
   }
 
@@ -213,7 +207,6 @@ export class NotificationAdminService {
             channel: input.channel,
             name: input.name.slice(0, 128),
             domain: domain as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM',
-            messageKind: input.messageKind ?? 'TEXT',
             titleTemplate: input.titleTemplate ?? null,
             bodyTemplate: input.bodyTemplate,
             linkUrlTemplate: input.linkUrlTemplate ?? null,
@@ -270,7 +263,6 @@ export class NotificationAdminService {
       bodyTemplate,
       titleTemplate,
       linkUrlTemplate,
-      messageKind: input.messageKind ?? existing.messageKind,
       variables,
     })
     const updated = await this.prisma.$transaction(async transaction => {
@@ -281,7 +273,6 @@ export class NotificationAdminService {
           ...(input.domain !== undefined
             ? { domain: input.domain as 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM' }
             : {}),
-          ...(input.messageKind !== undefined ? { messageKind: input.messageKind } : {}),
           ...(input.titleTemplate !== undefined ? { titleTemplate: input.titleTemplate } : {}),
           ...(input.bodyTemplate !== undefined ? { bodyTemplate: input.bodyTemplate } : {}),
           ...(input.linkUrlTemplate !== undefined ? { linkUrlTemplate: input.linkUrlTemplate } : {}),
