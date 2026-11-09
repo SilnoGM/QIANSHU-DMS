@@ -153,7 +153,7 @@ await this.systemNotifications.publish(
 | `assistant_deliveries` | 千树小助理 | 逐人或逐群发送尝试 | `notification_id`、`recipient_user_id`、`target_id`、`account_id`、`status`、`attempt_count`、`next_attempt_at`、`template_version`、`rendered_content`、`provider_msg_id`、`provider_new_msg_id`、`failure_code`、`accepted_at` |
 | `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一（控制台节点 ID，由管理员导入）、`wxid`（控制台复制）、`status`、`region_id`/`proxy_ip_encrypted`（历史字段，登录由控制台完成）、`last_online_at`、`last_login_at`、`version` |
 | `assistant_bindings` | 千树小助理 | 员工与公司号绑定 | `user_id`、`account_id`、`wxid`、`wechat_nickname`、`status`、`bound_by_user_id`、`verified_at`、`verified_by_user_id`、`friend_checked_at`、`bound_at`；唯一 `(user_id, account_id)`、`(account_id, wxid)` |
-| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一（可编辑语义键）、`chatroom_id` 唯一（同步身份）、`name`、`purpose`、`internal_only`、`member_count`、`enabled`、`last_synced_at` |
+| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一（可编辑语义键）、`chatroom_id` 唯一（同步身份）、`name`、`purpose`、`internal_only`、`member_count`、`avatar_url`、`enabled`、`last_synced_at` |
 | `assistant_callback_events` | 千树小助理 | 回调原始记录（可选，后续） | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
 | `assistant_dispatch_leases` | 千树小助理 | 派发器单实例租约 | `id='assistant-dispatch'`、`owner_id`、`expires_at` |
 
@@ -499,7 +499,7 @@ export type AssistantTransportResult =
 
 | 页面 | 路由 | 内容 |
 | --- | --- | --- |
-| GeWe助理 | `/system/notifications/assistant` | 渠道开关（页头右侧）、公司号（含个人二维码与发送测试）、管理员绑定（含改绑）、群目标（含编辑 key） |
+| GeWe助理 | `/system/notifications/assistant` | 渠道开关（页头右侧）、公司号（含个人二维码与发送测试）、管理员绑定（含改绑）、群目标（卡片、搜索筛选、编辑 key） |
 | 通知策略 | `/system/notifications/policies` | 模板（按渠道）与事件 × 渠道策略 |
 | 通知记录 | `/system/notifications/records` | 概览、近 24 小时状态与发送记录 |
 
@@ -538,6 +538,8 @@ export type AssistantTransportResult =
 导航图标使用品牌资产 `qs-gewe-assistant`、`qs-notification-policy`、`qs-notification-records`；新增图标必须放入 `src/assets/icons/`、登记 `brand-icons.json`，并重跑 `node web/scripts/generate-icon-inventory.mjs`。导航图标不能使用 `i-lucide:*`。
 
 GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发送测试放在公司号卡片的个人二维码旁边。绑定卡片的「发送测试」打开内容弹窗：默认填入随机内容，可手动编辑（最多 500 字）或点「随机内容」重新生成；发送成功即标记已验证，同一绑定 30 秒内只能发送一次。
+
+群管理使用卡片网格（`sm` 2 列、`xl` 3 列、`2xl` 4 列），卡片展示群头像与启停圆点、名称、用途、仅内部/非内部标签、`chatroomId` 复制胶囊、语义 key、成员数和同步时间；底部只保留「仅内部成员」「启用」两个开关，编辑收进「更多」。页签支持全部/仅内部/非内部/已停用筛选，并提供名称、用途、key、`chatroomId` 搜索。同步群会刷新群头像、名称和成员数。
 
 ### 8.3 页面结构
 

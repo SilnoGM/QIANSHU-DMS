@@ -13,6 +13,7 @@ import {
   AssistantAdminError,
   type AssistantAdminTransport,
   type AssistantBriefContact,
+  type AssistantChatroomInfo,
   type AssistantTransport,
 } from './notification.types'
 import type {
@@ -825,6 +826,7 @@ export class AssistantAdminService {
     readonly purpose: string | null
     readonly internalOnly: boolean
     readonly memberCount: number | null
+    readonly avatarUrl: string | null
     readonly enabled: boolean
     readonly lastSyncedAt: Date | null
   }): AssistantTargetDto {
@@ -836,6 +838,7 @@ export class AssistantAdminService {
       purpose: target.purpose,
       internalOnly: target.internalOnly,
       memberCount: target.memberCount,
+      avatarUrl: target.avatarUrl,
       enabled: target.enabled,
       lastSyncedAt: iso(target.lastSyncedAt),
     }
@@ -853,16 +856,43 @@ export class AssistantAdminService {
     try {
       const { chatrooms } = await this.adminTransport.fetchContactIds(account.appId)
       const brief = await this.adminTransport.fetchBriefInfo(account.appId, chatrooms.slice(0, 100))
-      const nameByWxid = new Map(brief.map(contact => [contact.wxid, contact.nickname]))
+      const contactByWxid = new Map(brief.map(contact => [contact.wxid, contact]))
+      const detailByChatroom = new Map<string, AssistantChatroomInfo>()
+      for (const chatroomId of chatrooms.slice(0, 100)) {
+        try {
+          detailByChatroom.set(chatroomId, await this.adminTransport.fetchChatroomInfo(account.appId, chatroomId))
+        }
+        catch (error) {
+          // 单个群详情不可用（如刚保存到通讯录、尚未活跃）不应阻断整批同步；
+          // 离线、限流、网络等全局失败仍然向上抛出。
+          if (!(error instanceof AssistantAdminError) || !['REJECTED', 'UNKNOWN'].includes(error.kind)) {
+            throw error
+          }
+          this.logger.warn(`assistant chatroom detail skipped code=${error.code}`)
+        }
+      }
       const now = new Date()
       for (const chatroomId of chatrooms) {
+        const contact = contactByWxid.get(chatroomId)
+        const detail = detailByChatroom.get(chatroomId)
+        const name = detail?.nickname ?? contact?.nickname ?? chatroomId
+        const avatarUrl = detail?.avatarUrl ?? contact?.avatarUrl
         await this.prisma.assistantTarget.upsert({
           where: { chatroomId },
-          update: { name: nameByWxid.get(chatroomId) ?? chatroomId, lastSyncedAt: now },
+          update: {
+            name,
+            ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+            ...(detail?.memberCount !== null && detail?.memberCount !== undefined
+              ? { memberCount: detail.memberCount }
+              : {}),
+            lastSyncedAt: now,
+          },
           create: {
             key: chatroomId,
             chatroomId,
-            name: nameByWxid.get(chatroomId) ?? chatroomId,
+            name,
+            avatarUrl: avatarUrl ?? null,
+            memberCount: detail?.memberCount ?? null,
             internalOnly: false,
             enabled: true,
             lastSyncedAt: now,

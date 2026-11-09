@@ -284,7 +284,7 @@ export interface SystemNotificationPublishResult {
 
 `POST /api/assistant/bindings/:id/verify` 请求体为 `{ "content": "..." }`：去除首尾空白后不能为空，最长 500 个字符；空内容或超限返回 422 `ASSISTANT_BINDING_CONTENT_INVALID`。服务端先以 `last_test_sent_at` 的条件更新原子占用 30 秒冷却窗口，窗口内重复请求返回 429 `ASSISTANT_BINDING_TEST_COOLDOWN` 且不调用 GeWe；发送成功后写入验证时间并标记 `ACTIVE`。测试内容只用于本次发送，不落库、不进审计；上游失败同样占用冷却窗口，避免连续重试。
 
-群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。
+群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。同步群会为前 100 个群调用 GeWe `getChatroomInfo` 刷新名称、头像与 `memberCount`（成员列表长度）；单个群详情被拒绝或返回未知业务错误时跳过该群的详情字段，离线、限流、超时和网络失败仍使整批同步失败。群目标响应包含 `avatarUrl`、`memberCount`、`lastSyncedAt`，列表读取不访问 GeWe。
 
 上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 

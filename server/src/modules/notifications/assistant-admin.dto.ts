@@ -108,6 +108,7 @@ export class AssistantTargetDto {
   @ApiProperty({ type: 'string', nullable: true }) purpose!: string | null
   @ApiProperty() internalOnly!: boolean
   @ApiProperty({ nullable: true, type: 'integer' }) memberCount!: number | null
+  @ApiProperty({ type: 'string', nullable: true }) avatarUrl!: string | null
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastSyncedAt!: string | null
 }

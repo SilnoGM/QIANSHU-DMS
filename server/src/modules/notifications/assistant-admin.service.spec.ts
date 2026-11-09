@@ -4,7 +4,7 @@ import type { AssistantConfiguration } from '../../config/assistant.config'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AssistantAdminService } from './assistant-admin.service'
 import { FakeAssistantTransport } from './fake-assistant.transport'
-import type { AssistantAdminTransport } from './notification.types'
+import { AssistantAdminError, type AssistantAdminTransport } from './notification.types'
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言 mock 调用参数。 */
 
@@ -22,12 +22,16 @@ const context = { actorUserId: 'user-1', requestId: 'req-1' }
 function adminTransport(online = true) {
   return {
     checkOnline: jest.fn().mockResolvedValue(online),
+    fetchContactIds: jest.fn().mockResolvedValue({ friends: [], chatrooms: [] }),
     fetchBriefInfo: jest.fn().mockResolvedValue([]),
+    fetchChatroomInfo: jest.fn().mockResolvedValue({ nickname: null, avatarUrl: null, memberCount: null }),
     checkRelations: jest.fn().mockResolvedValue([]),
     getOwnQrCode: jest.fn(),
   } as unknown as AssistantAdminTransport & {
     checkOnline: jest.Mock
+    fetchContactIds: jest.Mock
     fetchBriefInfo: jest.Mock
+    fetchChatroomInfo: jest.Mock
     checkRelations: jest.Mock
     getOwnQrCode: jest.Mock
   }
@@ -551,6 +555,93 @@ describe('AssistantAdminService', () => {
       .rejects.toMatchObject({ code: 'ASSISTANT_BINDING_USER_CONFLICT' })
   })
 
+  it('syncs chatroom avatars and member counts from GeWe details', async () => {
+    const syncedAt = new Date('2026-11-09T06:00:00.000Z')
+    const target = {
+      id: 'target-1',
+      key: 'room-1@chatroom',
+      chatroomId: 'room-1@chatroom',
+      name: '财务群详情',
+      purpose: null,
+      internalOnly: false,
+      memberCount: 12,
+      avatarUrl: 'https://example.com/detail-avatar.png',
+      enabled: true,
+      lastSyncedAt: syncedAt,
+      createdAt: syncedAt,
+      updatedAt: syncedAt,
+    }
+    const prisma = {
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue(accountRow()) },
+      assistantTarget: {
+        upsert: jest.fn().mockResolvedValue(target),
+        findMany: jest.fn().mockResolvedValue([target]),
+      },
+    }
+    const admin = adminTransport()
+    admin.fetchContactIds.mockResolvedValue({ friends: [], chatrooms: ['room-1@chatroom'] })
+    admin.fetchBriefInfo.mockResolvedValue([{
+      wxid: 'room-1@chatroom',
+      nickname: '财务群',
+      remark: null,
+      alias: null,
+      avatarUrl: 'https://example.com/brief-avatar.png',
+    }])
+    admin.fetchChatroomInfo.mockResolvedValue({
+      nickname: '财务群详情',
+      avatarUrl: 'https://example.com/detail-avatar.png',
+      memberCount: 12,
+    })
+
+    const result = await service(prisma, new FakeAssistantTransport(), admin).syncTargets()
+
+    expect(admin.fetchChatroomInfo).toHaveBeenCalledWith('wx-app', 'room-1@chatroom')
+    expect(prisma.assistantTarget.upsert).toHaveBeenCalledWith({
+      where: { chatroomId: 'room-1@chatroom' },
+      update: expect.objectContaining({
+        name: '财务群详情',
+        avatarUrl: 'https://example.com/detail-avatar.png',
+        memberCount: 12,
+      }),
+      create: expect.objectContaining({
+        avatarUrl: 'https://example.com/detail-avatar.png',
+        memberCount: 12,
+      }),
+    })
+    expect(result[0]?.avatarUrl).toBe('https://example.com/detail-avatar.png')
+  })
+
+  it('keeps syncing when a single chatroom detail is unavailable', async () => {
+    const prisma = {
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue(accountRow()) },
+      assistantTarget: {
+        upsert: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    }
+    const admin = adminTransport()
+    admin.fetchContactIds.mockResolvedValue({ friends: [], chatrooms: ['room-1@chatroom'] })
+    admin.fetchBriefInfo.mockResolvedValue([{
+      wxid: 'room-1@chatroom',
+      nickname: '财务群',
+      remark: null,
+      alias: null,
+      avatarUrl: 'https://example.com/brief-avatar.png',
+    }])
+    admin.fetchChatroomInfo.mockRejectedValue(
+      new AssistantAdminError('ASSISTANT_REJECTED_404', 'REJECTED', '群不存在'),
+    )
+
+    await service(prisma, new FakeAssistantTransport(), admin).syncTargets()
+
+    expect(prisma.assistantTarget.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({
+        name: '财务群',
+        avatarUrl: 'https://example.com/brief-avatar.png',
+      }),
+    }))
+  })
+
   it('updates the semantic target key and rejects a duplicate', async () => {
     const target = {
       id: 'target-1',
@@ -560,6 +651,7 @@ describe('AssistantAdminService', () => {
       purpose: null,
       internalOnly: false,
       memberCount: null,
+      avatarUrl: null,
       enabled: true,
       lastSyncedAt: null,
     }

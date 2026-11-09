@@ -211,14 +211,15 @@ CHECK：两个保留期都在 `7..3650`。
 | `name` | varchar(128) | 否 | — | 群名 |
 | `purpose` | varchar(255) | 是 | `null` | 用途 |
 | `internalOnly` | boolean | 否 | `false` | 是否纯内部成员 |
-| `memberCount` | int | 是 | `null` | 同步到的成员数 |
+| `memberCount` | int | 是 | `null` | 同步到的群成员数，取 GeWe 群成员列表长度 |
+| `avatarUrl` | text | 是 | `null` | 群头像快照；同步时刷新，空值表示尚未同步 |
 | `enabled` | boolean | 否 | `true` | — |
 | `lastSyncedAt` | timestamptz(6) | 是 | `null` | — |
 | `createdAt` / `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
 索引：唯一 `key`、`chatroomId`；`(enabled, internalOnly)`；CHECK `memberCount IS NULL OR memberCount >= 0`。
 
-`key` 是管理员可编辑的语义键，`chatroomId` 是通讯录同步身份。修改 `key` 后必须同步更新引用旧 key 的渠道策略；同步群只按 `chatroomId` upsert 名称与时间，不会覆盖管理员改过的 key。
+`key` 是管理员可编辑的语义键，`chatroomId` 是通讯录同步身份。修改 `key` 后必须同步更新引用旧 key 的渠道策略；同步群按 `chatroomId` upsert 名称、头像、成员数与同步时间，不会覆盖管理员改过的 `key`、用途、内部群标记和启停状态。群详情不可用（如刚保存到通讯录、尚未活跃）时只跳过该群的详情字段，不阻断整批同步。
 
 ### 4.4 `assistant_deliveries`
 

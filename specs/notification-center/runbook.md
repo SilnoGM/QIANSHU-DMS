@@ -87,7 +87,7 @@
 ## 6. 群目标管理
 
 1. 在微信里把群保存到通讯录；未保存的群不会出现在 `fetchContactsList`。
-2. 管理端点「同步群」；新群的 key 默认是 `chatroomId`。点「编辑」改为语义 key（如 `finance`、`operations`），并填写用途。
+2. 管理端点「同步群」；同步会按群详情刷新名称、头像和成员数。新群的 key 默认是 `chatroomId`；通过卡片「更多 → 编辑信息」改为语义 key（如 `finance`、`operations`），并填写用途。
 3. 修改 key 后，事件策略里引用旧 key 的 `targetKeys` 必须同步更新。
 4. 勾选 `internalOnly` 前，逐个核对群成员：必须是内部员工，且有权查看金额与客户名称。
 5. 群成员变化时重新核对；出现外部人员立即取消 `internalOnly` 或停用群目标，并通知管理员。

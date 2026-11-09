@@ -124174,6 +124174,10 @@
             "type": "integer",
             "nullable": true
           },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -124191,6 +124195,7 @@
           "purpose",
           "internalOnly",
           "memberCount",
+          "avatarUrl",
           "enabled",
           "lastSyncedAt"
         ]

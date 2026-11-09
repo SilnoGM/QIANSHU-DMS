@@ -3527,6 +3527,7 @@ model AssistantTarget {
   purpose      String?   @db.VarChar(255)
   internalOnly Boolean   @default(false) @map("internal_only")
   memberCount  Int?      @map("member_count")
+  avatarUrl    String?   @map("avatar_url") @db.Text
   enabled      Boolean   @default(true)
   lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

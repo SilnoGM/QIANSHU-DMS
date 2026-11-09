@@ -10,6 +10,7 @@ import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
 import { qrImageSrc } from './qr-image'
 
@@ -64,6 +65,9 @@ const verifyRecipientLabel = computed(() => {
 const targetEditOpen = ref(false)
 const targetEditId = ref<string | null>(null)
 const targetDraft = ref({ key: '', name: '', purpose: '' })
+type TargetFilter = 'all' | 'disabled' | 'external' | 'internal'
+const targetFilter = ref<TargetFilter>('all')
+const targetKeyword = ref('')
 
 const editingAccount = computed(() => accounts.value.find(account => account.id === editingAccountId.value) ?? null)
 const accountDialogTitle = computed(() => accountDialogMode.value === 'create' ? '导入公司号' : '更新公司号节点')
@@ -79,6 +83,34 @@ const canSubmitAccount = computed(() => accountDialogMode.value === 'create'
   && accountDraft.value.appId.trim().length > 0
   && accountDraft.value.wxid.trim().length > 0
   : true)
+
+const targetInternalCount = computed(() => targets.value.filter(target => target.internalOnly).length)
+const editingTarget = computed(() => targets.value.find(target => target.id === targetEditId.value) ?? null)
+const targetFilterItems = computed(() => [
+  { value: 'all', label: '全部', count: targets.value.length },
+  { value: 'internal', label: '仅内部', count: targetInternalCount.value },
+  { value: 'external', label: '非内部', count: targets.value.length - targetInternalCount.value },
+  { value: 'disabled', label: '已停用', count: targets.value.filter(target => !target.enabled).length },
+])
+const filteredTargets = computed(() => {
+  const keyword = targetKeyword.value.trim().toLowerCase()
+  return targets.value.filter((target) => {
+    if (targetFilter.value === 'internal' && !target.internalOnly) {
+      return false
+    }
+    if (targetFilter.value === 'external' && target.internalOnly) {
+      return false
+    }
+    if (targetFilter.value === 'disabled' && target.enabled) {
+      return false
+    }
+    if (keyword.length === 0) {
+      return true
+    }
+    return [target.name, target.purpose ?? '', target.key, target.chatroomId]
+      .some(value => value.toLowerCase().includes(keyword))
+  })
+})
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -169,6 +201,26 @@ function bindingMenuItems(binding: AssistantBindingDto): ActionMenuItem[][] {
       variant: 'destructive',
     },
   ]]
+}
+
+function targetMenuItems(target: AssistantTargetDto): ActionMenuItem[][] {
+  return [[
+    {
+      disabled: !canManageTarget.value || busy.value,
+      handle: () => openTargetEdit(target),
+      label: '编辑信息',
+    },
+  ]]
+}
+
+function targetStatusDotClass(enabled: boolean): string {
+  return enabled ? 'bg-emerald-500' : 'bg-red-500'
+}
+
+function targetScopeClass(internalOnly: boolean): string {
+  return internalOnly
+    ? 'border-primary/30 bg-primary/10 text-primary'
+    : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
 }
 
 async function loadAll(): Promise<void> {
@@ -817,36 +869,133 @@ onMounted(() => {
         <div v-if="targets.length === 0" class="qs-type-meta text-muted-foreground mt-4">
           还没有群目标。先同步群，再标记用途与内部群。
         </div>
-        <div v-else class="mt-4 flex flex-col gap-2">
-          <div v-for="target in targets" :key="target.id" class="p-3 border border-border rounded-lg flex flex-wrap gap-3 items-center justify-between">
-            <div>
-              <p class="qs-type-body-medium m-0">
-                {{ target.name }}
-              </p>
-              <p class="qs-type-meta text-muted-foreground m-0">
-                {{ target.key }} · {{ target.chatroomId }}
-              </p>
+        <div v-else class="mt-4 flex flex-col gap-3">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0 lg:flex-1">
+              <QsStatusSwitchToolbar
+                :model-value="targetFilter"
+                :items="targetFilterItems"
+                aria-label="群目标筛选"
+                @update:model-value="targetFilter = $event as TargetFilter"
+              />
             </div>
-            <div class="flex flex-wrap gap-4 items-center">
-              <label class="qs-type-meta flex gap-2 items-center">
-                <FaSwitch
-                  :model-value="target.internalOnly"
-                  :disabled="!canManageTarget || busy"
-                  @update:model-value="updateTarget(target, { internalOnly: Boolean($event) })"
-                />
-                仅内部成员
-              </label>
-              <label class="qs-type-meta flex gap-2 items-center">
-                <FaSwitch
-                  :model-value="target.enabled"
-                  :disabled="!canManageTarget || busy"
-                  @update:model-value="updateTarget(target, { enabled: Boolean($event) })"
-                />
-                启用
-              </label>
-              <FaButton variant="outline" size="sm" :disabled="!canManageTarget || busy" @click="openTargetEdit(target)">
-                编辑
-              </FaButton>
+            <FaInput
+              v-model="targetKeyword"
+              type="search"
+              clearable
+              class="shrink-0 w-full lg:w-80"
+              placeholder="群名称、用途、key 或 chatroomId"
+              aria-label="搜索群目标"
+            >
+              <template #start>
+                <FaIcon name="i-lucide:search" />
+              </template>
+            </FaInput>
+          </div>
+
+          <div v-if="filteredTargets.length === 0" class="qs-type-meta text-muted-foreground">
+            没有匹配的群目标。
+          </div>
+          <div
+            v-else
+            class="gap-3 grid grid-cols-1 2xl:grid-cols-4 sm:grid-cols-2 xl:grid-cols-3"
+            data-testid="assistant-target-grid"
+          >
+            <div
+              v-for="target in filteredTargets"
+              :key="target.id"
+              class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0 overflow-hidden"
+            >
+              <div class="flex gap-2.5 items-start">
+                <span class="shrink-0 relative">
+                  <FaAvatar
+                    :src="target.avatarUrl ?? ''"
+                    :fallback="target.name"
+                    class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted size-10"
+                  />
+                  <span
+                    class="border-2 border-background rounded-full size-3 absolute -bottom-0.5 -right-0.5"
+                    :class="targetStatusDotClass(target.enabled)"
+                    :title="`群状态：${target.enabled ? '已启用' : '已停用'}`"
+                    :aria-label="`群状态：${target.enabled ? '已启用' : '已停用'}`"
+                    role="img"
+                  />
+                </span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex gap-2 items-start justify-between">
+                    <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="target.name">
+                      {{ target.name }}
+                    </p>
+                    <FaTag variant="outline" class="shrink-0" :class="targetScopeClass(target.internalOnly)">
+                      {{ target.internalOnly ? '仅内部' : '非内部' }}
+                    </FaTag>
+                  </div>
+                  <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate" :title="target.purpose ?? ''">
+                    用途：{{ target.purpose?.trim() || '未设置用途' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="px-2.5 py-1 rounded-md bg-slate-50 flex gap-1.5 min-w-0 items-center dark:bg-slate-900/40">
+                <span class="text-xs text-slate-500 font-mono flex-1 min-w-0 truncate dark:text-slate-400" :title="target.chatroomId">
+                  {{ target.chatroomId }}
+                </span>
+                <CopyCellButton :text="target.chatroomId" label="群 chatroomId" always-visible />
+              </div>
+
+              <dl class="m-0 flex flex-col gap-1">
+                <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                  <dt class="text-slate-400 shrink-0">
+                    语义 key
+                  </dt>
+                  <dd class="text-slate-600 m-0 min-w-0 truncate dark:text-slate-300" :title="target.key">
+                    {{ target.key }}
+                  </dd>
+                </div>
+                <div v-if="target.memberCount !== null" class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                  <dt class="text-slate-400 shrink-0">
+                    成员数
+                  </dt>
+                  <dd class="text-slate-600 m-0 dark:text-slate-300">
+                    {{ target.memberCount }}
+                  </dd>
+                </div>
+                <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                  <dt class="text-slate-400 shrink-0">
+                    同步时间
+                  </dt>
+                  <dd class="text-slate-600 m-0 dark:text-slate-300">
+                    {{ formatDate(target.lastSyncedAt) }}
+                  </dd>
+                </div>
+              </dl>
+
+              <div class="mt-auto px-3 py-2 bg-slate-50/70 flex flex-wrap gap-2 items-center justify-between -mx-3 -mb-3 dark:bg-slate-900/40">
+                <div class="flex flex-wrap gap-3 items-center">
+                  <label class="qs-type-meta flex gap-1.5 items-center">
+                    仅内部成员
+                    <FaSwitch
+                      :model-value="target.internalOnly"
+                      :disabled="!canManageTarget || busy"
+                      @update:model-value="updateTarget(target, { internalOnly: Boolean($event) })"
+                    />
+                  </label>
+                  <label class="qs-type-meta flex gap-1.5 items-center">
+                    启用
+                    <FaSwitch
+                      :model-value="target.enabled"
+                      :disabled="!canManageTarget || busy"
+                      @update:model-value="updateTarget(target, { enabled: Boolean($event) })"
+                    />
+                  </label>
+                </div>
+                <FaDropdown :items="targetMenuItems(target)" align="end">
+                  <FaButton variant="outline" size="sm" class="text-xs! text-slate-600! font-normal! dark:text-slate-300!" :disabled="busy">
+                    更多
+                    <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
+                  </FaButton>
+                </FaDropdown>
+              </div>
             </div>
           </div>
         </div>
@@ -986,6 +1135,15 @@ onMounted(() => {
 
     <QsGenericModal v-model="targetEditOpen" title="编辑群目标" size="md" :submitting="busy" @update:model-value="targetEditOpen = $event">
       <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <span class="qs-type-compact-label">群 chatroomId</span>
+          <div class="px-2.5 py-1 rounded-md bg-slate-50 flex gap-1.5 min-w-0 items-center dark:bg-slate-900/40">
+            <span class="text-xs text-slate-500 font-mono flex-1 min-w-0 truncate dark:text-slate-400" :title="editingTarget?.chatroomId ?? ''">
+              {{ editingTarget?.chatroomId ?? '—' }}
+            </span>
+            <CopyCellButton v-if="editingTarget !== null" :text="editingTarget.chatroomId" label="群 chatroomId" always-visible />
+          </div>
+        </div>
         <label class="flex flex-col gap-1">
           <span class="qs-type-compact-label">群目标 key</span>
           <FaInput v-model="targetDraft.key" placeholder="finance" />

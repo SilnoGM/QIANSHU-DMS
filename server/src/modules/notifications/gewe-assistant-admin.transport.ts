@@ -10,6 +10,7 @@ import {
   ASSISTANT_TRANSPORT_OPTIONS,
   type AssistantAdminTransport,
   type AssistantBriefContact,
+  type AssistantChatroomInfo,
 } from './notification.types'
 
 interface AssistantAdminTransportOptions {
@@ -110,6 +111,19 @@ export class GeweAssistantAdminTransport implements AssistantAdminTransport {
       }
     }
     return contacts
+  }
+
+  async fetchChatroomInfo(appId: string, chatroomId: string): Promise<AssistantChatroomInfo> {
+    const data = asRecord(await this.post('/gewe/v2/api/group/getChatroomInfo', { appId, chatroomId }))
+    if (data === null) {
+      throw new AssistantAdminError('ASSISTANT_CHATROOM_RESPONSE_INVALID', 'UNKNOWN', 'GeWe 群信息响应无效')
+    }
+    return {
+      nickname: asString(data.nickName),
+      avatarUrl: asString(data.smallHeadImgUrl),
+      // GeWe 不返回成员数，只能使用成员列表长度；大群是否截断以上游返回为准。
+      memberCount: Array.isArray(data.memberList) ? data.memberList.length : null,
+    }
   }
 
   async getOwnQrCode(appId: string): Promise<string> {
