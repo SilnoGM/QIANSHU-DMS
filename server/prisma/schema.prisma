@@ -3496,6 +3496,7 @@ model AssistantBinding {
   accountId         String                 @map("account_id") @db.Uuid
   wxid              String                 @db.VarChar(128)
   wechatNickname    String?                @map("wechat_nickname") @db.VarChar(128)
+  wechatAvatarUrl   String?                @map("wechat_avatar_url") @db.Text
   status            AssistantBindingStatus @default(ACTIVE)
   boundByUserId     String                 @map("bound_by_user_id") @db.Uuid
   verifiedAt        DateTime?              @map("verified_at") @db.Timestamptz(6)

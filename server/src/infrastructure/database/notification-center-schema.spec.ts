@@ -23,6 +23,10 @@ const businessLinks = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261108110000_notification_inbox_business_links/migration.sql'),
   'utf8',
 )
+const bindingAvatar = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261109100000_assistant_binding_wechat_avatar/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -113,6 +117,11 @@ describe('notification center database contract', () => {
     expect(inbox).toContain("'purchase.review.pending'")
     expect(inbox).toContain("'invoice.review.pending'")
     expect(inbox).toContain("'shipment.arrived'")
+  })
+
+  it('adds the binding WeChat avatar snapshot column', () => {
+    expect(schema).toContain('wechatAvatarUrl')
+    expect(bindingAvatar).toContain('ADD COLUMN "wechat_avatar_url" TEXT')
   })
 
   it('adds business detail links and their ID variables to the in-app templates', () => {

@@ -12,6 +12,7 @@ import {
   ASSISTANT_TRANSPORT,
   AssistantAdminError,
   type AssistantAdminTransport,
+  type AssistantBriefContact,
   type AssistantTransport,
 } from './notification.types'
 import type {
@@ -138,10 +139,10 @@ export class AssistantAdminService {
   }
 
   /**
-   * 公司号的微信昵称与头像不能由系统伪造：读取 GeWe 联系人资料并返回快照。
-   * 资料同步是增强信息，失败不得阻断导入、状态检查或节点更新。
+   * GeWe 联系人资料是外部快照：公司号与员工绑定都复用同一次 getBriefInfo。
+   * 资料同步是增强信息，失败不得阻断导入、状态检查、绑定或巡检。
    */
-  private async fetchAccountProfile(
+  private async fetchContactProfile(
     appId: string,
     wxid: string,
   ): Promise<{ readonly nickname: string | null, readonly avatarUrl: string | null } | null> {
@@ -251,7 +252,7 @@ export class AssistantAdminService {
       throw new ApiException(409, 'ASSISTANT_ACCOUNT_APP_ID_EXISTS', '该 appId 已导入')
     }
     await this.requireOnlineNode(appId)
-    const profile = await this.fetchAccountProfile(appId, wxid)
+    const profile = await this.fetchContactProfile(appId, wxid)
     const resolvedNickname = profile?.nickname ?? nickname
 
     try {
@@ -326,7 +327,7 @@ export class AssistantAdminService {
     const changedWxid = nextWxid !== undefined && nextWxid !== account.wxid
     const profileWxid = nextWxid ?? account.wxid
     const profile = (changedAppId !== null || changedWxid) && profileWxid !== null
-      ? await this.fetchAccountProfile(changedAppId ?? account.appId, profileWxid)
+      ? await this.fetchContactProfile(changedAppId ?? account.appId, profileWxid)
       : null
     const resolvedNickname = profile?.nickname ?? nickname
 
@@ -391,7 +392,7 @@ export class AssistantAdminService {
     const online = await this.checkOnline(account.appId)
     const profile = account.wxid === null
       ? null
-      : await this.fetchAccountProfile(account.appId, account.wxid)
+      : await this.fetchContactProfile(account.appId, account.wxid)
     const updated = await this.prisma.assistantAccount.update({
       where: { id },
       data: {
@@ -494,6 +495,7 @@ export class AssistantAdminService {
     readonly accountId: string
     readonly wxid: string
     readonly wechatNickname: string | null
+    readonly wechatAvatarUrl: string | null
     readonly status: string
     readonly verifiedAt: Date | null
     readonly friendCheckedAt: Date | null
@@ -510,6 +512,7 @@ export class AssistantAdminService {
       wxid: row.wxid,
       wxidMasked: maskWxid(row.wxid) ?? '',
       wechatNickname: row.wechatNickname,
+      wechatAvatarUrl: row.wechatAvatarUrl,
       status: row.status,
       verifiedAt: iso(row.verifiedAt),
       friendCheckedAt: iso(row.friendCheckedAt),
@@ -520,7 +523,7 @@ export class AssistantAdminService {
   async createBinding(context: AssistantAdminContext, input: AssistantBindingCreateDto): Promise<AssistantBindingDto> {
     const [user, account] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: input.userId }, select: { id: true, status: true } }),
-      this.prisma.assistantAccount.findFirst({ where: ACTIVE_ACCOUNT_WHERE, orderBy: { createdAt: 'asc' }, select: { id: true } }),
+      this.prisma.assistantAccount.findFirst({ where: ACTIVE_ACCOUNT_WHERE, orderBy: { createdAt: 'asc' }, select: { id: true, appId: true } }),
     ])
     if (user === null || user.status !== 'ACTIVE') {
       throw new ApiException(422, 'ASSISTANT_BINDING_USER_INVALID', '员工不存在或已停用')
@@ -528,14 +531,18 @@ export class AssistantAdminService {
     if (account === null) {
       throw new ApiException(422, 'ASSISTANT_ACCOUNT_UNAVAILABLE', '没有可用的公司号')
     }
+    const wxid = input.wxid.trim()
+    const profile = await this.fetchContactProfile(account.appId, wxid)
+    const wechatNickname = profile?.nickname ?? (input.wechatNickname?.trim() || null)
     try {
       const binding = await this.prisma.$transaction(async transaction => {
         const created = await transaction.assistantBinding.create({
           data: {
             userId: user.id,
             accountId: account.id,
-            wxid: input.wxid.trim(),
-            wechatNickname: input.wechatNickname?.trim() || null,
+            wxid,
+            wechatNickname,
+            wechatAvatarUrl: profile?.avatarUrl ?? null,
             status: 'ACTIVE',
             boundByUserId: context.actorUserId,
           },
@@ -699,27 +706,66 @@ export class AssistantAdminService {
 
   async checkBindings(context: AssistantAdminContext): Promise<{ checked: number, invalidated: number }> {
     const bindings = await this.prisma.assistantBinding.findMany({
-      where: { status: 'ACTIVE' },
       include: { account: { select: { appId: true } } },
+      orderBy: [{ boundAt: 'desc' }, { id: 'desc' }],
     })
     let invalidated = 0
+    const groups = new Map<string, Array<(typeof bindings)[number]>>()
     for (const binding of bindings) {
+      const group = groups.get(binding.accountId) ?? []
+      group.push(binding)
+      groups.set(binding.accountId, group)
+    }
+
+    for (const group of groups.values()) {
+      const account = group[0].account
+      const wxids = [...new Set(group.map(binding => binding.wxid))]
+      let profiles: readonly AssistantBriefContact[] = []
       try {
-        const relations = await this.adminTransport.checkRelations(binding.account.appId, [binding.wxid])
-        const relation = relations.find(item => item.wxid === binding.wxid)?.relation
-        const status = relation === 1 || relation === 2 || relation === 3 ? 'INVALID' : 'ACTIVE'
-        if (status === 'INVALID') {
-          invalidated += 1
-        }
-        await this.prisma.assistantBinding.update({
-          where: { id: binding.id },
-          data: { status, friendCheckedAt: new Date() },
-        })
+        profiles = await this.adminTransport.fetchBriefInfo(account.appId, wxids)
       }
       catch {
-        // 单个好友检测失败不阻断其他绑定。
+        // 资料同步失败不阻断好友关系巡检；已有头像和昵称继续保留。
+      }
+
+      const activeWxids = group.filter(binding => binding.status === 'ACTIVE').map(binding => binding.wxid)
+      let relations: readonly { readonly wxid: string, readonly relation: number }[] = []
+      if (activeWxids.length > 0) {
+        try {
+          relations = await this.adminTransport.checkRelations(account.appId, activeWxids)
+        }
+        catch {
+          // 单个账号的好友检测失败不阻断其他账号。
+        }
+      }
+
+      for (const binding of group) {
+        const profile = profiles.find(item => item.wxid === binding.wxid)
+        const relation = relations.find(item => item.wxid === binding.wxid)?.relation
+        const relationInvalid = relation === 1 || relation === 2 || relation === 3
+        const nextStatus = binding.status === 'ACTIVE' && relationInvalid ? 'INVALID' : binding.status
+        if (binding.status === 'ACTIVE' && relationInvalid) {
+          invalidated += 1
+        }
+        const data = {
+          ...(profile?.nickname ? { wechatNickname: profile.nickname.slice(0, 128) } : {}),
+          ...(profile?.avatarUrl ? { wechatAvatarUrl: profile.avatarUrl } : {}),
+          ...(binding.status === 'ACTIVE' && relation !== undefined
+            ? { status: nextStatus, friendCheckedAt: new Date() }
+            : {}),
+        }
+        if (Object.keys(data).length === 0) {
+          continue
+        }
+        try {
+          await this.prisma.assistantBinding.update({ where: { id: binding.id }, data })
+        }
+        catch {
+          // 单条绑定写入失败不阻断其他绑定。
+        }
       }
     }
+
     if (invalidated > 0) {
       await this.prisma.$transaction(async transaction => {
         await this.audit.record(transaction, {

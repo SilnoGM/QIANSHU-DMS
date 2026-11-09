@@ -183,7 +183,8 @@ CHECK：两个保留期都在 `7..3650`。
 | `userId` | uuid | 否 | — | FK `users(id)` |
 | `accountId` | uuid | 否 | — | FK `assistant_accounts(id)` |
 | `wxid` | varchar(128) | 否 | — | 员工微信 ID |
-| `wechatNickname` | varchar(128) | 是 | `null` | 展示用 |
+| `wechatNickname` | varchar(128) | 是 | `null` | 展示用，好友巡检可按需刷新 |
+| `wechatAvatarUrl` | text | 是 | `null` | 微信头像快照；好友巡检按需刷新，空值表示未同步 |
 | `status` | `AssistantBindingStatus` | 否 | `ACTIVE` | — |
 | `boundByUserId` | uuid | 否 | — | 管理员，FK `users(id)` |
 | `verifiedAt` | timestamptz(6) | 是 | `null` | 测试消息确认时间 |

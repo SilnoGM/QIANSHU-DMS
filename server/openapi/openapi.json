@@ -124006,6 +124006,10 @@
             "type": "string",
             "nullable": true
           },
+          "wechatAvatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -124038,6 +124042,7 @@
           "wxid",
           "wxidMasked",
           "wechatNickname",
+          "wechatAvatarUrl",
           "status",
           "verifiedAt",
           "friendCheckedAt",

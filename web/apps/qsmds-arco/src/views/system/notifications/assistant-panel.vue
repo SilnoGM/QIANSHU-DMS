@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { AssistantAccountDto, AssistantBindingDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
 import { computed, onMounted, ref } from 'vue'
 
@@ -10,7 +9,7 @@ import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import { useAppAuth } from '@/composables/app/auth'
 import { qrImageSrc } from './qr-image'
 
@@ -138,14 +137,21 @@ const contactOptions = computed(() => contacts.value.map(contact => ({
   value: contact.wxid,
 })))
 
-const bindingColumns: QsGenericTableColumn<AssistantBindingDto>[] = [
-  { accessorKey: 'userName', id: 'userName', title: '系统用户', minWidth: 140 },
-  { accessorKey: 'accountName', id: 'accountName', title: '所属微信节点', minWidth: 140 },
-  { accessorKey: 'wxid', id: 'wxid', title: '微信wxid', minWidth: 240, copyable: true, cellClass: 'qs-type-data' },
-  { accessorKey: 'wechatNickname', id: 'wechatNickname', title: '微信昵称', minWidth: 120 },
-  { accessorKey: 'status', id: 'status', title: '绑定状态', width: 100 },
-  { accessorKey: 'verifiedAt', id: 'verifiedAt', title: '验证时间', width: 160 },
-]
+function bindingMenuItems(binding: AssistantBindingDto): ActionMenuItem[][] {
+  return [[
+    {
+      disabled: !canManageBinding.value || busy.value,
+      handle: () => void openReassign(binding),
+      label: '改绑',
+    },
+    {
+      disabled: !canManageBinding.value || busy.value,
+      handle: () => void revokeBinding(binding),
+      label: '停用',
+      variant: 'destructive',
+    },
+  ]]
+}
 
 async function loadAll(): Promise<void> {
   loading.value = true
@@ -430,7 +436,7 @@ async function checkBindings(): Promise<void> {
   busy.value = true
   try {
     const result = (await notificationsApi.assistant.bindings.check()).data
-    toast.success(`已检查 ${result.checked} 条绑定，${result.invalidated} 条失效`)
+    toast.success(`已检查 ${result.checked} 条绑定，已同步微信资料，${result.invalidated} 条失效`)
     await loadAll()
   }
   catch (failure) {
@@ -642,7 +648,7 @@ onMounted(() => {
               用户微信绑定
             </h2>
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              绑定完全由管理员维护；只有已验证绑定能接收金额与客户名称。
+              绑定完全由管理员维护；只有已验证绑定能接收金额与客户名称。好友巡检会同步微信昵称与头像。
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -655,37 +661,76 @@ onMounted(() => {
           </div>
         </div>
 
-        <QsGenericTable
-          class="mt-4"
-          :columns="bindingColumns"
-          :data="bindings"
-          :addable="false"
-          :show-pagination="false"
-          row-key="id"
-          data-testid="assistant-binding-table"
+        <div v-if="bindings.length === 0" class="qs-type-meta text-muted-foreground mt-4">
+          暂无用户微信绑定。
+        </div>
+        <div
+          v-else
+          class="mt-4 gap-3 grid grid-cols-1 2xl:grid-cols-6 lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-2 xl:grid-cols-5"
+          data-testid="assistant-binding-grid"
         >
-          <template #cell-status="{ row }">
-            <FaTag variant="outline" :class="statusClass(row.original.status)">
-              {{ statusLabel(row.original.status) }}
-            </FaTag>
-          </template>
-          <template #cell-verifiedAt="{ row }">
-            {{ formatDate(row.original.verifiedAt) }}
-          </template>
-          <template #actions="{ row }">
-            <div class="flex flex-wrap gap-2">
-              <FaButton size="sm" :disabled="!canManageBinding || busy" @click="verifyBinding(row)">
+          <div v-for="binding in bindings" :key="binding.id" class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0">
+            <div class="flex gap-2.5 items-start">
+              <FaAvatar
+                :src="binding.wechatAvatarUrl ?? ''"
+                :fallback="binding.wechatNickname?.trim() || binding.userName"
+                class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted shrink-0 size-10"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex gap-2 items-start justify-between">
+                  <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="binding.userName">
+                    {{ binding.userName }}
+                  </p>
+                  <FaTag variant="outline" :class="statusClass(binding.status)">
+                    {{ statusLabel(binding.status) }}
+                  </FaTag>
+                </div>
+                <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate" :title="binding.wechatNickname ?? ''">
+                  微信昵称：{{ binding.wechatNickname?.trim() || '未同步' }}
+                </p>
+              </div>
+            </div>
+
+            <div class="flex gap-1 min-w-0 items-center">
+              <span class="qs-type-compact-label shrink-0">wxid</span>
+              <span class="qs-type-data flex-1 min-w-0 truncate" :title="binding.wxid">
+                {{ binding.wxid }}
+              </span>
+              <CopyCellButton :text="binding.wxid" label="微信wxid" always-visible />
+            </div>
+
+            <dl class="m-0 flex flex-col gap-1">
+              <div class="flex gap-1 min-w-0">
+                <dt class="qs-type-compact-label shrink-0">
+                  所属节点
+                </dt>
+                <dd class="qs-type-meta m-0 min-w-0 truncate" :title="binding.accountName">
+                  {{ binding.accountName }}
+                </dd>
+              </div>
+              <div class="flex gap-1 min-w-0">
+                <dt class="qs-type-compact-label shrink-0">
+                  验证时间
+                </dt>
+                <dd class="qs-type-meta m-0">
+                  {{ formatDate(binding.verifiedAt) }}
+                </dd>
+              </div>
+            </dl>
+
+            <div class="mt-auto pt-2 border-t flex gap-2 items-center">
+              <FaButton size="sm" :disabled="!canManageBinding || busy" @click="verifyBinding(binding)">
                 发送测试
               </FaButton>
-              <FaButton variant="outline" size="sm" :disabled="!canManageBinding || busy" @click="openReassign(row)">
-                改绑
-              </FaButton>
-              <FaButton variant="outline" size="sm" :disabled="!canManageBinding || busy" @click="revokeBinding(row)">
-                停用
-              </FaButton>
+              <FaDropdown :items="bindingMenuItems(binding)" align="end">
+                <FaButton variant="outline" size="sm" :disabled="busy">
+                  更多
+                  <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
             </div>
-          </template>
-        </QsGenericTable>
+          </div>
+        </div>
       </FaPageMain>
 
       <FaPageMain class="my-2!">

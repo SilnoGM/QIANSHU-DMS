@@ -65,6 +65,7 @@ export class AssistantBindingDto {
   @ApiProperty() wxid!: string
   @ApiProperty() wxidMasked!: string
   @ApiProperty({ type: 'string', nullable: true }) wechatNickname!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) wechatAvatarUrl!: string | null
   @ApiProperty({ enum: ['ACTIVE', 'INVALID', 'DISABLED'] }) status!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) verifiedAt!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) friendCheckedAt!: string | null

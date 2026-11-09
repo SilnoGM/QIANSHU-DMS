@@ -23,10 +23,12 @@ function adminTransport(online = true) {
   return {
     checkOnline: jest.fn().mockResolvedValue(online),
     fetchBriefInfo: jest.fn().mockResolvedValue([]),
+    checkRelations: jest.fn().mockResolvedValue([]),
     getOwnQrCode: jest.fn(),
   } as unknown as AssistantAdminTransport & {
     checkOnline: jest.Mock
     fetchBriefInfo: jest.Mock
+    checkRelations: jest.Mock
     getOwnQrCode: jest.Mock
   }
 }
@@ -55,12 +57,13 @@ function bindingRow(overrides: Record<string, unknown> = {}) {
     accountId: 'account-1',
     wxid: 'wxid-user',
     wechatNickname: '旧员工',
+    wechatAvatarUrl: null,
     status: 'ACTIVE',
     verifiedAt: new Date('2026-11-06T00:00:00.000Z'),
     friendCheckedAt: null,
     boundAt: new Date('2026-11-06T00:00:00.000Z'),
     user: { displayName: '旧员工' },
-    account: { name: '公司号-01' },
+    account: { name: '公司号-01', appId: 'wx-app' },
     ...overrides,
   }
 }
@@ -336,6 +339,63 @@ describe('AssistantAdminService', () => {
     await expect(service(prisma, new FakeAssistantTransport(), admin).accountQrCode('account-1'))
       .rejects.toMatchObject({ code: 'ASSISTANT_ACCOUNT_NOT_IMPORTED' })
     expect(admin.getOwnQrCode).not.toHaveBeenCalled()
+  })
+
+  it('refreshes profiles for all bindings and checks only active friend relations', async () => {
+    const active = bindingRow({
+      id: 'binding-active',
+      wxid: 'wxid-active',
+      wechatNickname: '旧昵称',
+      wechatAvatarUrl: null,
+      status: 'ACTIVE',
+    })
+    const disabled = bindingRow({
+      id: 'binding-disabled',
+      wxid: 'wxid-disabled',
+      wechatNickname: '旧昵称-停用',
+      wechatAvatarUrl: null,
+      status: 'DISABLED',
+    })
+    const prisma = {
+      assistantBinding: {
+        findMany: jest.fn().mockResolvedValue([active, disabled]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      $transaction: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        audit: { record: jest.fn() },
+      })),
+    }
+    const admin = adminTransport(true)
+    admin.fetchBriefInfo.mockResolvedValue([
+      { wxid: 'wxid-active', nickname: '新昵称', remark: null, alias: null, avatarUrl: 'https://wx.qlogo.cn/a.jpg' },
+      { wxid: 'wxid-disabled', nickname: '新昵称-停用', remark: null, alias: null, avatarUrl: 'https://wx.qlogo.cn/b.jpg' },
+    ])
+    admin.checkRelations.mockResolvedValue([{ wxid: 'wxid-active', relation: 1 }])
+
+    const result = await service(prisma, new FakeAssistantTransport(), admin).checkBindings(context)
+
+    expect(admin.fetchBriefInfo).toHaveBeenCalledWith('wx-app', ['wxid-active', 'wxid-disabled'])
+    expect(admin.checkRelations).toHaveBeenCalledWith('wx-app', ['wxid-active'])
+    expect(prisma.assistantBinding.update).toHaveBeenCalledWith({
+      where: { id: 'binding-active' },
+      data: expect.objectContaining({
+        wechatNickname: '新昵称',
+        wechatAvatarUrl: 'https://wx.qlogo.cn/a.jpg',
+        status: 'INVALID',
+      }),
+    })
+    expect(prisma.assistantBinding.update).toHaveBeenCalledWith({
+      where: { id: 'binding-disabled' },
+      data: expect.objectContaining({
+        wechatNickname: '新昵称-停用',
+        wechatAvatarUrl: 'https://wx.qlogo.cn/b.jpg',
+      }),
+    })
+    expect(prisma.assistantBinding.update).not.toHaveBeenCalledWith({
+      where: { id: 'binding-disabled' },
+      data: expect.objectContaining({ status: expect.anything() }),
+    })
+    expect(result).toEqual({ checked: 2, invalidated: 1 })
   })
 
   it('returns the plaintext wxid in binding list responses', async () => {
