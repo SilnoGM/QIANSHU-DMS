@@ -226,10 +226,10 @@ async function ensurePolicyOptions(): Promise<void> {
 }
 
 const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
-  { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
-  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 110 },
   { accessorKey: 'name', id: 'name', title: '名称', minWidth: 160 },
   { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
+  { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
+  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 110 },
   { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
   { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 150 },
   { accessorKey: 'updatedByName', id: 'updatedByName', title: '更新人', width: 100 },
@@ -318,6 +318,16 @@ function changePolicyChannel(value: string): void {
 
 function formatChannel(channel: string): string {
   return channel === 'ASSISTANT' ? '千树小助理' : '站内通知'
+}
+
+function channelTagClass(channel: string): string {
+  if (channel === 'ASSISTANT') {
+    return 'border-primary/30 bg-primary/10 text-primary'
+  }
+  if (channel === 'IN_APP') {
+    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+  }
+  return 'border-border bg-muted text-muted-foreground'
 }
 
 async function load(): Promise<void> {
@@ -780,86 +790,119 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <FaAlert v-if="error !== null" variant="destructive" :title="error">
+  <FaPageMain v-if="error !== null" class="my-2!">
+    <FaAlert variant="destructive" :title="error">
       <template #actions>
         <FaButton variant="outline" size="sm" @click="load">
           重试
         </FaButton>
       </template>
     </FaAlert>
+  </FaPageMain>
 
-    <div v-else-if="loading" class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
+  <FaPageMain v-else-if="loading" class="my-2!">
+    <div class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
       <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
       正在加载通知规则…
     </div>
+  </FaPageMain>
 
-    <template v-else>
-      <section class="p-4 border border-border rounded-lg bg-background">
-        <div class="flex flex-wrap gap-3 items-center justify-between">
-          <div>
-            <h3 class="qs-type-body-medium m-0">
-              模板
-            </h3>
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              业务只传一个 templateKey，每个渠道各有一份模板；保存时会校验未声明变量。
-            </p>
-          </div>
-          <FaButton size="sm" :disabled="!canUpdateTemplate || busy" @click="openCreateTemplate">
-            新建模板
-          </FaButton>
+  <template v-else>
+    <FaPageMain class="my-2!">
+      <div class="flex flex-wrap gap-3 items-center justify-between">
+        <div>
+          <h2 class="qs-type-section-title m-0">
+            消息模板
+          </h2>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            业务只传一个 templateKey，每个渠道各有一份模板；保存时会校验未声明变量。
+          </p>
         </div>
+        <FaButton size="sm" :disabled="!canUpdateTemplate || busy" @click="openCreateTemplate">
+          新建模板
+        </FaButton>
+      </div>
 
-        <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <FaInput
-            v-model="templateKeyword"
-            type="search"
-            clearable
-            class="w-full sm:w-72"
-            placeholder="模板键或名称"
-            aria-label="搜索模板"
-          >
-            <template #start>
-              <FaIcon name="i-lucide:search" />
-            </template>
-          </FaInput>
-          <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="模板渠道" />
-          <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="模板状态" />
-        </div>
-
-        <QsGenericTable
-          class="mt-4"
-          :columns="templateColumns"
-          :data="filteredTemplates"
-          :addable="false"
-          :show-pagination="false"
-          row-key="id"
-          data-testid="notification-template-table"
+      <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <FaInput
+          v-model="templateKeyword"
+          type="search"
+          clearable
+          class="flex-1 w-full"
+          placeholder="模板键或名称"
+          aria-label="搜索模板"
         >
-          <template #cell-channel="{ row }">
+          <template #start>
+            <FaIcon name="i-lucide:search" />
+          </template>
+        </FaInput>
+        <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="模板渠道" />
+        <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="模板状态" />
+      </div>
+
+      <QsGenericTable
+        class="mt-4"
+        :columns="templateColumns"
+        :data="filteredTemplates"
+        :addable="false"
+        :searchable="false"
+        :show-pagination="false"
+        row-key="id"
+        data-testid="notification-template-table"
+      >
+        <template #cell-channel="{ row }">
+          <FaTag variant="outline" :class="channelTagClass(row.original.channel)">
             {{ formatChannel(row.original.channel) }}
-          </template>
-          <template #cell-messageKind="{ row }">
-            {{ row.original.messageKind === 'LINK' ? '链接' : '文本' }}
-          </template>
-          <template #cell-updatedAt="{ row }">
-            {{ formatDateTime(row.original.updatedAt) }}
-          </template>
-          <template #cell-updatedByName="{ row }">
-            {{ row.original.updatedByName ?? '—' }}
-          </template>
-          <template #cell-enabled="{ row }">
-            <div class="flex gap-2 items-center">
-              <FaSwitch
-                :model-value="row.original.enabled"
-                :disabled="!canUpdateTemplate || busy"
-                @update:model-value="toggleTemplateEnabled(row.original, Boolean($event))"
-              />
-              <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
+          </FaTag>
+        </template>
+        <template #cell-messageKind="{ row }">
+          {{ row.original.messageKind === 'LINK' ? '链接' : '文本' }}
+        </template>
+        <template #cell-updatedAt="{ row }">
+          {{ formatDateTime(row.original.updatedAt) }}
+        </template>
+        <template #cell-updatedByName="{ row }">
+          {{ row.original.updatedByName ?? '—' }}
+        </template>
+        <template #cell-enabled="{ row }">
+          <div class="flex gap-2 items-center">
+            <FaSwitch
+              :model-value="row.original.enabled"
+              :disabled="!canUpdateTemplate || busy"
+              @update:model-value="toggleTemplateEnabled(row.original, Boolean($event))"
+            />
+            <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
+          </div>
+        </template>
+        <template #actions="{ row }">
+          <div class="flex flex-wrap gap-2">
+            <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
+              编辑
+            </FaButton>
+            <FaButton variant="outline" size="sm" @click="openPreview(row)">
+              预览
+            </FaButton>
+          </div>
+        </template>
+        <template #mobile-row="{ row }">
+          <div class="flex flex-col gap-2 min-w-0">
+            <div class="flex gap-2 items-start justify-between">
+              <div class="min-w-0">
+                <p class="qs-type-body-medium m-0 truncate" :title="row.name">
+                  {{ row.name }}
+                </p>
+                <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate">
+                  {{ row.key }} · {{ formatChannel(row.channel) }}
+                </p>
+              </div>
+              <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
+                {{ row.enabled ? '启用' : '停用' }}
+              </FaTag>
             </div>
-          </template>
-          <template #actions="{ row }">
-            <div class="flex flex-wrap gap-2">
+            <p class="qs-type-meta text-muted-foreground m-0">
+              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
+            </p>
+            <div class="flex gap-2">
               <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
                 编辑
               </FaButton>
@@ -867,464 +910,439 @@ onMounted(() => {
                 预览
               </FaButton>
             </div>
-          </template>
-          <template #mobile-row="{ row }">
-            <div class="flex flex-col gap-2 min-w-0">
-              <div class="flex gap-2 items-start justify-between">
-                <div class="min-w-0">
-                  <p class="qs-type-body-medium m-0 truncate" :title="row.name">
-                    {{ row.name }}
-                  </p>
-                  <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate">
-                    {{ row.key }} · {{ formatChannel(row.channel) }}
-                  </p>
-                </div>
-                <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
-                  {{ row.enabled ? '启用' : '停用' }}
-                </FaTag>
-              </div>
-              <p class="qs-type-meta text-muted-foreground m-0">
-                {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
-              </p>
-              <div class="flex gap-2">
-                <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
-                  编辑
-                </FaButton>
-                <FaButton variant="outline" size="sm" @click="openPreview(row)">
-                  预览
-                </FaButton>
-              </div>
-            </div>
-          </template>
-        </QsGenericTable>
-      </section>
-
-      <section class="p-4 border border-border rounded-lg bg-background">
-        <div class="flex flex-wrap gap-3 items-center justify-between">
-          <div>
-            <h3 class="qs-type-body-medium m-0">
-              事件策略
-            </h3>
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              站内不需要 TTL 与静默时段；千树小助理必须配置 TTL。敏感内容只允许发已验证绑定与仅内部群。
-            </p>
-            <p class="qs-type-meta text-amber-700 m-0 mt-1 dark:text-amber-300">
-              当前业务只接入采购审核、开票申请和货件到仓；其余事件暂无触发源，可以提前配置但不会触发。
-            </p>
           </div>
-          <FaButton size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy()">
-            配置策略
+        </template>
+      </QsGenericTable>
+    </FaPageMain>
+
+    <FaPageMain class="my-2!">
+      <div class="flex flex-wrap gap-3 items-center justify-between">
+        <div>
+          <h2 class="qs-type-section-title m-0">
+            事件策略
+          </h2>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            站内不需要 TTL 与静默时段；千树小助理必须配置 TTL。敏感内容只允许发已验证绑定与仅内部群。
+          </p>
+          <p class="qs-type-meta text-amber-700 m-0 mt-1 dark:text-amber-300">
+            当前业务只接入采购审核、开票申请和货件到仓；其余事件暂无触发源，可以提前配置但不会触发。
+          </p>
+        </div>
+        <FaButton size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy()">
+          配置策略
+        </FaButton>
+      </div>
+
+      <div class="mt-4 border border-border rounded-lg overflow-hidden">
+        <div class="px-3 py-2 bg-muted/40 flex flex-wrap gap-2 items-center justify-between">
+          <span class="qs-type-meta">事件 × 渠道覆盖</span>
+          <span class="qs-type-meta text-muted-foreground">点击标签直接编辑或创建对应策略</span>
+        </div>
+        <div
+          v-for="row in policyCoverage"
+          :key="row.value"
+          class="px-3 py-2 border-t border-border/60 flex flex-wrap gap-2 items-center justify-between"
+        >
+          <span class="qs-type-meta">{{ row.label }}</span>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="channel in row.channels"
+              :key="channel.value"
+              type="button"
+              class="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              @click="openPolicyAt(row.value, channel.value)"
+            >
+              <FaTag
+                variant="outline"
+                :class="channel.policy === null
+                  ? 'border-amber-500/40 border-dashed bg-amber-500/5 text-amber-700 dark:text-amber-300'
+                  : channel.policy.enabled
+                    ? 'border-primary/30 bg-primary/10 text-primary'
+                    : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
+              >
+                {{ channel.label }} · {{ channel.policy === null ? '未配置' : channel.policy.enabled ? '已启用' : '已停用' }}
+              </FaTag>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <FaInput
+          v-model="policyKeyword"
+          type="search"
+          clearable
+          class="flex-1 w-full"
+          placeholder="事件、模板键或目标"
+          aria-label="搜索事件策略"
+        >
+          <template #start>
+            <FaIcon name="i-lucide:search" />
+          </template>
+        </FaInput>
+        <FaSelect v-model="policyChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="策略渠道" />
+        <FaSelect v-model="policyStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="策略状态" />
+      </div>
+
+      <QsGenericTable
+        class="mt-4"
+        :columns="policyColumns"
+        :data="filteredPolicies"
+        :addable="false"
+        :searchable="false"
+        :show-pagination="false"
+        row-key="id"
+        data-testid="notification-policy-table"
+      >
+        <template #cell-eventType="{ row }">
+          {{ formatEventType(row.original.eventType) }}
+        </template>
+        <template #cell-channel="{ row }">
+          <FaTag variant="outline" :class="channelTagClass(row.original.channel)">
+            {{ formatChannel(row.original.channel) }}
+          </FaTag>
+        </template>
+        <template #cell-targetMode="{ row }">
+          {{ TARGET_MODE_LABELS[row.original.targetMode] ?? row.original.targetMode }}
+        </template>
+        <template #cell-templateKey="{ row }">
+          {{ row.original.templateKey ?? '—' }}
+        </template>
+        <template #cell-priority="{ row }">
+          {{ PRIORITY_LABELS[row.original.priority] ?? row.original.priority }}
+        </template>
+        <template #cell-ttlSeconds="{ row }">
+          {{ formatTtl(row.original.ttlSeconds) }}
+        </template>
+        <template #cell-updatedAt="{ row }">
+          {{ formatDateTime(row.original.updatedAt) }}
+        </template>
+        <template #cell-updatedByName="{ row }">
+          {{ row.original.updatedByName ?? '—' }}
+        </template>
+        <template #cell-enabled="{ row }">
+          <div class="flex gap-2 items-center">
+            <FaSwitch
+              :model-value="row.original.enabled"
+              :disabled="!canUpdatePolicy || busy"
+              @update:model-value="togglePolicyEnabled(row.original, Boolean($event))"
+            />
+            <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
+          </div>
+        </template>
+        <template #actions="{ row }">
+          <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
+            编辑
+          </FaButton>
+        </template>
+        <template #mobile-row="{ row }">
+          <div class="flex flex-col gap-2 min-w-0">
+            <div class="flex gap-2 items-start justify-between">
+              <div class="min-w-0">
+                <p class="qs-type-body-medium m-0 truncate">
+                  {{ formatEventType(row.eventType) }}
+                </p>
+                <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
+                  {{ formatChannel(row.channel) }} · {{ TARGET_MODE_LABELS[row.targetMode] ?? row.targetMode }}
+                </p>
+              </div>
+              <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
+                {{ row.enabled ? '启用' : '停用' }}
+              </FaTag>
+            </div>
+            <p class="qs-type-meta text-muted-foreground m-0">
+              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
+            </p>
+            <div>
+              <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
+                编辑
+              </FaButton>
+            </div>
+          </div>
+        </template>
+      </QsGenericTable>
+    </FaPageMain>
+  </template>
+
+  <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
+    <div class="gap-3 grid md:grid-cols-2">
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">模板键</span>
+        <FaInput v-model="templateDraft.key" :disabled="templateMode === 'edit'" placeholder="purchase.review.pending" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">渠道</span>
+        <FaSelect v-model="templateDraft.channel" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">名称</span>
+        <FaInput v-model="templateDraft.name" placeholder="采购审核待办" />
+      </label>
+      <label class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">标题（站内通知使用）</span>
+        <FaInput v-model="templateDraft.titleTemplate" placeholder="采购单 {{ orderNo }} 待审核" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">消息类型</span>
+        <FaSelect v-model="templateDraft.messageKind" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
+      </label>
+      <label class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
+        <textarea v-model="templateDraft.bodyTemplate" rows="5" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
+        <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
+      </label>
+      <label class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">链接模板（可选）</span>
+        <FaInput v-model="templateDraft.linkUrlTemplate" placeholder="/operations/purchase-orders/{{ orderId }}" />
+      </label>
+      <div class="flex flex-col gap-2 md:col-span-2">
+        <div class="flex items-center justify-between">
+          <span class="qs-type-compact-label">变量白名单</span>
+          <FaButton variant="outline" size="sm" @click="addTemplateVariable">
+            添加变量
           </FaButton>
         </div>
-
-        <div class="mt-4 border border-border rounded-lg overflow-hidden">
-          <div class="px-3 py-2 bg-muted/40 flex flex-wrap gap-2 items-center justify-between">
-            <span class="qs-type-meta">事件 × 渠道覆盖</span>
-            <span class="qs-type-meta text-muted-foreground">点击标签直接编辑或创建对应策略</span>
-          </div>
-          <div
-            v-for="row in policyCoverage"
-            :key="row.value"
-            class="px-3 py-2 border-t border-border/60 flex flex-wrap gap-2 items-center justify-between"
-          >
-            <span class="qs-type-meta">{{ row.label }}</span>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="channel in row.channels"
-                :key="channel.value"
-                type="button"
-                class="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                @click="openPolicyAt(row.value, channel.value)"
-              >
-                <FaTag
-                  variant="outline"
-                  :class="channel.policy === null
-                    ? 'border-amber-500/40 border-dashed bg-amber-500/5 text-amber-700 dark:text-amber-300'
-                    : channel.policy.enabled
-                      ? 'border-primary/30 bg-primary/10 text-primary'
-                      : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-                >
-                  {{ channel.label }} · {{ channel.policy === null ? '未配置' : channel.policy.enabled ? '已启用' : '已停用' }}
-                </FaTag>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <FaInput
-            v-model="policyKeyword"
-            type="search"
-            clearable
-            class="w-full sm:w-72"
-            placeholder="事件、模板键或目标"
-            aria-label="搜索事件策略"
-          >
-            <template #start>
-              <FaIcon name="i-lucide:search" />
-            </template>
-          </FaInput>
-          <FaSelect v-model="policyChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-full sm:w-36" aria-label="策略渠道" />
-          <FaSelect v-model="policyStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-full sm:w-32" aria-label="策略状态" />
-        </div>
-
-        <QsGenericTable
-          class="mt-4"
-          :columns="policyColumns"
-          :data="filteredPolicies"
-          :addable="false"
-          :show-pagination="false"
-          row-key="id"
-          data-testid="notification-policy-table"
+        <p v-if="templateDraft.variables.length === 0" class="qs-type-meta text-muted-foreground m-0">
+          还没有变量。正文只允许使用这里声明的变量。
+        </p>
+        <div
+          v-for="(variable, index) in templateDraft.variables"
+          :key="index"
+          class="gap-2 grid items-end md:grid-cols-[minmax(0,1fr)_96px_auto_auto_auto]"
         >
-          <template #cell-eventType="{ row }">
-            {{ formatEventType(row.original.eventType) }}
-          </template>
-          <template #cell-channel="{ row }">
-            {{ formatChannel(row.original.channel) }}
-          </template>
-          <template #cell-targetMode="{ row }">
-            {{ TARGET_MODE_LABELS[row.original.targetMode] ?? row.original.targetMode }}
-          </template>
-          <template #cell-templateKey="{ row }">
-            {{ row.original.templateKey ?? '—' }}
-          </template>
-          <template #cell-priority="{ row }">
-            {{ PRIORITY_LABELS[row.original.priority] ?? row.original.priority }}
-          </template>
-          <template #cell-ttlSeconds="{ row }">
-            {{ formatTtl(row.original.ttlSeconds) }}
-          </template>
-          <template #cell-updatedAt="{ row }">
-            {{ formatDateTime(row.original.updatedAt) }}
-          </template>
-          <template #cell-updatedByName="{ row }">
-            {{ row.original.updatedByName ?? '—' }}
-          </template>
-          <template #cell-enabled="{ row }">
-            <div class="flex gap-2 items-center">
-              <FaSwitch
-                :model-value="row.original.enabled"
-                :disabled="!canUpdatePolicy || busy"
-                @update:model-value="togglePolicyEnabled(row.original, Boolean($event))"
-              />
-              <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
-            </div>
-          </template>
-          <template #actions="{ row }">
-            <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
-              编辑
-            </FaButton>
-          </template>
-          <template #mobile-row="{ row }">
-            <div class="flex flex-col gap-2 min-w-0">
-              <div class="flex gap-2 items-start justify-between">
-                <div class="min-w-0">
-                  <p class="qs-type-body-medium m-0 truncate">
-                    {{ formatEventType(row.eventType) }}
-                  </p>
-                  <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
-                    {{ formatChannel(row.channel) }} · {{ TARGET_MODE_LABELS[row.targetMode] ?? row.targetMode }}
-                  </p>
-                </div>
-                <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
-                  {{ row.enabled ? '启用' : '停用' }}
-                </FaTag>
-              </div>
-              <p class="qs-type-meta text-muted-foreground m-0">
-                模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
-              </p>
-              <div>
-                <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
-                  编辑
-                </FaButton>
-              </div>
-            </div>
-          </template>
-        </QsGenericTable>
-      </section>
-    </template>
-
-    <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
-      <div class="gap-3 grid md:grid-cols-2">
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">模板键</span>
-          <FaInput v-model="templateDraft.key" :disabled="templateMode === 'edit'" placeholder="purchase.review.pending" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">渠道</span>
-          <FaSelect v-model="templateDraft.channel" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">名称</span>
-          <FaInput v-model="templateDraft.name" placeholder="采购审核待办" />
-        </label>
-        <label class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">标题（站内通知使用）</span>
-          <FaInput v-model="templateDraft.titleTemplate" placeholder="采购单 {{ orderNo }} 待审核" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">消息类型</span>
-          <FaSelect v-model="templateDraft.messageKind" :options="[{ label: '文本', value: 'TEXT' }, { label: '链接', value: 'LINK' }]" />
-        </label>
-        <label class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
-          <textarea v-model="templateDraft.bodyTemplate" rows="5" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
-          <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
-        </label>
-        <label class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">链接模板（可选）</span>
-          <FaInput v-model="templateDraft.linkUrlTemplate" placeholder="/operations/purchase-orders/{{ orderId }}" />
-        </label>
-        <div class="flex flex-col gap-2 md:col-span-2">
-          <div class="flex items-center justify-between">
-            <span class="qs-type-compact-label">变量白名单</span>
-            <FaButton variant="outline" size="sm" @click="addTemplateVariable">
-              添加变量
-            </FaButton>
-          </div>
-          <p v-if="templateDraft.variables.length === 0" class="qs-type-meta text-muted-foreground m-0">
-            还没有变量。正文只允许使用这里声明的变量。
-          </p>
-          <div
-            v-for="(variable, index) in templateDraft.variables"
-            :key="index"
-            class="gap-2 grid items-end md:grid-cols-[minmax(0,1fr)_96px_auto_auto_auto]"
-          >
-            <label class="flex flex-col gap-1">
-              <span class="qs-type-compact-label">变量名</span>
-              <FaInput v-model="variable.name" placeholder="orderNo" />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="qs-type-compact-label">最大长度</span>
-              <FaInput v-model.number="variable.maxLength" type="number" min="1" max="200" />
-            </label>
-            <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
-              <FaSwitch v-model="variable.required" />
-              必填
-            </label>
-            <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
-              <FaSwitch v-model="variable.sensitive" />
-              敏感
-            </label>
-            <FaButton
-              variant="ghost"
-              size="icon-sm"
-              :aria-label="`删除变量 ${variable.name || index + 1}`"
-              @click="removeTemplateVariable(index)"
-            >
-              <FaIcon name="i-lucide:trash-2" class="size-4" aria-hidden="true" />
-            </FaButton>
-          </div>
-          <p class="qs-type-meta text-muted-foreground m-0">
-            变量名只允许字母、数字和下划线；正文中的 &#123;&#123;name&#125;&#125; 必须在这里声明。
-          </p>
-          <p v-if="templateVariableError !== null" class="qs-type-meta text-destructive m-0">
-            {{ templateVariableError }}
-          </p>
-        </div>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">最大长度</span>
-          <FaInput v-model.number="templateDraft.maxLength" type="number" min="1" max="5000" />
-          <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
-        </label>
-        <label class="qs-type-meta flex gap-2 items-center">
-          <FaSwitch v-model="templateDraft.enabled" />
-          启用
-        </label>
-      </div>
-      <template #footer>
-        <FaButton variant="outline" :disabled="busy" @click="templateOpen = false">
-          取消
-        </FaButton>
-        <FaButton :loading="busy" :disabled="!canSaveTemplate" @click="saveTemplate">
-          保存
-        </FaButton>
-      </template>
-    </QsGenericModal>
-
-    <QsGenericModal
-      v-model="previewOpen"
-      :title="previewTemplate === null ? '模板预览' : `模板预览 · ${previewTemplate.name}`"
-      size="lg"
-      :submitting="busy"
-      @update:model-value="previewOpen = $event"
-    >
-      <div class="flex flex-col gap-3">
-        <p v-if="previewTemplate !== null" class="qs-type-meta text-muted-foreground m-0">
-          模板键：{{ previewTemplate.key }} · 渠道：{{ formatChannel(previewTemplate.channel) }}
-        </p>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">样例变量（JSON 对象）</span>
-          <textarea v-model="previewVariables" rows="4" class="qs-type-data px-3 py-2 border border-border rounded-md bg-background w-full" />
-        </label>
-        <p v-if="previewContent.length === 0" class="qs-type-meta text-muted-foreground m-0">
-          点击「预览」生成渲染结果。
-        </p>
-        <pre v-if="previewContent" class="qs-type-body p-3 border border-border rounded-lg bg-muted/40 whitespace-pre-wrap">{{ previewContent }}</pre>
-        <p v-if="previewTruncated" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
-          内容超过模板最大长度，预览已截断。
-        </p>
-        <ul v-if="previewWarnings.length > 0" class="qs-type-meta text-amber-700 m-0 pl-5 list-disc dark:text-amber-300">
-          <li v-for="warning in previewWarnings" :key="warning">
-            {{ warning }}
-          </li>
-        </ul>
-        <p v-if="previewLink" class="qs-type-meta text-muted-foreground break-all">
-          链接：{{ previewLink }}
-        </p>
-        <p v-if="previewTemplate?.channel === 'IN_APP'" class="qs-type-meta text-muted-foreground m-0">
-          站内模板不支持测试发送，仅千树小助理模板可以测试外发。
-        </p>
-      </div>
-      <template #footer>
-        <FaButton variant="outline" :loading="busy" @click="preview">
-          预览
-        </FaButton>
-        <FaButton :loading="busy" :disabled="!canUpdateTemplate || previewTemplate?.channel !== 'ASSISTANT'" @click="testTemplate">
-          测试发送
-        </FaButton>
-      </template>
-    </QsGenericModal>
-
-    <QsGenericModal v-model="policyOpen" title="事件策略" size="2xl" :submitting="busy" :before-close="canClosePolicyModal" @update:model-value="policyOpen = $event">
-      <div class="gap-3 grid md:grid-cols-2">
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">事件</span>
-          <FaSelect
-            :model-value="policyEventType"
-            :options="EVENT_OPTIONS"
-            :disabled="policyEditingExisting"
-            @update:model-value="changePolicyEvent(String($event))"
-          />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">渠道</span>
-          <FaSelect
-            :model-value="policyChannel"
-            :options="CHANNEL_OPTIONS"
-            :disabled="policyEditingExisting"
-            @update:model-value="changePolicyChannel(String($event))"
-          />
-        </label>
-        <p v-if="policyExisting !== null && !policyEditingExisting" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
-          该事件与渠道已有策略，保存会更新现有配置（当前版本 {{ policyExisting.version }}）。
-        </p>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">目标模式</span>
-          <FaSelect v-model="policyDraft.targetMode" :options="policyTargetModeOptions" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">模板</span>
-          <FaSelect v-model="policyDraft.templateKey" :options="templateKeyOptions" placeholder="选择模板" />
-        </label>
-        <p v-if="policyOptionsLoading" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
-          正在加载员工、角色、权限与群目标选项…
-        </p>
-        <div v-if="policyDraft.targetMode === 'COMMAND_TARGET'" class="qs-type-meta text-muted-foreground p-3 border border-border rounded-lg bg-muted/30 md:col-span-2">
-          目标由业务命令携带，不需要额外配置。
-        </div>
-        <label v-else-if="policyDraft.targetMode === 'USERS'" class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">固定员工</span>
-          <FaSelect
-            v-model="policyDraft.targetConfig.userIds"
-            multiple
-            :options="policyUserOptions"
-            :disabled="policyOptionsLoading"
-            placeholder="选择员工"
-          />
-          <span class="qs-type-meta text-muted-foreground">可多选；列表只包含启用中的员工。</span>
-        </label>
-        <label v-else-if="policyDraft.targetMode === 'ROLE'" class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">角色</span>
-          <FaSelect
-            v-model="policyDraft.targetConfig.roleCodes"
-            multiple
-            :options="policyRoleOptions"
-            :disabled="policyOptionsLoading"
-            placeholder="选择角色"
-          />
-        </label>
-        <label v-else-if="policyDraft.targetMode === 'PERMISSION'" class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">权限</span>
-          <FaSelect
-            v-model="policyDraft.targetConfig.permissionCode"
-            :options="policyPermissionOptions"
-            :disabled="policyOptionsLoading"
-            placeholder="选择权限"
-          />
-          <span class="qs-type-meta text-muted-foreground">接收拥有该权限的全部启用用户。</span>
-        </label>
-        <label v-else class="flex flex-col gap-1 md:col-span-2">
-          <span class="qs-type-compact-label">群目标</span>
-          <FaSelect
-            v-model="policyDraft.targetConfig.targetKeys"
-            multiple
-            :options="policyGroupOptions"
-            :disabled="policyOptionsLoading"
-            placeholder="选择群目标"
-          />
-          <span class="qs-type-meta text-muted-foreground">敏感内容只会发送到标记为「仅内部」且已启用的群。</span>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">优先级</span>
-          <FaSelect v-model="policyDraft.priority" :options="[{ label: '普通', value: 'NORMAL' }, { label: '高', value: 'HIGH' }]" />
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">站外 TTL（秒）</span>
-          <FaInput v-model.number="policyDraft.ttlSeconds" type="number" min="60" max="604800" :disabled="policyChannel === 'IN_APP'" />
-          <span class="qs-type-meta text-muted-foreground">{{ policyTtlHint }}</span>
-        </label>
-        <div v-if="policyChannel === 'ASSISTANT'" class="flex flex-col gap-2 md:col-span-2">
-          <label class="qs-type-meta flex gap-2 items-center">
-            <FaSwitch v-model="policyDraft.quietHoursEnabled" />
-            启用静默时段
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">变量名</span>
+            <FaInput v-model="variable.name" placeholder="orderNo" />
           </label>
-          <div v-if="policyDraft.quietHoursEnabled" class="gap-2 grid sm:grid-cols-2">
-            <label class="flex flex-col gap-1">
-              <span class="qs-type-compact-label">开始时间</span>
-              <FaInput v-model="policyDraft.quietStart" type="time" />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="qs-type-compact-label">结束时间</span>
-              <FaInput v-model="policyDraft.quietEnd" type="time" />
-            </label>
-          </div>
-          <span v-if="policyDraft.quietHoursEnabled" class="qs-type-meta text-muted-foreground">
-            时区固定为 {{ policyDraft.quietTimezone }}；开始时间晚于结束时间表示跨天。
-          </span>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">最大长度</span>
+            <FaInput v-model.number="variable.maxLength" type="number" min="1" max="200" />
+          </label>
+          <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
+            <FaSwitch v-model="variable.required" />
+            必填
+          </label>
+          <label class="qs-type-meta pb-1 flex gap-1.5 items-center">
+            <FaSwitch v-model="variable.sensitive" />
+            敏感
+          </label>
+          <FaButton
+            variant="ghost"
+            size="icon-sm"
+            :aria-label="`删除变量 ${variable.name || index + 1}`"
+            @click="removeTemplateVariable(index)"
+          >
+            <FaIcon name="i-lucide:trash-2" class="size-4" aria-hidden="true" />
+          </FaButton>
         </div>
-        <label v-if="policyChannel === 'ASSISTANT'" class="qs-type-meta flex gap-2 items-center">
-          <FaSwitch v-model="policyDraft.allowSensitive" />
-          允许金额/客户名称
-        </label>
-        <label class="qs-type-meta flex gap-2 items-center">
-          <FaSwitch v-model="policyDraft.enabled" />
-          启用
-        </label>
+        <p class="qs-type-meta text-muted-foreground m-0">
+          变量名只允许字母、数字和下划线；正文中的 &#123;&#123;name&#125;&#125; 必须在这里声明。
+        </p>
+        <p v-if="templateVariableError !== null" class="qs-type-meta text-destructive m-0">
+          {{ templateVariableError }}
+        </p>
       </div>
-      <template #footer>
-        <FaButton variant="outline" :disabled="busy" @click="policyOpen = false">
-          取消
-        </FaButton>
-        <FaButton :loading="busy" :disabled="!canSavePolicy" @click="savePolicy">
-          保存
-        </FaButton>
-      </template>
-    </QsGenericModal>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">最大长度</span>
+        <FaInput v-model.number="templateDraft.maxLength" type="number" min="1" max="5000" />
+        <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
+      </label>
+      <label class="qs-type-meta flex gap-2 items-center">
+        <FaSwitch v-model="templateDraft.enabled" />
+        启用
+      </label>
+    </div>
+    <template #footer>
+      <FaButton variant="outline" :disabled="busy" @click="templateOpen = false">
+        取消
+      </FaButton>
+      <FaButton :loading="busy" :disabled="!canSaveTemplate" @click="saveTemplate">
+        保存
+      </FaButton>
+    </template>
+  </QsGenericModal>
 
-    <QsGenericModal v-model="discardOpen" title="放弃修改" size="sm" :z-index="2200" @update:model-value="handleDiscardVisible">
-      <p class="qs-type-body m-0">
-        有未保存的修改，关闭后这些修改会丢失。
+  <QsGenericModal
+    v-model="previewOpen"
+    :title="previewTemplate === null ? '模板预览' : `模板预览 · ${previewTemplate.name}`"
+    size="lg"
+    :submitting="busy"
+    @update:model-value="previewOpen = $event"
+  >
+    <div class="flex flex-col gap-3">
+      <p v-if="previewTemplate !== null" class="qs-type-meta text-muted-foreground m-0">
+        模板键：{{ previewTemplate.key }} · 渠道：{{ formatChannel(previewTemplate.channel) }}
       </p>
-      <template #footer>
-        <FaButton variant="outline" @click="cancelDiscard">
-          继续编辑
-        </FaButton>
-        <FaButton variant="destructive" @click="confirmDiscard">
-          放弃修改
-        </FaButton>
-      </template>
-    </QsGenericModal>
-  </div>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">样例变量（JSON 对象）</span>
+        <textarea v-model="previewVariables" rows="4" class="qs-type-data px-3 py-2 border border-border rounded-md bg-background w-full" />
+      </label>
+      <p v-if="previewContent.length === 0" class="qs-type-meta text-muted-foreground m-0">
+        点击「预览」生成渲染结果。
+      </p>
+      <pre v-if="previewContent" class="qs-type-body p-3 border border-border rounded-lg bg-muted/40 whitespace-pre-wrap">{{ previewContent }}</pre>
+      <p v-if="previewTruncated" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+        内容超过模板最大长度，预览已截断。
+      </p>
+      <ul v-if="previewWarnings.length > 0" class="qs-type-meta text-amber-700 m-0 pl-5 list-disc dark:text-amber-300">
+        <li v-for="warning in previewWarnings" :key="warning">
+          {{ warning }}
+        </li>
+      </ul>
+      <p v-if="previewLink" class="qs-type-meta text-muted-foreground break-all">
+        链接：{{ previewLink }}
+      </p>
+      <p v-if="previewTemplate?.channel === 'IN_APP'" class="qs-type-meta text-muted-foreground m-0">
+        站内模板不支持测试发送，仅千树小助理模板可以测试外发。
+      </p>
+    </div>
+    <template #footer>
+      <FaButton variant="outline" :loading="busy" @click="preview">
+        预览
+      </FaButton>
+      <FaButton :loading="busy" :disabled="!canUpdateTemplate || previewTemplate?.channel !== 'ASSISTANT'" @click="testTemplate">
+        测试发送
+      </FaButton>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal v-model="policyOpen" title="事件策略" size="2xl" :submitting="busy" :before-close="canClosePolicyModal" @update:model-value="policyOpen = $event">
+    <div class="gap-3 grid md:grid-cols-2">
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">事件</span>
+        <FaSelect
+          :model-value="policyEventType"
+          :options="EVENT_OPTIONS"
+          :disabled="policyEditingExisting"
+          @update:model-value="changePolicyEvent(String($event))"
+        />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">渠道</span>
+        <FaSelect
+          :model-value="policyChannel"
+          :options="CHANNEL_OPTIONS"
+          :disabled="policyEditingExisting"
+          @update:model-value="changePolicyChannel(String($event))"
+        />
+      </label>
+      <p v-if="policyExisting !== null && !policyEditingExisting" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
+        该事件与渠道已有策略，保存会更新现有配置（当前版本 {{ policyExisting.version }}）。
+      </p>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">目标模式</span>
+        <FaSelect v-model="policyDraft.targetMode" :options="policyTargetModeOptions" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">模板</span>
+        <FaSelect v-model="policyDraft.templateKey" :options="templateKeyOptions" placeholder="选择模板" />
+      </label>
+      <p v-if="policyOptionsLoading" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
+        正在加载员工、角色、权限与群目标选项…
+      </p>
+      <div v-if="policyDraft.targetMode === 'COMMAND_TARGET'" class="qs-type-meta text-muted-foreground p-3 border border-border rounded-lg bg-muted/30 md:col-span-2">
+        目标由业务命令携带，不需要额外配置。
+      </div>
+      <label v-else-if="policyDraft.targetMode === 'USERS'" class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">固定员工</span>
+        <FaSelect
+          v-model="policyDraft.targetConfig.userIds"
+          multiple
+          :options="policyUserOptions"
+          :disabled="policyOptionsLoading"
+          placeholder="选择员工"
+        />
+        <span class="qs-type-meta text-muted-foreground">可多选；列表只包含启用中的员工。</span>
+      </label>
+      <label v-else-if="policyDraft.targetMode === 'ROLE'" class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">角色</span>
+        <FaSelect
+          v-model="policyDraft.targetConfig.roleCodes"
+          multiple
+          :options="policyRoleOptions"
+          :disabled="policyOptionsLoading"
+          placeholder="选择角色"
+        />
+      </label>
+      <label v-else-if="policyDraft.targetMode === 'PERMISSION'" class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">权限</span>
+        <FaSelect
+          v-model="policyDraft.targetConfig.permissionCode"
+          :options="policyPermissionOptions"
+          :disabled="policyOptionsLoading"
+          placeholder="选择权限"
+        />
+        <span class="qs-type-meta text-muted-foreground">接收拥有该权限的全部启用用户。</span>
+      </label>
+      <label v-else class="flex flex-col gap-1 md:col-span-2">
+        <span class="qs-type-compact-label">群目标</span>
+        <FaSelect
+          v-model="policyDraft.targetConfig.targetKeys"
+          multiple
+          :options="policyGroupOptions"
+          :disabled="policyOptionsLoading"
+          placeholder="选择群目标"
+        />
+        <span class="qs-type-meta text-muted-foreground">敏感内容只会发送到标记为「仅内部」且已启用的群。</span>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">优先级</span>
+        <FaSelect v-model="policyDraft.priority" :options="[{ label: '普通', value: 'NORMAL' }, { label: '高', value: 'HIGH' }]" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="qs-type-compact-label">站外 TTL（秒）</span>
+        <FaInput v-model.number="policyDraft.ttlSeconds" type="number" min="60" max="604800" :disabled="policyChannel === 'IN_APP'" />
+        <span class="qs-type-meta text-muted-foreground">{{ policyTtlHint }}</span>
+      </label>
+      <div v-if="policyChannel === 'ASSISTANT'" class="flex flex-col gap-2 md:col-span-2">
+        <label class="qs-type-meta flex gap-2 items-center">
+          <FaSwitch v-model="policyDraft.quietHoursEnabled" />
+          启用静默时段
+        </label>
+        <div v-if="policyDraft.quietHoursEnabled" class="gap-2 grid sm:grid-cols-2">
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">开始时间</span>
+            <FaInput v-model="policyDraft.quietStart" type="time" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">结束时间</span>
+            <FaInput v-model="policyDraft.quietEnd" type="time" />
+          </label>
+        </div>
+        <span v-if="policyDraft.quietHoursEnabled" class="qs-type-meta text-muted-foreground">
+          时区固定为 {{ policyDraft.quietTimezone }}；开始时间晚于结束时间表示跨天。
+        </span>
+      </div>
+      <label v-if="policyChannel === 'ASSISTANT'" class="qs-type-meta flex gap-2 items-center">
+        <FaSwitch v-model="policyDraft.allowSensitive" />
+        允许金额/客户名称
+      </label>
+      <label class="qs-type-meta flex gap-2 items-center">
+        <FaSwitch v-model="policyDraft.enabled" />
+        启用
+      </label>
+    </div>
+    <template #footer>
+      <FaButton variant="outline" :disabled="busy" @click="policyOpen = false">
+        取消
+      </FaButton>
+      <FaButton :loading="busy" :disabled="!canSavePolicy" @click="savePolicy">
+        保存
+      </FaButton>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal v-model="discardOpen" title="放弃修改" size="sm" :z-index="2200" @update:model-value="handleDiscardVisible">
+    <p class="qs-type-body m-0">
+      有未保存的修改，关闭后这些修改会丢失。
+    </p>
+    <template #footer>
+      <FaButton variant="outline" @click="cancelDiscard">
+        继续编辑
+      </FaButton>
+      <FaButton variant="destructive" @click="confirmDiscard">
+        放弃修改
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

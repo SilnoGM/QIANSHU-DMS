@@ -240,6 +240,10 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
 
 test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /模板预览/u)
+  assert.match(rulesSource, /消息模板/u)
+  assert.match(rulesSource, /qs-type-section-title/u)
+  assert.match(rulesSource, /channelTagClass/u)
+  assert.match(rulesSource, /searchable="false"/u)
   assert.match(rulesSource, /事件策略/u)
   assert.match(rulesSource, /测试发送/u)
   assert.match(rulesSource, /占位符必须使用双花括号/u)

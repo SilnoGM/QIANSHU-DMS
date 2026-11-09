@@ -9,7 +9,5 @@ defineOptions({ name: 'SystemNotificationPolicies' })
     title="通知策略"
     description="维护通知模板、事件目标、TTL 与站内/站外渠道策略。"
   />
-  <FaPageMain>
-    <RulesPanel />
-  </FaPageMain>
+  <RulesPanel />
 </template>
