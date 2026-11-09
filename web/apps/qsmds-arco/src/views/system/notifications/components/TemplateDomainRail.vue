@@ -70,7 +70,7 @@ watch(() => props.search, (value) => {
         >
           <FaIcon :name="collapsedDomains.has(group.domain) ? 'i-lucide:chevron-right' : 'i-lucide:chevron-down'" class="text-muted-foreground shrink-0 size-3.5" aria-hidden="true" />
           <span class="qs-type-meta font-medium">{{ group.label }}</span>
-          <span class="qs-type-meta text-muted-foreground">({{ group.keyCount }} KEY · {{ group.channelCount }} 渠道)</span>
+          <span class="qs-type-meta text-muted-foreground">({{ group.keyCount }} 个模板键 · {{ group.channelCount }} 个渠道)</span>
         </button>
 
         <div v-if="!collapsedDomains.has(group.domain)" class="pb-1">
@@ -95,16 +95,40 @@ watch(() => props.search, (value) => {
             </span>
             <span class="flex shrink-0 gap-1 items-center">
               <template v-if="selectedKey === keyGroup.key">
-                <FaTag v-if="keyGroup.assistant !== null" variant="outline" class="text-primary border-primary/30 bg-primary/10">
+                <FaTag
+                  v-if="keyGroup.assistant !== null"
+                  variant="outline"
+                  :class="keyGroup.assistant.enabled
+                    ? 'text-primary border-primary/30 bg-primary/10'
+                    : 'text-muted-foreground border-border bg-muted'"
+                  :title="`千树小助理：${keyGroup.assistant.enabled ? '已启用' : '已停用'}`"
+                >
                   小助理
                 </FaTag>
-                <FaTag v-if="keyGroup.inApp !== null" variant="outline" class="text-sky-700 border-sky-500/30 bg-sky-500/10 dark:text-sky-300">
+                <FaTag
+                  v-if="keyGroup.inApp !== null"
+                  variant="outline"
+                  :class="keyGroup.inApp.enabled
+                    ? 'text-sky-700 border-sky-500/30 bg-sky-500/10 dark:text-sky-300'
+                    : 'text-muted-foreground border-border bg-muted'"
+                  :title="`站内通知：${keyGroup.inApp.enabled ? '已启用' : '已停用'}`"
+                >
                   站内
                 </FaTag>
               </template>
               <template v-else>
-                <span v-if="keyGroup.assistant !== null" class="rounded-full bg-primary size-2" title="已配置千树小助理" />
-                <span v-if="keyGroup.inApp !== null" class="rounded-full bg-sky-500 size-2" title="已配置站内通知" />
+                <span
+                  v-if="keyGroup.assistant !== null"
+                  class="rounded-full size-2"
+                  :class="keyGroup.assistant.enabled ? 'bg-primary' : 'border border-slate-400 bg-transparent'"
+                  :title="`千树小助理：${keyGroup.assistant.enabled ? '已启用' : '已停用'}`"
+                />
+                <span
+                  v-if="keyGroup.inApp !== null"
+                  class="rounded-full size-2"
+                  :class="keyGroup.inApp.enabled ? 'bg-sky-500' : 'border border-slate-400 bg-transparent'"
+                  :title="`站内通知：${keyGroup.inApp.enabled ? '已启用' : '已停用'}`"
+                />
               </template>
             </span>
           </button>

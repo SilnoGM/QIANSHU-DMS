@@ -4,7 +4,7 @@ import type { NotificationTemplateDto } from '@/api/generated/types.gen'
 
 import { computed } from 'vue'
 
-import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import {
   templateDomainClass,
   templateDomainLabel,
@@ -23,6 +23,24 @@ const emit = defineEmits<{
   preview: [template: NotificationTemplateDto]
   toggle: [template: NotificationTemplateDto, enabled: boolean]
 }>()
+
+const toast = useQsToast()
+
+async function copyKey(): Promise<void> {
+  if (props.group === null) {
+    return
+  }
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable')
+    }
+    await navigator.clipboard.writeText(props.group.key)
+    toast.success('模板 Key 已复制')
+  }
+  catch {
+    toast.error('复制失败，请手动选择模板 Key')
+  }
+}
 
 const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
   if (props.group === null || (props.group.assistant !== null && props.group.inApp !== null)) {
@@ -48,14 +66,17 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
             {{ templateDomainLabel(group.domain) }}
           </FaTag>
           <span class="qs-type-data-emphasis break-all">{{ group.key }}</span>
-          <CopyCellButton :text="group.key" label="模板 Key" always-visible />
+          <FaButton variant="ghost" size="sm" class="text-muted-foreground" @click="copyKey">
+            <FaIcon name="i-lucide:copy" class="size-3.5" aria-hidden="true" />
+            复制 Key
+          </FaButton>
         </div>
         <p class="qs-type-meta text-muted-foreground m-0 mt-1.5">
           <template v-if="group.channelCount === 2">
-            该模板键下共配置了 2 个分发渠道，调用接口时将按启用状态自动路由。
+            该模板键下共配置了 2 个发送渠道，调用接口时将按启用状态自动路由。
           </template>
           <template v-else>
-            该模板键下已配置 1 个分发渠道，可补齐另一渠道。
+            该模板键下已配置 1 个发送渠道，可补齐另一渠道。
           </template>
         </p>
       </div>

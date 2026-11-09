@@ -881,7 +881,7 @@ onMounted(() => {
       </div>
 
       <div
-        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:h-[560px]"
+        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:max-h-[560px]"
         data-testid="notification-template-master-detail"
       >
         <TemplateDomainRail

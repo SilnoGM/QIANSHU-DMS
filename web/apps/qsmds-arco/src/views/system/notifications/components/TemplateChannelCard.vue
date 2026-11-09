@@ -30,6 +30,7 @@ const channelIconClass = computed(() => props.channel === 'ASSISTANT'
   ? 'bg-primary/10 text-primary'
   : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
 const previewSegments = computed(() => props.template === null ? [] : splitTemplateBody(props.template.bodyTemplate))
+const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTemplateBody(props.template.linkUrlTemplate) : [])
 </script>
 
 <template>
@@ -39,7 +40,7 @@ const previewSegments = computed(() => props.template === null ? [] : splitTempl
         <span class="rounded-md flex shrink-0 size-7 items-center justify-center" :class="channelIconClass">
           <FaIcon :name="channelIcon" class="size-4" aria-hidden="true" />
         </span>
-        <span class="qs-type-body-medium truncate">{{ channelLabel }}</span>
+        <span class="qs-type-meta text-muted-foreground truncate">{{ channelLabel }}</span>
       </div>
       <label v-if="template !== null" class="qs-type-meta flex shrink-0 gap-1.5 items-center">
         启用
@@ -57,13 +58,13 @@ const previewSegments = computed(() => props.template === null ? [] : splitTempl
     </div>
 
     <template v-if="template !== null">
-      <div class="min-w-0">
-        <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="template.name">
+      <div class="flex flex-wrap gap-x-1.5 min-w-0 items-baseline">
+        <p class="qs-type-body-medium text-foreground m-0 min-w-0 truncate" :title="template.name">
           {{ template.name }}
         </p>
-        <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
-          v{{ template.version }} · {{ messageKindLabel(template.messageKind) }}
-        </p>
+        <span class="qs-type-meta text-muted-foreground whitespace-nowrap">
+          (v{{ template.version }} · {{ messageKindLabel(template.messageKind) }})
+        </span>
       </div>
 
       <div class="p-3 border border-border rounded-md bg-muted/30 min-h-20">
@@ -75,13 +76,18 @@ const previewSegments = computed(() => props.template === null ? [] : splitTempl
           >{{ segment.text }}</span>
         </p>
         <p v-if="template.linkUrlTemplate" class="qs-type-meta text-muted-foreground m-0 mt-2 break-all">
-          链接：{{ template.linkUrlTemplate }}
+          链接：
+          <span
+            v-for="(segment, index) in linkSegments"
+            :key="index"
+            :class="segment.token ? 'text-primary bg-primary/10 rounded px-0.5 font-mono' : ''"
+          >{{ segment.text }}</span>
         </p>
       </div>
 
       <div class="mt-auto pt-3 border-t border-border flex flex-wrap gap-2 items-center justify-between">
         <div class="flex flex-col gap-0.5 min-w-0">
-          <QsPersonDisplay :display-name="template.updatedByName ?? ''" size="sm" />
+          <QsPersonDisplay :display-name="template.updatedByName?.trim() || '系统内置'" size="sm" />
           <span class="qs-type-meta text-muted-foreground">{{ formatNotificationDateTime(template.updatedAt) }}</span>
         </div>
         <div class="flex flex-wrap gap-2">
