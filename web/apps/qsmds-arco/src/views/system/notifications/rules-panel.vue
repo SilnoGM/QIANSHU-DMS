@@ -231,7 +231,8 @@ const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
   { accessorKey: 'name', id: 'name', title: '名称', minWidth: 160 },
   { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
   { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
-  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 160 },
+  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 150 },
+  { accessorKey: 'updatedByName', id: 'updatedByName', title: '更新人', width: 100 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
@@ -241,7 +242,8 @@ const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
   { accessorKey: 'templateKey', id: 'templateKey', title: '模板', minWidth: 160 },
   { accessorKey: 'priority', id: 'priority', title: '优先级', width: 80 },
   { accessorKey: 'ttlSeconds', id: 'ttlSeconds', title: 'TTL', width: 100 },
-  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 160 },
+  { accessorKey: 'updatedAt', id: 'updatedAt', title: '更新时间', width: 150 },
+  { accessorKey: 'updatedByName', id: 'updatedByName', title: '更新人', width: 100 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 
@@ -829,6 +831,9 @@ onMounted(() => {
           <template #cell-updatedAt="{ row }">
             {{ formatDateTime(row.original.updatedAt) }}
           </template>
+          <template #cell-updatedByName="{ row }">
+            {{ row.original.updatedByName ?? '—' }}
+          </template>
           <template #cell-enabled="{ row }">
             <div class="flex gap-2 items-center">
               <FaSwitch
@@ -865,7 +870,7 @@ onMounted(() => {
                 </FaTag>
               </div>
               <p class="qs-type-meta text-muted-foreground m-0">
-                {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新 {{ formatDateTime(row.updatedAt) }}
+                {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
               </p>
               <div class="flex gap-2">
                 <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
@@ -979,6 +984,9 @@ onMounted(() => {
           <template #cell-updatedAt="{ row }">
             {{ formatDateTime(row.original.updatedAt) }}
           </template>
+          <template #cell-updatedByName="{ row }">
+            {{ row.original.updatedByName ?? '—' }}
+          </template>
           <template #cell-enabled="{ row }">
             <div class="flex gap-2 items-center">
               <FaSwitch
@@ -1010,7 +1018,7 @@ onMounted(() => {
                 </FaTag>
               </div>
               <p class="qs-type-meta text-muted-foreground m-0">
-                模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新 {{ formatDateTime(row.updatedAt) }}
+                模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新 {{ formatDateTime(row.updatedAt) }} · {{ row.updatedByName ?? '—' }}
               </p>
               <div>
                 <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">

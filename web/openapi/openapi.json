@@ -125063,6 +125063,10 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "updatedByName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -125078,7 +125082,8 @@
           "maxLength",
           "enabled",
           "version",
-          "updatedAt"
+          "updatedAt",
+          "updatedByName"
         ]
       },
       "NotificationTemplateCreateDto": {
@@ -125292,6 +125297,10 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "updatedByName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -125307,7 +125316,8 @@
           "allowSensitive",
           "enabled",
           "version",
-          "updatedAt"
+          "updatedAt",
+          "updatedByName"
         ]
       },
       "NotificationChannelPolicyUpdateDto": {

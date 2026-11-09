@@ -37,6 +37,7 @@ export class NotificationTemplateDto {
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer' }) version!: number
   @ApiProperty({ format: 'date-time' }) updatedAt!: string
+  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
 }
 
 export class NotificationTemplateCreateDto {
@@ -89,6 +90,7 @@ export class NotificationChannelPolicyDto {
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer' }) version!: number
   @ApiProperty({ format: 'date-time' }) updatedAt!: string
+  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
 }
 
 export class NotificationChannelPolicyUpdateDto {

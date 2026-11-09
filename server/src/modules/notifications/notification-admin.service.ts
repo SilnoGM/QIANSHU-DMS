@@ -75,6 +75,7 @@ function toTemplateDto(template: {
   readonly enabled: boolean
   readonly version: number
   readonly updatedAt: Date
+  readonly updatedBy?: { readonly displayName: string } | null
 }): NotificationTemplateDto {
   return {
     id: template.id,
@@ -90,6 +91,7 @@ function toTemplateDto(template: {
     enabled: template.enabled,
     version: template.version,
     updatedAt: template.updatedAt.toISOString(),
+    updatedByName: template.updatedBy?.displayName ?? null,
   }
 }
 
@@ -107,6 +109,7 @@ function toPolicyDto(policy: {
   readonly enabled: boolean
   readonly version: number
   readonly updatedAt: Date
+  readonly updatedBy?: { readonly displayName: string } | null
 }): NotificationChannelPolicyDto {
   return {
     id: policy.id,
@@ -122,6 +125,7 @@ function toPolicyDto(policy: {
     enabled: policy.enabled,
     version: policy.version,
     updatedAt: policy.updatedAt.toISOString(),
+    updatedByName: policy.updatedBy?.displayName ?? null,
   }
 }
 
@@ -148,6 +152,7 @@ export class NotificationAdminService {
     const templates = await this.prisma.notificationTemplate.findMany({
       where: channel === 'IN_APP' || channel === 'ASSISTANT' ? { channel } : {},
       orderBy: [{ key: 'asc' }, { channel: 'asc' }],
+      include: { updatedBy: { select: { displayName: true } } },
     })
     return templates.map(toTemplateDto)
   }
@@ -341,6 +346,7 @@ export class NotificationAdminService {
         ...(channel === 'IN_APP' || channel === 'ASSISTANT' ? { channel } : {}),
       },
       orderBy: [{ eventType: 'asc' }, { channel: 'asc' }],
+      include: { updatedBy: { select: { displayName: true } } },
     })
     return policies.map(toPolicyDto)
   }
