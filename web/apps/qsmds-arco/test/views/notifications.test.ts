@@ -33,6 +33,22 @@ const rulesSource = readFileSync(
   new URL('../../src/views/system/notifications/rules-panel.vue', import.meta.url),
   'utf8',
 )
+const templateRailSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/TemplateDomainRail.vue', import.meta.url),
+  'utf8',
+)
+const templateDetailSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/TemplateKeyDetail.vue', import.meta.url),
+  'utf8',
+)
+const templateCardSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/TemplateChannelCard.vue', import.meta.url),
+  'utf8',
+)
+const templateGroupingSource = readFileSync(
+  new URL('../../src/views/system/notifications/template-key-grouping.logic.ts', import.meta.url),
+  'utf8',
+)
 const recordsSource = readFileSync(
   new URL('../../src/views/system/notifications/records-panel.vue', import.meta.url),
   'utf8',
@@ -263,7 +279,6 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /canCloseTemplateModal/u)
   assert.match(rulesSource, /canClosePolicyModal/u)
   assert.match(rulesSource, /放弃修改/u)
-  assert.match(rulesSource, /filteredTemplates/u)
   assert.match(rulesSource, /filteredPolicies/u)
   assert.match(rulesSource, /toggleTemplateEnabled/u)
   assert.match(rulesSource, /togglePolicyEnabled/u)
@@ -275,20 +290,31 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /updatedByInfo/u)
   assert.match(rulesSource, /#cell-updatedByInfo/u)
   assert.match(rulesSource, /QsPersonDisplay/u)
-  assert.match(rulesSource, /messageKindClass/u)
-  assert.match(rulesSource, /messageKindLabel/u)
   assert.match(rulesSource, /action-column/u)
   assert.match(rulesSource, /TEMPLATE_DOMAIN_OPTIONS/u)
   assert.match(rulesSource, /templateOtherChannel/u)
-  assert.match(rulesSource, /templateDomainFilter/u)
   assert.match(rulesSource, /templateDomainLabel/u)
   assert.match(rulesSource, /policyTemplateDomainMismatch/u)
-  assert.match(rulesSource, /templateGroups/u)
-  assert.match(rulesSource, /templateGrouping/u)
-  assert.match(rulesSource, /#group-header/u)
-  assert.match(rulesSource, /table-root-class="overflow-auto overscroll-contain h-\[560px\]"/u)
-  assert.match(rulesSource, /sticky-header/u)
-  assert.match(rulesSource, /label: '销售域'[\s\S]*label: '采购域'[\s\S]*label: '货件运输域'[\s\S]*label: '财务域'[\s\S]*label: '发票域'[\s\S]*label: '对账域'[\s\S]*label: '系统'/u)
+  assert.match(rulesSource, /TemplateDomainRail/u)
+  assert.match(rulesSource, /TemplateKeyDetail/u)
+  assert.match(rulesSource, /notification-template-master-detail/u)
+  assert.match(rulesSource, /handleTemplateAdd/u)
+  assert.match(rulesSource, /groupTemplatesByKey/u)
+  assert.match(rulesSource, /filterTemplateDomainGroups/u)
+  assert.match(templateRailSource, /过滤业务域或 templateKey/u)
+  assert.match(templateRailSource, /selectedKey/u)
+  assert.match(templateRailSource, /KEY/u)
+  assert.match(templateDetailSource, /新增渠道模板/u)
+  assert.match(templateDetailSource, /TemplateChannelCard/u)
+  assert.match(templateDetailSource, /该模板键下共配置了/u)
+  assert.match(templateCardSource, /splitTemplateBody/u)
+  assert.match(templateCardSource, /line-clamp-4/u)
+  assert.match(templateCardSource, /QsPersonDisplay/u)
+  assert.match(templateCardSource, /编辑模板/u)
+  assert.match(templateCardSource, /预览/u)
+  assert.match(templateGroupingSource, /groupTemplatesByKey/u)
+  assert.match(templateGroupingSource, /filterTemplateDomainGroups/u)
+  assert.match(templateGroupingSource, /label: '销售域'[\s\S]*label: '采购域'[\s\S]*label: '货件运输域'[\s\S]*label: '财务域'[\s\S]*label: '发票域'[\s\S]*label: '对账域'[\s\S]*label: '系统'/u)
   assert.match(rulesSource, /<QsGenericTable/u)
   assert.match(rulesSource, /<QsGenericModal/u)
   assert.doesNotMatch(rulesSource, /<FaTable/u)

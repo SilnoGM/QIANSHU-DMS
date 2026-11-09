@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TemplateDomain, TemplateKeyGroup } from './template-key-grouping.logic'
 import type {
   AssistantTargetDto,
   NotificationChannelPolicyDto,
@@ -7,11 +8,10 @@ import type {
   RoleDto,
   UserDto,
 } from '@/api/generated/types.gen'
-import type { QsGenericTableGrouping } from '@/components/business/QsGenericTable/grouping'
+
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 
 import { computed, onMounted, ref, watch } from 'vue'
-
 import { getApiClientFailureMessage } from '@/api/errors'
 import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
@@ -20,6 +20,18 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
+import TemplateDomainRail from './components/TemplateDomainRail.vue'
+import TemplateKeyDetail from './components/TemplateKeyDetail.vue'
+import {
+  filterTemplateDomainGroups,
+  formatNotificationDateTime,
+  groupTemplateKeysByDomain,
+  groupTemplatesByKey,
+  TEMPLATE_DOMAIN_OPTIONS,
+
+  templateDomainLabel,
+
+} from './template-key-grouping.logic'
 
 const toast = useQsToast()
 const { auth } = useAppAuth()
@@ -37,12 +49,6 @@ interface TemplateVariableDraft {
   required: boolean
   maxLength: number
   sensitive: boolean
-}
-
-type TemplateDomain = 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM'
-
-interface TemplateGroupRow extends NotificationTemplateDto {
-  groupRows: TemplateGroupRow[]
 }
 
 const templateOpen = ref(false)
@@ -137,18 +143,6 @@ const PRIORITY_LABELS: Record<string, string> = {
   NORMAL: '普通',
   HIGH: '高',
 }
-const TEMPLATE_DOMAIN_OPTIONS: Array<{ label: string, value: TemplateDomain }> = [
-  { label: '销售域', value: 'SALES' },
-  { label: '采购域', value: 'PURCHASE' },
-  { label: '货件运输域', value: 'SHIPMENT' },
-  { label: '财务域', value: 'FINANCE' },
-  { label: '发票域', value: 'INVOICE' },
-  { label: '对账域', value: 'RECONCILIATION' },
-  { label: '系统', value: 'SYSTEM' },
-]
-const TEMPLATE_DOMAIN_LABELS: Record<string, string> = Object.fromEntries(
-  TEMPLATE_DOMAIN_OPTIONS.map(option => [option.value, option.label]),
-)
 const EVENT_DOMAIN_MAP: Record<string, TemplateDomain> = {
   PURCHASE_REVIEW_PENDING: 'PURCHASE',
   INVOICE_REQUEST_REVIEW_PENDING: 'INVOICE',
@@ -159,10 +153,6 @@ const EVENT_DOMAIN_MAP: Record<string, TemplateDomain> = {
   PURCHASE_PAYABLE_PENDING: 'FINANCE',
 }
 const EVENT_LABELS: Record<string, string> = Object.fromEntries(EVENT_OPTIONS.map(option => [option.value, option.label]))
-const TEMPLATE_DOMAIN_FILTER_OPTIONS = [
-  { label: '全部业务域', value: 'ALL' },
-  ...TEMPLATE_DOMAIN_OPTIONS,
-]
 const CHANNEL_FILTER_OPTIONS = [
   { label: '全部渠道', value: 'ALL' },
   ...CHANNEL_OPTIONS,
@@ -172,10 +162,8 @@ const STATUS_FILTER_OPTIONS = [
   { label: '启用', value: 'ENABLED' },
   { label: '停用', value: 'DISABLED' },
 ]
-const templateKeyword = ref('')
-const templateDomainFilter = ref('ALL')
-const templateChannelFilter = ref('ALL')
-const templateStatusFilter = ref('ALL')
+const templateSearch = ref('')
+const selectedTemplateKey = ref<string | null>(null)
 const policyKeyword = ref('')
 const policyChannelFilter = ref('ALL')
 const policyStatusFilter = ref('ALL')
@@ -193,20 +181,6 @@ function formatTtl(seconds: number | null): string {
   }
   const hours = seconds / 3600
   return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`
-}
-
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'Asia/Shanghai',
-})
-
-function formatDateTime(value: string | null): string {
-  return value === null ? '—' : dateTimeFormatter.format(new Date(value))
 }
 
 const policyUsers = ref<UserDto[]>([])
@@ -260,16 +234,6 @@ async function ensurePolicyOptions(): Promise<void> {
   policyOptionsLoading.value = false
 }
 
-const templateColumns: QsGenericTableColumn<TemplateGroupRow>[] = [
-  { accessorKey: 'name', id: 'name', title: '名称', minWidth: 120 },
-  { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
-  { accessorKey: 'domain', id: 'domain', title: '业务域', width: 120 },
-  { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
-  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
-  { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
-  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 170 },
-  { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
-]
 const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
   { accessorKey: 'eventType', id: 'eventType', title: '事件', minWidth: 180 },
   { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
@@ -299,43 +263,26 @@ const policyTemplateDomainMismatch = computed(() => {
     && policyEventDomain.value !== 'SYSTEM'
     && template.domain !== policyEventDomain.value
 })
-const filteredTemplates = computed(() => {
-  const keyword = templateKeyword.value.trim().toLowerCase()
-  return templates.value.filter((template) => {
-    if (templateDomainFilter.value !== 'ALL' && template.domain !== templateDomainFilter.value) {
-      return false
-    }
-    if (templateChannelFilter.value !== 'ALL' && template.channel !== templateChannelFilter.value) {
-      return false
-    }
-    if (templateStatusFilter.value === 'ENABLED' && !template.enabled) {
-      return false
-    }
-    if (templateStatusFilter.value === 'DISABLED' && template.enabled) {
-      return false
-    }
-    if (keyword.length === 0) {
-      return true
-    }
-    return [template.key, template.name, formatChannel(template.channel), templateDomainLabel(template.domain)]
-      .some(value => value.toLowerCase().includes(keyword))
-  })
+const templateKeyGroups = computed(() => groupTemplatesByKey(templates.value))
+const templateDomainGroups = computed(() => groupTemplateKeysByDomain(templateKeyGroups.value))
+const visibleTemplateDomainGroups = computed(() => filterTemplateDomainGroups(templateDomainGroups.value, templateSearch.value))
+const selectedTemplateGroup = computed<TemplateKeyGroup | null>(() => {
+  const current = templateKeyGroups.value.find(group => group.key === selectedTemplateKey.value)
+  if (current !== undefined) {
+    return current
+  }
+  return visibleTemplateDomainGroups.value[0]?.keys[0] ?? null
 })
-const templateGroups = computed<TemplateGroupRow[]>(() => {
-  return TEMPLATE_DOMAIN_OPTIONS.flatMap((option) => {
-    const domainTemplates = filteredTemplates.value.filter(template => template.domain === option.value)
-    if (domainTemplates.length === 0) {
-      return []
+watch(
+  visibleTemplateDomainGroups,
+  (groups) => {
+    const visibleKeys = groups.flatMap(group => group.keys)
+    if (!visibleKeys.some(group => group.key === selectedTemplateKey.value)) {
+      selectedTemplateKey.value = visibleKeys[0]?.key ?? null
     }
-    const rows: TemplateGroupRow[] = domainTemplates.map(template => ({ ...template, groupRows: [] }))
-    const first = rows[0]
-    return first === undefined ? [] : [{ ...first, groupRows: rows }]
-  })
-})
-const templateGrouping: QsGenericTableGrouping<TemplateGroupRow> = {
-  getRows: group => group.groupRows,
-  getLabel: group => templateDomainLabel(group.domain),
-}
+  },
+  { immediate: true },
+)
 const templateOtherChannel = computed(() => {
   const key = templateDraft.value.key.trim()
   if (key.length === 0) {
@@ -407,33 +354,6 @@ function channelTagClass(channel: string): string {
     return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
   }
   return 'border-border bg-muted text-muted-foreground'
-}
-
-function messageKindLabel(kind: string): string {
-  return kind === 'LINK' ? '链接' : '文本'
-}
-
-function messageKindClass(kind: string): string {
-  return kind === 'LINK'
-    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-    : 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
-}
-
-function templateDomainLabel(domain: string): string {
-  return TEMPLATE_DOMAIN_LABELS[domain] ?? domain
-}
-
-function templateDomainClass(domain: string): string {
-  const classes: Record<string, string> = {
-    SALES: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-    PURCHASE: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-    SHIPMENT: 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300',
-    FINANCE: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
-    INVOICE: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
-    RECONCILIATION: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
-    SYSTEM: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300',
-  }
-  return classes[domain] ?? classes.SYSTEM
 }
 
 async function load(): Promise<void> {
@@ -518,6 +438,33 @@ function openCreateTemplate(): void {
   }
   templateBaseline.value = JSON.stringify(templateDraft.value)
   templateOpen.value = true
+}
+
+function openCreateTemplateForChannel(group: TemplateKeyGroup, channel: 'ASSISTANT' | 'IN_APP'): void {
+  templateMode.value = 'create'
+  templateDraft.value = {
+    id: '',
+    key: group.key,
+    channel,
+    name: '',
+    domain: group.domain,
+    messageKind: 'TEXT',
+    titleTemplate: '',
+    bodyTemplate: '',
+    linkUrlTemplate: '',
+    variables: [],
+    maxLength: 2000,
+    enabled: true,
+    expectedVersion: 1,
+  }
+  templateBaseline.value = JSON.stringify(templateDraft.value)
+  templateOpen.value = true
+}
+
+function handleTemplateAdd(channel: 'ASSISTANT' | 'IN_APP'): void {
+  if (selectedTemplateGroup.value !== null) {
+    openCreateTemplateForChannel(selectedTemplateGroup.value, channel)
+  }
 }
 
 function openEditTemplate(template: NotificationTemplateDto): void {
@@ -933,137 +880,29 @@ onMounted(() => {
         </FaButton>
       </div>
 
-      <QsGenericTable
-        class="mt-4"
-        :columns="templateColumns"
-        :data="templateGroups"
-        :grouping="templateGrouping"
-        :addable="false"
-        :searchable="false"
-        :action-column="{ width: 180, minWidth: 180 }"
-        :show-pagination="false"
-        table-root-class="overflow-auto overscroll-contain h-[560px]"
-        sticky-header
-        row-key="id"
-        data-testid="notification-template-table"
+      <div
+        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:h-[560px]"
+        data-testid="notification-template-master-detail"
       >
-        <template #query-leading>
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaInput
-              v-model="templateKeyword"
-              type="search"
-              clearable
-              class="w-48"
-              placeholder="模板键或名称"
-              aria-label="搜索模板"
-            >
-              <template #start>
-                <FaIcon name="i-lucide:search" />
-              </template>
-            </FaInput>
-            <FaSelect v-model="templateDomainFilter" :options="TEMPLATE_DOMAIN_FILTER_OPTIONS" class="w-32" aria-label="模板业务域" />
-            <FaSelect v-model="templateChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="模板渠道" />
-            <FaSelect v-model="templateStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="模板状态" />
-          </div>
-        </template>
-        <template #group-header="{ row, rows }">
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaTag variant="outline" :class="templateDomainClass(row.domain)">
-              {{ templateDomainLabel(row.domain) }}
-            </FaTag>
-            <span class="qs-type-meta text-muted-foreground">{{ rows.length }} 个模板</span>
-          </div>
-        </template>
-        <template #cell-channel="{ row }">
-          <FaTag variant="outline" :class="channelTagClass(row.original.channel)">
-            {{ formatChannel(row.original.channel) }}
-          </FaTag>
-        </template>
-        <template #cell-messageKind="{ row }">
-          <FaTag variant="outline" :class="messageKindClass(row.original.messageKind)">
-            {{ messageKindLabel(row.original.messageKind) }}
-          </FaTag>
-        </template>
-        <template #cell-domain="{ row }">
-          <FaTag variant="outline" :class="templateDomainClass(row.original.domain)">
-            {{ templateDomainLabel(row.original.domain) }}
-          </FaTag>
-        </template>
-        <template #cell-updatedByInfo="{ row }">
-          <div class="flex flex-col gap-1 min-w-0">
-            <QsPersonDisplay :display-name="row.original.updatedByName ?? ''" size="sm" />
-            <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
-          </div>
-        </template>
-        <template #cell-enabled="{ row }">
-          <FaTag
-            variant="outline"
-            :class="row.original.enabled
-              ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-          >
-            {{ row.original.enabled ? '启用' : '停用' }}
-          </FaTag>
-        </template>
-        <template #actions="{ row }">
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaSwitch
-              :model-value="row.enabled"
-              :disabled="!canUpdateTemplate || busy"
-              :aria-label="`${row.name} 启用状态`"
-              :title="row.enabled ? '点击停用' : '点击启用'"
-              @update:model-value="toggleTemplateEnabled(row, Boolean($event))"
-            />
-            <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
-              编辑
-            </FaButton>
-            <FaButton variant="outline" size="sm" @click="openPreview(row)">
-              预览
-            </FaButton>
-          </div>
-        </template>
-        <template #mobile-row="{ row }">
-          <div class="flex flex-col gap-2 min-w-0">
-            <div class="flex gap-2 items-start justify-between">
-              <div class="min-w-0">
-                <p class="qs-type-body-medium m-0 truncate" :title="row.name">
-                  {{ row.name }}
-                </p>
-                <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate">
-                  {{ row.key }} · {{ formatChannel(row.channel) }}
-                </p>
-              </div>
-              <FaTag
-                variant="outline"
-                class="shrink-0"
-                :class="row.enabled
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-              >
-                {{ row.enabled ? '启用' : '停用' }}
-              </FaTag>
-            </div>
-            <p class="qs-type-meta text-muted-foreground m-0">
-              {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · {{ templateDomainLabel(row.domain) }} · 版本 {{ row.version }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
-            </p>
-            <div class="flex flex-wrap gap-2 items-center">
-              <FaSwitch
-                :model-value="row.enabled"
-                :disabled="!canUpdateTemplate || busy"
-                :aria-label="`${row.name} 启用状态`"
-                :title="row.enabled ? '点击停用' : '点击启用'"
-                @update:model-value="toggleTemplateEnabled(row, Boolean($event))"
-              />
-              <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
-                编辑
-              </FaButton>
-              <FaButton variant="outline" size="sm" @click="openPreview(row)">
-                预览
-              </FaButton>
-            </div>
-          </div>
-        </template>
-      </QsGenericTable>
+        <TemplateDomainRail
+          :groups="visibleTemplateDomainGroups"
+          :search="templateSearch"
+          :selected-key="selectedTemplateKey"
+          @select="selectedTemplateKey = $event"
+          @update:search="templateSearch = $event"
+        />
+        <div class="min-h-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-y-auto">
+          <TemplateKeyDetail
+            :group="selectedTemplateGroup"
+            :can-update="canUpdateTemplate"
+            :busy="busy"
+            @add="handleTemplateAdd"
+            @edit="openEditTemplate"
+            @preview="openPreview"
+            @toggle="toggleTemplateEnabled"
+          />
+        </div>
+      </div>
     </FaPageMain>
 
     <FaPageMain class="my-2!">
@@ -1170,7 +1009,7 @@ onMounted(() => {
         <template #cell-updatedByInfo="{ row }">
           <div class="flex flex-col gap-1 min-w-0">
             <QsPersonDisplay :display-name="row.original.updatedByName ?? ''" size="sm" />
-            <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
+            <span class="qs-type-meta text-muted-foreground">{{ formatNotificationDateTime(row.original.updatedAt) }}</span>
           </div>
         </template>
         <template #cell-enabled="{ row }">
@@ -1219,7 +1058,7 @@ onMounted(() => {
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
-              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
+              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatNotificationDateTime(row.updatedAt) }}
             </p>
             <div class="flex flex-wrap gap-2 items-center">
               <FaSwitch
