@@ -925,6 +925,8 @@ onMounted(() => {
         :searchable="false"
         :action-column="{ width: 180, minWidth: 180 }"
         :show-pagination="false"
+        table-root-class="overflow-auto overscroll-contain h-[560px]"
+        sticky-header
         row-key="id"
         data-testid="notification-template-table"
       >

@@ -71,9 +71,11 @@ const props = withDefaults(defineProps<{
   showColumnSettings?: boolean
   showPagination?: boolean
   showRowNumber?: boolean
+  stickyHeader?: boolean
   stripe?: boolean
   summaryValues?: Record<string, QsGenericTableSummaryValue>
   tableClass?: string
+  tableRootClass?: string
   total?: number
 }>(), {
   actionColumn: () => ({}),
@@ -96,9 +98,11 @@ const props = withDefaults(defineProps<{
   showColumnSettings: true,
   showPagination: true,
   showRowNumber: true,
+  stickyHeader: false,
   stripe: false,
   summaryValues: () => ({}),
   tableClass: undefined,
+  tableRootClass: 'overflow-x-auto',
   total: undefined,
 })
 
@@ -777,8 +781,9 @@ watch([tableColumns, isNarrow], () => {
         :sortable="true"
         :sorting="sorting"
         :stripe="stripe"
+        :header-class="stickyHeader ? '[&_th]:top-0' : undefined"
         :table-class="tableClass"
-        table-root-class="overflow-x-auto"
+        :table-root-class="tableRootClass"
         :class="loading && data.length ? 'pointer-events-none opacity-60' : undefined"
         @sorting-change="handleSortingChange"
         @selection-change="handleSelectionChange"
