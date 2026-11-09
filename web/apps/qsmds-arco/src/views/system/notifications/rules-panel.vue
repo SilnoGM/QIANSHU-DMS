@@ -17,6 +17,7 @@ import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
 
 const toast = useQsToast()
@@ -226,22 +227,22 @@ async function ensurePolicyOptions(): Promise<void> {
 }
 
 const templateColumns: QsGenericTableColumn<NotificationTemplateDto>[] = [
-  { accessorKey: 'name', id: 'name', title: '名称', minWidth: 160 },
+  { accessorKey: 'name', id: 'name', title: '名称', minWidth: 120 },
   { accessorKey: 'messageKind', id: 'messageKind', title: '类型', width: 90 },
   { accessorKey: 'key', id: 'key', title: '模板键', minWidth: 180 },
-  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 110 },
+  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
   { accessorKey: 'version', id: 'version', title: '版本', width: 80 },
-  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 140 },
+  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 170 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
   { accessorKey: 'eventType', id: 'eventType', title: '事件', minWidth: 180 },
-  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 110 },
+  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
   { accessorKey: 'targetMode', id: 'targetMode', title: '目标', width: 110 },
   { accessorKey: 'templateKey', id: 'templateKey', title: '模板', minWidth: 160 },
   { accessorKey: 'priority', id: 'priority', title: '优先级', width: 80 },
   { accessorKey: 'ttlSeconds', id: 'ttlSeconds', title: 'TTL', width: 100 },
-  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 140 },
+  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 170 },
   { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
 ]
 
@@ -326,6 +327,16 @@ function channelTagClass(channel: string): string {
     return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
   }
   return 'border-border bg-muted text-muted-foreground'
+}
+
+function messageKindLabel(kind: string): string {
+  return kind === 'LINK' ? '链接' : '文本'
+}
+
+function messageKindClass(kind: string): string {
+  return kind === 'LINK'
+    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+    : 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
 }
 
 async function load(): Promise<void> {
@@ -827,6 +838,7 @@ onMounted(() => {
         :data="filteredTemplates"
         :addable="false"
         :searchable="false"
+        :action-column="{ width: 180, minWidth: 180 }"
         :show-pagination="false"
         row-key="id"
         data-testid="notification-template-table"
@@ -855,26 +867,35 @@ onMounted(() => {
           </FaTag>
         </template>
         <template #cell-messageKind="{ row }">
-          {{ row.original.messageKind === 'LINK' ? '链接' : '文本' }}
+          <FaTag variant="outline" :class="messageKindClass(row.original.messageKind)">
+            {{ messageKindLabel(row.original.messageKind) }}
+          </FaTag>
         </template>
         <template #cell-updatedByInfo="{ row }">
-          <div class="leading-4 flex flex-col min-w-0">
-            <span class="truncate">{{ row.original.updatedByName ?? '—' }}</span>
+          <div class="flex flex-col gap-1 min-w-0">
+            <QsPersonDisplay :display-name="row.original.updatedByName ?? ''" size="sm" />
             <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
           </div>
         </template>
         <template #cell-enabled="{ row }">
-          <div class="flex gap-2 items-center">
-            <FaSwitch
-              :model-value="row.original.enabled"
-              :disabled="!canUpdateTemplate || busy"
-              @update:model-value="toggleTemplateEnabled(row.original, Boolean($event))"
-            />
-            <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
-          </div>
+          <FaTag
+            variant="outline"
+            :class="row.original.enabled
+              ? 'border-primary/30 bg-primary/10 text-primary'
+              : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
+          >
+            {{ row.original.enabled ? '启用' : '停用' }}
+          </FaTag>
         </template>
         <template #actions="{ row }">
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaSwitch
+              :model-value="row.enabled"
+              :disabled="!canUpdateTemplate || busy"
+              :aria-label="`${row.name} 启用状态`"
+              :title="row.enabled ? '点击停用' : '点击启用'"
+              @update:model-value="toggleTemplateEnabled(row, Boolean($event))"
+            />
             <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
               编辑
             </FaButton>
@@ -894,14 +915,27 @@ onMounted(() => {
                   {{ row.key }} · {{ formatChannel(row.channel) }}
                 </p>
               </div>
-              <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
+              <FaTag
+                variant="outline"
+                class="shrink-0"
+                :class="row.enabled
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
+              >
                 {{ row.enabled ? '启用' : '停用' }}
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
               {{ row.messageKind === 'LINK' ? '链接' : '文本' }} · 版本 {{ row.version }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
             </p>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2 items-center">
+              <FaSwitch
+                :model-value="row.enabled"
+                :disabled="!canUpdateTemplate || busy"
+                :aria-label="`${row.name} 启用状态`"
+                :title="row.enabled ? '点击停用' : '点击启用'"
+                @update:model-value="toggleTemplateEnabled(row, Boolean($event))"
+              />
               <FaButton variant="outline" size="sm" :disabled="!canUpdateTemplate || busy" @click="openEditTemplate(row)">
                 编辑
               </FaButton>
@@ -972,6 +1006,7 @@ onMounted(() => {
         :data="filteredPolicies"
         :addable="false"
         :searchable="false"
+        :action-column="{ width: 140, minWidth: 140 }"
         :show-pagination="false"
         row-key="id"
         data-testid="notification-policy-table"
@@ -1015,25 +1050,34 @@ onMounted(() => {
           {{ formatTtl(row.original.ttlSeconds) }}
         </template>
         <template #cell-updatedByInfo="{ row }">
-          <div class="leading-4 flex flex-col min-w-0">
-            <span class="truncate">{{ row.original.updatedByName ?? '—' }}</span>
+          <div class="flex flex-col gap-1 min-w-0">
+            <QsPersonDisplay :display-name="row.original.updatedByName ?? ''" size="sm" />
             <span class="qs-type-meta text-muted-foreground">{{ formatDateTime(row.original.updatedAt) }}</span>
           </div>
         </template>
         <template #cell-enabled="{ row }">
-          <div class="flex gap-2 items-center">
-            <FaSwitch
-              :model-value="row.original.enabled"
-              :disabled="!canUpdatePolicy || busy"
-              @update:model-value="togglePolicyEnabled(row.original, Boolean($event))"
-            />
-            <span class="qs-type-meta">{{ row.original.enabled ? '启用' : '停用' }}</span>
-          </div>
+          <FaTag
+            variant="outline"
+            :class="row.original.enabled
+              ? 'border-primary/30 bg-primary/10 text-primary'
+              : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
+          >
+            {{ row.original.enabled ? '启用' : '停用' }}
+          </FaTag>
         </template>
         <template #actions="{ row }">
-          <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
-            编辑
-          </FaButton>
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaSwitch
+              :model-value="row.enabled"
+              :disabled="!canUpdatePolicy || busy"
+              :aria-label="`${formatEventType(row.eventType)} 启用状态`"
+              :title="row.enabled ? '点击停用' : '点击启用'"
+              @update:model-value="togglePolicyEnabled(row, Boolean($event))"
+            />
+            <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
+              编辑
+            </FaButton>
+          </div>
         </template>
         <template #mobile-row="{ row }">
           <div class="flex flex-col gap-2 min-w-0">
@@ -1046,14 +1090,27 @@ onMounted(() => {
                   {{ formatChannel(row.channel) }} · {{ TARGET_MODE_LABELS[row.targetMode] ?? row.targetMode }}
                 </p>
               </div>
-              <FaTag variant="outline" class="shrink-0" :class="row.enabled ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'">
+              <FaTag
+                variant="outline"
+                class="shrink-0"
+                :class="row.enabled
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
+              >
                 {{ row.enabled ? '启用' : '停用' }}
               </FaTag>
             </div>
             <p class="qs-type-meta text-muted-foreground m-0">
               模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatDateTime(row.updatedAt) }}
             </p>
-            <div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <FaSwitch
+                :model-value="row.enabled"
+                :disabled="!canUpdatePolicy || busy"
+                :aria-label="`${formatEventType(row.eventType)} 启用状态`"
+                :title="row.enabled ? '点击停用' : '点击启用'"
+                @update:model-value="togglePolicyEnabled(row, Boolean($event))"
+              />
               <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
                 编辑
               </FaButton>
