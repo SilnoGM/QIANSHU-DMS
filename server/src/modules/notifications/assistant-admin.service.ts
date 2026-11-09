@@ -30,6 +30,7 @@ import type {
   AssistantChannelUpdateDto,
   AssistantContactDto,
   AssistantTargetDto,
+  AssistantTargetMemberDto,
   AssistantTargetUpdateDto,
 } from './assistant-admin.dto'
 
@@ -904,6 +905,38 @@ export class AssistantAdminService {
       this.mapUpstreamError(error)
     }
     return this.listTargets()
+  }
+
+  async listTargetMembers(id: string): Promise<AssistantTargetMemberDto[]> {
+    const target = await this.prisma.assistantTarget.findUnique({
+      where: { id },
+      select: { chatroomId: true },
+    })
+    if (target === null) {
+      throw new ApiException(404, 'ASSISTANT_TARGET_NOT_FOUND', '群目标不存在')
+    }
+    const account = await this.prisma.assistantAccount.findFirst({
+      where: ACTIVE_ACCOUNT_WHERE,
+      orderBy: { createdAt: 'asc' },
+      select: { appId: true },
+    })
+    if (account === null) {
+      throw new ApiException(422, 'ASSISTANT_ACCOUNT_UNAVAILABLE', '没有可用的公司号')
+    }
+    try {
+      const members = await this.adminTransport.fetchChatroomMembers(account.appId, target.chatroomId)
+      return members.map(member => ({
+        wxid: member.wxid,
+        nickname: member.nickname,
+        displayName: member.displayName,
+        avatarUrl: member.avatarUrl,
+        inviterName: member.inviterName,
+        role: member.role,
+      }))
+    }
+    catch (error) {
+      this.mapUpstreamError(error)
+    }
   }
 
   async updateTarget(id: string, input: AssistantTargetUpdateDto): Promise<AssistantTargetDto> {

@@ -25,6 +25,7 @@ import {
   AssistantContactQueryDto,
   AssistantIdParamDto,
   AssistantTargetDto,
+  AssistantTargetMemberDto,
   AssistantTargetUpdateDto,
   AssistantTestSendDto,
 } from './assistant-admin.dto'
@@ -236,6 +237,18 @@ export class AssistantAdminController {
   @contract('assistant_targets_sync', true, [{ status: 422, codes: ['ASSISTANT_ACCOUNT_UNAVAILABLE'] }, ...upstreamErrors])
   syncTargets() {
     return this.assistant.syncTargets()
+  }
+
+  @Get('targets/:id/members')
+  @RequirePermissions('assistant-target:read')
+  @ApiContractResponse({ status: 200, type: [AssistantTargetMemberDto] })
+  @contract('assistant_targets_members', false, [
+    { status: 404, codes: ['ASSISTANT_TARGET_NOT_FOUND'] },
+    { status: 422, codes: ['ASSISTANT_ACCOUNT_UNAVAILABLE'] },
+    ...upstreamErrors,
+  ])
+  listTargetMembers(@Param() params: AssistantIdParamDto) {
+    return this.assistant.listTargetMembers(params.id)
   }
 
   @Patch('targets/:id')

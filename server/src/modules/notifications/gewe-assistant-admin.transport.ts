@@ -11,6 +11,7 @@ import {
   type AssistantAdminTransport,
   type AssistantBriefContact,
   type AssistantChatroomInfo,
+  type AssistantChatroomMember,
 } from './notification.types'
 
 interface AssistantAdminTransportOptions {
@@ -124,6 +125,45 @@ export class GeweAssistantAdminTransport implements AssistantAdminTransport {
       // GeWe 不返回成员数，只能使用成员列表长度；大群是否截断以上游返回为准。
       memberCount: Array.isArray(data.memberList) ? data.memberList.length : null,
     }
+  }
+
+  async fetchChatroomMembers(appId: string, chatroomId: string): Promise<readonly AssistantChatroomMember[]> {
+    const data = asRecord(await this.post('/gewe/v2/api/group/getChatroomMemberList', { appId, chatroomId }))
+    if (data === null || !Array.isArray(data.memberList)) {
+      throw new AssistantAdminError('ASSISTANT_CHATROOM_MEMBERS_INVALID', 'UNKNOWN', 'GeWe 群成员响应无效')
+    }
+    const ownerWxid = asString(data.chatroomOwner)
+    const adminWxid = asString(data.adminWxid)
+    const rows: {
+      avatarUrl: string | null
+      displayName: string | null
+      inviterWxid: string | null
+      nickname: string | null
+      wxid: string
+    }[] = []
+    for (const item of data.memberList) {
+      const record = asRecord(item)
+      const wxid = asString(record?.wxid) ?? asString(record?.userName)
+      if (wxid === null) {
+        continue
+      }
+      rows.push({
+        avatarUrl: asString(record?.bigHeadImgUrl) ?? asString(record?.smallHeadImgUrl),
+        displayName: asString(record?.displayName),
+        inviterWxid: asString(record?.inviterUserName),
+        nickname: asString(record?.nickName),
+        wxid,
+      })
+    }
+    const nameByWxid = new Map(rows.map(row => [row.wxid, row.displayName ?? row.nickname ?? row.wxid]))
+    return rows.map(row => ({
+      wxid: row.wxid,
+      nickname: row.nickname,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      inviterName: row.inviterWxid === null ? null : nameByWxid.get(row.inviterWxid) ?? null,
+      role: row.wxid === ownerWxid ? 'OWNER' : row.wxid === adminWxid ? 'ADMIN' : 'MEMBER',
+    }))
   }
 
   async getOwnQrCode(appId: string): Promise<string> {

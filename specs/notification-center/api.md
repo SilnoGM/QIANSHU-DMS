@@ -271,6 +271,7 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/assistant/bindings/check` | `assistant-binding:manage` | `assistant_bindings_check` | 触发好友关系巡检 |
 | GET | `/api/assistant/targets` | `assistant-target:read` | `assistant_targets_list` | 群目标列表 |
 | POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群；新群 key 默认使用 `chatroomId` |
+| GET | `/api/assistant/targets/:id/members` | `assistant-target:read` | `assistant_targets_members` | 按需读取群成员与群主/管理员角色，不落库 |
 | PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 编辑语义 key、名称、用途、内部群与启停 |
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
 | GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
@@ -285,6 +286,8 @@ export interface SystemNotificationPublishResult {
 `POST /api/assistant/bindings/:id/verify` 请求体为 `{ "content": "..." }`：去除首尾空白后不能为空，最长 500 个字符；空内容或超限返回 422 `ASSISTANT_BINDING_CONTENT_INVALID`。服务端先以 `last_test_sent_at` 的条件更新原子占用 30 秒冷却窗口，窗口内重复请求返回 429 `ASSISTANT_BINDING_TEST_COOLDOWN` 且不调用 GeWe；发送成功后写入验证时间并标记 `ACTIVE`。测试内容只用于本次发送，不落库、不进审计；上游失败同样占用冷却窗口，避免连续重试。
 
 群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。同步群会为前 100 个群调用 GeWe `getChatroomInfo` 刷新名称、头像与 `memberCount`（成员列表长度）；单个群详情被拒绝或返回未知业务错误时跳过该群的详情字段，离线、限流、超时和网络失败仍使整批同步失败。群目标响应包含 `avatarUrl`、`memberCount`、`lastSyncedAt`，列表读取不访问 GeWe。
+
+`GET /api/assistant/targets/:id/members` 按需调用 GeWe `getChatroomMemberList`，返回成员 `wxid`、微信昵称、群内昵称、头像、邀请人昵称和角色（`OWNER`/`ADMIN`/`MEMBER`，由 `chatroomOwner`/`adminWxid` 匹配）。GeWe 该接口没有分页参数，返回数量以上游为准。成员列表不落库、不写审计，关闭页面即丢弃；没有可用公司号返回 422 `ASSISTANT_ACCOUNT_UNAVAILABLE`，群目标不存在返回 404 `ASSISTANT_TARGET_NOT_FOUND`，其余上游错误复用统一的 422/429/503 映射。成员是否内部员工不由系统判断。
 
 上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 

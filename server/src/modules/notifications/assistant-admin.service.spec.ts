@@ -25,6 +25,7 @@ function adminTransport(online = true) {
     fetchContactIds: jest.fn().mockResolvedValue({ friends: [], chatrooms: [] }),
     fetchBriefInfo: jest.fn().mockResolvedValue([]),
     fetchChatroomInfo: jest.fn().mockResolvedValue({ nickname: null, avatarUrl: null, memberCount: null }),
+    fetchChatroomMembers: jest.fn().mockResolvedValue([]),
     checkRelations: jest.fn().mockResolvedValue([]),
     getOwnQrCode: jest.fn(),
   } as unknown as AssistantAdminTransport & {
@@ -32,6 +33,7 @@ function adminTransport(online = true) {
     fetchContactIds: jest.Mock
     fetchBriefInfo: jest.Mock
     fetchChatroomInfo: jest.Mock
+    fetchChatroomMembers: jest.Mock
     checkRelations: jest.Mock
     getOwnQrCode: jest.Mock
   }
@@ -640,6 +642,55 @@ describe('AssistantAdminService', () => {
         avatarUrl: 'https://example.com/brief-avatar.png',
       }),
     }))
+  })
+
+  it('returns chatroom members with roles and inviter names', async () => {
+    const prisma = {
+      assistantTarget: { findUnique: jest.fn().mockResolvedValue({ chatroomId: 'room-1@chatroom' }) },
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue(accountRow()) },
+    }
+    const admin = adminTransport()
+    admin.fetchChatroomMembers.mockResolvedValue([
+      {
+        wxid: 'wxid-owner',
+        nickname: '张三',
+        displayName: '群主张三',
+        avatarUrl: 'https://example.com/owner.png',
+        inviterName: null,
+        role: 'OWNER',
+      },
+      {
+        wxid: 'wxid-admin',
+        nickname: '李四',
+        displayName: null,
+        avatarUrl: null,
+        inviterName: '群主张三',
+        role: 'ADMIN',
+      },
+    ])
+
+    const result = await service(prisma, new FakeAssistantTransport(), admin).listTargetMembers('target-1')
+
+    expect(admin.fetchChatroomMembers).toHaveBeenCalledWith('wx-app', 'room-1@chatroom')
+    expect(result).toEqual([
+      expect.objectContaining({ wxid: 'wxid-owner', role: 'OWNER', inviterName: null }),
+      expect.objectContaining({ wxid: 'wxid-admin', role: 'ADMIN', inviterName: '群主张三' }),
+    ])
+  })
+
+  it('rejects member lookup for a missing target or without an active account', async () => {
+    const missingTarget = {
+      assistantTarget: { findUnique: jest.fn().mockResolvedValue(null) },
+    }
+    await expect(service(missingTarget).listTargetMembers('target-1'))
+      .rejects.toMatchObject({ code: 'ASSISTANT_TARGET_NOT_FOUND' })
+
+    const missingAccount = {
+      assistantTarget: { findUnique: jest.fn().mockResolvedValue({ chatroomId: 'room-1@chatroom' }) },
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+    }
+    await expect(service(missingAccount).listTargetMembers('target-1'))
+      .rejects.toMatchObject({ code: 'ASSISTANT_ACCOUNT_UNAVAILABLE' })
   })
 
   it('updates the semantic target key and rejects a duplicate', async () => {

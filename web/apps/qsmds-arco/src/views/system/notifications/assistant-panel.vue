@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AssistantAccountDto, AssistantBindingDto, AssistantContactDto, AssistantTargetDto, UserDto } from '@/api/generated/types.gen'
+import type { AssistantAccountDto, AssistantBindingDto, AssistantContactDto, AssistantTargetDto, AssistantTargetMemberDto, UserDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 
 import { computed, onMounted, ref } from 'vue'
@@ -20,6 +20,7 @@ const { auth } = useAppAuth()
 const canUpdateChannel = computed(() => auth('assistant-channel:update'))
 const canOperateAccount = computed(() => auth('assistant-account:operate'))
 const canManageBinding = computed(() => auth('assistant-binding:manage'))
+const canReadTarget = computed(() => auth('assistant-target:read'))
 const canManageTarget = computed(() => auth('assistant-target:manage'))
 
 const loading = ref(true)
@@ -67,6 +68,19 @@ const targetEditId = ref<string | null>(null)
 const targetDraft = ref({ key: '', name: '', purpose: '' })
 type TargetFilter = 'all' | 'disabled' | 'external' | 'internal'
 const targetFilter = ref<TargetFilter>('all')
+const targetMemberCache = new Map<string, AssistantTargetMemberDto[]>()
+const flippedTargetId = ref<string | null>(null)
+const flippedMembers = ref<AssistantTargetMemberDto[]>([])
+const flippedMembersLoading = ref(false)
+const flippedMembersError = ref<string | null>(null)
+const memberDetailOpen = ref(false)
+const memberDetail = ref<AssistantTargetMemberDto | null>(null)
+const groupMembersOpen = ref(false)
+const groupMembersTarget = ref<AssistantTargetDto | null>(null)
+const groupMembers = ref<AssistantTargetMemberDto[]>([])
+const groupMembersLoading = ref(false)
+const groupMembersError = ref<string | null>(null)
+const groupMemberKeyword = ref('')
 
 const editingAccount = computed(() => accounts.value.find(account => account.id === editingAccountId.value) ?? null)
 const accountDialogTitle = computed(() => accountDialogMode.value === 'create' ? '导入公司号' : '更新公司号节点')
@@ -104,6 +118,14 @@ const filteredTargets = computed(() => {
     }
     return true
   })
+})
+const filteredGroupMembers = computed(() => {
+  const keyword = groupMemberKeyword.value.trim().toLowerCase()
+  if (keyword.length === 0) {
+    return groupMembers.value
+  }
+  return groupMembers.value.filter(member => [member.displayName ?? '', member.nickname ?? '', member.wxid]
+    .some(value => value.toLowerCase().includes(keyword)))
 })
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -200,6 +222,16 @@ function bindingMenuItems(binding: AssistantBindingDto): ActionMenuItem[][] {
 function targetMenuItems(target: AssistantTargetDto): ActionMenuItem[][] {
   return [[
     {
+      disabled: !canReadTarget.value || busy.value,
+      handle: () => toggleTargetFlip(target),
+      label: '查看成员',
+    },
+    {
+      disabled: !canReadTarget.value || busy.value,
+      handle: () => openGroupMembers(target),
+      label: '查看群组',
+    },
+    {
       disabled: !canManageTarget.value || busy.value,
       handle: () => openTargetEdit(target),
       label: '编辑信息',
@@ -215,6 +247,118 @@ function targetScopeClass(internalOnly: boolean): string {
   return internalOnly
     ? 'border-primary/30 bg-primary/10 text-primary'
     : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+}
+
+function memberDisplayName(member: AssistantTargetMemberDto): string {
+  return member.displayName?.trim() || member.nickname?.trim() || member.wxid
+}
+
+function memberRoleLabel(role: string): string {
+  if (role === 'OWNER') {
+    return '群主'
+  }
+  if (role === 'ADMIN') {
+    return '管理员'
+  }
+  return '成员'
+}
+
+function memberRoleClass(role: string): string {
+  if (role === 'OWNER') {
+    return 'border-primary/30 bg-primary/10 text-primary'
+  }
+  if (role === 'ADMIN') {
+    return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+  }
+  return 'border-border bg-muted text-muted-foreground'
+}
+
+async function requestTargetMembers(target: AssistantTargetDto): Promise<AssistantTargetMemberDto[]> {
+  const cached = targetMemberCache.get(target.id)
+  if (cached !== undefined) {
+    return cached
+  }
+  const members = (await notificationsApi.assistant.targets.members(target.id, new AbortController().signal)).data
+  targetMemberCache.set(target.id, members)
+  return members
+}
+
+async function loadFlippedMembers(target: AssistantTargetDto): Promise<void> {
+  flippedMembersError.value = null
+  flippedMembersLoading.value = true
+  try {
+    const members = await requestTargetMembers(target)
+    if (flippedTargetId.value !== target.id) {
+      return
+    }
+    flippedMembers.value = members
+  }
+  catch (failure) {
+    if (flippedTargetId.value !== target.id) {
+      return
+    }
+    flippedMembersError.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
+  }
+  finally {
+    if (flippedTargetId.value === target.id) {
+      flippedMembersLoading.value = false
+    }
+  }
+}
+
+function toggleTargetFlip(target: AssistantTargetDto): void {
+  if (flippedTargetId.value === target.id) {
+    closeTargetFlip()
+    return
+  }
+  flippedTargetId.value = target.id
+  flippedMembers.value = []
+  flippedMembersError.value = null
+  void loadFlippedMembers(target)
+}
+
+function closeTargetFlip(): void {
+  flippedTargetId.value = null
+  flippedMembers.value = []
+  flippedMembersError.value = null
+  flippedMembersLoading.value = false
+}
+
+function openMemberDetail(member: AssistantTargetMemberDto): void {
+  memberDetail.value = member
+  memberDetailOpen.value = true
+}
+
+async function loadGroupMembers(target: AssistantTargetDto): Promise<void> {
+  groupMembersError.value = null
+  groupMembersLoading.value = true
+  try {
+    const members = await requestTargetMembers(target)
+    if (groupMembersTarget.value?.id !== target.id) {
+      return
+    }
+    groupMembers.value = members
+  }
+  catch (failure) {
+    if (groupMembersTarget.value?.id !== target.id) {
+      return
+    }
+    groupMembersError.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
+  }
+  finally {
+    if (groupMembersTarget.value?.id === target.id) {
+      groupMembersLoading.value = false
+    }
+  }
+}
+
+function openGroupMembers(target: AssistantTargetDto): void {
+  groupMembersTarget.value = target
+  groupMembers.value = []
+  groupMembersError.value = null
+  groupMemberKeyword.value = ''
+  groupMembersOpen.value = true
+  void loadGroupMembers(target)
 }
 
 async function loadAll(): Promise<void> {
@@ -888,97 +1032,168 @@ onMounted(() => {
             <div
               v-for="target in filteredTargets"
               :key="target.id"
-              class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0 overflow-hidden"
+              class="min-w-0 [perspective:1200px]"
             >
-              <div class="flex gap-2.5 items-start">
-                <span class="shrink-0 relative">
-                  <FaAvatar
-                    :src="target.avatarUrl ?? ''"
-                    :fallback="target.name"
-                    class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted size-10"
-                  />
-                  <span
-                    class="border-2 border-background rounded-full size-3 absolute -bottom-0.5 -right-0.5"
-                    :class="targetStatusDotClass(target.enabled)"
-                    :title="`群状态：${target.enabled ? '已启用' : '已停用'}`"
-                    :aria-label="`群状态：${target.enabled ? '已启用' : '已停用'}`"
-                    role="img"
-                  />
-                </span>
-                <div class="flex-1 min-w-0">
-                  <div class="flex gap-2 items-start justify-between">
-                    <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="target.name">
-                      {{ target.name }}
-                    </p>
-                    <FaTag variant="outline" class="shrink-0" :class="targetScopeClass(target.internalOnly)">
-                      {{ target.internalOnly ? '仅内部' : '非内部' }}
-                    </FaTag>
+              <div
+                class="transition-transform duration-500 ease-out [transform-style:preserve-3d] relative motion-reduce:transition-none"
+                :class="flippedTargetId === target.id ? '[transform:rotateY(180deg)]' : ''"
+              >
+                <div
+                  class="p-3 border border-border rounded-lg bg-background flex flex-col gap-3 min-w-0 [backface-visibility:hidden] overflow-hidden"
+                  :class="flippedTargetId === target.id ? 'pointer-events-none' : ''"
+                  :aria-hidden="flippedTargetId === target.id ? 'true' : undefined"
+                  :inert="flippedTargetId === target.id ? true : undefined"
+                >
+                  <div class="flex gap-2.5 items-start">
+                    <span class="shrink-0 relative">
+                      <FaAvatar
+                        :src="target.avatarUrl ?? ''"
+                        :fallback="target.name"
+                        class="text-sm text-muted-foreground font-medium border border-border rounded-lg bg-muted size-10"
+                      />
+                      <span
+                        class="border-2 border-background rounded-full size-3 absolute -bottom-0.5 -right-0.5"
+                        :class="targetStatusDotClass(target.enabled)"
+                        :title="`群状态：${target.enabled ? '已启用' : '已停用'}`"
+                        :aria-label="`群状态：${target.enabled ? '已启用' : '已停用'}`"
+                        role="img"
+                      />
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex gap-2 items-start justify-between">
+                        <p class="qs-type-body-medium m-0 min-w-0 truncate" :title="target.name">
+                          {{ target.name }}
+                        </p>
+                        <FaTag variant="outline" class="shrink-0" :class="targetScopeClass(target.internalOnly)">
+                          {{ target.internalOnly ? '仅内部' : '非内部' }}
+                        </FaTag>
+                      </div>
+                      <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate" :title="target.purpose ?? ''">
+                        用途：{{ target.purpose?.trim() || '未设置用途' }}
+                      </p>
+                    </div>
                   </div>
-                  <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate" :title="target.purpose ?? ''">
-                    用途：{{ target.purpose?.trim() || '未设置用途' }}
+
+                  <div class="px-2.5 py-1 rounded-md bg-slate-50 flex gap-1.5 min-w-0 items-center dark:bg-slate-900/40">
+                    <span class="text-xs text-slate-500 font-mono flex-1 min-w-0 truncate dark:text-slate-400" :title="target.chatroomId">
+                      {{ target.chatroomId }}
+                    </span>
+                    <CopyCellButton :text="target.chatroomId" label="群 chatroomId" always-visible />
+                  </div>
+
+                  <dl class="m-0 flex flex-col gap-1">
+                    <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                      <dt class="text-slate-400 shrink-0">
+                        语义 key
+                      </dt>
+                      <dd class="text-slate-600 m-0 min-w-0 truncate dark:text-slate-300" :title="target.key">
+                        {{ target.key }}
+                      </dd>
+                    </div>
+                    <div v-if="target.memberCount !== null" class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                      <dt class="text-slate-400 shrink-0">
+                        成员数
+                      </dt>
+                      <dd class="text-slate-600 m-0 dark:text-slate-300">
+                        {{ target.memberCount }}
+                      </dd>
+                    </div>
+                    <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
+                      <dt class="text-slate-400 shrink-0">
+                        同步时间
+                      </dt>
+                      <dd class="text-slate-600 m-0 dark:text-slate-300">
+                        {{ formatDate(target.lastSyncedAt) }}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div class="mt-auto px-3 py-2 bg-slate-50/70 flex flex-wrap gap-2 items-center justify-between -mx-3 -mb-3 dark:bg-slate-900/40">
+                    <div class="flex flex-wrap gap-3 items-center">
+                      <label class="qs-type-meta flex gap-1.5 items-center">
+                        仅内部成员
+                        <FaSwitch
+                          :model-value="target.internalOnly"
+                          :disabled="!canManageTarget || busy"
+                          @update:model-value="updateTarget(target, { internalOnly: Boolean($event) })"
+                        />
+                      </label>
+                      <label class="qs-type-meta flex gap-1.5 items-center">
+                        启用
+                        <FaSwitch
+                          :model-value="target.enabled"
+                          :disabled="!canManageTarget || busy"
+                          @update:model-value="updateTarget(target, { enabled: Boolean($event) })"
+                        />
+                      </label>
+                    </div>
+                    <FaDropdown :items="targetMenuItems(target)" align="end">
+                      <FaButton variant="outline" size="sm" class="text-xs! text-slate-600! font-normal! dark:text-slate-300!" :disabled="busy">
+                        更多
+                        <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
+                      </FaButton>
+                    </FaDropdown>
+                  </div>
+                </div>
+
+                <div
+                  class="p-3 border border-border rounded-lg bg-background flex flex-col gap-2 min-w-0 [backface-visibility:hidden] [transform:rotateY(180deg)] inset-0 absolute overflow-hidden"
+                  :class="flippedTargetId === target.id ? '' : 'pointer-events-none'"
+                  :aria-hidden="flippedTargetId === target.id ? undefined : 'true'"
+                  :inert="flippedTargetId === target.id ? undefined : true"
+                >
+                  <div class="flex gap-2 items-start justify-between">
+                    <div class="min-w-0">
+                      <p class="qs-type-body-medium m-0 truncate" :title="target.name">
+                        {{ target.name }}
+                      </p>
+                      <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
+                        {{ flippedMembers.length > 0 ? flippedMembers.length : (target.memberCount ?? 0) }} 位成员
+                      </p>
+                    </div>
+                    <FaButton variant="outline" size="sm" class="text-xs! text-slate-600! font-normal! dark:text-slate-300!" @click="closeTargetFlip">
+                      返回
+                    </FaButton>
+                  </div>
+
+                  <div class="flex-1 min-h-0 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+                    <p v-if="flippedMembersLoading" class="qs-type-meta text-muted-foreground m-0">
+                      成员加载中…
+                    </p>
+                    <div v-else-if="flippedMembersError !== null" class="flex flex-col gap-2 items-start">
+                      <p class="qs-type-meta text-destructive m-0">
+                        {{ flippedMembersError }}
+                      </p>
+                      <FaButton variant="outline" size="sm" @click="loadFlippedMembers(target)">
+                        重试
+                      </FaButton>
+                    </div>
+                    <p v-else-if="flippedMembers.length === 0" class="qs-type-meta text-muted-foreground m-0">
+                      暂无成员信息
+                    </p>
+                    <div v-else class="gap-2 grid grid-cols-6">
+                      <button
+                        v-for="member in flippedMembers"
+                        :key="member.wxid"
+                        type="button"
+                        class="p-0.5 border-2 border-transparent rounded-full transition-colors focus-visible:outline-none hover:border-primary focus-visible:ring-2 focus-visible:ring-primary/40"
+                        :title="memberDisplayName(member)"
+                        :aria-label="`查看成员：${memberDisplayName(member)}`"
+                        @click="openMemberDetail(member)"
+                      >
+                        <FaAvatar
+                          :src="member.avatarUrl ?? ''"
+                          :fallback="memberDisplayName(member)"
+                          class="text-xs text-muted-foreground font-medium border border-border rounded-full bg-muted size-8"
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p class="qs-type-meta text-muted-foreground m-0">
+                    点击头像查看成员信息
                   </p>
                 </div>
-              </div>
-
-              <div class="px-2.5 py-1 rounded-md bg-slate-50 flex gap-1.5 min-w-0 items-center dark:bg-slate-900/40">
-                <span class="text-xs text-slate-500 font-mono flex-1 min-w-0 truncate dark:text-slate-400" :title="target.chatroomId">
-                  {{ target.chatroomId }}
-                </span>
-                <CopyCellButton :text="target.chatroomId" label="群 chatroomId" always-visible />
-              </div>
-
-              <dl class="m-0 flex flex-col gap-1">
-                <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
-                  <dt class="text-slate-400 shrink-0">
-                    语义 key
-                  </dt>
-                  <dd class="text-slate-600 m-0 min-w-0 truncate dark:text-slate-300" :title="target.key">
-                    {{ target.key }}
-                  </dd>
-                </div>
-                <div v-if="target.memberCount !== null" class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
-                  <dt class="text-slate-400 shrink-0">
-                    成员数
-                  </dt>
-                  <dd class="text-slate-600 m-0 dark:text-slate-300">
-                    {{ target.memberCount }}
-                  </dd>
-                </div>
-                <div class="text-xs leading-4 flex gap-2 min-w-0 items-center justify-between">
-                  <dt class="text-slate-400 shrink-0">
-                    同步时间
-                  </dt>
-                  <dd class="text-slate-600 m-0 dark:text-slate-300">
-                    {{ formatDate(target.lastSyncedAt) }}
-                  </dd>
-                </div>
-              </dl>
-
-              <div class="mt-auto px-3 py-2 bg-slate-50/70 flex flex-wrap gap-2 items-center justify-between -mx-3 -mb-3 dark:bg-slate-900/40">
-                <div class="flex flex-wrap gap-3 items-center">
-                  <label class="qs-type-meta flex gap-1.5 items-center">
-                    仅内部成员
-                    <FaSwitch
-                      :model-value="target.internalOnly"
-                      :disabled="!canManageTarget || busy"
-                      @update:model-value="updateTarget(target, { internalOnly: Boolean($event) })"
-                    />
-                  </label>
-                  <label class="qs-type-meta flex gap-1.5 items-center">
-                    启用
-                    <FaSwitch
-                      :model-value="target.enabled"
-                      :disabled="!canManageTarget || busy"
-                      @update:model-value="updateTarget(target, { enabled: Boolean($event) })"
-                    />
-                  </label>
-                </div>
-                <FaDropdown :items="targetMenuItems(target)" align="end">
-                  <FaButton variant="outline" size="sm" class="text-xs! text-slate-600! font-normal! dark:text-slate-300!" :disabled="busy">
-                    更多
-                    <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
-                  </FaButton>
-                </FaDropdown>
               </div>
             </div>
           </div>
@@ -1113,6 +1328,146 @@ onMounted(() => {
         </FaButton>
         <FaButton :loading="verifySubmitting" :disabled="!canSubmitVerify" @click="submitVerify">
           确认发送
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal v-model="groupMembersOpen" title="查看群组" size="lg" @update:model-value="groupMembersOpen = $event">
+      <div class="flex flex-col gap-3">
+        <div class="flex gap-3 items-center">
+          <FaAvatar
+            :src="groupMembersTarget?.avatarUrl ?? ''"
+            :fallback="groupMembersTarget?.name ?? ''"
+            class="text-lg text-muted-foreground font-medium border border-border rounded-lg bg-muted shrink-0 size-12"
+          />
+          <div class="flex-1 min-w-0">
+            <p class="qs-type-body-medium m-0 truncate" :title="groupMembersTarget?.name ?? ''">
+              {{ groupMembersTarget?.name ?? '—' }}
+            </p>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
+              {{ groupMembers.length > 0 ? groupMembers.length : (groupMembersTarget?.memberCount ?? 0) }} 位成员
+            </p>
+          </div>
+        </div>
+
+        <FaInput
+          v-model="groupMemberKeyword"
+          type="search"
+          clearable
+          placeholder="搜索昵称或 wxid"
+          aria-label="搜索群成员"
+        >
+          <template #start>
+            <FaIcon name="i-lucide:search" />
+          </template>
+        </FaInput>
+
+        <p v-if="groupMembersLoading" class="qs-type-meta text-muted-foreground m-0">
+          成员加载中…
+        </p>
+        <div v-else-if="groupMembersError !== null" class="flex flex-col gap-2 items-start">
+          <p class="qs-type-meta text-destructive m-0">
+            {{ groupMembersError }}
+          </p>
+          <FaButton v-if="groupMembersTarget !== null" variant="outline" size="sm" @click="loadGroupMembers(groupMembersTarget)">
+            重试
+          </FaButton>
+        </div>
+        <p v-else-if="filteredGroupMembers.length === 0" class="qs-type-meta text-muted-foreground m-0">
+          {{ groupMembers.length === 0 ? '暂无成员信息' : '没有匹配的成员' }}
+        </p>
+        <div v-else class="max-h-96 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+          <div
+            v-for="member in filteredGroupMembers"
+            :key="member.wxid"
+            class="py-2 border-b border-border/60 flex gap-2.5 items-center last:border-b-0"
+          >
+            <FaAvatar
+              :src="member.avatarUrl ?? ''"
+              :fallback="memberDisplayName(member)"
+              class="text-sm text-muted-foreground font-medium border border-border rounded-full bg-muted shrink-0 size-9"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="flex gap-2 items-center">
+                <span class="qs-type-body-medium min-w-0 truncate">{{ memberDisplayName(member) }}</span>
+                <FaTag variant="outline" class="shrink-0" :class="memberRoleClass(member.role)">
+                  {{ memberRoleLabel(member.role) }}
+                </FaTag>
+              </div>
+              <p class="qs-type-meta text-muted-foreground font-mono m-0 truncate" :title="member.wxid">
+                {{ member.wxid }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <p class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+          系统不判断成员是否内部员工，「仅内部成员」仍需人工核对。
+        </p>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" @click="groupMembersOpen = false">
+          关闭
+        </FaButton>
+      </template>
+    </QsGenericModal>
+
+    <QsGenericModal v-model="memberDetailOpen" title="成员信息" size="md" @update:model-value="memberDetailOpen = $event">
+      <div v-if="memberDetail !== null" class="flex flex-col gap-4">
+        <div class="flex gap-3 items-center">
+          <FaAvatar
+            :src="memberDetail.avatarUrl ?? ''"
+            :fallback="memberDisplayName(memberDetail)"
+            class="text-lg text-muted-foreground font-medium border border-border rounded-full bg-muted shrink-0 size-14"
+          />
+          <div class="flex-1 min-w-0">
+            <div class="flex gap-2 items-center">
+              <p class="qs-type-body-medium m-0 min-w-0 truncate">
+                {{ memberDisplayName(memberDetail) }}
+              </p>
+              <FaTag variant="outline" class="shrink-0" :class="memberRoleClass(memberDetail.role)">
+                {{ memberRoleLabel(memberDetail.role) }}
+              </FaTag>
+            </div>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-0.5 truncate">
+              微信昵称：{{ memberDetail.nickname?.trim() || '—' }}
+            </p>
+          </div>
+        </div>
+
+        <dl class="m-0 flex flex-col gap-2">
+          <div class="text-xs leading-5 flex gap-3 items-center justify-between">
+            <dt class="text-slate-400 shrink-0">
+              群内昵称
+            </dt>
+            <dd class="text-slate-600 m-0 min-w-0 truncate dark:text-slate-300">
+              {{ memberDetail.displayName?.trim() || '—' }}
+            </dd>
+          </div>
+          <div class="text-xs leading-5 flex gap-3 items-center justify-between">
+            <dt class="text-slate-400 shrink-0">
+              微信 ID
+            </dt>
+            <dd class="text-slate-600 m-0 flex gap-1 min-w-0 items-center dark:text-slate-300">
+              <span class="font-mono min-w-0 truncate" :title="memberDetail.wxid">
+                {{ memberDetail.wxid }}
+              </span>
+              <CopyCellButton :text="memberDetail.wxid" label="微信wxid" always-visible />
+            </dd>
+          </div>
+          <div v-if="memberDetail.inviterName !== null" class="text-xs leading-5 flex gap-3 items-center justify-between">
+            <dt class="text-slate-400 shrink-0">
+              邀请人
+            </dt>
+            <dd class="text-slate-600 m-0 min-w-0 truncate dark:text-slate-300">
+              {{ memberDetail.inviterName }}
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" @click="memberDetailOpen = false">
+          关闭
         </FaButton>
       </template>
     </QsGenericModal>

@@ -146,12 +146,22 @@ export interface AssistantChatroomInfo {
   readonly memberCount: number | null
 }
 
+export interface AssistantChatroomMember {
+  readonly wxid: string
+  readonly nickname: string | null
+  readonly displayName: string | null
+  readonly avatarUrl: string | null
+  readonly inviterName: string | null
+  readonly role: 'ADMIN' | 'MEMBER' | 'OWNER'
+}
+
 export interface AssistantAdminTransport {
   /** 只读探测节点在线状态；账号登录、重连和退出都在 GeWe 控制台完成。 */
   checkOnline(appId: string): Promise<boolean>
   fetchContactIds(appId: string): Promise<{ readonly friends: readonly string[], readonly chatrooms: readonly string[] }>
   fetchBriefInfo(appId: string, wxids: readonly string[]): Promise<readonly AssistantBriefContact[]>
   fetchChatroomInfo(appId: string, chatroomId: string): Promise<AssistantChatroomInfo>
+  fetchChatroomMembers(appId: string, chatroomId: string): Promise<readonly AssistantChatroomMember[]>
   getOwnQrCode(appId: string): Promise<string>
   checkRelations(appId: string, wxids: readonly string[]): Promise<readonly { readonly wxid: string, readonly relation: number }[]>
 }
