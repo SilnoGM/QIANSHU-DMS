@@ -56,15 +56,24 @@ describe('NotificationAdminService', () => {
     expect(withdrawal).toMatchObject({
       label: '提现审核',
       domain: 'FINANCE',
-      implemented: false,
-      variablesKnown: false,
-      defaultTemplateKey: null,
+      implemented: true,
+      variablesKnown: true,
+      defaultTemplateKey: 'fund.withdrawal.pending',
     })
-    expect(withdrawal?.variables).toEqual([])
-    expect(withdrawal?.variableDefinitions).toEqual([])
+    expect(withdrawal?.variables).toEqual(['withdrawalNo', 'applicantName', 'amount'])
+    expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
+      sensitive: true,
+    })
+    expect(result).toHaveLength(31)
+    for (const event of result) {
+      expect(event.variablesKnown).toBe(true)
+      expect(event.defaultTemplateKey).not.toBeNull()
+      expect(event.variableDefinitions).toHaveLength(event.variables.length)
+      expect(event.implemented).toBe(true)
+    }
   })
 
-  it('uses the same seven-domain model for events and inbox filtering', () => {
+  it('uses the same eight-domain model for events and inbox filtering', () => {
     expect(Object.keys(NOTIFICATION_DOMAIN_LABELS)).toEqual([
       'sales',
       'purchase',
@@ -72,9 +81,11 @@ describe('NotificationAdminService', () => {
       'finance',
       'invoice',
       'reconciliation',
+      'operations',
       'system',
     ])
     expect(NOTIFICATION_EVENT_DOMAIN.PURCHASE_PAYABLE_PENDING).toBe('finance')
+    expect(NOTIFICATION_EVENT_DOMAIN.PROXY_NODE_EXPIRING).toBe('operations')
     for (const [eventType, domain] of Object.entries(NOTIFICATION_EVENT_DOMAIN)) {
       expect(NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType as keyof typeof NOTIFICATION_EVENT_TEMPLATE_DOMAIN])
         .toBe(domain.toUpperCase())

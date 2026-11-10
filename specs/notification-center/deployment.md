@@ -328,6 +328,59 @@ sudo journalctl -u qianshu-dms-notification-cleanup.service --since today
 
 该命令当前没有数据库 advisory lock，部署时必须保证只有一个调度器运行；不要同时在两个主机或两个 timer 上启用。仓库资产尚未在测试机安装，也没有执行 `systemd-analyze verify`。
 
+### 10.3.1 业务扫描定时
+
+扫描命令：
+
+```bash
+pnpm -C server notifications:scan
+pnpm -C server notifications:scan --dry-run
+```
+
+Docker 部署等价命令：
+
+```bash
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
+  run --rm server node dist/commands/notification-scan.js
+```
+
+命令只在上海时间 `09:00–22:00` 内执行；窗口外输出 `skipped/outside_window` 并成功退出。扫描范围：
+
+- 静态节点剩余 7 天、1 天到期提醒
+- 采购应付日汇总
+- 包装待付款日汇总
+
+命令使用数据库 advisory lock，防止多个 timer 或人工重跑重复发布；同一节点按 `节点 + 到期日 + 阈值` 去重，日汇总按上海日期去重。
+
+仓库资产：
+
+- [`qianshu-dms-notification-scan.service`](../../deploy/docker/systemd/qianshu-dms-notification-scan.service)
+- [`qianshu-dms-notification-scan.timer`](../../deploy/docker/systemd/qianshu-dms-notification-scan.timer)
+
+安装、静态校验并启用：
+
+```bash
+sudo install -o root -g root -m 0644 \
+  <worktree>/deploy/docker/systemd/qianshu-dms-notification-scan.service \
+  <worktree>/deploy/docker/systemd/qianshu-dms-notification-scan.timer \
+  /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemd-analyze verify \
+  /etc/systemd/system/qianshu-dms-notification-scan.service \
+  /etc/systemd/system/qianshu-dms-notification-scan.timer
+sudo systemctl enable --now qianshu-dms-notification-scan.timer
+systemctl list-timers qianshu-dms-notification-scan.timer
+```
+
+首次启用前先手工做一次 dry-run：
+
+```bash
+sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
+  run --rm server node dist/commands/notification-scan.js --dry-run
+```
+
+定时器按上海时间 `09:05/13:05/17:05/21:05` 运行。`Persistent=true` 可能在主机夜间恢复时补跑，命令自身的时间守卫会拒绝窗口外执行。
+
 ### 10.4 告警阈值
 
 站内指标目前以结构化日志输出（`kind=metric`），没有额外的 Prometheus exporter；若日志平台未接入，以下阈值只能作为巡检口径，不能宣称自动告警已生效。

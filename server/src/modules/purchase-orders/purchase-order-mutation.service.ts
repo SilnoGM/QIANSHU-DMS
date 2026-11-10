@@ -31,6 +31,8 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
   calculatePurchaseOrderLineTotal,
@@ -121,6 +123,9 @@ type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
     version: true
     productMode: true
     supplierValue: true
+    customSupplierName: true
+    currencyCode: true
+    createdByUserId: true
     createRequestFingerprintHash: true
     createRequestFingerprintVersion: true
     shippingMarkText: true
@@ -229,6 +234,7 @@ export class PurchaseOrderMutationService {
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
     private readonly dataScope: DataScopeService = dataScopeFallback(),
     private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -374,6 +380,21 @@ export class PurchaseOrderMutationService {
           salesOrderId: order.salesOrderId,
         })
       }
+      await this.notifications.publish({
+        eventType: 'PURCHASE_REVIEW_APPROVED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.review.approved',
+        variables: {
+          currencyCode: order.currencyCode,
+          orderNo: order.orderNo,
+          totalAmount: order.purchaseTotalAmount.toFixed(2),
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-review-approved:${purchaseOrderId}:v${order.version + 1}`,
+        priority: 'NORMAL',
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     }).catch((error: unknown) => {
       // 只有事务退出后才映射失败；不在 aborted transaction 中恢复，也不把其他审核当作本次成功。
       if (error instanceof NumberingGenerationError) throw mapShippingMarkGenerationError(error)
@@ -444,6 +465,20 @@ export class PurchaseOrderMutationService {
         reason ?? '用户取消采购订单',
         null,
       )
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_CANCELLED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.cancelled',
+        variables: {
+          orderNo: order.orderNo,
+          reason: reason ?? '用户取消采购订单',
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-cancelled:${purchaseOrderId}:v${order.version + 1}`,
+        priority: 'HIGH',
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
@@ -490,6 +525,20 @@ export class PurchaseOrderMutationService {
         reason,
         { reason },
       )
+      await this.notifications.publish({
+        eventType: 'PURCHASE_REVIEW_REJECTED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.review.rejected',
+        variables: {
+          orderNo: order.orderNo,
+          reason,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-review-rejected:${purchaseOrderId}:v${order.version + 1}`,
+        priority: 'HIGH',
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
@@ -1405,6 +1454,9 @@ export class PurchaseOrderMutationService {
         version: true,
         productMode: true,
         supplierValue: true,
+        customSupplierName: true,
+        currencyCode: true,
+        createdByUserId: true,
         createRequestFingerprintHash: true,
         createRequestFingerprintVersion: true,
         shippingMarkText: true,

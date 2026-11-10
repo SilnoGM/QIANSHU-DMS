@@ -25,6 +25,8 @@ import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-ti
 import { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
 import { parseSalesOrderIdempotencyKey } from '../sales-order-command.normalizer'
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
+import { noopSystemNotifications } from '../../notifications/noop-system-notification'
+import { SystemNotificationService } from '../../notifications/system-notification.service'
 import type { SalesReceiptApproveDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptApprovalContextDto } from '../dto/sales-receipt.dto'
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
 import { assertReceiptCapacity, convertReceiptToCny, receiptFailure } from './sales-receipt-money'
@@ -65,6 +67,7 @@ export class SalesReceiptService {
     private readonly delivery: MediaContentDeliveryService,
     private readonly numbering: NumberingGeneratorService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   private async authorize(tx: Tx, context: SalesOrderMutationContext, codes: string[]) {
@@ -225,6 +228,23 @@ export class SalesReceiptService {
           paymentMethodNameSnapshot: method.label, voucherTitle: createSalesOrderDocumentTitle(order.customerName, input.paymentType, new Date()),
           submittedByUserId: context.actorUserId, idempotencyKeyHash, requestFingerprintHash, collectionNo: issuance.number, numberingIssuanceId: issuance.issuanceId } })
         await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_SUBMITTED, row.id, salesOrderId)
+        await this.notifications.publish({
+          eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+          source: { type: 'SALES_RECEIPT_REQUEST', id: row.id },
+          target: { kind: 'PERMISSION', permissionCode: 'sales-receipts:review' },
+          templateKey: 'sales.receipt.pending',
+          variables: {
+            amount: row.amount.toFixed(2),
+            collectionNo: row.collectionNo ?? '',
+            currencyCode: row.currencyCode,
+            customerName: order.customerName,
+            orderNo: order.orderNo,
+            paymentType: row.paymentType,
+          },
+          dedupeKey: `sales-receipt-review:${row.id}:v${row.version}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
         return row.id
       })
     } catch (error) {
@@ -284,6 +304,22 @@ export class SalesReceiptService {
         await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'APPROVED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, approvedPaymentId: payment.id, version: { increment: 1 } } })
         await this.updatePaymentStatus(tx, context, order, true, reviewRemark ?? '收款审核通过，系统重新计算付款状态')
         await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_APPROVED, id, order.id)
+        await this.notifications.publish({
+          eventType: 'SALES_RECEIPT_APPROVED',
+          source: { type: 'SALES_RECEIPT_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.submittedByUserId] },
+          templateKey: 'sales.receipt.approved',
+          variables: {
+            amount: row.amount.toFixed(2),
+            collectionNo: row.collectionNo ?? '',
+            currencyCode: row.currencyCode,
+            orderNo: order.orderNo,
+            paymentType: row.paymentType,
+          },
+          dedupeKey: `sales-receipt-approved:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       })
     } catch (error) { return mapError(error) }
     return this.query.getById(id, context.actorUserId)
@@ -301,6 +337,23 @@ export class SalesReceiptService {
       const now = new Date()
       await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, version: { increment: 1 } } })
       await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_REJECTED, id, order.id)
+      await this.notifications.publish({
+        eventType: 'SALES_RECEIPT_REJECTED',
+        source: { type: 'SALES_RECEIPT_REQUEST', id },
+        target: { kind: 'USERS', userIds: [row.submittedByUserId] },
+        templateKey: 'sales.receipt.rejected',
+        variables: {
+          amount: row.amount.toFixed(2),
+          collectionNo: row.collectionNo ?? '',
+          currencyCode: row.currencyCode,
+          orderNo: order.orderNo,
+          paymentType: row.paymentType,
+          reason: reviewRemark,
+        },
+        dedupeKey: `sales-receipt-rejected:${id}:v${row.version + 1}`,
+        priority: 'HIGH',
+        requestedByUserId: context.actorUserId,
+      }, { transaction: tx })
     })
     return this.query.getById(id, context.actorUserId)
   }

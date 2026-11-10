@@ -95,8 +95,16 @@ describe('NotificationInboxService', () => {
   })
 
   it.each([
-    ['finance', ['FUND_WITHDRAWAL_REVIEW_PENDING', 'PACKAGING_COST_PAYMENT_PENDING', 'PURCHASE_PAYABLE_PENDING']],
-    ['sales', []],
+    ['finance', [
+      'FUND_WITHDRAWAL_REVIEW_PENDING',
+      'PACKAGING_COST_PAYMENT_PENDING',
+      'PURCHASE_PAYABLE_PENDING',
+      'FUND_WITHDRAWAL_APPROVED',
+      'FUND_WITHDRAWAL_REJECTED',
+      'PACKAGING_COST_PAID',
+    ]],
+    ['operations', ['MACHINE_VIEWING_APPOINTMENT_CREATED', 'PROXY_NODE_EXPIRING', 'ADVERTISING_RECHARGE_PAYMENT_PENDING', 'ADVERTISING_RECHARGE_PAID', 'ADVERTISING_RECHARGE_REJECTED', 'ADVERTISING_RECHARGE_VOIDED']],
+    ['sales', ['SALES_RECEIPT_REVIEW_PENDING', 'SALES_RECEIPT_APPROVED', 'SALES_RECEIPT_REJECTED']],
     ['system', []],
   ] as const)('maps the %s domain to its registered event types', async (domain, eventTypes) => {
     const findMany = jest.fn().mockResolvedValue([])

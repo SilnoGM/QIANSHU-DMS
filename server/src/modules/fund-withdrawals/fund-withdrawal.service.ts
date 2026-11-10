@@ -15,6 +15,8 @@ import {
   FUND_WITHDRAWAL_SUMMARY,
 } from '../fund-accounts/application/fund-withdrawal'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
   FUND_WITHDRAWAL_NO_CONSUMER_CODE,
   FUND_WITHDRAWAL_NO_RULE_CODE,
@@ -54,6 +56,7 @@ export class FundWithdrawalService {
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   /**
@@ -122,6 +125,10 @@ export class FundWithdrawalService {
             409,
           )
         }
+        const applicant = await transaction.user.findUnique({
+          where: { id: context.actorUserId },
+          select: { displayName: true },
+        })
 
         const issuance = await this.numbering.generateScopedInTransaction(
           transaction,
@@ -162,6 +169,20 @@ export class FundWithdrawalService {
             withdrawalNo: created.withdrawalNo,
           },
         })
+        await this.notifications.publish({
+          eventType: 'FUND_WITHDRAWAL_REVIEW_PENDING',
+          source: { type: 'FUND_WITHDRAWAL_REQUEST', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'fund-withdrawals:review' },
+          templateKey: 'fund.withdrawal.pending',
+          variables: {
+            amount,
+            applicantName: applicant?.displayName ?? '—',
+            withdrawalNo: created.withdrawalNo,
+          },
+          dedupeKey: `fund-withdrawal-review:${created.id}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
         return created.id
       }, { timeout: 60_000 })
       return await this.queries.getOwn(context.actorUserId, id)
@@ -217,6 +238,25 @@ export class FundWithdrawalService {
             withdrawalNo: row.withdrawalNo,
           },
         })
+        const applicant = await transaction.user.findUnique({
+          where: { id: row.userId },
+          select: { displayName: true },
+        })
+        await this.notifications.publish({
+          eventType: 'FUND_WITHDRAWAL_REJECTED',
+          source: { type: 'FUND_WITHDRAWAL_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.userId] },
+          templateKey: 'fund.withdrawal.rejected',
+          variables: {
+            amount: row.amount.toFixed(2),
+            applicantName: applicant?.displayName ?? '—',
+            reason,
+            withdrawalNo: row.withdrawalNo,
+          },
+          dedupeKey: `fund-withdrawal-rejected:${id}:v${row.version + 1}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
       }, { timeout: 60_000 })
       return await this.queries.getReview(id, context.actorUserId)
     }
@@ -309,6 +349,20 @@ export class FundWithdrawalService {
             withdrawalNo: row.withdrawalNo,
           },
         })
+        await this.notifications.publish({
+          eventType: 'FUND_WITHDRAWAL_APPROVED',
+          source: { type: 'FUND_WITHDRAWAL_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.userId] },
+          templateKey: 'fund.withdrawal.approved',
+          variables: {
+            amount: row.amount.toFixed(2),
+            applicantName: applicant?.displayName ?? '—',
+            withdrawalNo: row.withdrawalNo,
+          },
+          dedupeKey: `fund-withdrawal-approved:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
       }, { timeout: 60_000 })
       return await this.queries.getReview(id, context.actorUserId)
     }

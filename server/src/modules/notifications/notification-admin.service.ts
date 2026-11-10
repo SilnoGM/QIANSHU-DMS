@@ -7,6 +7,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { assistantAdminErrorToApiException } from './assistant-admin.errors'
+import { parseNotificationQuietHours } from './notification-quiet-hours'
 import { inspectNotificationTemplate, renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
   ASSISTANT_TRANSPORT,
@@ -407,8 +408,16 @@ export class NotificationAdminService {
         throw new ApiException(422, 'NOTIFICATION_POLICY_QUIET_HOURS_INVALID', '站内通知不需要静默时段')
       }
     }
-    else if (input.ttlSeconds === undefined || input.ttlSeconds === null) {
-      throw new ApiException(422, 'NOTIFICATION_POLICY_TTL_REQUIRED', '千树小助理必须配置站外 TTL')
+    else {
+      if (input.ttlSeconds === undefined || input.ttlSeconds === null) {
+        throw new ApiException(422, 'NOTIFICATION_POLICY_TTL_REQUIRED', '千树小助理必须配置站外 TTL')
+      }
+      if (input.quietHours !== undefined && input.quietHours !== null) {
+        const quiet = parseNotificationQuietHours(input.quietHours)
+        if (quiet === null || quiet.start === quiet.end) {
+          throw new ApiException(422, 'NOTIFICATION_POLICY_QUIET_HOURS_INVALID', '静默时段必须是合法的开始与结束时间')
+        }
+      }
     }
 
     const config = input.targetConfig

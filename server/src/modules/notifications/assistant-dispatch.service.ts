@@ -6,6 +6,11 @@ import type { AssistantConfiguration } from '../../config/assistant.config'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import {
+  isWithinQuietHours,
+  nextQuietHoursEnd,
+  parseNotificationQuietHours,
+} from './notification-quiet-hours'
+import {
   ASSISTANT_TRANSPORT,
   type AssistantTransport,
   type AssistantTransportResult,
@@ -91,7 +96,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     }
     const setting = await this.prisma.notificationChannelSettings.findUnique({
       where: { channel: 'ASSISTANT' },
-      select: { enabled: true },
+      select: { defaultQuietHours: true, enabled: true },
     })
     if (setting === null || !setting.enabled) {
       return
@@ -104,7 +109,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         this.logger.warn('assistant dispatch lease lost during batch')
         break
       }
-      await this.dispatchDelivery(delivery)
+      await this.dispatchDelivery(delivery, setting.defaultQuietHours)
     }
   }
 
@@ -146,10 +151,10 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     `)
   }
 
-  private async dispatchDelivery(delivery: ClaimedDelivery): Promise<void> {
+  private async dispatchDelivery(delivery: ClaimedDelivery, defaultQuietHours: Prisma.JsonValue | null): Promise<void> {
     const notification = await this.prisma.notification.findUnique({
       where: { id: delivery.notification_id },
-      select: { id: true, expiresAt: true },
+      select: { eventType: true, expiresAt: true, id: true, priority: true },
     })
     if (notification === null) {
       await this.markDelivery(delivery.id, 'CANCELLED', { failureCode: 'NOTIFICATION_MISSING', failureMessage: '通知已不存在' })
@@ -157,6 +162,10 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     }
     if (notification.expiresAt !== null && notification.expiresAt.getTime() <= Date.now()) {
       await this.markDelivery(delivery.id, 'EXPIRED', { failureCode: 'EXPIRED', failureMessage: '通知已过期' })
+      await this.refreshNotificationStatus(notification.id)
+      return
+    }
+    if (await this.deferForQuietHours(delivery, notification, defaultQuietHours)) {
       await this.refreshNotificationStatus(notification.id)
       return
     }
@@ -277,6 +286,46 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         ...(finalFailure ? { acceptedAt: null } : {}),
       },
     })
+  }
+
+  /**
+   * NORMAL 交付在静默窗口内不发送，直接推到窗口结束；HIGH 保持原有突破语义。
+   * 策略显式配置优先，未配置时继承渠道默认静默时段。
+   */
+  private async deferForQuietHours(
+    delivery: ClaimedDelivery,
+    notification: { readonly eventType: string, readonly expiresAt: Date | null, readonly priority: 'NORMAL' | 'HIGH' },
+    defaultQuietHours: Prisma.JsonValue | null,
+  ): Promise<boolean> {
+    if (notification.priority === 'HIGH') {
+      return false
+    }
+    const policy = await this.prisma.notificationChannelPolicy.findUnique({
+      where: { eventType_channel: { channel: 'ASSISTANT', eventType: notification.eventType } },
+      select: { quietHours: true },
+    })
+    const quietHours = parseNotificationQuietHours(policy?.quietHours)
+      ?? parseNotificationQuietHours(defaultQuietHours)
+    const now = new Date()
+    if (quietHours === null || !isWithinQuietHours(now, quietHours)) {
+      return false
+    }
+    const nextAttemptAt = nextQuietHoursEnd(now, quietHours)
+    if (nextAttemptAt === null) {
+      return false
+    }
+    if (notification.expiresAt !== null && nextAttemptAt.getTime() >= notification.expiresAt.getTime()) {
+      await this.markDelivery(delivery.id, 'EXPIRED', {
+        failureCode: 'QUIET_HOURS_EXPIRED',
+        failureMessage: '静默窗口结束前通知已过期',
+      })
+      return true
+    }
+    await this.prisma.assistantDelivery.update({
+      where: { id: delivery.id },
+      data: { nextAttemptAt, status: 'PENDING' },
+    })
+    return true
   }
 
   private async failDelivery(

@@ -6,6 +6,8 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { AuditService } from '../audit/audit.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
   MACHINE_VIEWING_NO_CONSUMER_CODE,
   MACHINE_VIEWING_NO_RULE_CODE,
@@ -46,6 +48,7 @@ export class MachineViewingService {
     private readonly queries: MachineViewingQueryService,
     private readonly audit: AuditService,
     private readonly numbering: NumberingGeneratorService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   async create(
@@ -151,6 +154,25 @@ export class MachineViewingService {
             customerName: normalized.customerName,
           },
         })
+        await this.notifications.publish({
+          eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
+          source: { type: 'MACHINE_VIEWING_APPOINTMENT', id: created.id },
+          target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
+          templateKey: 'operations.machine-viewing.created',
+          variables: {
+            appointmentDate,
+            appointmentNo: issuance.number,
+            contactPerson: normalized.contactPerson,
+            customerName: normalized.customerName,
+            hour: normalized.hour ?? null,
+            machineType: normalized.machineType,
+            period: normalized.period,
+            site: normalized.site,
+          },
+          dedupeKey: `machine-viewing-created:${created.id}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
         return await this.requireDto(transaction, created.id)
       }, { timeout: 30_000 })
     }

@@ -16,7 +16,7 @@ import {
   ValidateNested,
 } from 'class-validator'
 
-const TEMPLATE_DOMAINS = ['SALES', 'PURCHASE', 'SHIPMENT', 'FINANCE', 'INVOICE', 'RECONCILIATION', 'SYSTEM'] as const
+const TEMPLATE_DOMAINS = ['SALES', 'PURCHASE', 'SHIPMENT', 'FINANCE', 'INVOICE', 'RECONCILIATION', 'OPERATIONS', 'SYSTEM'] as const
 
 export class NotificationEventVariableDto {
   @ApiProperty() name!: string

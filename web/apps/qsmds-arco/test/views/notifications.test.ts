@@ -271,6 +271,7 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(inboxSource, /value: 'sales'/u)
   assert.match(inboxSource, /value: 'shipment'/u)
   assert.match(inboxSource, /value: 'finance'/u)
+  assert.match(inboxSource, /value: 'operations'/u)
   assert.match(inboxSource, /value: 'system'/u)
   assert.match(inboxSource, /财务/u)
   assert.match(inboxSource, /货件运输/u)

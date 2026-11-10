@@ -94,7 +94,9 @@
 | `SLH_RECONCILIATION_COMPLETED` | 对账 | 2 | 原首批候选，当前未接入 |
 | `SHIPMENT_ARRIVED` | 货件运输 | 1 | 已实现 |
 
-业务域统一为销售、采购、货件运输、财务、发票、对账、系统七个域，与模板域一一对应。当前只有采购、货件运输、财务、发票、对账五个域有事件；销售与系统暂时没有事件，筛选入口仍保留并返回空列表。
+业务域统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域，与模板域一一对应。当前只有系统域没有事件，筛选入口仍保留并返回空列表。
+
+扩展事件按事件域映射：收款三个事件归销售；采购审核结果与取消归采购；调货申请与货件释放归货件运输；提现结果与包装已付款归财务；开票退回/通知/开具/结算/取消归发票；看机预约、静态节点到期和广告充值归运营。完整清单由 `GET /api/notifications/events` 返回。
 
 ## 3. 接口
 
@@ -121,7 +123,7 @@ GET /api/notifications/me/inbox?status=all&domain=purchase&page=1&pageSize=20
 ```
 
 - `status`：`all`（未归档，含已读与未读）、`unread`、`archived`；默认 `all`。
-- `domain`：`sales`、`purchase`、`shipment`、`finance`、`invoice`、`reconciliation`、`system`；省略表示全部；非法值 422。
+- `domain`：`sales`、`purchase`、`shipment`、`finance`、`invoice`、`reconciliation`、`operations`、`system`；省略表示全部；非法值 422。
 - 排序：`createdAt DESC, id DESC`。
 - 响应：`{ items, page, pageSize, total }`。
 - 列表项：`id`、`eventType`、`domain`、`title`、`readAt`、`archivedAt`、`createdAt`；正文只在详情返回，避免列表过大。

@@ -47,6 +47,7 @@ const DOMAIN_OPTIONS = [
   { label: '财务', value: 'finance' },
   { label: '发票', value: 'invoice' },
   { label: '对账', value: 'reconciliation' },
+  { label: '运营', value: 'operations' },
   { label: '系统', value: 'system' },
 ]
 const DOMAIN_LABELS: Record<string, string> = {
@@ -56,6 +57,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   finance: '财务',
   invoice: '发票',
   reconciliation: '对账',
+  operations: '运营',
   system: '系统',
 }
 

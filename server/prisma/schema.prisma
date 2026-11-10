@@ -3302,6 +3302,7 @@ enum NotificationTemplateDomain {
   INVOICE
   RECONCILIATION
   SYSTEM
+  OPERATIONS
 
   @@map("notification_template_domain")
 }

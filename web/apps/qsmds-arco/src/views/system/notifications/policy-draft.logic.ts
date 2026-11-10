@@ -55,8 +55,8 @@ export function readQuietHours(value: unknown): { enabled: boolean, start: strin
   const record = asRecord(value)
   return {
     enabled: record !== null,
-    start: typeof record?.start === 'string' ? record.start : '20:00',
-    end: typeof record?.end === 'string' ? record.end : '08:00',
+    start: typeof record?.start === 'string' ? record.start : '22:00',
+    end: typeof record?.end === 'string' ? record.end : '09:00',
     timezone: typeof record?.timezone === 'string' ? record.timezone : 'Asia/Shanghai',
   }
 }

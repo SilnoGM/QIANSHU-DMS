@@ -53,4 +53,61 @@ describe('AssistantDispatchService', () => {
     await service(prisma).dispatchOnce(20)
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(2)
   })
+
+  it('defers NORMAL deliveries during the quiet window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-10T14:30:00.000Z'))
+    try {
+      const update = jest.fn()
+      const prisma = {
+        $queryRaw: jest.fn()
+          .mockResolvedValueOnce([{ id: 'assistant-dispatch' }])
+          .mockResolvedValueOnce([{
+            account_id: null,
+            attempt_count: 0,
+            id: 'delivery-1',
+            notification_id: 'notification-1',
+            recipient_user_id: 'user-1',
+            rendered_content: 'test',
+            target_id: null,
+          }])
+          .mockResolvedValueOnce([{ id: 'assistant-dispatch' }]),
+        notification: {
+          findUnique: jest.fn().mockResolvedValue({
+            eventType: 'PROXY_NODE_EXPIRING',
+            expiresAt: new Date('2026-11-12T00:00:00.000Z'),
+            id: 'notification-1',
+            priority: 'NORMAL',
+          }),
+          update: jest.fn(),
+        },
+        notificationChannelPolicy: {
+          findUnique: jest.fn().mockResolvedValue({
+            quietHours: { end: '09:00', start: '22:00', timezone: 'Asia/Shanghai' },
+          }),
+        },
+        notificationChannelSettings: {
+          findUnique: jest.fn().mockResolvedValue({
+            defaultQuietHours: { end: '09:00', start: '22:00', timezone: 'Asia/Shanghai' },
+            enabled: true,
+          }),
+        },
+        assistantDelivery: {
+          findMany: jest.fn().mockResolvedValue([]),
+          groupBy: jest.fn().mockResolvedValue([{ _count: { _all: 1 }, status: 'PENDING' }]),
+          update,
+        },
+        notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+      }
+
+      await service(prisma).dispatchOnce(20)
+
+      expect(update).toHaveBeenCalledWith({
+        data: { nextAttemptAt: new Date('2026-11-11T01:00:00.000Z'), status: 'PENDING' },
+        where: { id: 'delivery-1' },
+      })
+    }
+    finally {
+      jest.useRealTimers()
+    }
+  })
 })

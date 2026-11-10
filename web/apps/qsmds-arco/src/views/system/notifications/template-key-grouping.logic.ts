@@ -1,6 +1,6 @@
 import type { NotificationTemplateDto } from '@/api/generated/types.gen'
 
-export type TemplateDomain = 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM'
+export type TemplateDomain = 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'OPERATIONS' | 'SYSTEM'
 
 export const TEMPLATE_DOMAIN_OPTIONS: Array<{ label: string, value: TemplateDomain }> = [
   { label: '销售域', value: 'SALES' },
@@ -9,6 +9,7 @@ export const TEMPLATE_DOMAIN_OPTIONS: Array<{ label: string, value: TemplateDoma
   { label: '财务域', value: 'FINANCE' },
   { label: '发票域', value: 'INVOICE' },
   { label: '对账域', value: 'RECONCILIATION' },
+  { label: '运营域', value: 'OPERATIONS' },
   { label: '系统', value: 'SYSTEM' },
 ]
 

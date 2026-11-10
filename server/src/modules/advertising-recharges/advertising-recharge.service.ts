@@ -5,6 +5,8 @@ import { AuditEventType } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { AuditService } from '../audit/audit.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
   ADVERTISING_RECHARGE_FUND_SOURCE,
   ADVERTISING_RECHARGE_PAY_CONSUMER,
@@ -52,6 +54,17 @@ export interface AdvertisingRechargeCommandContext {
   readonly requestId: string
 }
 
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
+function accountTypeLabel(value: AdvertisingAccountTypeValue): string {
+  return value === 'PERSONAL' ? '个人户' : '非个人户'
+}
+
 interface LockedRow {
   readonly applicantUserId: string
   readonly rechargeNo: string
@@ -76,6 +89,7 @@ export class AdvertisingRechargeService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   /**
@@ -172,6 +186,10 @@ export class AdvertisingRechargeService {
             409,
           )
         }
+        const applicant = await transaction.user.findUnique({
+          where: { id: context.actorUserId },
+          select: { displayName: true },
+        })
 
         if (qrMediaAssetId !== null) {
           await this.documents.attach(transaction, {
@@ -214,7 +232,7 @@ export class AdvertisingRechargeService {
             status: 'PENDING',
             requestKeyHash,
           },
-          select: { id: true, rechargeNo: true },
+          select: { id: true, rechargeNo: true, version: true },
         })
         await this.audit.record(transaction, {
           eventType: AuditEventType.ADVERTISING_RECHARGE_SUBMITTED,
@@ -233,6 +251,23 @@ export class AdvertisingRechargeService {
             rechargeCurrency: currency,
           },
         })
+        await this.notifications.publish({
+          eventType: 'ADVERTISING_RECHARGE_PAYMENT_PENDING',
+          source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'advertising-recharges:pay' },
+          templateKey: 'operations.advertising-recharge.pending',
+          variables: {
+            accountType: accountTypeLabel(input.accountType),
+            adAccountName,
+            applicantName: applicant?.displayName ?? '—',
+            rechargeAmount: amount,
+            rechargeCurrency: currency,
+            rechargeNo: created.rechargeNo,
+          },
+          dedupeKey: `advertising-recharge-pending:${created.id}:v${created.version}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
         return created.id
       }, { timeout: 60_000 })
       return await this.queries.getOwn(context.actorUserId, id)
@@ -293,11 +328,12 @@ export class AdvertisingRechargeService {
         await applyTransactionTimeouts(transaction)
         const row = await this.lock(transaction, id)
         this.assertPendingVersion(row, input.expectedVersion)
+        const reviewedAt = new Date()
         await transaction.advertisingRechargeRequest.update({
           where: { id },
           data: {
             status: 'REJECTED',
-            reviewedAt: new Date(),
+            reviewedAt,
             reviewedByUserId: context.actorUserId,
             rejectReason: reason,
             version: { increment: 1 },
@@ -313,6 +349,20 @@ export class AdvertisingRechargeService {
           targetId: id,
           metadata: { reason, rechargeNo: row.rechargeNo },
         })
+        await this.notifications.publish({
+          eventType: 'ADVERTISING_RECHARGE_REJECTED',
+          source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.applicantUserId] },
+          templateKey: 'operations.advertising-recharge.rejected',
+          variables: {
+            occurredAt: notificationTime(reviewedAt),
+            reason,
+            rechargeNo: row.rechargeNo,
+          },
+          dedupeKey: `advertising-recharge-rejected:${id}:v${row.version + 1}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
       }, { timeout: 60_000 })
       return await this.queries.getAll(id)
     }
@@ -420,6 +470,20 @@ export class AdvertisingRechargeService {
             companyShareRate: posting.companyShareRateSnapshot,
           },
         })
+        await this.notifications.publish({
+          eventType: 'ADVERTISING_RECHARGE_PAID',
+          source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.applicantUserId] },
+          templateKey: 'operations.advertising-recharge.paid',
+          variables: {
+            occurredAt: notificationTime(paidAt),
+            paymentAmountCny: paymentAmount,
+            rechargeNo: row.rechargeNo,
+          },
+          dedupeKey: `advertising-recharge-paid:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
       }, { timeout: 60_000 })
       return await this.queries.getAll(id)
     }
@@ -507,6 +571,21 @@ export class AdvertisingRechargeService {
             fundReversalBatchId: reversal.batchId,
           },
         })
+        await this.notifications.publish({
+          eventType: 'ADVERTISING_RECHARGE_VOIDED',
+          source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.applicantUserId] },
+          templateKey: 'operations.advertising-recharge.voided',
+          variables: {
+            occurredAt: notificationTime(voidedAt),
+            paymentAmountCny: row.paymentAmountCny.toFixed(2),
+            reason,
+            rechargeNo: row.rechargeNo,
+          },
+          dedupeKey: `advertising-recharge-voided:${id}:v${row.version + 1}`,
+          priority: 'HIGH',
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
       }, { timeout: 60_000 })
       return await this.queries.getAll(id)
     }

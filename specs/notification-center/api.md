@@ -199,7 +199,9 @@ export interface SystemNotificationPublishResult {
 | `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | 对账 | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
 | `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | 货件运输 | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
 
-业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、系统七个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
+业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
+
+当前已扩展为 31 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
@@ -251,7 +253,7 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
 
-模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
+模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`OPERATIONS`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
 
 策略的 `templateKey` 非空时即显式绑定：模板必须存在于该渠道，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND`；模板占位符必须属于该事件的变量契约，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID`。尚无触发源的事件不登记变量契约，只校验模板存在性。`templateKey` 为空时发布回退到业务命令键。
 
@@ -397,7 +399,7 @@ export interface SystemNotificationPublishResult {
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=sales/purchase/shipment/finance/invoice/reconciliation/system`、`page`、`pageSize` |
+| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=sales/purchase/shipment/finance/invoice/reconciliation/operations/system`、`page`、`pageSize` |
 | GET | `/api/notifications/me/inbox/unread-count` | 未读总数 `{ total }`；只算未读且未归档 |
 | GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供桌面通知使用 |
 | GET | `/api/notifications/me/inbox/:id` | 详情；不属于当前用户返回 404 |
