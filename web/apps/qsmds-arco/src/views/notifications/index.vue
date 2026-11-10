@@ -41,18 +41,22 @@ const STATUS_OPTIONS = [
 ]
 const DOMAIN_OPTIONS = [
   { label: '全部业务域', value: 'all' },
+  { label: '销售', value: 'sales' },
   { label: '采购', value: 'purchase' },
-  { label: '资金', value: 'fund' },
+  { label: '货件运输', value: 'shipment' },
+  { label: '财务', value: 'finance' },
   { label: '发票', value: 'invoice' },
   { label: '对账', value: 'reconciliation' },
-  { label: '货件', value: 'shipment' },
+  { label: '系统', value: 'system' },
 ]
 const DOMAIN_LABELS: Record<string, string> = {
+  sales: '销售',
   purchase: '采购',
-  fund: '资金',
+  shipment: '货件运输',
+  finance: '财务',
   invoice: '发票',
   reconciliation: '对账',
-  shipment: '货件',
+  system: '系统',
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {

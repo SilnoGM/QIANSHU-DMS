@@ -93,4 +93,26 @@ describe('NotificationInboxService', () => {
       }),
     })
   })
+
+  it.each([
+    ['finance', ['FUND_WITHDRAWAL_REVIEW_PENDING', 'PACKAGING_COST_PAYMENT_PENDING', 'PURCHASE_PAYABLE_PENDING']],
+    ['sales', []],
+    ['system', []],
+  ] as const)('maps the %s domain to its registered event types', async (domain, eventTypes) => {
+    const findMany = jest.fn().mockResolvedValue([])
+    const count = jest.fn().mockResolvedValue(0)
+    const service = new NotificationInboxService({
+      notificationInboxItem: { findMany, count },
+      $transaction: jest.fn(async (promises: Promise<unknown>[]) => Promise.all(promises)),
+    } as unknown as PrismaService)
+
+    await service.list('user-1', { status: 'all', domain, page: 1, pageSize: 20 })
+
+    expect(count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        userId: 'user-1',
+        eventType: { in: eventTypes },
+      }),
+    })
+  })
 })

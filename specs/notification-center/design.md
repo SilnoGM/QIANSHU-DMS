@@ -56,7 +56,7 @@
 ## 2. 总体架构
 
 ```
-业务模块（采购/资金/发票/对账/货件）
+业务模块（销售/采购/货件运输/财务/发票/对账/系统）
         │  publish(command, { transaction })
         ▼
 SystemNotificationService

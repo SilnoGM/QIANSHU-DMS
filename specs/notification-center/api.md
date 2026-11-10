@@ -192,14 +192,14 @@ export interface SystemNotificationPublishResult {
 | eventType | source.type | 业务域 | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | 采购 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | 资金 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
 | `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | 发票 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
-| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | 资金 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
-| `PURCHASE_PAYABLE_PENDING` | `PURCHASE_ORDER_PAYABLE` | 采购 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.pending` | NORMAL | 24h | 2 |
+| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
+| `PURCHASE_PAYABLE_PENDING` | `PURCHASE_ORDER_PAYABLE` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.pending` | NORMAL | 24h | 2 |
 | `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | 对账 | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
-| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | 货件 | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
+| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | 货件运输 | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
 
-业务域用于站内通知的单列表筛选；`PURCHASE_PAYABLE_PENDING` 归采购已确认，其余阶段 2 业务域为建议值，实施前确认。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
+业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、系统七个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
@@ -397,7 +397,7 @@ export interface SystemNotificationPublishResult {
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=purchase/fund/invoice/reconciliation/shipment`、`page`、`pageSize` |
+| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=sales/purchase/shipment/finance/invoice/reconciliation/system`、`page`、`pageSize` |
 | GET | `/api/notifications/me/inbox/unread-count` | 未读总数 `{ total }`；只算未读且未归档 |
 | GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供桌面通知使用 |
 | GET | `/api/notifications/me/inbox/:id` | 详情；不属于当前用户返回 404 |

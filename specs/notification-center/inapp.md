@@ -87,14 +87,14 @@
 | eventType | 业务域 | 阶段 | 备注 |
 | --- | --- | --- | --- |
 | `PURCHASE_REVIEW_PENDING` | 采购 | 1 | 已实现 |
-| `PURCHASE_PAYABLE_PENDING` | 采购 | 2 | 已确认归采购；语义是待付款提醒，不是到期提醒 |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | 资金 | 2 | 建议值，实施前确认 |
+| `PURCHASE_PAYABLE_PENDING` | 财务 | 2 | 付款动作归财务；语义是待付款提醒，不是到期提醒 |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | 财务 | 2 | 与模板域 `FINANCE` 统一 |
 | `INVOICE_REQUEST_REVIEW_PENDING` | 发票 | 1 | 已实现，替代原对账完成事件 |
-| `PACKAGING_COST_PAYMENT_PENDING` | 资金 | 2 | 建议值，实施前确认 |
+| `PACKAGING_COST_PAYMENT_PENDING` | 财务 | 2 | 与模板域 `FINANCE` 统一 |
 | `SLH_RECONCILIATION_COMPLETED` | 对账 | 2 | 原首批候选，当前未接入 |
-| `SHIPMENT_ARRIVED` | 货件 | 1 | 已实现 |
+| `SHIPMENT_ARRIVED` | 货件运输 | 1 | 已实现 |
 
-阶段 3 当前只有采购、发票、货件三个域有数据；筛选器可以展示全部五个域，也可以只展示当前有数据的域，实施时按 UI 简洁度决定。
+业务域统一为销售、采购、货件运输、财务、发票、对账、系统七个域，与模板域一一对应。当前只有采购、货件运输、财务、发票、对账五个域有事件；销售与系统暂时没有事件，筛选入口仍保留并返回空列表。
 
 ## 3. 接口
 
@@ -121,7 +121,7 @@ GET /api/notifications/me/inbox?status=all&domain=purchase&page=1&pageSize=20
 ```
 
 - `status`：`all`（未归档，含已读与未读）、`unread`、`archived`；默认 `all`。
-- `domain`：`purchase`、`fund`、`invoice`、`reconciliation`、`shipment`；省略表示全部；非法值 422。
+- `domain`：`sales`、`purchase`、`shipment`、`finance`、`invoice`、`reconciliation`、`system`；省略表示全部；非法值 422。
 - 排序：`createdAt DESC, id DESC`。
 - 响应：`{ items, page, pageSize, total }`。
 - 列表项：`id`、`eventType`、`domain`、`title`、`readAt`、`archivedAt`、`createdAt`；正文只在详情返回，避免列表过大。

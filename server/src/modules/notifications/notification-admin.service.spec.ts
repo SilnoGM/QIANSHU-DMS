@@ -4,6 +4,7 @@ import type { AssistantConfiguration } from '../../config/assistant.config'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import { NotificationAdminService } from './notification-admin.service'
+import { NOTIFICATION_DOMAIN_LABELS, NOTIFICATION_EVENT_DOMAIN, NOTIFICATION_EVENT_TEMPLATE_DOMAIN } from './notification.types'
 import { FakeAssistantTransport } from './fake-assistant.transport'
 
 const configuration: AssistantConfiguration = {
@@ -61,6 +62,23 @@ describe('NotificationAdminService', () => {
     })
     expect(withdrawal?.variables).toEqual([])
     expect(withdrawal?.variableDefinitions).toEqual([])
+  })
+
+  it('uses the same seven-domain model for events and inbox filtering', () => {
+    expect(Object.keys(NOTIFICATION_DOMAIN_LABELS)).toEqual([
+      'sales',
+      'purchase',
+      'shipment',
+      'finance',
+      'invoice',
+      'reconciliation',
+      'system',
+    ])
+    expect(NOTIFICATION_EVENT_DOMAIN.PURCHASE_PAYABLE_PENDING).toBe('finance')
+    for (const [eventType, domain] of Object.entries(NOTIFICATION_EVENT_DOMAIN)) {
+      expect(NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType as keyof typeof NOTIFICATION_EVENT_TEMPLATE_DOMAIN])
+        .toBe(domain.toUpperCase())
+    }
   })
 
   it('renders a template preview with sample variables', async () => {

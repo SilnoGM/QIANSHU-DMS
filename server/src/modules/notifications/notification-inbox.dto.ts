@@ -2,7 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 
-const DOMAINS = ['purchase', 'fund', 'invoice', 'reconciliation', 'shipment'] as const
+import { NOTIFICATION_DOMAINS, type NotificationDomain } from './notification.types'
+
 const STATUSES = ['all', 'unread', 'archived'] as const
 
 export class NotificationInboxQueryDto {
@@ -11,10 +12,10 @@ export class NotificationInboxQueryDto {
   @IsIn(STATUSES)
   status: (typeof STATUSES)[number] = 'all'
 
-  @ApiPropertyOptional({ enum: DOMAINS })
+  @ApiPropertyOptional({ enum: NOTIFICATION_DOMAINS })
   @IsOptional()
-  @IsIn(DOMAINS)
-  domain?: (typeof DOMAINS)[number]
+  @IsIn(NOTIFICATION_DOMAINS)
+  domain?: NotificationDomain
 
   @ApiPropertyOptional({ type: 'integer', minimum: 1, default: 1 })
   @IsOptional()
@@ -48,10 +49,10 @@ export class NotificationInboxNewQueryDto {
 }
 
 export class NotificationInboxReadAllDto {
-  @ApiPropertyOptional({ enum: DOMAINS })
+  @ApiPropertyOptional({ enum: NOTIFICATION_DOMAINS })
   @IsOptional()
-  @IsIn(DOMAINS)
-  domain?: (typeof DOMAINS)[number]
+  @IsIn(NOTIFICATION_DOMAINS)
+  domain?: NotificationDomain
 }
 
 export class NotificationInboxItemDto {

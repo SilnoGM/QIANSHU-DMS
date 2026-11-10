@@ -26,6 +26,7 @@ import type {
   NotificationChannelPolicyUpdateDto,
   NotificationEventDto,
   NotificationInboxDetailDto,
+  NotificationInboxListData,
   NotificationInboxNewDto,
   NotificationInboxPageDto,
   NotificationInboxReadAllResultDto,
@@ -44,7 +45,7 @@ import api from '../index'
 
 export type AssistantBindingListQuery = NonNullable<AssistantBindingsListData['query']>
 export type NotificationRecordListQuery = NonNullable<NotificationsRecordsListData['query']>
-export type NotificationInboxDomain = 'purchase' | 'fund' | 'invoice' | 'reconciliation' | 'shipment'
+export type NotificationInboxDomain = NonNullable<NonNullable<NotificationInboxListData['query']>['domain']>
 export type NotificationInboxStatus = 'all' | 'unread' | 'archived'
 
 function path(...segments: string[]): string {

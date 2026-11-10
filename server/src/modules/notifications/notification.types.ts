@@ -16,19 +16,26 @@ export type NotificationChannel = 'IN_APP' | 'ASSISTANT'
 
 export type NotificationPriority = 'NORMAL' | 'HIGH'
 
-export type NotificationDomain =
-  | 'purchase'
-  | 'fund'
-  | 'invoice'
-  | 'reconciliation'
-  | 'shipment'
+export const NOTIFICATION_DOMAINS = [
+  'sales',
+  'purchase',
+  'shipment',
+  'finance',
+  'invoice',
+  'reconciliation',
+  'system',
+] as const
+
+export type NotificationDomain = (typeof NOTIFICATION_DOMAINS)[number]
 
 export const NOTIFICATION_DOMAIN_LABELS: Readonly<Record<NotificationDomain, string>> = Object.freeze({
+  sales: '销售',
   purchase: '采购',
-  fund: '资金',
+  shipment: '货件运输',
+  finance: '财务',
   invoice: '发票',
   reconciliation: '对账',
-  shipment: '货件',
+  system: '系统',
 })
 
 /** 站内通知的业务域筛选由事件类型派生，不单独落库。 */
@@ -37,9 +44,9 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   INVOICE_REQUEST_REVIEW_PENDING: 'invoice',
   SLH_RECONCILIATION_COMPLETED: 'reconciliation',
   SHIPMENT_ARRIVED: 'shipment',
-  FUND_WITHDRAWAL_REVIEW_PENDING: 'fund',
-  PACKAGING_COST_PAYMENT_PENDING: 'fund',
-  PURCHASE_PAYABLE_PENDING: 'fund',
+  FUND_WITHDRAWAL_REVIEW_PENDING: 'finance',
+  PACKAGING_COST_PAYMENT_PENDING: 'finance',
+  PURCHASE_PAYABLE_PENDING: 'finance',
 })
 
 export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({

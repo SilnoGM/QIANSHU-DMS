@@ -80776,11 +80776,13 @@
             "schema": {
               "type": "string",
               "enum": [
+                "sales",
                 "purchase",
-                "fund",
+                "shipment",
+                "finance",
                 "invoice",
                 "reconciliation",
-                "shipment"
+                "system"
               ]
             }
           },
@@ -126051,11 +126053,13 @@
           "domain": {
             "type": "string",
             "enum": [
+              "sales",
               "purchase",
-              "fund",
+              "shipment",
+              "finance",
               "invoice",
               "reconciliation",
-              "shipment"
+              "system"
             ]
           }
         }

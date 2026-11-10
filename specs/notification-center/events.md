@@ -202,7 +202,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `shipment.arrived` |
-| 业务域 | 货件 |
+| 业务域 | 货件运输 |
 | 优先级 | `NORMAL` |
 | 站外 TTL | 8 小时 |
 | `dedupeKey` | `shipment-arrived:{purchaseOrderId}:{sortedPartIds.join(',')}` |
@@ -215,12 +215,12 @@
 
 | 事件 | 业务域 | 触发方向 | 默认目标 | 备注 |
 | --- | --- | --- | --- | --- |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | 资金 | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | 财务 | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
 | `INVOICE_REQUEST_REVIEW_PENDING` | 发票 | 开票申请提交/进入待审 | 权限 `invoice-requests:review`，1:1 | 开票时效 |
-| `PACKAGING_COST_PAYMENT_PENDING` | 资金 | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
-| `PURCHASE_PAYABLE_PENDING` | 采购 | 采购单存在未付清的定金/尾款 | 应付负责人，1:1 | 待付款提醒，不依赖到期日；每日扫描需要 CLI + systemd timer，`dedupeKey` 带日期 |
+| `PACKAGING_COST_PAYMENT_PENDING` | 财务 | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
+| `PURCHASE_PAYABLE_PENDING` | 财务 | 采购单存在未付清的定金/尾款 | 财务付款权限，1:1 | 待付款提醒，不依赖到期日；每日扫描需要 CLI + systemd timer，`dedupeKey` 带日期 |
 
-业务域中 `PURCHASE_PAYABLE_PENDING` 归采购已确认；其余阶段 2 业务域为建议值，实施前确认。
+业务域统一为销售、采购、货件运输、财务、发票、对账、系统七个域；`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。其余阶段 2 业务域与模板域一一对应。
 
 ## 6. 测试与验收
 
