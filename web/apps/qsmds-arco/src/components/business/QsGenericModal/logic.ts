@@ -25,6 +25,7 @@ export interface QsGenericModalProps {
   fillHeight?: boolean
   loading?: boolean
   modelValue?: boolean
+  panelClass?: string
   size?: QsGenericModalSize
   submitting?: boolean
   title: string

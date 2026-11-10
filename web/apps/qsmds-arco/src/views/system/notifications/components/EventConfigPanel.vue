@@ -53,7 +53,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   createTemplate: [payload: { eventType: string, channel: NotificationChannelValue, key: string }]
-  editTemplate: [template: NotificationTemplateDto]
+  editTemplate: [payload: { eventType: string, template: NotificationTemplateDto }]
   previewTemplate: [template: NotificationTemplateDto]
   retry: []
   saved: [policy: NotificationChannelPolicyDto]
@@ -222,12 +222,14 @@ defineExpose({
       </template>
 
       <template #group-header="{ row, rows }">
-        <div class="flex flex-wrap gap-2 items-center">
+        <div class="flex flex-wrap gap-2 min-w-0 w-full items-center justify-between">
           <span class="qs-type-body-medium">{{ row.label }}</span>
-          <span class="qs-type-meta text-muted-foreground">{{ rows.length }} 个事件</span>
-          <FaTag v-if="groupReadyCount(rows) > 0" variant="outline" class="text-primary border-primary/30 bg-primary/10">
-            已配齐 {{ groupReadyCount(rows) }}
-          </FaTag>
+          <span class="flex flex-wrap gap-2 items-center">
+            <span class="qs-type-meta text-muted-foreground">{{ rows.length }} 个事件</span>
+            <FaTag v-if="groupReadyCount(rows) > 0" variant="outline" class="text-primary border-primary/30 bg-primary/10">
+              已配齐 {{ groupReadyCount(rows) }}
+            </FaTag>
+          </span>
         </div>
       </template>
 

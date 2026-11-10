@@ -6,7 +6,7 @@ import type {
   NotificationTemplateDto,
 } from '@/api/generated/types.gen'
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
@@ -18,6 +18,7 @@ import EventConfigPanel from './components/EventConfigPanel.vue'
 import TemplateLibraryPanel from './components/TemplateLibraryPanel.vue'
 import { buildTemplateUsageCounts, templateUsageCount } from './event-config.logic'
 import { TEMPLATE_DOMAIN_OPTIONS, templateDomainLabel } from './template-key-grouping.logic'
+import { extractTemplatePlaceholders, insertTextAtSelection } from './template-variable.logic'
 
 const toast = useQsToast()
 const { auth } = useAppAuth()
@@ -73,6 +74,14 @@ interface TemplateVariableDraft {
 const templateOpen = ref(false)
 const templateMode = ref<'create' | 'edit'>('create')
 const templateAboveDrawer = ref(false)
+const templateView = ref<'basic' | 'content' | 'variables'>('basic')
+const templateEventType = ref('')
+const templateVariableSearch = ref('')
+const activeTemplateField = ref<'body' | 'title' | 'link'>('body')
+const templateFieldWasFocused = ref(false)
+const templateBodyRef = ref<HTMLTextAreaElement | null>(null)
+const templateTitleFieldRef = ref<HTMLElement | null>(null)
+const templateLinkFieldRef = ref<HTMLElement | null>(null)
 const templateBaseline = ref('')
 const templateDraft = ref({
   id: '',
@@ -104,6 +113,12 @@ const CHANNEL_OPTIONS = [
   { label: '站内通知', value: 'IN_APP' },
 ]
 
+const TEMPLATE_VIEW_OPTIONS = [
+  { label: '基础信息', value: 'basic' },
+  { label: '内容配置', value: 'content' },
+  { label: '变量白名单', value: 'variables' },
+]
+
 const templateOtherChannel = computed(() => {
   const key = templateDraft.value.key.trim()
   if (key.length === 0) {
@@ -114,6 +129,179 @@ const templateOtherChannel = computed(() => {
 })
 
 const templateDraftUsage = computed(() => templateUsageCount(usage.value, templateDraft.value.key.trim()))
+
+const templateEvent = computed(() => templateEventType.value === ''
+  ? null
+  : events.value.find(event => event.eventType === templateEventType.value) ?? null)
+const templateEventOptions = computed(() => [
+  { label: '不指定事件', value: '' },
+  ...events.value.map(event => ({
+    label: `${event.label}（${event.eventType}）`,
+    value: event.eventType,
+  })),
+])
+const templateVariableDefinitions = computed(() => templateEvent.value?.variableDefinitions ?? [])
+const filteredTemplateVariableDefinitions = computed(() => {
+  const normalized = templateVariableSearch.value.trim().toLowerCase()
+  if (normalized.length === 0) {
+    return templateVariableDefinitions.value
+  }
+  return templateVariableDefinitions.value.filter(variable =>
+    [variable.name, variable.label, variable.description]
+      .some(value => value.toLowerCase().includes(normalized)))
+})
+const templatePlaceholders = computed(() => extractTemplatePlaceholders(
+  templateDraft.value.bodyTemplate,
+  templateDraft.value.titleTemplate,
+  templateDraft.value.linkUrlTemplate,
+))
+const templateUnknownPlaceholders = computed(() => {
+  const event = templateEvent.value
+  if (event === null || !event.variablesKnown) {
+    return []
+  }
+  const allowed = new Set(event.variables)
+  return templatePlaceholders.value.filter(name => !allowed.has(name))
+})
+const templateUndeclaredPlaceholders = computed(() => {
+  const declared = new Set(templateDraft.value.variables.map(variable => variable.name.trim()))
+  return templatePlaceholders.value.filter(name => !declared.has(name))
+})
+
+watch(() => templateDraft.value.channel, (channel) => {
+  if (channel !== 'IN_APP' && activeTemplateField.value === 'title') {
+    activeTemplateField.value = 'body'
+  }
+})
+
+watch(() => templateDraft.value.key, (key) => {
+  if (!templateOpen.value || templateMode.value === 'edit' || templateAboveDrawer.value) {
+    return
+  }
+  const inferred = inferTemplateEventType(key)
+  if (inferred !== '') {
+    templateEventType.value = inferred
+  }
+})
+
+function inferTemplateEventType(key: string): string {
+  const normalized = key.trim()
+  if (normalized.length === 0) {
+    return ''
+  }
+  const matches = events.value.filter(event => event.defaultTemplateKey === normalized)
+  return matches.length === 1 ? matches[0]!.eventType : ''
+}
+
+function resetTemplateVariableUi(): void {
+  templateView.value = 'basic'
+  templateVariableSearch.value = ''
+  activeTemplateField.value = 'body'
+  templateFieldWasFocused.value = false
+}
+
+function templateVariableToken(name: string): string {
+  return `{{${name}}}`
+}
+
+function templateVariableDescription(name: string): string {
+  const normalized = name.trim()
+  if (normalized.length === 0) {
+    return '—'
+  }
+  return templateVariableDefinitions.value.find(variable => variable.name === normalized)?.description ?? '—'
+}
+
+function templateVariableExample(name: string): string {
+  const normalized = name.trim()
+  if (normalized.length === 0) {
+    return '—'
+  }
+  return templateVariableDefinitions.value.find(variable => variable.name === normalized)?.example ?? '—'
+}
+
+function changeTemplateView(value: string | number): void {
+  const next = String(value)
+  if (next === 'basic' || next === 'content' || next === 'variables') {
+    templateView.value = next
+    if (next !== 'content') {
+      templateFieldWasFocused.value = false
+    }
+  }
+}
+
+function ensureTemplateVariable(name: string): void {
+  if (templateDraft.value.variables.some(variable => variable.name === name)) {
+    return
+  }
+  const definition = templateVariableDefinitions.value.find(variable => variable.name === name)
+  templateDraft.value.variables.push({
+    name,
+    required: definition?.required ?? true,
+    maxLength: definition?.maxLength ?? 200,
+    sensitive: definition?.sensitive ?? false,
+  })
+}
+
+function markTemplateField(field: 'body' | 'title' | 'link'): void {
+  activeTemplateField.value = field
+  templateFieldWasFocused.value = true
+}
+
+function templateFieldValue(field: 'body' | 'title' | 'link'): string {
+  if (field === 'body') {
+    return templateDraft.value.bodyTemplate
+  }
+  return field === 'title' ? templateDraft.value.titleTemplate : templateDraft.value.linkUrlTemplate
+}
+
+function setTemplateFieldValue(field: 'body' | 'title' | 'link', value: string): void {
+  if (field === 'body') {
+    templateDraft.value.bodyTemplate = value
+  }
+  else if (field === 'title') {
+    templateDraft.value.titleTemplate = value
+  }
+  else {
+    templateDraft.value.linkUrlTemplate = value
+  }
+}
+
+function templateFieldElement(field: 'body' | 'title' | 'link'): HTMLInputElement | HTMLTextAreaElement | null {
+  if (field === 'body') {
+    return templateBodyRef.value
+  }
+  const container = field === 'title' ? templateTitleFieldRef.value : templateLinkFieldRef.value
+  const input = container?.querySelector('input')
+  return input instanceof HTMLInputElement ? input : null
+}
+
+function insertTemplateVariable(name: string): void {
+  ensureTemplateVariable(name)
+  const field = activeTemplateField.value === 'title' && templateDraft.value.channel !== 'IN_APP'
+    ? 'body'
+    : activeTemplateField.value
+  const token = templateVariableToken(name)
+  const value = templateFieldValue(field)
+  if (value.includes(token)) {
+    return
+  }
+  const element = templateFieldElement(field)
+  const useSelection = templateFieldWasFocused.value && element !== null
+  const result = insertTextAtSelection(
+    value,
+    token,
+    useSelection ? element.selectionStart : null,
+    useSelection ? element.selectionEnd : null,
+  )
+  setTemplateFieldValue(field, result.value)
+  void nextTick(() => {
+    if (element !== null) {
+      element.focus()
+      element.setSelectionRange(result.cursor, result.cursor)
+    }
+  })
+}
 
 function formatChannel(channel: string): string {
   return channel === 'ASSISTANT' ? '千树小助理' : '站内通知'
@@ -295,6 +483,8 @@ function confirmDiscard(): void {
 function openCreateTemplate(): void {
   templateMode.value = 'create'
   templateAboveDrawer.value = false
+  templateEventType.value = ''
+  resetTemplateVariableUi()
   templateDraft.value = {
     id: '',
     key: '',
@@ -320,6 +510,8 @@ function openCreateTemplateForChannel(payload: {
 }): void {
   templateMode.value = 'create'
   templateAboveDrawer.value = false
+  templateEventType.value = inferTemplateEventType(payload.key)
+  resetTemplateVariableUi()
   templateDraft.value = {
     id: '',
     key: payload.key,
@@ -346,6 +538,8 @@ function openCreateTemplateFromEvent(payload: {
   const event = events.value.find(item => item.eventType === payload.eventType)
   templateMode.value = 'create'
   templateAboveDrawer.value = true
+  templateEventType.value = payload.eventType
+  resetTemplateVariableUi()
   templateDraft.value = {
     id: '',
     key: payload.key || event?.defaultTemplateKey || '',
@@ -364,9 +558,11 @@ function openCreateTemplateFromEvent(payload: {
   templateOpen.value = true
 }
 
-function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false): void {
+function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false, eventType = ''): void {
   templateMode.value = 'edit'
   templateAboveDrawer.value = aboveDrawer
+  templateEventType.value = eventType || inferTemplateEventType(template.key)
+  resetTemplateVariableUi()
   templateDraft.value = {
     id: template.id,
     key: template.key,
@@ -396,10 +592,6 @@ function parseVariables(raw: string): Record<string, string | number | null> {
     throw new Error('变量必须是 JSON 对象')
   }
   return parsed as Record<string, string | number | null>
-}
-
-function addTemplateVariable(): void {
-  templateDraft.value.variables.push({ name: '', required: false, maxLength: 200, sensitive: false })
 }
 
 function removeTemplateVariable(index: number): void {
@@ -614,7 +806,7 @@ onMounted(() => {
           :busy="busy"
           @saved="handlePolicySaved"
           @retry="load"
-          @edit-template="openEditTemplate($event, true)"
+          @edit-template="openEditTemplate($event.template, true, $event.eventType)"
           @preview-template="openPreview"
           @create-template="openCreateTemplateFromEvent"
         />
@@ -645,17 +837,25 @@ onMounted(() => {
     </FaPageMain>
   </template>
 
-  <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :z-index="2200" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
-    <div class="flex flex-col gap-5">
+  <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :z-index="templateAboveDrawer ? 2200 : 2000" :submitting="busy" :before-close="canCloseTemplateModal" fill-height panel-class="h-[820px] max-h-[calc(100dvh-3rem)]" @update:model-value="templateOpen = $event">
+    <div
+      class="flex flex-1 flex-col gap-5 min-h-0"
+      :class="templateView === 'content' ? 'overflow-hidden' : 'overflow-y-auto'"
+    >
       <FaAlert
         v-if="templateDraftUsage > 1"
         :title="`该模板键被 ${templateDraftUsage} 个事件使用`"
         description="修改内容会同时影响这些事件的下一次发送。"
       />
-      <section class="flex flex-col gap-3">
-        <h3 class="qs-type-body-medium m-0">
-          基础信息
-        </h3>
+      <QsStatusSwitchToolbar
+        :model-value="templateView"
+        :items="TEMPLATE_VIEW_OPTIONS"
+        aria-label="模板编辑视图"
+        class="w-full"
+        stretch
+        @update:model-value="changeTemplateView"
+      />
+      <section v-if="templateView === 'basic'" class="flex flex-col gap-3">
         <div class="gap-3 grid md:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">模板键</span>
@@ -695,6 +895,18 @@ onMounted(() => {
               </span>
             </template>
           </label>
+          <label class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">适用事件</span>
+            <template v-if="templateAboveDrawer">
+              <div class="px-3 py-2 border border-border rounded-md bg-muted/30">
+                {{ templateEvent?.label ?? '未指定事件' }}
+              </div>
+            </template>
+            <template v-else>
+              <FaSelect v-model="templateEventType" class="w-full" :options="templateEventOptions" />
+              <span class="qs-type-meta text-muted-foreground">用于展示可用变量；模板仍可按 Key 被多个事件绑定。</span>
+            </template>
+          </label>
           <p v-if="templateMode === 'edit'" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
             模板键与渠道创建后不可修改；需要换渠道请新建对应模板。
           </p>
@@ -704,10 +916,6 @@ onMounted(() => {
             <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
           </label>
           <div class="flex flex-wrap gap-4 items-end md:col-span-2">
-            <label v-if="templateDraft.channel === 'IN_APP'" class="flex flex-1 flex-col gap-1 min-w-0">
-              <span class="qs-type-compact-label">标题（站内通知使用）</span>
-              <FaInput v-model="templateDraft.titleTemplate" class="w-full" placeholder="采购单 {{ orderNo }} 待审核" />
-            </label>
             <label class="qs-type-meta pb-2 flex gap-2 items-center">
               <FaSwitch v-model="templateDraft.enabled" />
               启用
@@ -716,40 +924,112 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="pt-4 border-t border-border flex flex-col gap-3">
-        <h3 class="qs-type-body-medium m-0">
-          消息内容
-        </h3>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
-          <textarea v-model="templateDraft.bodyTemplate" rows="7" class="qs-type-body px-3 py-2 border border-border rounded-md bg-background w-full" />
-          <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
-        </label>
-        <label class="flex flex-col gap-1">
-          <span class="qs-type-compact-label">跳转链接模板（可选）</span>
-          <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
-          <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
-        </label>
-      </section>
-
-      <section class="pt-4 border-t border-border flex flex-col gap-2">
-        <div class="flex items-center justify-between">
+      <div v-if="templateView === 'content'" class="flex-1 gap-4 grid min-h-0 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+        <section class="flex flex-col gap-3 min-h-0">
           <h3 class="qs-type-body-medium m-0">
-            变量白名单
+            消息内容
           </h3>
-          <FaButton variant="outline" size="sm" @click="addTemplateVariable">
-            添加变量
-          </FaButton>
-        </div>
+          <label
+            v-if="templateDraft.channel === 'IN_APP'"
+            ref="templateTitleFieldRef"
+            class="flex flex-col gap-1"
+            @click="markTemplateField('title')"
+            @focusin="markTemplateField('title')"
+          >
+            <span class="qs-type-compact-label">标题（站内通知使用）</span>
+            <FaInput v-model="templateDraft.titleTemplate" class="w-full" placeholder="采购单 {{ orderNo }} 待审核" />
+          </label>
+          <label class="flex flex-1 flex-col gap-1 min-h-0" @click="markTemplateField('body')" @focusin="markTemplateField('body')">
+            <span class="qs-type-compact-label">正文（支持 &#123;&#123;variable&#125;&#125;）</span>
+            <textarea ref="templateBodyRef" v-model="templateDraft.bodyTemplate" rows="7" class="qs-type-body mb-1 px-3 py-2 border border-border rounded-md bg-background flex-1 min-h-0 w-full resize-none" />
+            <span class="qs-type-meta text-muted-foreground">占位符必须使用双花括号；单花括号不会替换，保存会被拒绝。</span>
+          </label>
+          <label ref="templateLinkFieldRef" class="flex flex-col gap-1" @click="markTemplateField('link')" @focusin="markTemplateField('link')">
+            <span class="qs-type-compact-label">跳转链接模板（可选）</span>
+            <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
+            <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
+          </label>
+        </section>
+
+        <section class="flex flex-col gap-3 min-h-0">
+          <div class="flex flex-wrap gap-2 items-center justify-between">
+            <h3 class="qs-type-body-medium m-0">
+              可用变量
+            </h3>
+            <span v-if="templateEvent !== null" class="qs-type-meta text-muted-foreground">
+              {{ templateEvent.label }} · {{ templateVariableDefinitions.length }} 个变量
+            </span>
+          </div>
+
+          <template v-if="templateEvent !== null">
+            <div class="flex flex-wrap gap-2 items-center">
+              <FaInput
+                v-model="templateVariableSearch"
+                type="search"
+                clearable
+                class="max-w-full w-60"
+                placeholder="搜索变量名或说明"
+                aria-label="搜索可用变量"
+              />
+              <span class="qs-type-meta text-muted-foreground">先点击标题/正文/链接，再点插入</span>
+            </div>
+
+            <p v-if="templateVariableDefinitions.length === 0" class="qs-type-meta text-muted-foreground m-0">
+              该事件尚未登记变量契约。
+            </p>
+            <p v-else-if="filteredTemplateVariableDefinitions.length === 0" class="qs-type-meta text-muted-foreground m-0">
+              没有匹配的变量。
+            </p>
+            <div v-else class="flex-1 gap-2 grid min-h-0 overflow-y-auto">
+              <div
+                v-for="variable in filteredTemplateVariableDefinitions"
+                :key="variable.name"
+                class="p-2.5 border border-border rounded-md bg-background flex gap-2 min-w-0 items-start"
+              >
+                <div class="flex flex-1 flex-col gap-1 min-w-0">
+                  <span class="flex flex-wrap gap-1.5 items-center">
+                    <code class="qs-type-data text-primary px-1 rounded bg-primary/10">{{ templateVariableToken(variable.name) }}</code>
+                    <span class="qs-type-meta text-foreground font-medium">{{ variable.label }}</span>
+                    <FaTag v-if="variable.sensitive" variant="outline" class="text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300">
+                      敏感
+                    </FaTag>
+                  </span>
+                  <span class="qs-type-meta text-muted-foreground">{{ variable.description }}</span>
+                  <span class="qs-type-meta text-muted-foreground">
+                    示例：{{ variable.example }} · 最大 {{ variable.maxLength }} 字
+                  </span>
+                </div>
+                <FaButton variant="outline" size="sm" class="shrink-0" @click="insertTemplateVariable(variable.name)">
+                  插入
+                </FaButton>
+              </div>
+            </div>
+
+            <p v-if="templateUnknownPlaceholders.length > 0" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+              正文包含当前事件不提供的变量：{{ templateUnknownPlaceholders.join('、') }}，发布时会失败。
+            </p>
+            <p v-if="templateUndeclaredPlaceholders.length > 0" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+              正文占位符尚未加入白名单：{{ templateUndeclaredPlaceholders.join('、') }}，请删除后重新点击「插入」。
+            </p>
+          </template>
+          <p v-else class="qs-type-meta text-muted-foreground m-0">
+            选择适用事件后显示可用变量。
+          </p>
+        </section>
+      </div>
+
+      <section v-if="templateView === 'variables'" class="flex flex-col gap-2">
         <p v-if="templateVariableError !== null" class="qs-type-meta text-destructive m-0">
           {{ templateVariableError }}
         </p>
         <p v-if="templateDraft.variables.length === 0" class="qs-type-meta text-muted-foreground m-0">
-          还没有变量。正文只允许使用这里声明的变量。
+          还没有变量。在内容配置中点击变量右侧「插入」即可添加。
         </p>
         <div v-else class="border border-border rounded-lg overflow-x-auto">
-          <div class="px-3 py-2 bg-muted/40 gap-2 grid grid-cols-[minmax(0,1fr)_88px_64px_64px_32px] min-w-[520px] items-center">
+          <div class="px-3 py-2 bg-muted/40 gap-2 grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1fr)_72px_48px_48px_32px] min-w-[860px] items-center">
             <span class="qs-type-compact-label">变量名</span>
+            <span class="qs-type-compact-label">变量说明</span>
+            <span class="qs-type-compact-label">示例</span>
             <span class="qs-type-compact-label">最大长度</span>
             <span class="qs-type-compact-label text-center">必填</span>
             <span class="qs-type-compact-label text-center">敏感</span>
@@ -758,14 +1038,17 @@ onMounted(() => {
           <div
             v-for="(variable, index) in templateDraft.variables"
             :key="index"
-            class="px-3 py-2 border-t border-border/60 gap-2 grid grid-cols-[minmax(0,1fr)_88px_64px_64px_32px] min-w-[520px] items-center"
+            class="px-3 py-2 border-t border-border/60 gap-2 grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_minmax(0,1fr)_72px_48px_48px_32px] min-w-[860px] items-center"
           >
-            <FaInput
-              v-model="variable.name"
-              class="w-full"
-              :aria-label="`第 ${index + 1} 个变量的变量名`"
-              placeholder="orderNo"
-            />
+            <code class="qs-type-data px-2 py-1.5 border border-border rounded-md bg-muted/30 block truncate" :title="variable.name">
+              {{ variable.name }}
+            </code>
+            <span class="qs-type-meta text-muted-foreground truncate" :title="templateVariableDescription(variable.name)">
+              {{ templateVariableDescription(variable.name) }}
+            </span>
+            <span class="qs-type-meta text-muted-foreground truncate" :title="templateVariableExample(variable.name)">
+              {{ templateVariableExample(variable.name) }}
+            </span>
             <FaInput
               v-model.number="variable.maxLength"
               class="w-full"
@@ -788,7 +1071,7 @@ onMounted(() => {
           </div>
         </div>
         <p class="qs-type-meta text-muted-foreground m-0">
-          变量名只允许字母、数字和下划线；正文中的 &#123;&#123;name&#125;&#125; 必须在这里声明。
+          变量名通过内容配置中的「插入」按钮添加；这里只调整最大长度、必填和敏感标记。
         </p>
       </section>
     </div>

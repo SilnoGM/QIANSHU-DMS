@@ -42,7 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   createTemplate: [payload: { eventType: string, channel: NotificationChannelValue, key: string }]
-  editTemplate: [template: NotificationTemplateDto]
+  editTemplate: [payload: { eventType: string, template: NotificationTemplateDto }]
   previewTemplate: [template: NotificationTemplateDto]
   saved: [policy: NotificationChannelPolicyDto]
 }>()
@@ -256,7 +256,7 @@ defineExpose({
       :can-update-template="canUpdateTemplate"
       :can-view-template="canViewTemplate"
       @pick="pickTemplate"
-      @edit="emit('editTemplate', $event)"
+      @edit="emit('editTemplate', { eventType: event.eventType, template: $event })"
       @preview="emit('previewTemplate', $event)"
       @create="emit('createTemplate', { eventType: event.eventType, channel, key: $event })"
       @reset-default="resetDefaultTemplate"
