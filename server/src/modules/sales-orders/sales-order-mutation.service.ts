@@ -341,7 +341,7 @@ export class SalesOrderMutationService {
         await this.notifications.publish({
           eventType: 'SALES_ORDER_TERMINATED',
           source: { type: 'SALES_ORDER', id: salesOrderId },
-          target: { kind: 'USERS', userIds: [order.issuerUserId] },
+          target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
           templateKey: 'sales.order.terminated',
           variables: {
             customerName: order.customerName,
