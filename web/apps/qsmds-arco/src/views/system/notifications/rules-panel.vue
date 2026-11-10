@@ -1,48 +1,67 @@
 <script setup lang="ts">
-import type { TemplateDomain, TemplateKeyGroup } from './template-key-grouping.logic'
+import type { TemplateDomain } from './template-key-grouping.logic'
 import type {
-  AssistantTargetDto,
   NotificationChannelPolicyDto,
+  NotificationEventDto,
   NotificationTemplateDto,
-  PermissionDto,
-  RoleDto,
-  UserDto,
 } from '@/api/generated/types.gen'
 
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
-
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { getApiClientFailureMessage } from '@/api/errors'
-import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAppAuth } from '@/composables/app/auth'
-import TemplateDomainRail from './components/TemplateDomainRail.vue'
-import TemplateKeyDetail from './components/TemplateKeyDetail.vue'
-import {
-  filterTemplateDomainGroups,
-  formatNotificationDateTime,
-  groupTemplateKeysByDomain,
-  groupTemplatesByKey,
-  TEMPLATE_DOMAIN_OPTIONS,
-
-  templateDomainLabel,
-
-} from './template-key-grouping.logic'
+import EventConfigPanel from './components/EventConfigPanel.vue'
+import TemplateLibraryPanel from './components/TemplateLibraryPanel.vue'
+import { buildTemplateUsageCounts, templateUsageCount } from './event-config.logic'
+import { TEMPLATE_DOMAIN_OPTIONS, templateDomainLabel } from './template-key-grouping.logic'
 
 const toast = useQsToast()
 const { auth } = useAppAuth()
+const canViewPolicy = computed(() => auth('notification-policy:read'))
+const canViewTemplate = computed(() => auth('notification-template:read'))
 const canUpdateTemplate = computed(() => auth('notification-template:update'))
 const canUpdatePolicy = computed(() => auth('notification-policy:update'))
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 const busy = ref(false)
-const templates = ref<NotificationTemplateDto[]>([])
+const activeTab = ref<'events' | 'templates'>(canViewPolicy.value ? 'events' : 'templates')
+const events = ref<NotificationEventDto[]>([])
 const policies = ref<NotificationChannelPolicyDto[]>([])
+const templates = ref<NotificationTemplateDto[]>([])
+const eventsError = ref<string | null>(null)
+const policiesError = ref<string | null>(null)
+const templatesError = ref<string | null>(null)
+
+const tabs = computed(() => [
+  ...(canViewPolicy.value ? [{ label: '事件配置', value: 'events' }] : []),
+  ...(canViewTemplate.value ? [{ label: '模板库', value: 'templates' }] : []),
+])
+const templatesForCoverage = computed(() => canViewTemplate.value && templatesError.value === null
+  ? templates.value
+  : null)
+const usage = computed(() => buildTemplateUsageCounts(events.value, policies.value))
+
+const eventPanelRef = ref<InstanceType<typeof EventConfigPanel> | null>(null)
+const tabDiscardOpen = ref(false)
+const pendingTab = ref<'events' | 'templates' | null>(null)
+const leaveOpen = ref(false)
+const pendingRoute = ref<string | null>(null)
+const router = useRouter()
+
+watch(
+  tabs,
+  (availableTabs) => {
+    if (availableTabs.length > 0 && !availableTabs.some(tab => tab.value === activeTab.value)) {
+      activeTab.value = availableTabs[0]!.value as 'events' | 'templates'
+    }
+  },
+  { immediate: true },
+)
 
 interface TemplateVariableDraft {
   name: string
@@ -53,6 +72,7 @@ interface TemplateVariableDraft {
 
 const templateOpen = ref(false)
 const templateMode = ref<'create' | 'edit'>('create')
+const templateAboveDrawer = ref(false)
 const templateBaseline = ref('')
 const templateDraft = ref({
   id: '',
@@ -77,211 +97,13 @@ const previewLink = ref<string | null>(null)
 const previewTruncated = ref(false)
 const previewWarnings = ref<string[]>([])
 
-interface PolicyTargetConfigDraft {
-  permissionCode: string
-  roleCodes: string[]
-  targetKeys: string[]
-  userIds: string[]
-}
-
-const policyOpen = ref(false)
-const policyEditingExisting = ref(false)
-const policyBaseline = ref('')
 const discardOpen = ref(false)
-const discardKind = ref<'policy' | 'template' | null>(null)
-const policyEventType = ref('PURCHASE_REVIEW_PENDING')
-const policyChannel = ref<'IN_APP' | 'ASSISTANT'>('ASSISTANT')
-const policyDraft = ref({
-  targetMode: 'COMMAND_TARGET',
-  targetConfig: {
-    permissionCode: '',
-    roleCodes: [],
-    targetKeys: [],
-    userIds: [],
-  } as PolicyTargetConfigDraft,
-  templateKey: '',
-  priority: 'NORMAL',
-  ttlSeconds: 86_400,
-  quietHoursEnabled: false,
-  quietStart: '20:00',
-  quietEnd: '08:00',
-  quietTimezone: 'Asia/Shanghai',
-  allowSensitive: true,
-  enabled: true,
-  expectedVersion: 0,
-})
 
-const EVENT_OPTIONS = [
-  { label: '采购审核', value: 'PURCHASE_REVIEW_PENDING' },
-  { label: '开票申请', value: 'INVOICE_REQUEST_REVIEW_PENDING' },
-  { label: '对账完成', value: 'SLH_RECONCILIATION_COMPLETED' },
-  { label: '货件到仓', value: 'SHIPMENT_ARRIVED' },
-  { label: '提现审核', value: 'FUND_WITHDRAWAL_REVIEW_PENDING' },
-  { label: '包装待付款', value: 'PACKAGING_COST_PAYMENT_PENDING' },
-  { label: '采购待付款', value: 'PURCHASE_PAYABLE_PENDING' },
-]
 const CHANNEL_OPTIONS = [
   { label: '千树小助理', value: 'ASSISTANT' },
   { label: '站内通知', value: 'IN_APP' },
 ]
-const TARGET_MODE_OPTIONS = [
-  { label: '使用命令目标', value: 'COMMAND_TARGET' },
-  { label: '固定员工', value: 'USERS' },
-  { label: '角色', value: 'ROLE' },
-  { label: '权限', value: 'PERMISSION' },
-  { label: '群目标', value: 'GROUP' },
-]
-const TARGET_MODE_LABELS: Record<string, string> = {
-  COMMAND_TARGET: '命令目标',
-  USERS: '固定员工',
-  ROLE: '角色',
-  PERMISSION: '权限',
-  GROUP: '群目标',
-}
-const PRIORITY_LABELS: Record<string, string> = {
-  NORMAL: '普通',
-  HIGH: '高',
-}
-const EVENT_DOMAIN_MAP: Record<string, TemplateDomain> = {
-  PURCHASE_REVIEW_PENDING: 'PURCHASE',
-  INVOICE_REQUEST_REVIEW_PENDING: 'INVOICE',
-  SLH_RECONCILIATION_COMPLETED: 'RECONCILIATION',
-  SHIPMENT_ARRIVED: 'SHIPMENT',
-  FUND_WITHDRAWAL_REVIEW_PENDING: 'FINANCE',
-  PACKAGING_COST_PAYMENT_PENDING: 'FINANCE',
-  PURCHASE_PAYABLE_PENDING: 'FINANCE',
-}
-const EVENT_LABELS: Record<string, string> = Object.fromEntries(EVENT_OPTIONS.map(option => [option.value, option.label]))
-const CHANNEL_FILTER_OPTIONS = [
-  { label: '全部渠道', value: 'ALL' },
-  ...CHANNEL_OPTIONS,
-]
-const STATUS_FILTER_OPTIONS = [
-  { label: '全部状态', value: 'ALL' },
-  { label: '启用', value: 'ENABLED' },
-  { label: '停用', value: 'DISABLED' },
-]
-const templateSearch = ref('')
-const selectedTemplateKey = ref<string | null>(null)
-const policyKeyword = ref('')
-const policyChannelFilter = ref('ALL')
-const policyStatusFilter = ref('ALL')
 
-function formatEventType(eventType: string): string {
-  return EVENT_LABELS[eventType] ?? eventType
-}
-
-function formatTtl(seconds: number | null): string {
-  if (seconds === null) {
-    return '—'
-  }
-  if (seconds < 3600) {
-    return `${Math.round(seconds / 60)} 分钟`
-  }
-  const hours = seconds / 3600
-  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} 小时`
-}
-
-const policyUsers = ref<UserDto[]>([])
-const policyRoles = ref<RoleDto[]>([])
-const policyPermissions = ref<PermissionDto[]>([])
-const policyTargets = ref<AssistantTargetDto[]>([])
-const policyOptionsLoading = ref(false)
-const policyOptionsLoaded = ref(false)
-const policyUserOptions = computed(() => policyUsers.value.map(user => ({
-  label: `${user.displayName}（${user.username}）`,
-  value: user.id,
-})))
-const policyRoleOptions = computed(() => policyRoles.value.map(role => ({
-  label: `${role.name}（${role.code}）`,
-  value: role.code,
-})))
-const policyPermissionOptions = computed(() => policyPermissions.value.map(permission => ({
-  label: `${permission.name}（${permission.code}）`,
-  value: permission.code,
-})))
-const policyGroupOptions = computed(() => policyTargets.value.map(target => ({
-  label: `${target.name}（${target.key}）`,
-  value: target.key,
-})))
-
-async function ensurePolicyOptions(): Promise<void> {
-  if (policyOptionsLoaded.value || policyOptionsLoading.value) {
-    return
-  }
-  policyOptionsLoading.value = true
-  const signal = new AbortController().signal
-  const [users, roles, permissions, targets] = await Promise.allSettled([
-    managementApi.users.list({ page: 1, pageSize: 100, status: 'ACTIVE' }, signal),
-    managementApi.roles.list(),
-    managementApi.permissions.list(),
-    notificationsApi.assistant.targets.list(signal),
-  ])
-  if (users.status === 'fulfilled') {
-    policyUsers.value = users.value.data.items
-  }
-  if (roles.status === 'fulfilled') {
-    policyRoles.value = roles.value.data
-  }
-  if (permissions.status === 'fulfilled') {
-    policyPermissions.value = permissions.value.data
-  }
-  if (targets.status === 'fulfilled') {
-    policyTargets.value = targets.value.data
-  }
-  policyOptionsLoaded.value = true
-  policyOptionsLoading.value = false
-}
-
-const policyColumns: QsGenericTableColumn<NotificationChannelPolicyDto>[] = [
-  { accessorKey: 'eventType', id: 'eventType', title: '事件', minWidth: 180 },
-  { accessorKey: 'channel', id: 'channel', title: '渠道', width: 130 },
-  { accessorKey: 'targetMode', id: 'targetMode', title: '目标', width: 110 },
-  { accessorKey: 'templateKey', id: 'templateKey', title: '模板', minWidth: 160 },
-  { accessorKey: 'priority', id: 'priority', title: '优先级', width: 80 },
-  { accessorKey: 'ttlSeconds', id: 'ttlSeconds', title: 'TTL', width: 100 },
-  { accessorKey: 'updatedByName', id: 'updatedByInfo', title: '更新人', width: 170 },
-  { accessorKey: 'enabled', id: 'enabled', title: '状态', width: 90 },
-]
-
-const templateKeyOptions = computed(() => templates.value
-  .filter(template => template.channel === policyChannel.value)
-  .map(template => ({ label: template.key, value: template.key })))
-const policyTargetModeOptions = computed(() => policyChannel.value === 'IN_APP'
-  ? TARGET_MODE_OPTIONS.filter(option => option.value !== 'GROUP')
-  : TARGET_MODE_OPTIONS)
-const policyExisting = computed(() => policies.value.find(policy =>
-  policy.eventType === policyEventType.value && policy.channel === policyChannel.value) ?? null)
-const selectedPolicyTemplate = computed(() => templates.value.find(template =>
-  template.channel === policyChannel.value && template.key === policyDraft.value.templateKey) ?? null)
-const policyEventDomain = computed<TemplateDomain>(() => EVENT_DOMAIN_MAP[policyEventType.value] ?? 'SYSTEM')
-const policyTemplateDomainMismatch = computed(() => {
-  const template = selectedPolicyTemplate.value
-  return template !== null
-    && template.domain !== 'SYSTEM'
-    && policyEventDomain.value !== 'SYSTEM'
-    && template.domain !== policyEventDomain.value
-})
-const templateKeyGroups = computed(() => groupTemplatesByKey(templates.value))
-const templateDomainGroups = computed(() => groupTemplateKeysByDomain(templateKeyGroups.value))
-const visibleTemplateDomainGroups = computed(() => filterTemplateDomainGroups(templateDomainGroups.value, templateSearch.value))
-const selectedTemplateGroup = computed<TemplateKeyGroup | null>(() => {
-  const current = templateKeyGroups.value.find(group => group.key === selectedTemplateKey.value)
-  if (current !== undefined) {
-    return current
-  }
-  return visibleTemplateDomainGroups.value[0]?.keys[0] ?? null
-})
-watch(
-  visibleTemplateDomainGroups,
-  (groups) => {
-    const visibleKeys = groups.flatMap(group => group.keys)
-    if (!visibleKeys.some(group => group.key === selectedTemplateKey.value)) {
-      selectedTemplateKey.value = visibleKeys[0]?.key ?? null
-    }
-  },
-  { immediate: true },
-)
 const templateOtherChannel = computed(() => {
   const key = templateDraft.value.key.trim()
   if (key.length === 0) {
@@ -290,136 +112,189 @@ const templateOtherChannel = computed(() => {
   return templates.value.find(template =>
     template.key === key && template.channel !== templateDraft.value.channel) ?? null
 })
-watch(
-  () => [templateDraft.value.key, templateDraft.value.channel],
-  () => {
-    if (!templateOpen.value || templateMode.value !== 'create' || templateOtherChannel.value === null) {
-      return
-    }
-    templateDraft.value.domain = templateOtherChannel.value.domain
-  },
-)
-const filteredPolicies = computed(() => {
-  const keyword = policyKeyword.value.trim().toLowerCase()
-  return policies.value.filter((policy) => {
-    if (policyChannelFilter.value !== 'ALL' && policy.channel !== policyChannelFilter.value) {
-      return false
-    }
-    if (policyStatusFilter.value === 'ENABLED' && !policy.enabled) {
-      return false
-    }
-    if (policyStatusFilter.value === 'DISABLED' && policy.enabled) {
-      return false
-    }
-    if (keyword.length === 0) {
-      return true
-    }
-    return [
-      policy.eventType,
-      formatEventType(policy.eventType),
-      policy.templateKey ?? '',
-      TARGET_MODE_LABELS[policy.targetMode] ?? policy.targetMode,
-    ].some(value => value.toLowerCase().includes(keyword))
-  })
-})
-const policyCoverage = computed(() => EVENT_OPTIONS.map(event => ({
-  label: event.label,
-  value: event.value,
-  channels: CHANNEL_OPTIONS.map(channel => ({
-    ...channel,
-    policy: policies.value.find(policy => policy.eventType === event.value && policy.channel === channel.value) ?? null,
-  })),
-})))
 
-function changePolicyEvent(value: string): void {
-  policyEventType.value = value
-  syncPolicyCombination()
-}
-
-function changePolicyChannel(value: string): void {
-  policyChannel.value = value as 'IN_APP' | 'ASSISTANT'
-  syncPolicyCombination()
-}
+const templateDraftUsage = computed(() => templateUsageCount(usage.value, templateDraft.value.key.trim()))
 
 function formatChannel(channel: string): string {
   return channel === 'ASSISTANT' ? '千树小助理' : '站内通知'
 }
 
-function channelTagClass(channel: string): string {
-  if (channel === 'ASSISTANT') {
-    return 'border-primary/30 bg-primary/10 text-primary'
-  }
-  if (channel === 'IN_APP') {
-    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-  }
-  return 'border-border bg-muted text-muted-foreground'
-}
-
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
+  eventsError.value = null
+  policiesError.value = null
+  templatesError.value = null
+  const signal = new AbortController().signal
+  await Promise.all([
+    (async () => {
+      if (!canViewPolicy.value && !canViewTemplate.value) {
+        return
+      }
+      try {
+        events.value = (await notificationsApi.events.list(signal)).data
+      }
+      catch (failure) {
+        eventsError.value = getApiClientFailureMessage(failure, '事件列表加载失败')
+      }
+    })(),
+    (async () => {
+      if (!canViewPolicy.value) {
+        return
+      }
+      try {
+        policies.value = (await notificationsApi.policies.list({}, signal)).data
+      }
+      catch (failure) {
+        policiesError.value = getApiClientFailureMessage(failure, '事件策略加载失败')
+      }
+    })(),
+    (async () => {
+      if (!canViewTemplate.value) {
+        return
+      }
+      try {
+        const [assistantTemplates, inappTemplates] = await Promise.all([
+          notificationsApi.templates.list('ASSISTANT', signal),
+          notificationsApi.templates.list('IN_APP', signal),
+        ])
+        templates.value = [...assistantTemplates.data, ...inappTemplates.data]
+      }
+      catch (failure) {
+        templatesError.value = getApiClientFailureMessage(failure, '模板列表加载失败')
+      }
+    })(),
+  ])
+  if (!canViewPolicy.value && !canViewTemplate.value) {
+    error.value = '当前账号没有通知策略或模板查看权限。'
+  }
+  loading.value = false
+}
+
+async function reloadTemplates(): Promise<void> {
+  if (!canViewTemplate.value) {
+    return
+  }
+  const signal = new AbortController().signal
   try {
-    const signal = new AbortController().signal
-    const [assistantTemplates, inappTemplates, policyResult] = await Promise.all([
+    const [assistantTemplates, inappTemplates] = await Promise.all([
       notificationsApi.templates.list('ASSISTANT', signal),
       notificationsApi.templates.list('IN_APP', signal),
-      notificationsApi.policies.list({}, signal),
     ])
     templates.value = [...assistantTemplates.data, ...inappTemplates.data]
-    policies.value = policyResult.data
+    templatesError.value = null
   }
   catch (failure) {
-    error.value = getApiClientFailureMessage(failure, '通知规则加载失败')
-  }
-  finally {
-    loading.value = false
+    templatesError.value = getApiClientFailureMessage(failure, '模板列表加载失败')
   }
 }
 
-function requestDiscard(kind: 'policy' | 'template'): boolean {
+function handlePolicySaved(policy: NotificationChannelPolicyDto): void {
+  const index = policies.value.findIndex(item =>
+    item.eventType === policy.eventType && item.channel === policy.channel)
+  policies.value = index >= 0
+    ? policies.value.map((item, itemIndex) => itemIndex === index ? policy : item)
+    : [...policies.value, policy]
+}
+
+function handleTabChange(value: string | number): void {
+  const next = String(value) === 'templates' ? 'templates' : 'events'
+  if (activeTab.value === next) {
+    return
+  }
+  if (activeTab.value === 'events' && next === 'templates' && eventPanelRef.value?.hasDirty() === true) {
+    pendingTab.value = next
+    tabDiscardOpen.value = true
+    return
+  }
+  activeTab.value = next
+}
+
+function confirmTabDiscard(): void {
+  eventPanelRef.value?.discard()
+  activeTab.value = pendingTab.value ?? activeTab.value
+  pendingTab.value = null
+  tabDiscardOpen.value = false
+}
+
+function cancelTabDiscard(): void {
+  pendingTab.value = null
+  tabDiscardOpen.value = false
+}
+
+function hasUnsavedChanges(): boolean {
+  const templateDirty = templateOpen.value
+    && JSON.stringify(templateDraft.value) !== templateBaseline.value
+  return eventPanelRef.value?.hasDirty() === true || templateDirty
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!hasUnsavedChanges()) {
+    return
+  }
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+function confirmLeave(): void {
+  if (eventPanelRef.value?.hasDirty() === true) {
+    eventPanelRef.value.discard()
+  }
+  if (templateOpen.value) {
+    templateBaseline.value = JSON.stringify(templateDraft.value)
+    templateOpen.value = false
+  }
+  const target = pendingRoute.value
+  pendingRoute.value = null
+  leaveOpen.value = false
+  if (target !== null) {
+    void router.push(target)
+  }
+}
+
+function cancelLeave(): void {
+  pendingRoute.value = null
+  leaveOpen.value = false
+}
+
+onBeforeRouteLeave((to) => {
+  if (!hasUnsavedChanges()) {
+    return true
+  }
+  pendingRoute.value = to.fullPath
+  leaveOpen.value = true
+  return false
+})
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+function requestDiscard(): boolean {
   if (typeof window === 'undefined') {
     return true
   }
-  discardKind.value = kind
   discardOpen.value = true
   return false
 }
 
 function canCloseTemplateModal(): boolean {
-  return JSON.stringify(templateDraft.value) === templateBaseline.value || requestDiscard('template')
-}
-
-function canClosePolicyModal(): boolean {
-  return JSON.stringify(policyDraft.value) === policyBaseline.value || requestDiscard('policy')
+  return JSON.stringify(templateDraft.value) === templateBaseline.value || requestDiscard()
 }
 
 function confirmDiscard(): void {
-  if (discardKind.value === 'template') {
-    templateBaseline.value = JSON.stringify(templateDraft.value)
-    templateOpen.value = false
-  }
-  else if (discardKind.value === 'policy') {
-    policyBaseline.value = JSON.stringify(policyDraft.value)
-    policyOpen.value = false
-  }
+  templateBaseline.value = JSON.stringify(templateDraft.value)
+  templateOpen.value = false
   discardOpen.value = false
-  discardKind.value = null
-}
-
-function cancelDiscard(): void {
-  discardOpen.value = false
-  discardKind.value = null
-}
-
-function handleDiscardVisible(value: boolean): void {
-  discardOpen.value = value
-  if (!value) {
-    discardKind.value = null
-  }
 }
 
 function openCreateTemplate(): void {
   templateMode.value = 'create'
+  templateAboveDrawer.value = false
   templateDraft.value = {
     id: '',
     key: '',
@@ -438,14 +313,19 @@ function openCreateTemplate(): void {
   templateOpen.value = true
 }
 
-function openCreateTemplateForChannel(group: TemplateKeyGroup, channel: 'ASSISTANT' | 'IN_APP'): void {
+function openCreateTemplateForChannel(payload: {
+  key: string
+  domain: TemplateDomain
+  channel: 'ASSISTANT' | 'IN_APP'
+}): void {
   templateMode.value = 'create'
+  templateAboveDrawer.value = false
   templateDraft.value = {
     id: '',
-    key: group.key,
-    channel,
+    key: payload.key,
+    channel: payload.channel,
     name: '',
-    domain: group.domain,
+    domain: payload.domain,
     titleTemplate: '',
     bodyTemplate: '',
     linkUrlTemplate: '',
@@ -458,14 +338,35 @@ function openCreateTemplateForChannel(group: TemplateKeyGroup, channel: 'ASSISTA
   templateOpen.value = true
 }
 
-function handleTemplateAdd(channel: 'ASSISTANT' | 'IN_APP'): void {
-  if (selectedTemplateGroup.value !== null) {
-    openCreateTemplateForChannel(selectedTemplateGroup.value, channel)
+function openCreateTemplateFromEvent(payload: {
+  eventType: string
+  channel: 'ASSISTANT' | 'IN_APP'
+  key: string
+}): void {
+  const event = events.value.find(item => item.eventType === payload.eventType)
+  templateMode.value = 'create'
+  templateAboveDrawer.value = true
+  templateDraft.value = {
+    id: '',
+    key: payload.key || event?.defaultTemplateKey || '',
+    channel: payload.channel,
+    name: '',
+    domain: event?.domain ?? 'SYSTEM',
+    titleTemplate: '',
+    bodyTemplate: '',
+    linkUrlTemplate: '',
+    variables: [],
+    maxLength: 2000,
+    enabled: true,
+    expectedVersion: 1,
   }
+  templateBaseline.value = JSON.stringify(templateDraft.value)
+  templateOpen.value = true
 }
 
-function openEditTemplate(template: NotificationTemplateDto): void {
+function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false): void {
   templateMode.value = 'edit'
+  templateAboveDrawer.value = aboveDrawer
   templateDraft.value = {
     id: template.id,
     key: template.key,
@@ -577,7 +478,7 @@ async function saveTemplate(): Promise<void> {
     templateBaseline.value = JSON.stringify(templateDraft.value)
     templateOpen.value = false
     toast.success('模板已保存')
-    await load()
+    await reloadTemplates()
   }
   catch (failure) {
     toast.error(getApiClientFailureMessage(failure, '模板保存失败'))
@@ -642,156 +543,6 @@ async function testTemplate(): Promise<void> {
   }
 }
 
-function readStringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
-}
-
-function readPolicyTargetConfig(value: Record<string, unknown> | null | undefined): PolicyTargetConfigDraft {
-  return {
-    permissionCode: typeof value?.permissionCode === 'string' ? value.permissionCode : '',
-    roleCodes: readStringList(value?.roleCodes),
-    targetKeys: readStringList(value?.targetKeys),
-    userIds: readStringList(value?.userIds),
-  }
-}
-
-function readQuietHours(value: Record<string, unknown> | null | undefined) {
-  return {
-    enabled: value !== null && value !== undefined,
-    start: typeof value?.start === 'string' ? value.start : '20:00',
-    end: typeof value?.end === 'string' ? value.end : '08:00',
-    timezone: typeof value?.timezone === 'string' ? value.timezone : 'Asia/Shanghai',
-  }
-}
-
-function buildPolicyTargetConfig(): Record<string, unknown> {
-  if (policyDraft.value.targetMode === 'USERS') {
-    return { userIds: policyDraft.value.targetConfig.userIds }
-  }
-  if (policyDraft.value.targetMode === 'ROLE') {
-    return { roleCodes: policyDraft.value.targetConfig.roleCodes }
-  }
-  if (policyDraft.value.targetMode === 'PERMISSION') {
-    return { permissionCode: policyDraft.value.targetConfig.permissionCode }
-  }
-  if (policyDraft.value.targetMode === 'GROUP') {
-    return { targetKeys: policyDraft.value.targetConfig.targetKeys }
-  }
-  return {}
-}
-
-const canSavePolicy = computed(() => {
-  if (!canUpdatePolicy.value) {
-    return false
-  }
-  if (policyDraft.value.targetMode === 'USERS' && policyDraft.value.targetConfig.userIds.length === 0) {
-    return false
-  }
-  if (policyDraft.value.targetMode === 'ROLE' && policyDraft.value.targetConfig.roleCodes.length === 0) {
-    return false
-  }
-  if (policyDraft.value.targetMode === 'PERMISSION' && policyDraft.value.targetConfig.permissionCode.length === 0) {
-    return false
-  }
-  if (policyDraft.value.targetMode === 'GROUP' && policyDraft.value.targetConfig.targetKeys.length === 0) {
-    return false
-  }
-  if (policyChannel.value === 'ASSISTANT') {
-    const ttl = policyDraft.value.ttlSeconds
-    return Number.isInteger(ttl) && ttl >= 60 && ttl <= 604_800
-  }
-  return true
-})
-const policyTtlHint = computed(() => {
-  const seconds = policyDraft.value.ttlSeconds
-  return Number.isFinite(seconds) && seconds >= 60 && seconds <= 604_800
-    ? `约 ${(seconds / 3600).toFixed(1)} 小时；范围 60–604800 秒`
-    : '范围 60–604800 秒（1 分钟–7 天）'
-})
-
-function createPolicyDraft(policy?: NotificationChannelPolicyDto) {
-  const quiet = readQuietHours(policy?.quietHours)
-  return {
-    targetMode: policy?.targetMode ?? 'COMMAND_TARGET',
-    targetConfig: readPolicyTargetConfig(policy?.targetConfig),
-    templateKey: policy?.templateKey ?? '',
-    priority: policy?.priority ?? 'NORMAL',
-    ttlSeconds: policy?.ttlSeconds ?? 86_400,
-    quietHoursEnabled: quiet.enabled,
-    quietStart: quiet.start,
-    quietEnd: quiet.end,
-    quietTimezone: quiet.timezone,
-    allowSensitive: policy?.allowSensitive ?? true,
-    enabled: policy?.enabled ?? true,
-    expectedVersion: policy?.version ?? 0,
-  }
-}
-
-function syncPolicyCombination(): void {
-  if (policyEditingExisting.value) {
-    return
-  }
-  const existing = policies.value.find(policy =>
-    policy.eventType === policyEventType.value && policy.channel === policyChannel.value)
-  policyDraft.value = createPolicyDraft(existing)
-}
-
-function openPolicy(policy?: NotificationChannelPolicyDto, preset?: { eventType: string, channel: 'IN_APP' | 'ASSISTANT' }): void {
-  policyEditingExisting.value = policy !== undefined
-  policyEventType.value = policy?.eventType ?? preset?.eventType ?? 'PURCHASE_REVIEW_PENDING'
-  policyChannel.value = (policy?.channel as 'IN_APP' | 'ASSISTANT' | undefined) ?? preset?.channel ?? 'ASSISTANT'
-  const existing = policy ?? policies.value.find(item =>
-    item.eventType === policyEventType.value && item.channel === policyChannel.value)
-  policyDraft.value = createPolicyDraft(existing)
-  policyBaseline.value = JSON.stringify(policyDraft.value)
-  void ensurePolicyOptions()
-  policyOpen.value = true
-}
-
-function openPolicyAt(eventType: string, channel: string): void {
-  const targetChannel = channel as 'IN_APP' | 'ASSISTANT'
-  const existing = policies.value.find(policy => policy.eventType === eventType && policy.channel === targetChannel)
-  if (existing !== undefined) {
-    openPolicy(existing)
-    return
-  }
-  openPolicy(undefined, { eventType, channel: targetChannel })
-}
-
-async function savePolicy(): Promise<void> {
-  busy.value = true
-  try {
-    const quietHours = policyChannel.value === 'ASSISTANT' && policyDraft.value.quietHoursEnabled
-      ? {
-          start: policyDraft.value.quietStart,
-          end: policyDraft.value.quietEnd,
-          timezone: policyDraft.value.quietTimezone,
-        }
-      : null
-    await notificationsApi.policies.update(policyEventType.value, policyChannel.value, {
-      targetMode: policyDraft.value.targetMode as 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP',
-      targetConfig: buildPolicyTargetConfig(),
-      templateKey: policyDraft.value.templateKey || null,
-      priority: policyDraft.value.priority as 'NORMAL' | 'HIGH',
-      ttlSeconds: policyChannel.value === 'ASSISTANT' ? policyDraft.value.ttlSeconds : null,
-      quietHours: policyChannel.value === 'ASSISTANT' ? quietHours : null,
-      allowSensitive: policyDraft.value.allowSensitive,
-      enabled: policyDraft.value.enabled,
-      expectedVersion: policyExisting.value?.version ?? policyDraft.value.expectedVersion,
-    })
-    policyBaseline.value = JSON.stringify(policyDraft.value)
-    policyOpen.value = false
-    toast.success('事件策略已保存')
-    await load()
-  }
-  catch (failure) {
-    toast.error(getApiClientFailureMessage(failure, '事件策略保存失败'))
-  }
-  finally {
-    busy.value = false
-  }
-}
-
 async function toggleTemplateEnabled(template: NotificationTemplateDto, enabled: boolean): Promise<void> {
   busy.value = true
   try {
@@ -804,31 +555,6 @@ async function toggleTemplateEnabled(template: NotificationTemplateDto, enabled:
   }
   catch (failure) {
     toast.error(getApiClientFailureMessage(failure, '模板状态更新失败'))
-  }
-  finally {
-    busy.value = false
-  }
-}
-
-async function togglePolicyEnabled(policy: NotificationChannelPolicyDto, enabled: boolean): Promise<void> {
-  busy.value = true
-  try {
-    const updated = (await notificationsApi.policies.update(policy.eventType, policy.channel as 'IN_APP' | 'ASSISTANT', {
-      targetMode: policy.targetMode as 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP',
-      targetConfig: policy.targetConfig,
-      templateKey: policy.templateKey,
-      priority: policy.priority as 'NORMAL' | 'HIGH',
-      ttlSeconds: policy.ttlSeconds,
-      quietHours: policy.quietHours,
-      allowSensitive: policy.allowSensitive,
-      enabled,
-      expectedVersion: policy.version,
-    })).data
-    policies.value = policies.value.map(item => item.id === updated.id ? updated : item)
-    toast.success(enabled ? '策略已启用' : '策略已停用')
-  }
-  catch (failure) {
-    toast.error(getApiClientFailureMessage(failure, '策略状态更新失败'))
   }
   finally {
     busy.value = false
@@ -854,226 +580,78 @@ onMounted(() => {
   <FaPageMain v-else-if="loading" class="my-2!">
     <div class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
       <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-      正在加载通知规则…
+      正在加载通知策略…
     </div>
   </FaPageMain>
 
   <template v-else>
     <FaPageMain class="my-2!">
-      <div class="flex flex-wrap gap-3 items-center justify-between">
-        <div>
-          <h2 class="qs-type-section-title m-0">
-            消息模板
-          </h2>
-          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            业务只传一个 templateKey，每个渠道各有一份模板；保存时会校验未声明变量。
-          </p>
-        </div>
-        <FaButton size="sm" :disabled="!canUpdateTemplate || busy" @click="openCreateTemplate">
-          新建模板
-        </FaButton>
-      </div>
-
-      <div
-        class="mt-4 border border-border rounded-xl bg-background grid overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)] lg:h-[640px]"
-        data-testid="notification-template-master-detail"
-      >
-        <TemplateDomainRail
-          :groups="visibleTemplateDomainGroups"
-          :search="templateSearch"
-          :selected-key="selectedTemplateKey"
-          @select="selectedTemplateKey = $event"
-          @update:search="templateSearch = $event"
+      <template v-if="tabs.length > 0">
+        <QsStatusSwitchToolbar
+          :model-value="activeTab"
+          :items="tabs"
+          aria-label="通知策略视图"
+          class="w-full"
+          stretch
+          data-testid="notification-policy-view-switch"
+          @update:model-value="handleTabChange"
         />
-        <div class="h-full min-h-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:overflow-y-auto">
-          <TemplateKeyDetail
-            :group="selectedTemplateGroup"
-            :can-update="canUpdateTemplate"
-            :busy="busy"
-            @add="handleTemplateAdd"
-            @edit="openEditTemplate"
-            @preview="openPreview"
-            @toggle="toggleTemplateEnabled"
-          />
-        </div>
-      </div>
-    </FaPageMain>
 
-    <FaPageMain class="my-2!">
-      <div class="flex flex-wrap gap-3 items-center justify-between">
-        <div>
-          <h2 class="qs-type-section-title m-0">
-            事件策略
-          </h2>
-          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            站内不需要 TTL 与静默时段；千树小助理必须配置 TTL。敏感内容只允许发已验证绑定与仅内部群。
-          </p>
-          <p class="qs-type-meta text-amber-700 m-0 mt-1 dark:text-amber-300">
-            当前业务只接入采购审核、开票申请和货件到仓；其余事件暂无触发源，可以提前配置但不会触发。
-          </p>
-        </div>
-        <FaButton size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy()">
-          配置策略
-        </FaButton>
-      </div>
+        <EventConfigPanel
+          v-show="activeTab === 'events'"
+          ref="eventPanelRef"
+          class="mt-4"
+          :events="events"
+          :policies="policies"
+          :templates="templatesForCoverage"
+          :events-error="eventsError"
+          :policies-error="policiesError"
+          :templates-error="templatesError"
+          :can-update-policy="canUpdatePolicy"
+          :can-update-template="canUpdateTemplate"
+          :can-view-policy="canViewPolicy"
+          :can-view-template="canViewTemplate"
+          :busy="busy"
+          @saved="handlePolicySaved"
+          @retry="load"
+          @edit-template="openEditTemplate($event, true)"
+          @preview-template="openPreview"
+          @create-template="openCreateTemplateFromEvent"
+        />
 
-      <div class="mt-4 border border-border rounded-lg overflow-hidden">
-        <div class="px-3 py-2 bg-muted/40 flex flex-wrap gap-2 items-center justify-between">
-          <span class="qs-type-meta">事件 × 渠道覆盖</span>
-          <span class="qs-type-meta text-muted-foreground">点击标签直接编辑或创建对应策略</span>
-        </div>
-        <div
-          v-for="row in policyCoverage"
-          :key="row.value"
-          class="px-3 py-2 border-t border-border/60 flex flex-wrap gap-2 items-center justify-between"
-        >
-          <span class="qs-type-meta">{{ row.label }}</span>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="channel in row.channels"
-              :key="channel.value"
-              type="button"
-              class="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              @click="openPolicyAt(row.value, channel.value)"
-            >
-              <FaTag
-                variant="outline"
-                :class="channel.policy === null
-                  ? 'border-amber-500/40 border-dashed bg-amber-500/5 text-amber-700 dark:text-amber-300'
-                  : channel.policy.enabled
-                    ? 'border-primary/30 bg-primary/10 text-primary'
-                    : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-              >
-                {{ channel.label }} · {{ channel.policy === null ? '未配置' : channel.policy.enabled ? '已启用' : '已停用' }}
-              </FaTag>
-            </button>
-          </div>
-        </div>
-      </div>
+        <TemplateLibraryPanel
+          v-show="activeTab === 'templates'"
+          class="mt-4"
+          :templates="templates"
+          :usage="usage"
+          :loading-error="templatesError"
+          :can-update="canUpdateTemplate"
+          :busy="busy"
+          @create="openCreateTemplate"
+          @add="openCreateTemplateForChannel"
+          @edit="openEditTemplate"
+          @preview="openPreview"
+          @toggle="toggleTemplateEnabled"
+        />
+      </template>
 
-      <QsGenericTable
-        class="mt-4"
-        :columns="policyColumns"
-        :data="filteredPolicies"
-        :addable="false"
-        :searchable="false"
-        :action-column="{ width: 140, minWidth: 140 }"
-        :show-pagination="false"
-        row-key="id"
-        data-testid="notification-policy-table"
-      >
-        <template #query-leading>
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaInput
-              v-model="policyKeyword"
-              type="search"
-              clearable
-              class="w-56"
-              placeholder="事件、模板键或目标"
-              aria-label="搜索事件策略"
-            >
-              <template #start>
-                <FaIcon name="i-lucide:search" />
-              </template>
-            </FaInput>
-            <FaSelect v-model="policyChannelFilter" :options="CHANNEL_FILTER_OPTIONS" class="w-32" aria-label="策略渠道" />
-            <FaSelect v-model="policyStatusFilter" :options="STATUS_FILTER_OPTIONS" class="w-28" aria-label="策略状态" />
-          </div>
-        </template>
-        <template #cell-eventType="{ row }">
-          {{ formatEventType(row.original.eventType) }}
-        </template>
-        <template #cell-channel="{ row }">
-          <FaTag variant="outline" :class="channelTagClass(row.original.channel)">
-            {{ formatChannel(row.original.channel) }}
-          </FaTag>
-        </template>
-        <template #cell-targetMode="{ row }">
-          {{ TARGET_MODE_LABELS[row.original.targetMode] ?? row.original.targetMode }}
-        </template>
-        <template #cell-templateKey="{ row }">
-          {{ row.original.templateKey ?? '—' }}
-        </template>
-        <template #cell-priority="{ row }">
-          {{ PRIORITY_LABELS[row.original.priority] ?? row.original.priority }}
-        </template>
-        <template #cell-ttlSeconds="{ row }">
-          {{ formatTtl(row.original.ttlSeconds) }}
-        </template>
-        <template #cell-updatedByInfo="{ row }">
-          <div class="flex flex-col gap-1 min-w-0">
-            <QsPersonDisplay :display-name="row.original.updatedByName ?? ''" size="sm" />
-            <span class="qs-type-meta text-muted-foreground">{{ formatNotificationDateTime(row.original.updatedAt) }}</span>
-          </div>
-        </template>
-        <template #cell-enabled="{ row }">
-          <FaTag
-            variant="outline"
-            :class="row.original.enabled
-              ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-          >
-            {{ row.original.enabled ? '启用' : '停用' }}
-          </FaTag>
-        </template>
-        <template #actions="{ row }">
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaSwitch
-              :model-value="row.enabled"
-              :disabled="!canUpdatePolicy || busy"
-              :aria-label="`${formatEventType(row.eventType)} 启用状态`"
-              :title="row.enabled ? '点击停用' : '点击启用'"
-              @update:model-value="togglePolicyEnabled(row, Boolean($event))"
-            />
-            <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
-              编辑
-            </FaButton>
-          </div>
-        </template>
-        <template #mobile-row="{ row }">
-          <div class="flex flex-col gap-2 min-w-0">
-            <div class="flex gap-2 items-start justify-between">
-              <div class="min-w-0">
-                <p class="qs-type-body-medium m-0 truncate">
-                  {{ formatEventType(row.eventType) }}
-                </p>
-                <p class="qs-type-meta text-muted-foreground m-0 mt-0.5">
-                  {{ formatChannel(row.channel) }} · {{ TARGET_MODE_LABELS[row.targetMode] ?? row.targetMode }}
-                </p>
-              </div>
-              <FaTag
-                variant="outline"
-                class="shrink-0"
-                :class="row.enabled
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'"
-              >
-                {{ row.enabled ? '启用' : '停用' }}
-              </FaTag>
-            </div>
-            <p class="qs-type-meta text-muted-foreground m-0">
-              模板 {{ row.templateKey ?? '—' }} · {{ formatTtl(row.ttlSeconds) }} · 更新：{{ row.updatedByName ?? '—' }} · {{ formatNotificationDateTime(row.updatedAt) }}
-            </p>
-            <div class="flex flex-wrap gap-2 items-center">
-              <FaSwitch
-                :model-value="row.enabled"
-                :disabled="!canUpdatePolicy || busy"
-                :aria-label="`${formatEventType(row.eventType)} 启用状态`"
-                :title="row.enabled ? '点击停用' : '点击启用'"
-                @update:model-value="togglePolicyEnabled(row, Boolean($event))"
-              />
-              <FaButton variant="outline" size="sm" :disabled="!canUpdatePolicy || busy" @click="openPolicy(row)">
-                编辑
-              </FaButton>
-            </div>
-          </div>
-        </template>
-      </QsGenericTable>
+      <FaEmpty
+        v-else
+        icon="i-lucide:shield-alert"
+        title="暂无查看权限"
+        description="当前账号缺少通知策略或模板读取权限。"
+        class="min-h-64"
+      />
     </FaPageMain>
   </template>
 
-  <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
+  <QsGenericModal v-model="templateOpen" :title="templateMode === 'create' ? '新建模板' : '编辑模板'" size="2xl" :z-index="2200" :submitting="busy" :before-close="canCloseTemplateModal" @update:model-value="templateOpen = $event">
     <div class="flex flex-col gap-5">
+      <FaAlert
+        v-if="templateDraftUsage > 1"
+        :title="`该模板键被 ${templateDraftUsage} 个事件使用`"
+        description="修改内容会同时影响这些事件的下一次发送。"
+      />
       <section class="flex flex-col gap-3">
         <h3 class="qs-type-body-medium m-0">
           基础信息
@@ -1085,7 +663,13 @@ onMounted(() => {
           </label>
           <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">渠道</span>
-            <FaSelect v-model="templateDraft.channel" class="w-full" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
+            <template v-if="templateAboveDrawer">
+              <div class="px-3 py-2 border border-border rounded-md bg-muted/30">
+                {{ formatChannel(templateDraft.channel) }}
+              </div>
+              <span class="qs-type-meta text-muted-foreground">由当前事件渠道决定。</span>
+            </template>
+            <FaSelect v-else v-model="templateDraft.channel" class="w-full" :options="CHANNEL_OPTIONS" :disabled="templateMode === 'edit'" />
           </label>
           <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">名称</span>
@@ -1093,15 +677,23 @@ onMounted(() => {
           </label>
           <label class="flex flex-col gap-1">
             <span class="qs-type-compact-label">业务域</span>
-            <FaSelect
-              v-model="templateDraft.domain"
-              class="w-full"
-              :options="TEMPLATE_DOMAIN_OPTIONS"
-              :disabled="templateOtherChannel !== null"
-            />
-            <span v-if="templateOtherChannel !== null" class="qs-type-meta text-muted-foreground">
-              同一模板键在{{ formatChannel(templateOtherChannel.channel) }}已使用「{{ templateDomainLabel(templateOtherChannel.domain) }}」，业务域已锁定。
-            </span>
+            <template v-if="templateAboveDrawer">
+              <div class="px-3 py-2 border border-border rounded-md bg-muted/30">
+                {{ templateDomainLabel(templateDraft.domain) }}
+              </div>
+              <span class="qs-type-meta text-muted-foreground">业务域随事件确定；需要调整请在模板库中编辑。</span>
+            </template>
+            <template v-else>
+              <FaSelect
+                v-model="templateDraft.domain"
+                class="w-full"
+                :options="TEMPLATE_DOMAIN_OPTIONS"
+                :disabled="templateOtherChannel !== null"
+              />
+              <span v-if="templateOtherChannel !== null" class="qs-type-meta text-muted-foreground">
+                同一模板键在{{ formatChannel(templateOtherChannel.channel) }}已使用「{{ templateDomainLabel(templateOtherChannel.domain) }}」，业务域已锁定。
+              </span>
+            </template>
           </label>
           <p v-if="templateMode === 'edit'" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
             模板键与渠道创建后不可修改；需要换渠道请新建对应模板。
@@ -1214,6 +806,7 @@ onMounted(() => {
     v-model="previewOpen"
     :title="previewTemplate === null ? '模板预览' : `模板预览 · ${previewTemplate.name}`"
     size="lg"
+    :z-index="2200"
     :submitting="busy"
     @update:model-value="previewOpen = $event"
   >
@@ -1254,145 +847,44 @@ onMounted(() => {
     </template>
   </QsGenericModal>
 
-  <QsGenericModal v-model="policyOpen" title="事件策略" size="2xl" :submitting="busy" :before-close="canClosePolicyModal" @update:model-value="policyOpen = $event">
-    <div class="gap-3 grid md:grid-cols-2">
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">事件</span>
-        <FaSelect
-          :model-value="policyEventType"
-          :options="EVENT_OPTIONS"
-          :disabled="policyEditingExisting"
-          @update:model-value="changePolicyEvent(String($event))"
-        />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">渠道</span>
-        <FaSelect
-          :model-value="policyChannel"
-          :options="CHANNEL_OPTIONS"
-          :disabled="policyEditingExisting"
-          @update:model-value="changePolicyChannel(String($event))"
-        />
-      </label>
-      <p v-if="policyExisting !== null && !policyEditingExisting" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
-        该事件与渠道已有策略，保存会更新现有配置（当前版本 {{ policyExisting.version }}）。
-      </p>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">目标模式</span>
-        <FaSelect v-model="policyDraft.targetMode" :options="policyTargetModeOptions" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">模板</span>
-        <FaSelect v-model="policyDraft.templateKey" :options="templateKeyOptions" placeholder="选择模板" />
-      </label>
-      <p v-if="policyTemplateDomainMismatch && selectedPolicyTemplate !== null" class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
-        模板所属业务域（{{ templateDomainLabel(selectedPolicyTemplate.domain) }}）与事件业务域（{{ templateDomainLabel(policyEventDomain) }}）不一致，请确认。
-      </p>
-      <p v-if="policyOptionsLoading" class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
-        正在加载员工、角色、权限与群目标选项…
-      </p>
-      <div v-if="policyDraft.targetMode === 'COMMAND_TARGET'" class="qs-type-meta text-muted-foreground p-3 border border-border rounded-lg bg-muted/30 md:col-span-2">
-        目标由业务命令携带，不需要额外配置。
-      </div>
-      <label v-else-if="policyDraft.targetMode === 'USERS'" class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">固定员工</span>
-        <FaSelect
-          v-model="policyDraft.targetConfig.userIds"
-          multiple
-          :options="policyUserOptions"
-          :disabled="policyOptionsLoading"
-          placeholder="选择员工"
-        />
-        <span class="qs-type-meta text-muted-foreground">可多选；列表只包含启用中的员工。</span>
-      </label>
-      <label v-else-if="policyDraft.targetMode === 'ROLE'" class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">角色</span>
-        <FaSelect
-          v-model="policyDraft.targetConfig.roleCodes"
-          multiple
-          :options="policyRoleOptions"
-          :disabled="policyOptionsLoading"
-          placeholder="选择角色"
-        />
-      </label>
-      <label v-else-if="policyDraft.targetMode === 'PERMISSION'" class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">权限</span>
-        <FaSelect
-          v-model="policyDraft.targetConfig.permissionCode"
-          :options="policyPermissionOptions"
-          :disabled="policyOptionsLoading"
-          placeholder="选择权限"
-        />
-        <span class="qs-type-meta text-muted-foreground">接收拥有该权限的全部启用用户。</span>
-      </label>
-      <label v-else class="flex flex-col gap-1 md:col-span-2">
-        <span class="qs-type-compact-label">群目标</span>
-        <FaSelect
-          v-model="policyDraft.targetConfig.targetKeys"
-          multiple
-          :options="policyGroupOptions"
-          :disabled="policyOptionsLoading"
-          placeholder="选择群目标"
-        />
-        <span class="qs-type-meta text-muted-foreground">敏感内容只会发送到标记为「仅内部」且已启用的群。</span>
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">优先级</span>
-        <FaSelect v-model="policyDraft.priority" :options="[{ label: '普通', value: 'NORMAL' }, { label: '高', value: 'HIGH' }]" />
-      </label>
-      <label class="flex flex-col gap-1">
-        <span class="qs-type-compact-label">站外 TTL（秒）</span>
-        <FaInput v-model.number="policyDraft.ttlSeconds" type="number" min="60" max="604800" :disabled="policyChannel === 'IN_APP'" />
-        <span class="qs-type-meta text-muted-foreground">{{ policyTtlHint }}</span>
-      </label>
-      <div v-if="policyChannel === 'ASSISTANT'" class="flex flex-col gap-2 md:col-span-2">
-        <label class="qs-type-meta flex gap-2 items-center">
-          <FaSwitch v-model="policyDraft.quietHoursEnabled" />
-          启用静默时段
-        </label>
-        <div v-if="policyDraft.quietHoursEnabled" class="gap-2 grid sm:grid-cols-2">
-          <label class="flex flex-col gap-1">
-            <span class="qs-type-compact-label">开始时间</span>
-            <FaInput v-model="policyDraft.quietStart" type="time" />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="qs-type-compact-label">结束时间</span>
-            <FaInput v-model="policyDraft.quietEnd" type="time" />
-          </label>
-        </div>
-        <span v-if="policyDraft.quietHoursEnabled" class="qs-type-meta text-muted-foreground">
-          时区固定为 {{ policyDraft.quietTimezone }}；开始时间晚于结束时间表示跨天。
-        </span>
-      </div>
-      <label v-if="policyChannel === 'ASSISTANT'" class="qs-type-meta flex gap-2 items-center">
-        <FaSwitch v-model="policyDraft.allowSensitive" />
-        允许金额/客户名称
-      </label>
-      <label class="qs-type-meta flex gap-2 items-center">
-        <FaSwitch v-model="policyDraft.enabled" />
-        启用
-      </label>
-    </div>
-    <template #footer>
-      <FaButton variant="outline" :disabled="busy" @click="policyOpen = false">
-        取消
-      </FaButton>
-      <FaButton :loading="busy" :disabled="!canSavePolicy" @click="savePolicy">
-        保存
-      </FaButton>
-    </template>
-  </QsGenericModal>
-
-  <QsGenericModal v-model="discardOpen" title="放弃修改" size="sm" :z-index="2200" @update:model-value="handleDiscardVisible">
+  <QsGenericModal v-model="discardOpen" title="放弃修改" size="sm" :z-index="2200" @update:model-value="discardOpen = $event">
     <p class="qs-type-body m-0">
       有未保存的修改，关闭后这些修改会丢失。
     </p>
     <template #footer>
-      <FaButton variant="outline" @click="cancelDiscard">
+      <FaButton variant="outline" @click="discardOpen = false">
         继续编辑
       </FaButton>
       <FaButton variant="destructive" @click="confirmDiscard">
         放弃修改
+      </FaButton>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal v-model="tabDiscardOpen" title="放弃修改" size="sm" :z-index="2200" @update:model-value="cancelTabDiscard">
+    <p class="qs-type-body m-0">
+      事件配置有未保存的修改，切换到模板库后这些修改会丢失。
+    </p>
+    <template #footer>
+      <FaButton variant="outline" @click="cancelTabDiscard">
+        继续编辑
+      </FaButton>
+      <FaButton variant="destructive" @click="confirmTabDiscard">
+        放弃修改
+      </FaButton>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal v-model="leaveOpen" title="放弃修改" size="sm" :z-index="2300" @update:model-value="cancelLeave">
+    <p class="qs-type-body m-0">
+      页面有未保存的修改，离开后这些修改会丢失。
+    </p>
+    <template #footer>
+      <FaButton variant="outline" @click="cancelLeave">
+        继续编辑
+      </FaButton>
+      <FaButton variant="destructive" @click="confirmLeave">
+        离开页面
       </FaButton>
     </template>
   </QsGenericModal>

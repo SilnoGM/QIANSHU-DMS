@@ -11,13 +11,20 @@ import { inspectNotificationTemplate, renderNotificationTemplate, type Notificat
 import {
   ASSISTANT_TRANSPORT,
   AssistantAdminError,
+  IMPLEMENTED_NOTIFICATION_EVENT_TYPES,
+  NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY,
+  NOTIFICATION_EVENT_LABELS,
+  NOTIFICATION_EVENT_TEMPLATE_DOMAIN,
   NOTIFICATION_EVENT_TYPES,
+  NOTIFICATION_EVENT_VARIABLES,
+  notificationEventVariables,
   type AssistantTransport,
 } from './notification.types'
 import type {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
   NotificationChannelPolicyUpdateDto,
+  NotificationEventDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
   NotificationRecordPageDto,
@@ -361,6 +368,19 @@ export class NotificationAdminService {
     return { accepted: true }
   }
 
+  /** 事件元数据由服务端常量派生，管理端不再各自维护事件名、变量与默认模板键。 */
+  listEvents(): NotificationEventDto[] {
+    return NOTIFICATION_EVENT_TYPES.map(eventType => ({
+      eventType,
+      label: NOTIFICATION_EVENT_LABELS[eventType],
+      domain: NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType],
+      variables: [...(NOTIFICATION_EVENT_VARIABLES[eventType] ?? [])],
+      variablesKnown: notificationEventVariables(eventType) !== null,
+      defaultTemplateKey: NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY[eventType] ?? null,
+      implemented: IMPLEMENTED_NOTIFICATION_EVENT_TYPES.includes(eventType),
+    }))
+  }
+
   async listPolicies(eventType?: string, channel?: string): Promise<NotificationChannelPolicyDto[]> {
     const policies = await this.prisma.notificationChannelPolicy.findMany({
       where: {
@@ -405,6 +425,45 @@ export class NotificationAdminService {
     }
   }
 
+  /**
+   * 策略显式绑定模板时校验模板存在且占位符属于事件变量。
+   * 尚无触发源的事件不登记变量契约，跳过兼容性校验以允许提前配置。
+   */
+  private async assertPolicyTemplate(
+    eventType: string,
+    channel: 'IN_APP' | 'ASSISTANT',
+    templateKey: string | null | undefined,
+  ): Promise<void> {
+    const key = templateKey?.trim()
+    if (key === undefined || key.length === 0) {
+      return
+    }
+    const template = await this.prisma.notificationTemplate.findUnique({
+      where: { key_channel: { key, channel } },
+    })
+    if (template === null) {
+      throw new ApiException(422, 'NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND', '所选模板在该渠道不存在')
+    }
+    const allowed = notificationEventVariables(eventType)
+    if (allowed === null) {
+      return
+    }
+    const inspected = inspectNotificationTemplate({
+      body: template.bodyTemplate,
+      titleTemplate: template.titleTemplate,
+      linkUrlTemplate: template.linkUrlTemplate,
+      allowed: templateVariables(template.variables),
+    })
+    const unsupported = inspected.placeholders.filter(name => !allowed.includes(name))
+    if (unsupported.length > 0) {
+      throw new ApiException(
+        422,
+        'NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID',
+        `模板占位符超出事件变量范围：${unsupported.join('、')}`,
+      )
+    }
+  }
+
   async upsertPolicy(
     context: NotificationAdminContext,
     eventType: string,
@@ -415,6 +474,7 @@ export class NotificationAdminService {
       throw new ApiException(422, 'NOTIFICATION_EVENT_TYPE_INVALID', '事件类型未登记')
     }
     this.validatePolicy(channel, input)
+    await this.assertPolicyTemplate(eventType, channel, input.templateKey)
     const existing = await this.prisma.notificationChannelPolicy.findUnique({
       where: { eventType_channel: { eventType, channel } },
     })
@@ -427,7 +487,7 @@ export class NotificationAdminService {
     const data = {
       targetMode: input.targetMode as 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP',
       targetConfig: input.targetConfig as Prisma.InputJsonValue,
-      templateKey: input.templateKey ?? null,
+      templateKey: input.templateKey?.trim() || null,
       priority: input.priority as 'NORMAL' | 'HIGH',
       ttlSeconds: input.ttlSeconds ?? null,
       quietHours,
@@ -558,6 +618,7 @@ export class NotificationAdminService {
         targetName: delivery.target?.name ?? null,
         status: delivery.status,
         attemptCount: delivery.attemptCount,
+        templateKey: delivery.templateKey,
         failureCode: delivery.failureCode,
         failureMessage: delivery.failureMessage,
         acceptedAt: iso(delivery.acceptedAt),

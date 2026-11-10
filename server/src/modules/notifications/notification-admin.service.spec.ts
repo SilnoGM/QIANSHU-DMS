@@ -26,6 +26,30 @@ function service(prisma: Record<string, unknown>) {
 }
 
 describe('NotificationAdminService', () => {
+  it('lists registered events with labels, variables and default template keys', () => {
+    const result = service({}).listEvents()
+
+    const purchase = result.find(event => event.eventType === 'PURCHASE_REVIEW_PENDING')
+    expect(purchase).toMatchObject({
+      label: '采购审核',
+      domain: 'PURCHASE',
+      implemented: true,
+      variablesKnown: true,
+      defaultTemplateKey: 'purchase.review.pending',
+    })
+    expect(purchase?.variables).toEqual(expect.arrayContaining(['orderNo', 'customerName']))
+
+    const withdrawal = result.find(event => event.eventType === 'FUND_WITHDRAWAL_REVIEW_PENDING')
+    expect(withdrawal).toMatchObject({
+      label: '提现审核',
+      domain: 'FINANCE',
+      implemented: false,
+      variablesKnown: false,
+      defaultTemplateKey: null,
+    })
+    expect(withdrawal?.variables).toEqual([])
+  })
+
   it('renders a template preview with sample variables', async () => {
     const prisma = {
       notificationTemplate: {
@@ -94,6 +118,54 @@ describe('NotificationAdminService', () => {
         expectedVersion: 0,
       },
     )).rejects.toMatchObject({ code: 'NOTIFICATION_POLICY_TARGET_INVALID' })
+  })
+
+  it('rejects a policy template that does not exist on the channel', async () => {
+    await expect(service({
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+    }).upsertPolicy(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      'PURCHASE_REVIEW_PENDING',
+      'ASSISTANT',
+      {
+        targetMode: 'COMMAND_TARGET',
+        targetConfig: {},
+        templateKey: 'purchase.review.pending.short',
+        priority: 'NORMAL',
+        ttlSeconds: 86_400,
+        allowSensitive: false,
+        enabled: true,
+        expectedVersion: 0,
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND' })
+  })
+
+  it('rejects a policy template whose placeholders are not provided by the event', async () => {
+    await expect(service({
+      notificationTemplate: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'template-2',
+          bodyTemplate: '采购单 {{orderNo}} 货件 {{partNumbers}}',
+          titleTemplate: null,
+          linkUrlTemplate: null,
+          variables: [{ name: 'orderNo' }, { name: 'partNumbers' }],
+        }),
+      },
+    }).upsertPolicy(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      'PURCHASE_REVIEW_PENDING',
+      'ASSISTANT',
+      {
+        targetMode: 'COMMAND_TARGET',
+        targetConfig: {},
+        templateKey: 'purchase.review.pending.short',
+        priority: 'NORMAL',
+        ttlSeconds: 86_400,
+        allowSensitive: false,
+        enabled: true,
+        expectedVersion: 0,
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID' })
   })
 
   it('rejects a template domain that conflicts with the other channel', async () => {
@@ -196,6 +268,15 @@ describe('NotificationAdminService', () => {
     }
     const policyPrisma = {
       notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(policy) },
+      notificationTemplate: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'template-1',
+          bodyTemplate: '采购单 {{orderNo}} 待审核',
+          titleTemplate: null,
+          linkUrlTemplate: null,
+          variables: [{ name: 'orderNo' }],
+        }),
+      },
       $transaction: jest.fn(async (callback: (tx: typeof policyTransaction) => Promise<unknown>) => callback(policyTransaction)),
     }
 

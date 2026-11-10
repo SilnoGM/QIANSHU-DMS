@@ -3437,6 +3437,7 @@ model NotificationInboxItem {
   notificationId   String    @map("notification_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   eventType        String    @map("event_type") @db.VarChar(64)
+  templateKey      String    @map("template_key") @db.VarChar(64)
   templateVersion  Int       @map("template_version")
   titleSnapshot    String    @map("title_snapshot") @db.Text
   bodySnapshot     String    @map("body_snapshot") @db.Text
@@ -3556,6 +3557,7 @@ model AssistantDelivery {
   status            AssistantDeliveryStatus @default(PENDING)
   attemptCount      Int                     @default(0) @map("attempt_count")
   nextAttemptAt     DateTime                @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  templateKey       String                  @map("template_key") @db.VarChar(64)
   templateVersion   Int                     @map("template_version")
   renderedContent   String                  @map("rendered_content") @db.Text
   providerMsgId     String?                 @map("provider_msg_id") @db.VarChar(64)

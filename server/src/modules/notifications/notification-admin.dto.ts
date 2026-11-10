@@ -18,6 +18,16 @@ import {
 
 const TEMPLATE_DOMAINS = ['SALES', 'PURCHASE', 'SHIPMENT', 'FINANCE', 'INVOICE', 'RECONCILIATION', 'SYSTEM'] as const
 
+export class NotificationEventDto {
+  @ApiProperty() eventType!: string
+  @ApiProperty() label!: string
+  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
+  @ApiProperty({ type: [String] }) variables!: string[]
+  @ApiProperty() variablesKnown!: boolean
+  @ApiProperty({ type: 'string', nullable: true }) defaultTemplateKey!: string | null
+  @ApiProperty() implemented!: boolean
+}
+
 export class NotificationTemplateVariableDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/^[a-zA-Z0-9_]+$/u) name!: string
   @ApiPropertyOptional() @IsOptional() @IsBoolean() required?: boolean
@@ -126,6 +136,7 @@ export class NotificationDeliveryDto {
   @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
   @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
   @ApiProperty({ type: 'integer' }) attemptCount!: number
+  @ApiProperty() templateKey!: string
   @ApiProperty({ type: 'string', nullable: true }) failureCode!: string | null
   @ApiProperty({ type: 'string', nullable: true }) failureMessage!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) acceptedAt!: string | null

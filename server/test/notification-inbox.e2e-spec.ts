@@ -91,6 +91,7 @@ describe('Notification inbox API with PostgreSQL', () => {
         notificationId: notification.id,
         userId,
         eventType: 'PURCHASE_REVIEW_PENDING',
+        templateKey: 'purchase.review.pending',
         templateVersion: 1,
         titleSnapshot: title,
         bodySnapshot: 'E2E 通知正文',

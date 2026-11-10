@@ -6,13 +6,14 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
-import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { RequireAnyPermissions, RequirePermissions } from '../auth/decorators/auth.decorators'
 import { AssistantTestSendDto } from './assistant-admin.dto'
 import {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
   NotificationChannelPolicyPathDto,
   NotificationChannelPolicyUpdateDto,
+  NotificationEventDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
   NotificationRecordPageDto,
@@ -61,6 +62,14 @@ export class NotificationAdminController {
   @contract('notifications_overview_get')
   overview() {
     return this.notifications.overview()
+  }
+
+  @Get('events')
+  @RequireAnyPermissions('notification-policy:read', 'notification-template:read')
+  @ApiContractResponse({ status: 200, type: [NotificationEventDto] })
+  @contract('notifications_events_list')
+  listEvents() {
+    return this.notifications.listEvents()
   }
 
   @Get('templates')

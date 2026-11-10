@@ -234,6 +234,7 @@ CHECK：两个保留期都在 `7..3650`。
 | `status` | `AssistantDeliveryStatus` | 否 | `PENDING` | — |
 | `attemptCount` | int | 否 | `0` | — |
 | `nextAttemptAt` | timestamptz(6) | 否 | `now()` | 下次尝试 |
+| `templateKey` | varchar(64) | 否 | — | 实际渲染使用的模板键；渠道策略覆盖时与通知主键不同 |
 | `templateVersion` | int | 否 | — | 发布时模板版本 |
 | `renderedContent` | text | 否 | — | 渲染快照，可能含金额/客户名称 |
 | `providerMsgId` | varchar(64) | 是 | `null` | GeWe `msgId` |
@@ -268,11 +269,13 @@ CHECK：两个保留期都在 `7..3650`。
 
 ## 5. 站内通知与回调预留表
 
-`notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`20261108110000_notification_inbox_business_links` 为三条站内模板追加业务标识变量与默认详情链接；`assistant_callback_events` 仍未创建。
+`notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`20261108110000_notification_inbox_business_links` 为三条站内模板追加业务标识变量与默认详情链接；`20261110120000_notification_effective_template_key` 为站内条目与站外交付补实际模板键；`assistant_callback_events` 仍未创建。
 
 ### 5.1 `notification_inbox_items`
 
-`id`、`notificationId`、`userId`、`eventType`、`templateVersion`、`titleSnapshot`、`bodySnapshot`、`linkUrlSnapshot`、`readAt`、`archivedAt`、`createdAt`。
+`id`、`notificationId`、`userId`、`eventType`、`templateKey`、`templateVersion`、`titleSnapshot`、`bodySnapshot`、`linkUrlSnapshot`、`readAt`、`archivedAt`、`createdAt`。
+
+- `templateKey` 是实际渲染使用的模板键；渠道策略显式绑定模板时可能与通知主表 `template_key`（业务默认键）不同。
 
 - 唯一 `(notificationId, userId)`。
 - 列表索引：`(userId, archivedAt, createdAt DESC)`。

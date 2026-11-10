@@ -237,6 +237,7 @@ export interface SystemNotificationPublishResult {
 | 方法 | 路径 | 权限 | operationId | 说明 |
 | --- | --- | --- | --- | --- |
 | GET | `/api/notifications/overview` | `notification-record:read` | `notifications_overview_get` | 各渠道状态与今日统计 |
+| GET | `/api/notifications/events` | `notification-policy:read` 或 `notification-template:read` | `notifications_events_list` | 事件元数据：名称、业务域、变量契约、默认模板键、是否已接入 |
 | GET | `/api/notifications/settings` | `notification-policy:read` | `notifications_settings_get` | 全局保留期 |
 | PUT | `/api/notifications/settings` | `notification-policy:update` | `notifications_settings_update` | 修改保留期，需 `expectedVersion` |
 | GET | `/api/notifications/templates` | `notification-template:read` | `notifications_templates_list` | 模板列表，可按渠道筛选 |
@@ -251,6 +252,10 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
 
 模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
+
+策略的 `templateKey` 非空时即显式绑定：模板必须存在于该渠道，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND`；模板占位符必须属于该事件的变量契约，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID`。尚无触发源的事件不登记变量契约，只校验模板存在性。`templateKey` 为空时发布回退到业务命令键。
+
+`GET /api/notifications/events` 的事件元数据由服务端常量派生：`eventType`、`label`、`domain`（模板业务域）、`variables`、`variablesKnown`、`defaultTemplateKey`（业务命令默认键，无触发源时为 `null`）、`implemented`。管理端用它展示默认模板、过滤不兼容模板和判断事件是否已接入，不再各自维护事件名与变量清单。
 
 ### 4.2 千树小助理（渠道）
 
@@ -522,6 +527,8 @@ export interface SystemNotificationPublishResult {
 | 已归档 | `archived_at IS NOT NULL` |
 
 ### 7.3 站外交付状态（`assistant_deliveries`）
+
+每条交付包含实际渲染使用的 `templateKey` 与 `templateVersion`；渠道策略覆盖模板时，`templateKey` 可能与通知主表的业务默认键不同，记录详情按交付展示。
 
 | 状态 | 含义 |
 | --- | --- |

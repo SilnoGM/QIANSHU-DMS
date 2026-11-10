@@ -239,5 +239,7 @@
 
 - `eventType` 只追加，不重命名、不复用已删除的值。
 - 每个事件在每个启用渠道上必须有模板与策略；缺失时该渠道跳过，不影响其他渠道。
+- `NOTIFICATION_EVENT_VARIABLES` 登记事件实际会提供的变量集合；策略显式绑定模板时按它校验占位符，新增事件或调整变量必须同步更新。
+- 事件中文名、模板业务域、默认模板键与是否已接入由服务端常量统一维护，管理端通过 `GET /api/notifications/events` 读取；新增事件时同步补 `NOTIFICATION_EVENT_LABELS`、`NOTIFICATION_EVENT_TEMPLATE_DOMAIN`、`NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY` 并确认 `IMPLEMENTED_NOTIFICATION_EVENT_TYPES`。
 - 文案修改走模板版本，不改 `eventType` 语义。
 - 新增事件前先确认收件人、变量、敏感标记、TTL 与文案；不要先写代码再补口径。

@@ -49,6 +49,46 @@ const templateGroupingSource = readFileSync(
   new URL('../../src/views/system/notifications/template-key-grouping.logic.ts', import.meta.url),
   'utf8',
 )
+const eventConfigPanelSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventConfigPanel.vue', import.meta.url),
+  'utf8',
+)
+const eventConfigCardsSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventConfigCards.vue', import.meta.url),
+  'utf8',
+)
+const eventFilterBarSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventFilterBar.vue', import.meta.url),
+  'utf8',
+)
+const eventChannelDrawerSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventChannelDrawer.vue', import.meta.url),
+  'utf8',
+)
+const eventChannelCardSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventChannelCard.vue', import.meta.url),
+  'utf8',
+)
+const eventTemplateBlockSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/EventTemplateBlock.vue', import.meta.url),
+  'utf8',
+)
+const templatePickerSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/TemplatePickerDrawer.vue', import.meta.url),
+  'utf8',
+)
+const templateLibrarySource = readFileSync(
+  new URL('../../src/views/system/notifications/components/TemplateLibraryPanel.vue', import.meta.url),
+  'utf8',
+)
+const eventConfigLogicSource = readFileSync(
+  new URL('../../src/views/system/notifications/event-config.logic.ts', import.meta.url),
+  'utf8',
+)
+const policyDraftLogicSource = readFileSync(
+  new URL('../../src/views/system/notifications/policy-draft.logic.ts', import.meta.url),
+  'utf8',
+)
 const recordsSource = readFileSync(
   new URL('../../src/views/system/notifications/records-panel.vue', import.meta.url),
   'utf8',
@@ -254,24 +294,26 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(inboxStoreSource, /shouldYieldLeadership/u)
 })
 
-test('通知规则面板包含模板预览与事件策略编辑', () => {
-  assert.match(rulesSource, /模板预览/u)
-  assert.match(rulesSource, /消息模板/u)
-  assert.match(rulesSource, /qs-type-section-title/u)
-  assert.match(rulesSource, /channelTagClass/u)
-  assert.match(rulesSource, /searchable="false"/u)
-  assert.match(rulesSource, /#query-leading/u)
-  assert.match(rulesSource, /class="w-56"/u)
-  assert.match(rulesSource, /事件策略/u)
-  assert.match(rulesSource, /测试发送/u)
-  assert.match(rulesSource, /占位符必须使用双花括号/u)
-  assert.match(rulesSource, /配置策略/u)
-  assert.match(rulesSource, /事件 × 渠道覆盖/u)
-  assert.match(rulesSource, /policyCoverage/u)
-  assert.match(rulesSource, /openPolicyAt/u)
-  assert.match(rulesSource, /targetConfig\.userIds/u)
-  assert.match(rulesSource, /policyTargetModeOptions/u)
-  assert.match(rulesSource, /quietHoursEnabled/u)
+test('通知策略页以分组表格与渠道抽屉组织，模板库独立成页签', () => {
+  assert.match(rulesSource, /notification-policy-view-switch/u)
+  assert.match(rulesSource, /QsStatusSwitchToolbar/u)
+  assert.match(rulesSource, /stretch/u)
+  assert.match(rulesSource, /class="w-full"/u)
+  assert.match(rulesSource, /v-show="activeTab === 'events'"/u)
+  assert.match(rulesSource, /v-show="activeTab === 'templates'"/u)
+  assert.match(rulesSource, /EventConfigPanel/u)
+  assert.match(rulesSource, /TemplateLibraryPanel/u)
+  assert.match(rulesSource, /handleTabChange/u)
+  assert.match(rulesSource, /hasDirty/u)
+  assert.match(rulesSource, /hasUnsavedChanges/u)
+  assert.match(rulesSource, /onBeforeRouteLeave/u)
+  assert.match(rulesSource, /handleBeforeUnload/u)
+  assert.match(rulesSource, /templateAboveDrawer/u)
+  assert.match(rulesSource, /templateDraftUsage/u)
+  assert.match(rulesSource, /放弃修改/u)
+  assert.match(rulesSource, /TEMPLATE_DOMAIN_OPTIONS/u)
+  assert.match(rulesSource, /templateOtherChannel/u)
+  assert.match(rulesSource, /templateDomainLabel/u)
   assert.match(rulesSource, /addTemplateVariable/u)
   assert.match(rulesSource, /变量白名单/u)
   assert.match(rulesSource, /基础信息/u)
@@ -283,30 +325,90 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(rulesSource, /previewWarnings/u)
   assert.match(rulesSource, /previewTruncated/u)
   assert.match(rulesSource, /canCloseTemplateModal/u)
-  assert.match(rulesSource, /canClosePolicyModal/u)
-  assert.match(rulesSource, /放弃修改/u)
-  assert.match(rulesSource, /filteredPolicies/u)
-  assert.match(rulesSource, /toggleTemplateEnabled/u)
-  assert.match(rulesSource, /togglePolicyEnabled/u)
   assert.match(rulesSource, /canSaveTemplate/u)
-  assert.match(rulesSource, /#mobile-row/u)
-  assert.match(rulesSource, /formatEventType/u)
-  assert.match(rulesSource, /formatTtl/u)
-  assert.match(rulesSource, /updatedAt/u)
-  assert.match(rulesSource, /updatedByInfo/u)
-  assert.match(rulesSource, /#cell-updatedByInfo/u)
-  assert.match(rulesSource, /QsPersonDisplay/u)
-  assert.match(rulesSource, /action-column/u)
-  assert.match(rulesSource, /TEMPLATE_DOMAIN_OPTIONS/u)
-  assert.match(rulesSource, /templateOtherChannel/u)
-  assert.match(rulesSource, /templateDomainLabel/u)
-  assert.match(rulesSource, /policyTemplateDomainMismatch/u)
-  assert.match(rulesSource, /TemplateDomainRail/u)
-  assert.match(rulesSource, /TemplateKeyDetail/u)
-  assert.match(rulesSource, /notification-template-master-detail/u)
-  assert.match(rulesSource, /handleTemplateAdd/u)
-  assert.match(rulesSource, /groupTemplatesByKey/u)
-  assert.match(rulesSource, /filterTemplateDomainGroups/u)
+  assert.match(rulesSource, /toggleTemplateEnabled/u)
+  assert.match(rulesSource, /测试发送/u)
+  assert.doesNotMatch(rulesSource, /<FaTabs/u)
+  assert.doesNotMatch(rulesSource, /policyCoverage|openPolicyAt|policyColumns/u)
+
+  assert.match(eventConfigPanelSource, /notification-event-config/u)
+  assert.match(eventConfigPanelSource, /buildEventTableGroups/u)
+  assert.match(eventConfigPanelSource, /QsGenericTable/u)
+  assert.match(eventConfigPanelSource, /grouping/u)
+  assert.match(eventConfigPanelSource, /group-header/u)
+  assert.match(eventConfigPanelSource, /EventChannelDrawer/u)
+  assert.match(eventConfigPanelSource, /EventConfigCards/u)
+  assert.match(eventConfigPanelSource, /EventFilterBar/u)
+  assert.match(eventConfigPanelSource, /useMediaQuery/u)
+  assert.match(eventConfigPanelSource, /QsPersonDisplay/u)
+  assert.match(eventConfigPanelSource, /show-column-settings="true"/u)
+  assert.doesNotMatch(eventConfigPanelSource, /:stripe="true"/u)
+  assert.match(eventConfigPanelSource, /策略更新/u)
+  assert.match(eventConfigPanelSource, /站内配置/u)
+  assert.match(eventConfigPanelSource, /小助理配置/u)
+  assert.match(eventConfigPanelSource, /hasDirty/u)
+  assert.match(eventConfigPanelSource, /未接入/u)
+  assert.doesNotMatch(eventConfigPanelSource, /EventNavRail|EventChannelCard|v-model:draft|#mobile-row|小助配置/u)
+
+  assert.match(eventConfigCardsSource, /notification-event-cards/u)
+  assert.match(eventConfigCardsSource, /站内配置/u)
+  assert.match(eventConfigCardsSource, /小助理配置/u)
+  assert.match(eventConfigCardsSource, /策略更新/u)
+  assert.match(eventConfigCardsSource, /FaEmpty/u)
+
+  assert.match(eventFilterBarSource, /w-80/u)
+  assert.match(eventFilterBarSource, /清除筛选/u)
+
+  assert.match(eventChannelDrawerSource, /QsGenericDrawer/u)
+  assert.match(eventChannelDrawerSource, /before-close/u)
+  assert.match(eventChannelDrawerSource, /EventChannelCard/u)
+  assert.match(eventChannelDrawerSource, /TemplatePickerDrawer/u)
+  assert.match(eventChannelDrawerSource, /buildPolicyUpdate/u)
+  assert.match(eventChannelDrawerSource, /canSavePolicyDraft/u)
+  assert.match(eventChannelDrawerSource, /放弃修改/u)
+
+  assert.match(eventChannelCardSource, /variant/u)
+  assert.match(eventChannelCardSource, /投递配置/u)
+  assert.match(eventChannelCardSource, /targetConfig\.userIds/u)
+  assert.match(eventChannelCardSource, /员工范围/u)
+  assert.match(eventChannelCardSource, /ttlSeconds/u)
+  assert.match(eventChannelCardSource, /quietHoursEnabled/u)
+  assert.match(eventChannelCardSource, /EventTemplateBlock/u)
+  assert.match(eventChannelCardSource, /新策略默认停用/u)
+  assert.match(eventChannelCardSource, /canSavePolicyDraft/u)
+
+  assert.match(eventTemplateBlockSource, /策略绑定/u)
+  assert.match(eventTemplateBlockSource, /业务默认/u)
+  assert.match(eventTemplateBlockSource, /更换模板/u)
+  assert.match(eventTemplateBlockSource, /恢复默认/u)
+  assert.match(eventTemplateBlockSource, /按此 Key 新建模板/u)
+  assert.match(eventTemplateBlockSource, /不提供的变量/u)
+  assert.match(eventTemplateBlockSource, /跳转链接/u)
+  assert.match(eventTemplateBlockSource, /展开全文/u)
+
+  assert.match(templatePickerSource, /QsGenericModal/u)
+  assert.match(templatePickerSource, /z-index="2200"/u)
+  assert.match(templatePickerSource, /FaEmpty/u)
+  assert.match(templatePickerSource, /md:grid-cols-2/u)
+  assert.match(templatePickerSource, /不兼容变量/u)
+  assert.match(templatePickerSource, /templateUsageCount/u)
+  assert.match(templatePickerSource, /恢复业务默认模板/u)
+  assert.match(templatePickerSource, /仅看可绑定/u)
+  assert.match(templatePickerSource, /搜索模板/u)
+  assert.match(templatePickerSource, /emit\('preview'/u)
+
+  assert.match(eventConfigLogicSource, /resolveChannelTemplate/u)
+  assert.match(eventConfigLogicSource, /buildEventTableGroups/u)
+  assert.match(eventConfigLogicSource, /templateIncompatibleVariables/u)
+  assert.match(eventConfigLogicSource, /buildTemplateUsageCounts/u)
+  assert.match(policyDraftLogicSource, /buildPolicyUpdate/u)
+  assert.match(policyDraftLogicSource, /canSavePolicyDraft/u)
+
+  assert.match(templateLibrarySource, /notification-template-master-detail/u)
+  assert.match(templateLibrarySource, /TemplateDomainRail/u)
+  assert.match(templateLibrarySource, /TemplateKeyDetail/u)
+  assert.match(templateLibrarySource, /usage-count/u)
+
   assert.match(templateRailSource, /过滤业务域或 templateKey/u)
   assert.match(templateRailSource, /selectedKey/u)
   assert.match(templateRailSource, /个模板键/u)
@@ -318,6 +420,7 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(templateDetailSource, /复制 Key/u)
   assert.match(templateDetailSource, /渠道已配齐/u)
   assert.match(templateDetailSource, /缺少 1 个渠道/u)
+  assert.match(templateDetailSource, /usageCount/u)
   assert.match(templateCardSource, /splitTemplateBody/u)
   assert.match(templateCardSource, /linkSegments/u)
   assert.match(templateCardSource, /系统内置/u)
@@ -334,15 +437,15 @@ test('通知规则面板包含模板预览与事件策略编辑', () => {
   assert.match(templateGroupingSource, /groupTemplatesByKey/u)
   assert.match(templateGroupingSource, /filterTemplateDomainGroups/u)
   assert.match(templateGroupingSource, /label: '销售域'[\s\S]*label: '采购域'[\s\S]*label: '货件运输域'[\s\S]*label: '财务域'[\s\S]*label: '发票域'[\s\S]*label: '对账域'[\s\S]*label: '系统'/u)
-  assert.match(rulesSource, /<QsGenericTable/u)
   assert.match(rulesSource, /<QsGenericModal/u)
-  assert.doesNotMatch(rulesSource, /<FaTable/u)
 })
 
 test('发送记录使用表格与详情抽屉，不引入 Arco 表格', () => {
   assert.match(recordsSource, /<QsGenericTable/u)
   assert.match(recordsSource, /<FaDrawer/u)
   assert.match(recordsSource, /逐人交付/u)
+  assert.match(recordsSource, /逻辑模板/u)
+  assert.match(recordsSource, /实际模板/u)
   assert.doesNotMatch(recordsSource, /<FaTable/u)
   assert.doesNotMatch(recordsSource, /<FaPagination/u)
 })

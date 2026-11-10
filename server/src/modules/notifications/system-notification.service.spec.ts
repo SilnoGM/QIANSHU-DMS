@@ -107,6 +107,126 @@ describe('SystemNotificationService.publish', () => {
     expect(updateCalls[0]?.[0]?.data?.status).toBe('FAILED')
   })
 
+  it('uses the policy template key when it overrides the command key', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n3' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+        targetMode: 'GROUP',
+        targetConfig: { targetKeys: ['operations'] },
+        templateKey: 'purchase.review.pending.short',
+      })]) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template({
+        key: 'purchase.review.pending.short',
+        bodyTemplate: '采购单 {{orderNo}} 待审（简版）',
+      })) },
+      assistantTarget: { findMany: jest.fn().mockResolvedValue([{ id: 'target-1', internalOnly: true }]) },
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'account-1' }) },
+      assistantDelivery: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+      },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const service = new SystemNotificationService({} as PrismaService)
+
+    const result = await service.publish(command, { transaction: transaction as never })
+
+    expect(transaction.notificationTemplate.findUnique).toHaveBeenCalledWith({
+      where: { key_channel: { key: 'purchase.review.pending.short', channel: 'ASSISTANT' } },
+    })
+    expect(transaction.assistantDelivery.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        templateKey: 'purchase.review.pending.short',
+        renderedContent: '采购单 CG-1 待审（简版）',
+      })],
+    })
+    expect(result.channels).toEqual([
+      { channel: 'ASSISTANT', status: 'PENDING', recipientCount: 1, skippedCount: 0 },
+    ])
+  })
+
+  it('does not fall back to the command template when the policy template is missing', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n3' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+        templateKey: 'purchase.review.pending.short',
+      })]) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+    }
+    const service = new SystemNotificationService({} as PrismaService)
+
+    const result = await service.publish(command, { transaction: transaction as never })
+
+    expect(transaction.notificationTemplate.findUnique).toHaveBeenCalledTimes(1)
+    expect(transaction.notificationTemplate.findUnique).toHaveBeenCalledWith({
+      where: { key_channel: { key: 'purchase.review.pending.short', channel: 'ASSISTANT' } },
+    })
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'TEMPLATE_NOT_FOUND' }),
+    ]))
+    const updateCalls = transaction.notification.update.mock.calls as unknown as Array<
+      Array<{ data?: { status?: string } }>
+    >
+    expect(updateCalls[0]?.[0]?.data?.status).toBe('FAILED')
+  })
+
+  it('records the policy template key on in-app inbox items', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n4' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+        channel: 'IN_APP',
+        targetMode: 'USERS',
+        targetConfig: { userIds: ['user-1'] },
+        ttlSeconds: null,
+        templateKey: 'purchase.review.pending.short',
+      })]) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template({
+        key: 'purchase.review.pending.short',
+        channel: 'IN_APP',
+        titleTemplate: '采购单 {{orderNo}} 待审核',
+        bodyTemplate: '采购单 {{orderNo}} 待审核（简版）',
+        linkUrlTemplate: null,
+      })) },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      notificationInboxItem: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(1),
+      },
+      assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const service = new SystemNotificationService({} as PrismaService)
+
+    await service.publish(command, { transaction: transaction as never })
+
+    expect(transaction.notificationTemplate.findUnique).toHaveBeenCalledWith({
+      where: { key_channel: { key: 'purchase.review.pending.short', channel: 'IN_APP' } },
+    })
+    expect(transaction.notificationInboxItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        notificationId: 'n4',
+        userId: 'user-1',
+        templateKey: 'purchase.review.pending.short',
+        bodySnapshot: '采购单 CG-1 待审核（简版）',
+      })],
+      skipDuplicates: true,
+    })
+  })
+
   it('creates pending group deliveries for an internal group', async () => {
     const transaction = {
       notification: {
@@ -141,6 +261,7 @@ describe('SystemNotificationService.publish', () => {
         targetId: 'target-1',
         accountId: 'account-1',
         status: 'PENDING',
+        templateKey: 'purchase.review.pending',
         renderedContent: '采购单 CG-1 待审核',
       })],
     })

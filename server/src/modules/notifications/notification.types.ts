@@ -42,6 +42,88 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   PURCHASE_PAYABLE_PENDING: 'fund',
 })
 
+export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
+  PURCHASE_REVIEW_PENDING: '采购审核',
+  INVOICE_REQUEST_REVIEW_PENDING: '开票申请',
+  SLH_RECONCILIATION_COMPLETED: '对账完成',
+  SHIPMENT_ARRIVED: '货件到仓',
+  FUND_WITHDRAWAL_REVIEW_PENDING: '提现审核',
+  PACKAGING_COST_PAYMENT_PENDING: '包装待付款',
+  PURCHASE_PAYABLE_PENDING: '采购待付款',
+})
+
+/** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
+export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEventType, 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'SYSTEM'>> = Object.freeze({
+  PURCHASE_REVIEW_PENDING: 'PURCHASE',
+  INVOICE_REQUEST_REVIEW_PENDING: 'INVOICE',
+  SLH_RECONCILIATION_COMPLETED: 'RECONCILIATION',
+  SHIPMENT_ARRIVED: 'SHIPMENT',
+  FUND_WITHDRAWAL_REVIEW_PENDING: 'FINANCE',
+  PACKAGING_COST_PAYMENT_PENDING: 'FINANCE',
+  PURCHASE_PAYABLE_PENDING: 'FINANCE',
+})
+
+/** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
+export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = Object.freeze([
+  'PURCHASE_REVIEW_PENDING',
+  'INVOICE_REQUEST_REVIEW_PENDING',
+  'SHIPMENT_ARRIVED',
+])
+
+/** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
+export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<NotificationEventType, string>>> = Object.freeze({
+  PURCHASE_REVIEW_PENDING: 'purchase.review.pending',
+  INVOICE_REQUEST_REVIEW_PENDING: 'invoice.review.pending',
+  SHIPMENT_ARRIVED: 'shipment.arrived',
+})
+
+/**
+ * 事件向模板承诺的变量集合，用于策略绑定模板时校验占位符兼容性。
+ * 尚无触发源的事件不登记，避免阻断管理员提前配置；接入事件时同步补变量。
+ */
+export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationEventType, readonly string[]>>> = Object.freeze({
+  PURCHASE_REVIEW_PENDING: [
+    'orderNo',
+    'orderId',
+    'vendorName',
+    'totalAmount',
+    'currencyCode',
+    'lineCount',
+    'partCount',
+    'customerName',
+  ],
+  INVOICE_REQUEST_REVIEW_PENDING: [
+    'invoiceNo',
+    'invoiceRequestId',
+    'buyerName',
+    'totalAmount',
+    'lineCount',
+  ],
+  SHIPMENT_ARRIVED: [
+    'orderNo',
+    'orderId',
+    'partNumbers',
+    'receivedPartCount',
+    'receivedAt',
+    'customerName',
+  ],
+  SLH_RECONCILIATION_COMPLETED: [
+    'batchNo',
+    'slhBillNo',
+    'memberCount',
+    'reconciledMemberCount',
+    'settlementTotalCny',
+    'fundPostingCount',
+  ],
+})
+
+export function notificationEventVariables(eventType: string): readonly string[] | null {
+  if (!Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_VARIABLES, eventType)) {
+    return null
+  }
+  return NOTIFICATION_EVENT_VARIABLES[eventType as NotificationEventType] ?? null
+}
+
 export type NotificationTarget =
   | { readonly kind: 'USERS', readonly userIds: readonly string[] }
   | { readonly kind: 'ROLE', readonly roleCodes: readonly string[] }

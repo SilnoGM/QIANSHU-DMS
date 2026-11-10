@@ -220,7 +220,7 @@ onMounted(() => {
             <span class="qs-type-data">{{ detail.sourceType }} / {{ detail.sourceId }}</span>
           </p>
           <p class="m-0 flex gap-3 justify-between">
-            <span class="text-muted-foreground">模板</span>
+            <span class="text-muted-foreground">逻辑模板</span>
             <span class="qs-type-data">{{ detail.templateKey }}</span>
           </p>
           <p class="m-0 flex gap-3 justify-between">
@@ -249,6 +249,9 @@ onMounted(() => {
               <template v-if="delivery.failureCode">
                 · {{ delivery.failureCode }}
               </template>
+            </p>
+            <p v-if="delivery.templateKey !== detail.templateKey" class="qs-type-meta text-muted-foreground m-0">
+              实际模板：{{ delivery.templateKey }}
             </p>
             <p v-if="delivery.failureMessage" class="qs-type-meta text-destructive m-0">
               {{ delivery.failureMessage }}

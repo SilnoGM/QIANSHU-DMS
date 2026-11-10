@@ -24,6 +24,7 @@ import type {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
   NotificationChannelPolicyUpdateDto,
+  NotificationEventDto,
   NotificationInboxDetailDto,
   NotificationInboxNewDto,
   NotificationInboxPageDto,
@@ -59,6 +60,10 @@ export function createNotificationsApi(client: AxiosInstance) {
     overview: {
       get: (signal: AbortSignal) =>
         client.get<NotificationOverviewDto>('notifications/overview', { errorPresentation: 'local', signal }),
+    },
+    events: {
+      list: (signal: AbortSignal) =>
+        client.get<NotificationEventDto[]>('notifications/events', { errorPresentation: 'local', signal }),
     },
     templates: {
       list: (channel: string, signal: AbortSignal) =>

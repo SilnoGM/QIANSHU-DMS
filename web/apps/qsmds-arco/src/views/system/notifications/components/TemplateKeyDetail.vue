@@ -15,6 +15,7 @@ const props = defineProps<{
   busy: boolean
   canUpdate: boolean
   group: TemplateKeyGroup | null
+  usageCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -78,6 +79,9 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
           </template>
           <template v-else>
             该模板键下已配置 1 个发送渠道，可补齐另一渠道。
+          </template>
+          <template v-if="(usageCount ?? 0) > 0">
+            · 被 {{ usageCount }} 个事件使用
           </template>
         </p>
       </div>

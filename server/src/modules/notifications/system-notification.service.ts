@@ -206,10 +206,12 @@ export class SystemNotificationService {
 
     const channelResults: ResolvedChannelResult[] = []
     for (const policy of selectedPolicies) {
+      const templateKey = this.resolveTemplateKey(policy.templateKey, command.templateKey)
       if (policy.channel === 'IN_APP') {
         const channelResult = await this.createInAppItems(transaction, {
           notificationId: notification.id,
           policy,
+          templateKey,
           command,
           variables,
           now,
@@ -240,7 +242,7 @@ export class SystemNotificationService {
       }
 
       const template = await transaction.notificationTemplate.findUnique({
-        where: { key_channel: { key: command.templateKey, channel: 'ASSISTANT' } },
+        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
       })
       if (template === null || !template.enabled) {
         warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站外模板不存在或已停用' })
@@ -268,6 +270,7 @@ export class SystemNotificationService {
       const channelResult = await this.createAssistantDeliveries(transaction, {
         notificationId: notification.id,
         policy,
+        templateKey,
         templateVersion: template.version,
         content: render.content,
         command,
@@ -306,6 +309,15 @@ export class SystemNotificationService {
   }
 
   /**
+   * 渠道策略显式绑定模板时以策略为准；显式绑定但模板不存在时不做回退，
+   * 否则配置错误会被命令默认键静默掩盖。
+   */
+  private resolveTemplateKey(policyKey: string | null, fallbackKey: string): string {
+    const trimmed = policyKey?.trim()
+    return trimmed !== undefined && trimmed.length > 0 ? trimmed : fallbackKey
+  }
+
+  /**
    * 站内渠道在业务事务内写收件箱快照；不依赖 worker、不设置 TTL。
    * 目标解析与站外一致：GROUP 对 IN_APP 非法，其余模式复用同一套用户解析。
    */
@@ -318,6 +330,7 @@ export class SystemNotificationService {
         readonly targetConfig: Prisma.JsonValue
         readonly allowSensitive: boolean
       }
+      readonly templateKey: string
       readonly command: SystemNotificationPublishCommand
       readonly variables: Readonly<Record<string, string | number | null>>
       readonly now: Date
@@ -338,7 +351,7 @@ export class SystemNotificationService {
     }
 
     const template = await transaction.notificationTemplate.findUnique({
-      where: { key_channel: { key: input.command.templateKey, channel: 'IN_APP' } },
+      where: { key_channel: { key: input.templateKey, channel: 'IN_APP' } },
     })
     if (template === null || !template.enabled) {
       input.warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站内模板不存在或已停用' })
@@ -390,6 +403,7 @@ export class SystemNotificationService {
         notificationId: input.notificationId,
         userId,
         eventType: input.command.eventType.slice(0, 64),
+        templateKey: input.templateKey,
         templateVersion: template.version,
         titleSnapshot: title.content,
         bodySnapshot: body.content,
@@ -410,6 +424,7 @@ export class SystemNotificationService {
         readonly targetConfig: Prisma.JsonValue
         readonly allowSensitive: boolean
       }
+      readonly templateKey: string
       readonly templateVersion: number
       readonly content: string
       readonly command: SystemNotificationPublishCommand
@@ -451,6 +466,7 @@ export class SystemNotificationService {
           status: input.policy.allowSensitive && !target.internalOnly ? 'SKIPPED' as const : 'PENDING' as const,
           failureCode: input.policy.allowSensitive && !target.internalOnly ? 'TARGET_DISABLED' : null,
           failureMessage: input.policy.allowSensitive && !target.internalOnly ? '群未标记为仅内部成员，敏感内容不发送' : null,
+          templateKey: input.templateKey,
           templateVersion: input.templateVersion,
           renderedContent: input.content,
           nextAttemptAt: input.now,
@@ -500,6 +516,7 @@ export class SystemNotificationService {
           status: accountId === null ? 'SKIPPED' as const : 'PENDING' as const,
           failureCode: accountId === null ? 'NOT_BOUND' : null,
           failureMessage: accountId === null ? '员工未完成已验证绑定' : null,
+          templateKey: input.templateKey,
           templateVersion: input.templateVersion,
           renderedContent: input.content,
           nextAttemptAt: input.now,
