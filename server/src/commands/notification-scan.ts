@@ -7,6 +7,7 @@ import { SystemNotificationService } from '../modules/notifications/system-notif
 const SCAN_LOCK_KEY = 'notification-operations-scan'
 const PROXY_WARNING_DAYS = 7
 const PROXY_URGENT_DAYS = 1
+const PROXY_EXPIRED_LOOKBACK_DAYS = 7
 const DAY_MS = 24 * 60 * 60 * 1_000
 
 export interface NotificationScanResult {
@@ -14,6 +15,7 @@ export interface NotificationScanResult {
   readonly reason?: 'outside_window' | 'already_running'
   readonly dryRun: boolean
   readonly proxyExpiring: number
+  readonly proxyExpired: number
   readonly purchasePayableDigest: boolean
   readonly packagingPendingDigest: boolean
 }
@@ -122,6 +124,55 @@ async function scanProxyNodes(
   return published
 }
 
+async function scanExpiredProxyNodes(
+  prisma: Prisma.TransactionClient,
+  notifications: SystemNotificationService,
+  now: Date,
+  dryRun: boolean,
+): Promise<number> {
+  const nodes = await prisma.proxyNode.findMany({
+    where: {
+      expiresAt: { gte: addDays(now, -PROXY_EXPIRED_LOOKBACK_DAYS), lte: now },
+      vendorMissing: false,
+    },
+    orderBy: { expiresAt: 'asc' },
+    select: {
+      assignedUser: { select: { displayName: true, id: true, status: true } },
+      assignedUserId: true,
+      expiresAt: true,
+      host: true,
+      id: true,
+      publicIp: true,
+    },
+  })
+  let published = 0
+  for (const node of nodes) {
+    const target = node.assignedUser !== null && node.assignedUser.status === 'ACTIVE'
+      ? { kind: 'USERS' as const, userIds: [node.assignedUser.id] }
+      : { kind: 'PERMISSION' as const, permissionCode: 'proxy-nodes:manage' }
+    if (dryRun) {
+      published += 1
+      continue
+    }
+    await notifications.publish({
+      eventType: 'PROXY_NODE_EXPIRED',
+      source: { type: 'PROXY_NODE', id: node.id },
+      target,
+      templateKey: 'operations.proxy-node.expired',
+      variables: {
+        assignedUserName: node.assignedUser?.displayName ?? '未绑定',
+        expiresAt: shanghaiDateTime(node.expiresAt),
+        host: node.host,
+        nodeLabel: node.publicIp ?? node.host,
+      },
+      dedupeKey: `proxy-node-expired:${node.id}:${node.expiresAt.toISOString().slice(0, 10)}`,
+      priority: 'HIGH',
+    }, { transaction: prisma })
+    published += 1
+  }
+  return published
+}
+
 async function scanPurchasePayableDigest(
   prisma: Prisma.TransactionClient,
   notifications: SystemNotificationService,
@@ -209,6 +260,7 @@ export async function scanNotifications(
       reason: 'outside_window',
       dryRun,
       proxyExpiring: 0,
+      proxyExpired: 0,
       purchasePayableDigest: false,
       packagingPendingDigest: false,
     }
@@ -223,17 +275,20 @@ export async function scanNotifications(
         reason: 'already_running',
         dryRun,
         proxyExpiring: 0,
+        proxyExpired: 0,
         purchasePayableDigest: false,
         packagingPendingDigest: false,
       }
     }
     const proxyExpiring = await scanProxyNodes(transaction, notifications, now, dryRun)
+    const proxyExpired = await scanExpiredProxyNodes(transaction, notifications, now, dryRun)
     const purchasePayableDigest = await scanPurchasePayableDigest(transaction, notifications, now, dryRun)
     const packagingPendingDigest = await scanPackagingPendingDigest(transaction, notifications, now, dryRun)
     return {
       status: 'completed',
       dryRun,
       proxyExpiring,
+      proxyExpired,
       purchasePayableDigest,
       packagingPendingDigest,
     }

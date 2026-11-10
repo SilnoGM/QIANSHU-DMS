@@ -346,7 +346,7 @@ sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
 
 命令只在上海时间 `09:00–22:00` 内执行；窗口外输出 `skipped/outside_window` 并成功退出。扫描范围：
 
-- 静态节点剩余 7 天、1 天到期提醒
+- 静态节点剩余 7 天、1 天到期提醒，并补发最近 7 天内已过期节点
 - 采购应付日汇总
 - 包装待付款日汇总
 

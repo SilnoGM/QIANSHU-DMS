@@ -64,7 +64,7 @@ describe('NotificationAdminService', () => {
     expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
       sensitive: true,
     })
-    expect(result).toHaveLength(31)
+    expect(result).toHaveLength(38)
     for (const event of result) {
       expect(event.variablesKnown).toBe(true)
       expect(event.defaultTemplateKey).not.toBeNull()

@@ -201,7 +201,7 @@ export interface SystemNotificationPublishResult {
 
 业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
 
-当前已扩展为 31 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
+当前已扩展为 38 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 

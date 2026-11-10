@@ -10,6 +10,8 @@ import {
   nextQuietHoursEnd,
   parseNotificationQuietHours,
 } from './notification-quiet-hours'
+import { noopSystemNotifications } from './noop-system-notification'
+import { SystemNotificationService } from './system-notification.service'
 import {
   ASSISTANT_TRANSPORT,
   type AssistantTransport,
@@ -22,6 +24,13 @@ const MAX_ATTEMPTS = 3
 const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] as const
 const OFFLINE_RETRY_DELAYS_MS = [30_000, 120_000, 300_000] as const
 const RATE_LIMIT_RETRY_MS = 60_000
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 
 interface ClaimedDelivery {
   readonly id: string
@@ -57,6 +66,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -174,7 +184,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       ? null
       : await this.prisma.assistantAccount.findUnique({
         where: { id: delivery.account_id },
-        select: { id: true, appId: true, enabled: true, status: true },
+        select: { id: true, appId: true, enabled: true, name: true, status: true },
       })
     if (account === null || !account.enabled || account.status === 'DISABLED' || account.status === 'REQUIRES_LOGIN' || account.appId.startsWith('pending-')) {
       await this.failDelivery(delivery, 'ACCOUNT_DISABLED', '公司号不可用', false)
@@ -244,7 +254,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       return
     }
 
-    await this.handleFailure(delivery, result, notification.expiresAt)
+    await this.handleFailure(delivery, result, notification.expiresAt, account.name)
     await this.refreshNotificationStatus(notification.id)
   }
 
@@ -252,6 +262,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     delivery: ClaimedDelivery,
     result: Extract<AssistantTransportResult, { ok: false }>,
     expiresAt: Date | null,
+    accountName: string | null,
   ): Promise<void> {
     const attempt = delivery.attempt_count + 1
     const retryable = result.kind === 'TIMEOUT'
@@ -273,6 +284,20 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
           lastErrorMessage: result.message.slice(0, 255),
         },
       }).catch(() => undefined)
+      const occurredAt = new Date()
+      await this.notifications.publish({
+        eventType: 'ASSISTANT_ACCOUNT_OFFLINE',
+        source: { type: 'ASSISTANT_ACCOUNT', id: delivery.account_id },
+        target: { kind: 'PERMISSION', permissionCode: 'assistant-channel:update' },
+        templateKey: 'system.assistant-account.offline',
+        variables: {
+          accountName: accountName ?? '—',
+          occurredAt: notificationTime(occurredAt),
+          reason: result.message,
+        },
+        dedupeKey: `assistant-account-offline:${delivery.account_id}:${occurredAt.toISOString().slice(0, 10)}`,
+        priority: 'HIGH',
+      })
     }
 
     await this.prisma.assistantDelivery.update({

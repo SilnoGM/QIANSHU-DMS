@@ -13,6 +13,8 @@ import { applyTransactionTimeouts } from '../../../infrastructure/database/trans
 import type { DataScope } from '../../access-control/data-scope'
 import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
 import { AuditService } from '../../audit/audit.service'
+import { noopSystemNotifications } from '../../notifications/noop-system-notification'
+import { SystemNotificationService } from '../../notifications/system-notification.service'
 import { NumberingGenerationError } from '../../numbering/numbering.errors'
 import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
 import {
@@ -146,6 +148,13 @@ const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
 const ADMIN_ADJUSTMENT_POSTING_TYPE_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 
 /**
  * 受控来源只认白名单里的 (sourceCode, consumerCode) 组合，业务类型必须由组合显式决定：
@@ -525,6 +534,7 @@ export class FundPostingApplicationService extends FundPostingService {
     private readonly audit: AuditService,
     private readonly numbering: NumberingGeneratorService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     super()
   }
@@ -948,6 +958,23 @@ export class FundPostingApplicationService extends FundPostingService {
         userAccountId: request.input.userAccountId,
       },
     })
+    if (identities.userId !== null) {
+      await this.notifications.publish({
+        eventType: 'FUND_ACCOUNT_ADJUSTED',
+        source: { type: 'FUND_POSTING_BATCH', id: identity.id },
+        target: { kind: 'USERS', userIds: [identities.userId] },
+        templateKey: 'fund.account.adjusted',
+        variables: {
+          amount: plan.businessAmount,
+          currencyCode: 'CNY',
+          occurredAt: notificationTime(asOf),
+          reason: request.input.reason,
+        },
+        dedupeKey: `fund-account-adjusted:${identity.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
 
     return Object.freeze({
       batchId: identity.id,

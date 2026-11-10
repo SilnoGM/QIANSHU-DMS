@@ -71,6 +71,13 @@ import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requir
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 const PAYMENT_TYPES = new Set<PurchaseOrderPaymentType>([
   'DEPOSIT',
   'BALANCE',
@@ -1557,6 +1564,22 @@ export class PurchaseOrderMutationService {
         trigger,
       },
     })
+    if (newStatus === 'COMPLETED') {
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_COMPLETED',
+        source: { type: 'PURCHASE_ORDER', id: order.id },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.completed',
+        variables: {
+          occurredAt: notificationTime(new Date()),
+          orderNo: order.orderNo,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-completed:${order.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
   }
 
   private recordAudit(

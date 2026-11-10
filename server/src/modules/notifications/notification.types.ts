@@ -32,6 +32,13 @@ export const NOTIFICATION_EVENT_TYPES = [
   'ADVERTISING_RECHARGE_PAID',
   'ADVERTISING_RECHARGE_REJECTED',
   'ADVERTISING_RECHARGE_VOIDED',
+  'SALES_ORDER_COMPLETED',
+  'PURCHASE_ORDER_COMPLETED',
+  'SHIPMENT_SIGNED',
+  'SALES_ORDER_TERMINATED',
+  'FUND_ACCOUNT_ADJUSTED',
+  'PROXY_NODE_EXPIRED',
+  'ASSISTANT_ACCOUNT_OFFLINE',
 ] as const
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
@@ -97,6 +104,13 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   ADVERTISING_RECHARGE_PAID: 'operations',
   ADVERTISING_RECHARGE_REJECTED: 'operations',
   ADVERTISING_RECHARGE_VOIDED: 'operations',
+  SALES_ORDER_COMPLETED: 'sales',
+  PURCHASE_ORDER_COMPLETED: 'purchase',
+  SHIPMENT_SIGNED: 'shipment',
+  SALES_ORDER_TERMINATED: 'sales',
+  FUND_ACCOUNT_ADJUSTED: 'finance',
+  PROXY_NODE_EXPIRED: 'operations',
+  ASSISTANT_ACCOUNT_OFFLINE: 'system',
 })
 
 export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
@@ -131,6 +145,13 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   ADVERTISING_RECHARGE_PAID: '广告充值已付款',
   ADVERTISING_RECHARGE_REJECTED: '广告充值驳回',
   ADVERTISING_RECHARGE_VOIDED: '广告充值作废',
+  SALES_ORDER_COMPLETED: '销售订单完成',
+  PURCHASE_ORDER_COMPLETED: '采购订单完成',
+  SHIPMENT_SIGNED: '货件签收',
+  SALES_ORDER_TERMINATED: '销售订单终止',
+  FUND_ACCOUNT_ADJUSTED: '资金账户调整',
+  PROXY_NODE_EXPIRED: '节点已过期',
+  ASSISTANT_ACCOUNT_OFFLINE: '小助理离线',
 })
 
 /** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
@@ -166,6 +187,13 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   ADVERTISING_RECHARGE_PAID: 'OPERATIONS',
   ADVERTISING_RECHARGE_REJECTED: 'OPERATIONS',
   ADVERTISING_RECHARGE_VOIDED: 'OPERATIONS',
+  SALES_ORDER_COMPLETED: 'SALES',
+  PURCHASE_ORDER_COMPLETED: 'PURCHASE',
+  SHIPMENT_SIGNED: 'SHIPMENT',
+  SALES_ORDER_TERMINATED: 'SALES',
+  FUND_ACCOUNT_ADJUSTED: 'FINANCE',
+  PROXY_NODE_EXPIRED: 'OPERATIONS',
+  ASSISTANT_ACCOUNT_OFFLINE: 'SYSTEM',
 })
 
 /** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
@@ -201,6 +229,13 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'ADVERTISING_RECHARGE_PAID',
   'ADVERTISING_RECHARGE_REJECTED',
   'ADVERTISING_RECHARGE_VOIDED',
+  'SALES_ORDER_COMPLETED',
+  'PURCHASE_ORDER_COMPLETED',
+  'SHIPMENT_SIGNED',
+  'SALES_ORDER_TERMINATED',
+  'FUND_ACCOUNT_ADJUSTED',
+  'PROXY_NODE_EXPIRED',
+  'ASSISTANT_ACCOUNT_OFFLINE',
 ])
 
 /** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
@@ -236,6 +271,13 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   ADVERTISING_RECHARGE_PAID: 'operations.advertising-recharge.paid',
   ADVERTISING_RECHARGE_REJECTED: 'operations.advertising-recharge.rejected',
   ADVERTISING_RECHARGE_VOIDED: 'operations.advertising-recharge.voided',
+  SALES_ORDER_COMPLETED: 'sales.order.completed',
+  PURCHASE_ORDER_COMPLETED: 'purchase.order.completed',
+  SHIPMENT_SIGNED: 'shipment.signed',
+  SALES_ORDER_TERMINATED: 'sales.order.terminated',
+  FUND_ACCOUNT_ADJUSTED: 'fund.account.adjusted',
+  PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
+  ASSISTANT_ACCOUNT_OFFLINE: 'system.assistant-account.offline',
 })
 
 /**
@@ -303,6 +345,13 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   ADVERTISING_RECHARGE_PAID: ['rechargeNo', 'paymentAmountCny', 'occurredAt'],
   ADVERTISING_RECHARGE_REJECTED: ['rechargeNo', 'reason', 'occurredAt'],
   ADVERTISING_RECHARGE_VOIDED: ['rechargeNo', 'reason', 'paymentAmountCny', 'occurredAt'],
+  SALES_ORDER_COMPLETED: ['orderNo', 'customerName', 'occurredAt'],
+  PURCHASE_ORDER_COMPLETED: ['orderNo', 'vendorName', 'occurredAt'],
+  SHIPMENT_SIGNED: ['orderNo', 'customerName', 'occurredAt'],
+  SALES_ORDER_TERMINATED: ['orderNo', 'customerName', 'reason', 'occurredAt'],
+  FUND_ACCOUNT_ADJUSTED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
+  PROXY_NODE_EXPIRED: ['nodeLabel', 'host', 'expiresAt', 'assignedUserName'],
+  ASSISTANT_ACCOUNT_OFFLINE: ['accountName', 'occurredAt', 'reason'],
 })
 
 export function notificationEventVariables(eventType: string): readonly string[] | null {
@@ -830,6 +879,15 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     sensitive: false,
     maxLength: 64,
     required: false,
+  },
+  accountName: {
+    name: 'accountName',
+    label: '小助理公司号',
+    description: '千树小助理公司号名称。',
+    example: '千树小助理',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
   },
   settleAmountCny: {
     name: 'settleAmountCny',

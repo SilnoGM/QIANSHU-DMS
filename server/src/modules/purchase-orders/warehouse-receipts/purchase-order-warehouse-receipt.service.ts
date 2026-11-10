@@ -21,6 +21,7 @@ import { advanceSalesOrderWhenAllShipmentsReceived } from './sales-order-warehou
 
 export const WAREHOUSE_RECEIPT_ORDER_SELECT = {
   id: true, orderNo: true, purchaseType: true, salesOrderId: true, orderStatus: true, fulfillmentStatus: true, paymentStatus: true, version: true,
+  createdByUserId: true, customSupplierName: true, supplierValue: true,
   parts: { orderBy: { id: 'asc' }, select: { id: true, partNumber: true, status: true, shippedAt: true, warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true } },
 } satisfies Prisma.PurchaseOrderSelect
 export type WarehouseOrder = Prisma.PurchaseOrderGetPayload<{ select: typeof WAREHOUSE_RECEIPT_ORDER_SELECT }>
@@ -193,6 +194,22 @@ export class PurchaseOrderWarehouseReceiptService {
       priority: 'NORMAL',
       requestedByUserId: context.actorUserId,
     }, { transaction })
+    if (order.orderStatus !== 'COMPLETED' && orderStatus === 'COMPLETED') {
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_COMPLETED',
+        source: { type: 'PURCHASE_ORDER', id: order.id },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.completed',
+        variables: {
+          occurredAt: formatWarehouseTime(recordedAt),
+          orderNo: order.orderNo,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-completed:${order.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
     return { changed: true, receivedPartCount: partIds.length, fulfillmentStatus, orderStatus }
   }
 
