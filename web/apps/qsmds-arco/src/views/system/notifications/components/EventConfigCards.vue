@@ -41,12 +41,14 @@ function isUnimplementedConfigured(row: EventTableGroupRow['children'][number]):
     />
 
     <section v-for="group in groups" :key="group.id" class="flex flex-col gap-2">
-      <div class="px-1 flex flex-wrap gap-2 items-center">
+      <div class="px-1 flex flex-wrap gap-2 min-w-0 w-full items-center justify-between">
         <span class="qs-type-body-medium">{{ group.label }}</span>
-        <span class="qs-type-meta text-muted-foreground">{{ group.children.length }} 个事件</span>
-        <FaTag v-if="groupReadyCount(group) > 0" variant="outline" class="text-primary border-primary/30 bg-primary/10">
-          已配齐 {{ groupReadyCount(group) }}
-        </FaTag>
+        <span class="flex flex-wrap gap-2 items-center">
+          <span class="qs-type-meta text-muted-foreground">{{ group.children.length }} 个事件</span>
+          <FaTag v-if="groupReadyCount(group) > 0" variant="outline" class="text-primary border-primary/30 bg-primary/10">
+            已配齐 {{ groupReadyCount(group) }}
+          </FaTag>
+        </span>
       </div>
 
       <div class="gap-3 grid xl:grid-cols-2">
