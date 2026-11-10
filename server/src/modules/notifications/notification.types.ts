@@ -124,6 +124,214 @@ export function notificationEventVariables(eventType: string): readonly string[]
   return NOTIFICATION_EVENT_VARIABLES[eventType as NotificationEventType] ?? null
 }
 
+export interface NotificationVariableDefinition {
+  readonly name: string
+  readonly label: string
+  readonly description: string
+  readonly example: string
+  readonly sensitive: boolean
+  readonly maxLength: number
+  readonly required: boolean
+}
+
+/**
+ * 变量说明的唯一真相，供管理端展示可用变量；变量名同时参与事件契约校验。
+ * 新增或修改变量时必须同步更新这里，并保证事件变量列表中的名字都有定义。
+ */
+export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, NotificationVariableDefinition>> = Object.freeze({
+  orderNo: {
+    name: 'orderNo',
+    label: '采购单号',
+    description: '采购单编号，来自编号规则签发结果。',
+    example: 'CG/20261109-0001',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
+  },
+  orderId: {
+    name: 'orderId',
+    label: '采购单 ID',
+    description: '采购单 UUID，用于站内详情跳转链接。',
+    example: '5f0c2d8e-8d0f-4f0e-9a7a-0f1b2c3d4e5f',
+    sensitive: false,
+    maxLength: 64,
+    required: false,
+  },
+  vendorName: {
+    name: 'vendorName',
+    label: '供货方',
+    description: '采购单供货方名称，可能是自定义名称或字典显示值。',
+    example: '千树设备有限公司',
+    sensitive: false,
+    maxLength: 128,
+    required: true,
+  },
+  totalAmount: {
+    name: 'totalAmount',
+    label: '金额',
+    description: '采购总额或开票金额，已按业务口径格式化。',
+    example: '1,234.56',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  currencyCode: {
+    name: 'currencyCode',
+    label: '币种',
+    description: '金额对应的币种代码。',
+    example: 'CNY',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  lineCount: {
+    name: 'lineCount',
+    label: '明细行数',
+    description: '采购单或开票申请的明细行数。',
+    example: '3',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  partCount: {
+    name: 'partCount',
+    label: '货件数',
+    description: '采购单包含的货件数量。',
+    example: '2',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  customerName: {
+    name: 'customerName',
+    label: '客户名称',
+    description: '关联销售单的客户名称；未关联或查询失败时为空。',
+    example: '张三',
+    sensitive: true,
+    maxLength: 128,
+    required: false,
+  },
+  invoiceNo: {
+    name: 'invoiceNo',
+    label: '开票申请号',
+    description: '开票申请编号。',
+    example: 'KP/20261109-0001',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
+  },
+  invoiceRequestId: {
+    name: 'invoiceRequestId',
+    label: '开票申请 ID',
+    description: '开票申请 UUID，用于站内详情跳转链接。',
+    example: '8a4b1c2d-3e4f-4a5b-8c6d-7e8f9012a3b4',
+    sensitive: false,
+    maxLength: 64,
+    required: false,
+  },
+  buyerName: {
+    name: 'buyerName',
+    label: '购买方',
+    description: '开票申请的购买方名称。',
+    example: '千树设备有限公司',
+    sensitive: true,
+    maxLength: 128,
+    required: true,
+  },
+  partNumbers: {
+    name: 'partNumbers',
+    label: '到仓货件',
+    description: '本次到仓的货件号，按数字升序格式化为 01、02。',
+    example: '01、02',
+    sensitive: false,
+    maxLength: 128,
+    required: true,
+  },
+  receivedPartCount: {
+    name: 'receivedPartCount',
+    label: '到仓件数',
+    description: '本次到仓的货件数量。',
+    example: '2',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  receivedAt: {
+    name: 'receivedAt',
+    label: '到仓时间',
+    description: '按 Asia/Shanghai 时区格式化的到仓时间。',
+    example: '2026-11-09 14:30',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
+  },
+  batchNo: {
+    name: 'batchNo',
+    label: '对账批次号',
+    description: '顺联航对账批次编号。',
+    example: 'DZ/20261109-0001',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
+  },
+  slhBillNo: {
+    name: 'slhBillNo',
+    label: '账单号',
+    description: '顺联航账单编号。',
+    example: 'SLH-202611-0001',
+    sensitive: false,
+    maxLength: 64,
+    required: true,
+  },
+  memberCount: {
+    name: 'memberCount',
+    label: '明细行数',
+    description: '对账批次的成员明细行数。',
+    example: '12',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  reconciledMemberCount: {
+    name: 'reconciledMemberCount',
+    label: '已核对行数',
+    description: '已完成核对的成员行数，完成时等于明细行数。',
+    example: '12',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  settlementTotalCny: {
+    name: 'settlementTotalCny',
+    label: '结算金额',
+    description: '结算金额合计，单位 CNY。',
+    example: '12,345.67',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  fundPostingCount: {
+    name: 'fundPostingCount',
+    label: '资金批次数',
+    description: '对账完成后生成的资金入账批次数。',
+    example: '3',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+})
+
+export function notificationEventVariableDefinitions(eventType: string): readonly NotificationVariableDefinition[] | null {
+  const names = notificationEventVariables(eventType)
+  if (names === null) {
+    return null
+  }
+  return names.flatMap(name => {
+    const definition = NOTIFICATION_VARIABLE_DEFINITIONS[name]
+    return definition === undefined ? [] : [definition]
+  })
+}
+
 export type NotificationTarget =
   | { readonly kind: 'USERS', readonly userIds: readonly string[] }
   | { readonly kind: 'ROLE', readonly roleCodes: readonly string[] }

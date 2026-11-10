@@ -18,11 +18,22 @@ import {
 
 const TEMPLATE_DOMAINS = ['SALES', 'PURCHASE', 'SHIPMENT', 'FINANCE', 'INVOICE', 'RECONCILIATION', 'SYSTEM'] as const
 
+export class NotificationEventVariableDto {
+  @ApiProperty() name!: string
+  @ApiProperty() label!: string
+  @ApiProperty() description!: string
+  @ApiProperty() example!: string
+  @ApiProperty() sensitive!: boolean
+  @ApiProperty({ type: 'integer' }) maxLength!: number
+  @ApiProperty() required!: boolean
+}
+
 export class NotificationEventDto {
   @ApiProperty() eventType!: string
   @ApiProperty() label!: string
   @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
   @ApiProperty({ type: [String] }) variables!: string[]
+  @ApiProperty({ type: () => [NotificationEventVariableDto] }) variableDefinitions!: NotificationEventVariableDto[]
   @ApiProperty() variablesKnown!: boolean
   @ApiProperty({ type: 'string', nullable: true }) defaultTemplateKey!: string | null
   @ApiProperty() implemented!: boolean

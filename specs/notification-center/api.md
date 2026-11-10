@@ -255,7 +255,7 @@ export interface SystemNotificationPublishResult {
 
 策略的 `templateKey` 非空时即显式绑定：模板必须存在于该渠道，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND`；模板占位符必须属于该事件的变量契约，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID`。尚无触发源的事件不登记变量契约，只校验模板存在性。`templateKey` 为空时发布回退到业务命令键。
 
-`GET /api/notifications/events` 的事件元数据由服务端常量派生：`eventType`、`label`、`domain`（模板业务域）、`variables`、`variablesKnown`、`defaultTemplateKey`（业务命令默认键，无触发源时为 `null`）、`implemented`。管理端用它展示默认模板、过滤不兼容模板和判断事件是否已接入，不再各自维护事件名与变量清单。
+`GET /api/notifications/events` 的事件元数据由服务端常量派生：`eventType`、`label`、`domain`（模板业务域）、`variables`、`variableDefinitions`、`variablesKnown`、`defaultTemplateKey`（业务命令默认键，无触发源时为 `null`）、`implemented`。`variableDefinitions` 为每个变量提供 `name`、`label`、`description`、`example`、`sensitive`、`maxLength`、`required`，供模板编辑器直接展示和插入；`variables` 保留为变量名数组，供兼容性与策略校验使用。管理端用它展示默认模板、过滤不兼容模板和判断事件是否已接入，不再各自维护事件名与变量清单。
 
 ### 4.2 千树小助理（渠道）
 

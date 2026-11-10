@@ -17,6 +17,7 @@ import {
   NOTIFICATION_EVENT_TEMPLATE_DOMAIN,
   NOTIFICATION_EVENT_TYPES,
   NOTIFICATION_EVENT_VARIABLES,
+  notificationEventVariableDefinitions,
   notificationEventVariables,
   type AssistantTransport,
 } from './notification.types'
@@ -375,6 +376,7 @@ export class NotificationAdminService {
       label: NOTIFICATION_EVENT_LABELS[eventType],
       domain: NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType],
       variables: [...(NOTIFICATION_EVENT_VARIABLES[eventType] ?? [])],
+      variableDefinitions: [...(notificationEventVariableDefinitions(eventType) ?? [])],
       variablesKnown: notificationEventVariables(eventType) !== null,
       defaultTemplateKey: NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY[eventType] ?? null,
       implemented: IMPLEMENTED_NOTIFICATION_EVENT_TYPES.includes(eventType),

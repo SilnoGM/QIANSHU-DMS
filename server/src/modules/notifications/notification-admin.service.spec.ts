@@ -38,6 +38,18 @@ describe('NotificationAdminService', () => {
       defaultTemplateKey: 'purchase.review.pending',
     })
     expect(purchase?.variables).toEqual(expect.arrayContaining(['orderNo', 'customerName']))
+    const orderNo = purchase?.variableDefinitions.find(variable => variable.name === 'orderNo')
+    expect(orderNo).toMatchObject({
+      label: '采购单号',
+      sensitive: false,
+      maxLength: 64,
+      required: true,
+    })
+    expect(orderNo?.description).toContain('采购单编号')
+    expect(purchase?.variableDefinitions.find(variable => variable.name === 'totalAmount')).toMatchObject({
+      sensitive: true,
+      maxLength: 32,
+    })
 
     const withdrawal = result.find(event => event.eventType === 'FUND_WITHDRAWAL_REVIEW_PENDING')
     expect(withdrawal).toMatchObject({
@@ -48,6 +60,7 @@ describe('NotificationAdminService', () => {
       defaultTemplateKey: null,
     })
     expect(withdrawal?.variables).toEqual([])
+    expect(withdrawal?.variableDefinitions).toEqual([])
   })
 
   it('renders a template preview with sample variables', async () => {

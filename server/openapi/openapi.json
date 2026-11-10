@@ -125188,6 +125188,41 @@
           "queue"
         ]
       },
+      "NotificationEventVariableDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          },
+          "sensitive": {
+            "type": "boolean"
+          },
+          "maxLength": {
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "description",
+          "example",
+          "sensitive",
+          "maxLength",
+          "required"
+        ]
+      },
       "NotificationEventDto": {
         "type": "object",
         "properties": {
@@ -125215,6 +125250,12 @@
               "type": "string"
             }
           },
+          "variableDefinitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationEventVariableDto"
+            }
+          },
           "variablesKnown": {
             "type": "boolean"
           },
@@ -125231,6 +125272,7 @@
           "label",
           "domain",
           "variables",
+          "variableDefinitions",
           "variablesKnown",
           "defaultTemplateKey",
           "implemented"
