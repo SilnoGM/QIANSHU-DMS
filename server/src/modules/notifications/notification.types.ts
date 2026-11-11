@@ -39,6 +39,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'FUND_ACCOUNT_ADJUSTED',
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
+  'FUND_ACCOUNT_REVERSED',
 ] as const
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
@@ -111,6 +112,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   FUND_ACCOUNT_ADJUSTED: 'finance',
   PROXY_NODE_EXPIRED: 'operations',
   ASSISTANT_ACCOUNT_OFFLINE: 'system',
+  FUND_ACCOUNT_REVERSED: 'finance',
 })
 
 export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
@@ -152,6 +154,7 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   FUND_ACCOUNT_ADJUSTED: '资金账户调整',
   PROXY_NODE_EXPIRED: '节点已过期',
   ASSISTANT_ACCOUNT_OFFLINE: '小助理离线',
+  FUND_ACCOUNT_REVERSED: '资金冲账',
 })
 
 /** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
@@ -194,6 +197,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   FUND_ACCOUNT_ADJUSTED: 'FINANCE',
   PROXY_NODE_EXPIRED: 'OPERATIONS',
   ASSISTANT_ACCOUNT_OFFLINE: 'SYSTEM',
+  FUND_ACCOUNT_REVERSED: 'FINANCE',
 })
 
 /** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
@@ -236,6 +240,7 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'FUND_ACCOUNT_ADJUSTED',
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
+  'FUND_ACCOUNT_REVERSED',
 ])
 
 /** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
@@ -278,6 +283,7 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   FUND_ACCOUNT_ADJUSTED: 'fund.account.adjusted',
   PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
   ASSISTANT_ACCOUNT_OFFLINE: 'system.assistant-account.offline',
+  FUND_ACCOUNT_REVERSED: 'fund.account.reversed',
 })
 
 /**
@@ -352,6 +358,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   FUND_ACCOUNT_ADJUSTED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
   PROXY_NODE_EXPIRED: ['nodeLabel', 'host', 'expiresAt', 'assignedUserName'],
   ASSISTANT_ACCOUNT_OFFLINE: ['accountName', 'occurredAt', 'reason'],
+  FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
 })
 
 export function notificationEventVariables(eventType: string): readonly string[] | null {

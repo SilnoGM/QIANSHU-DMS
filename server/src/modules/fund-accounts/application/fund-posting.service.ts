@@ -1181,6 +1181,23 @@ export class FundPostingApplicationService extends FundPostingService {
         reversalState: plan.reversalState,
       },
     })
+    if (original.userId !== null) {
+      await this.notifications.publish({
+        eventType: 'FUND_ACCOUNT_REVERSED',
+        source: { type: 'FUND_POSTING_BATCH', id: batchIdentity.id },
+        target: { kind: 'USERS', userIds: [original.userId] },
+        templateKey: 'fund.account.reversed',
+        variables: {
+          amount: request.input.amount,
+          currencyCode: 'CNY',
+          occurredAt: notificationTime(asOf),
+          reason: request.input.reason,
+        },
+        dedupeKey: `fund-account-reversed:${batchIdentity.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
 
     return Object.freeze({
       batchId: batchIdentity.id,
