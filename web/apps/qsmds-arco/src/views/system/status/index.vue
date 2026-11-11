@@ -363,6 +363,7 @@ onBeforeUnmount(() => {
 <template>
   <div data-testid="system-status-page" class="flex flex-col min-h-0">
     <FaPageHeader
+      class="mb-2"
       title="系统状态"
       description="查看服务健康、资源水位、性能与运行信息；数据为采样快照，不是历史监控。"
     >
@@ -391,7 +392,7 @@ onBeforeUnmount(() => {
       </div>
     </FaPageHeader>
 
-    <FaPageMain>
+    <FaPageMain class="mt-0">
       <div class="flex flex-col gap-4">
         <FaEmpty
           v-if="!canRead"
