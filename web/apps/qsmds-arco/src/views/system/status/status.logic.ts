@@ -1,7 +1,7 @@
 import type { QsStatusTagTone } from '@/utils/status-tag-tone'
 
 export type SystemStatusLevel = 'ok' | 'warning' | 'critical' | 'unknown'
-export type DeploymentEnvironment = 'test' | 'prod' | 'unknown'
+export type DeploymentEnvironment = 'dev' | 'test' | 'prod' | 'unknown'
 
 export const SYSTEM_STATUS_LABELS: Readonly<Record<SystemStatusLevel, string>> = {
   ok: '正常',
@@ -22,6 +22,9 @@ export function statusTone(status: SystemStatusLevel): QsStatusTagTone {
 }
 
 export function environmentLabel(environment: DeploymentEnvironment): string {
+  if (environment === 'dev') {
+    return '开发环境'
+  }
   if (environment === 'test') {
     return '测试环境'
   }
@@ -37,6 +40,9 @@ export function environmentTone(environment: DeploymentEnvironment): QsStatusTag
   }
   if (environment === 'test') {
     return 'warning'
+  }
+  if (environment === 'dev') {
+    return 'info'
   }
   return 'neutral'
 }

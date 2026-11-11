@@ -273,8 +273,8 @@ export class SystemRuntimeDto {
   @ApiProperty({ type: 'string' })
   arch!: string
 
-  @ApiProperty({ type: 'string', enum: ['test', 'prod', 'unknown'] })
-  environment!: 'test' | 'prod' | 'unknown'
+  @ApiProperty({ type: 'string', enum: ['dev', 'test', 'prod', 'unknown'] })
+  environment!: 'dev' | 'test' | 'prod' | 'unknown'
 
   @ApiProperty({ type: 'string', enum: ['APP_ENV', 'MEDIA_STORAGE_ENV', 'none'] })
   environmentSource!: 'APP_ENV' | 'MEDIA_STORAGE_ENV' | 'none'

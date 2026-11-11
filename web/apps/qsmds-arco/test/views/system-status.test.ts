@@ -7,6 +7,7 @@ import systemStatusRoute from '../../src/router/modules/system.status'
 import {
   capabilityLabel,
   capacityLevelLabel,
+  environmentLabel,
   environmentTone,
   findCheckStatus,
   formatBytes,
@@ -88,7 +89,12 @@ test('状态与容量文案映射固定为中文', () => {
   assert.equal(statusTone('unknown'), 'neutral')
   assert.equal(environmentTone('prod'), 'success')
   assert.equal(environmentTone('test'), 'warning')
+  assert.equal(environmentTone('dev'), 'info')
   assert.equal(environmentTone('unknown'), 'neutral')
+  assert.equal(environmentLabel('dev'), '开发环境')
+  assert.equal(environmentLabel('test'), '测试环境')
+  assert.equal(environmentLabel('prod'), '生产环境')
+  assert.equal(environmentLabel('unknown'), '未知环境')
   assert.equal(capabilityLabel('up'), '正常')
   assert.equal(capabilityLabel('down'), '异常')
   assert.equal(capabilityLabel('unknown'), '未知')

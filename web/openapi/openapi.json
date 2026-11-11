@@ -134757,6 +134757,7 @@
           "environment": {
             "type": "string",
             "enum": [
+              "dev",
               "test",
               "prod",
               "unknown"

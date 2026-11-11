@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-export type DeploymentEnvironment = 'test' | 'prod' | 'unknown'
+export type DeploymentEnvironment = 'dev' | 'test' | 'prod' | 'unknown'
 
 export interface DeploymentEnvironmentResolution {
   readonly environment: DeploymentEnvironment
@@ -11,20 +11,20 @@ export interface DeploymentEnvironmentResolution {
 /**
  * 解析部署环境标识。
  *
- * 测试与生产都运行 `NODE_ENV=production`，不能用它区分环境；`MEDIA_STORAGE_ENV`
- * 在 COS 驱动下必填，但 local 驱动可以缺省，因此只作为明确取值为 test/prod 时的
- * 后备来源。未配置时返回 unknown，页面显示“未知环境”，不猜测。
+ * 开发、测试与生产都运行 `NODE_ENV=production` 或 `development`，不能用它区分环境；
+ * `MEDIA_STORAGE_ENV` 在 COS 驱动下必填，但 local 驱动可以缺省，因此只作为明确取值为
+ * dev/test/prod 时的后备来源。未配置时返回 unknown，页面显示“未知环境”，不猜测。
  */
 export function resolveDeploymentEnvironment(
   env: Record<string, string | undefined> = process.env,
 ): DeploymentEnvironmentResolution {
   const appEnvironment = env.APP_ENV?.trim().toLowerCase()
-  if (appEnvironment === 'test' || appEnvironment === 'prod') {
+  if (appEnvironment === 'dev' || appEnvironment === 'test' || appEnvironment === 'prod') {
     return { environment: appEnvironment, source: 'APP_ENV' }
   }
 
   const mediaEnvironment = env.MEDIA_STORAGE_ENV?.trim().toLowerCase()
-  if (mediaEnvironment === 'test' || mediaEnvironment === 'prod') {
+  if (mediaEnvironment === 'dev' || mediaEnvironment === 'test' || mediaEnvironment === 'prod') {
     return { environment: mediaEnvironment, source: 'MEDIA_STORAGE_ENV' }
   }
 
