@@ -108732,6 +108732,137 @@
           ]
         }
       }
+    },
+    "/api/system/status": {
+      "get": {
+        "operationId": "system_status_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "system-status"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": false,
+          "session": "required",
+          "privateNoStore": true
+        }
+      }
     }
   },
   "info": {
@@ -134103,6 +134234,647 @@
           "period",
           "customerName",
           "contactPerson"
+        ]
+      },
+      "SystemStatusCheckDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "service",
+              "resource",
+              "performance"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "category",
+          "status",
+          "message"
+        ]
+      },
+      "SystemBackendServiceDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "latencyMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "latencyMs",
+          "checkedAt"
+        ]
+      },
+      "SystemDatabaseServiceDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "latencyMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "timeZone": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "connections": {
+            "type": "integer",
+            "nullable": true
+          },
+          "activeConnections": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "latencyMs",
+          "checkedAt",
+          "version",
+          "timeZone",
+          "startedAt",
+          "sizeBytes",
+          "connections",
+          "activeConnections"
+        ]
+      },
+      "SystemMediaServiceDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "driver": {
+            "type": "string"
+          },
+          "storageEnvironment": {
+            "type": "string"
+          },
+          "readStatus": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "writeStatus": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "videoValidatorStatus": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "unknown"
+            ]
+          },
+          "capacityFreePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "capacityLevel": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ],
+            "nullable": true
+          },
+          "probedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "driver",
+          "storageEnvironment",
+          "readStatus",
+          "writeStatus",
+          "videoValidatorStatus",
+          "capacityFreePercent",
+          "capacityLevel",
+          "probedAt",
+          "message"
+        ]
+      },
+      "SystemServicesDto": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/SystemBackendServiceDto"
+          },
+          "database": {
+            "$ref": "#/components/schemas/SystemDatabaseServiceDto"
+          },
+          "media": {
+            "$ref": "#/components/schemas/SystemMediaServiceDto"
+          }
+        },
+        "required": [
+          "backend",
+          "database",
+          "media"
+        ]
+      },
+      "SystemHostResourceDto": {
+        "type": "object",
+        "properties": {
+          "cpuCount": {
+            "type": "integer"
+          },
+          "cpuUsagePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "loadAverage": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "nullable": true
+          },
+          "memoryTotalBytes": {
+            "type": "number"
+          },
+          "memoryAvailableBytes": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "cpuCount",
+          "cpuUsagePercent",
+          "loadAverage",
+          "memoryTotalBytes",
+          "memoryAvailableBytes"
+        ]
+      },
+      "SystemContainerResourceDto": {
+        "type": "object",
+        "properties": {
+          "cpuUsageCores": {
+            "type": "number",
+            "nullable": true
+          },
+          "cpuUsagePercentOfHost": {
+            "type": "number",
+            "nullable": true
+          },
+          "cpuQuotaCores": {
+            "type": "number",
+            "nullable": true
+          },
+          "cpuThrottledPeriods": {
+            "type": "integer",
+            "nullable": true
+          },
+          "memoryCurrentBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "memoryLimitBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "memoryPeakBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "memoryAnonBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "memoryOomKillCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "pidCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "pidLimit": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "cpuUsageCores",
+          "cpuUsagePercentOfHost",
+          "cpuQuotaCores",
+          "cpuThrottledPeriods",
+          "memoryCurrentBytes",
+          "memoryLimitBytes",
+          "memoryPeakBytes",
+          "memoryAnonBytes",
+          "memoryOomKillCount",
+          "pidCount",
+          "pidLimit"
+        ]
+      },
+      "SystemProcessResourceDto": {
+        "type": "object",
+        "properties": {
+          "rssBytes": {
+            "type": "number"
+          },
+          "heapUsedBytes": {
+            "type": "number"
+          },
+          "uptimeSeconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rssBytes",
+          "heapUsedBytes",
+          "uptimeSeconds"
+        ]
+      },
+      "SystemDiskResourceDto": {
+        "type": "object",
+        "properties": {
+          "totalBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "freeBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "availableBytes": {
+            "type": "number",
+            "nullable": true
+          },
+          "freePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "inodeTotal": {
+            "type": "number",
+            "nullable": true
+          },
+          "inodeFree": {
+            "type": "number",
+            "nullable": true
+          },
+          "inodeUsedPercent": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "totalBytes",
+          "freeBytes",
+          "availableBytes",
+          "freePercent",
+          "inodeTotal",
+          "inodeFree",
+          "inodeUsedPercent"
+        ]
+      },
+      "SystemNetworkResourceDto": {
+        "type": "object",
+        "properties": {
+          "rxBytesPerSecond": {
+            "type": "number",
+            "nullable": true
+          },
+          "txBytesPerSecond": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "rxBytesPerSecond",
+          "txBytesPerSecond"
+        ]
+      },
+      "SystemResourceDto": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "$ref": "#/components/schemas/SystemHostResourceDto"
+          },
+          "container": {
+            "$ref": "#/components/schemas/SystemContainerResourceDto"
+          },
+          "process": {
+            "$ref": "#/components/schemas/SystemProcessResourceDto"
+          },
+          "disk": {
+            "$ref": "#/components/schemas/SystemDiskResourceDto"
+          },
+          "network": {
+            "$ref": "#/components/schemas/SystemNetworkResourceDto"
+          },
+          "sampledAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "host",
+          "container",
+          "process",
+          "disk",
+          "network",
+          "sampledAt"
+        ]
+      },
+      "SystemPerformanceSlowRequestDto": {
+        "type": "object",
+        "properties": {
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "durationMs": {
+            "type": "number"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "statusCode": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "occurredAt",
+          "durationMs",
+          "operation",
+          "statusCode"
+        ]
+      },
+      "SystemPerformanceDto": {
+        "type": "object",
+        "properties": {
+          "windowSeconds": {
+            "type": "integer"
+          },
+          "totalRequests": {
+            "type": "integer"
+          },
+          "windowRequests": {
+            "type": "integer"
+          },
+          "serverErrors": {
+            "type": "integer"
+          },
+          "clientErrors": {
+            "type": "integer"
+          },
+          "errorRatePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "averageMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "p95Ms": {
+            "type": "number",
+            "nullable": true
+          },
+          "insufficientData": {
+            "type": "boolean"
+          },
+          "slowest": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemPerformanceSlowRequestDto"
+            }
+          }
+        },
+        "required": [
+          "windowSeconds",
+          "totalRequests",
+          "windowRequests",
+          "serverErrors",
+          "clientErrors",
+          "errorRatePercent",
+          "averageMs",
+          "p95Ms",
+          "insufficientData",
+          "slowest"
+        ]
+      },
+      "SystemRuntimeDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "nodeVersion": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "arch": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "test",
+              "prod",
+              "unknown"
+            ]
+          },
+          "environmentSource": {
+            "type": "string",
+            "enum": [
+              "APP_ENV",
+              "MEDIA_STORAGE_ENV",
+              "none"
+            ]
+          },
+          "nodeEnv": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "mediaDriver": {
+            "type": "string"
+          },
+          "mediaStorageEnvironment": {
+            "type": "string"
+          },
+          "mediaDeliveryMode": {
+            "type": "string"
+          },
+          "assistantWorkerEnabled": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptimeSeconds": {
+            "type": "number"
+          },
+          "migration": {
+            "type": "string",
+            "nullable": true
+          },
+          "databaseVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "databaseTimeZone": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "version",
+          "nodeVersion",
+          "platform",
+          "arch",
+          "environment",
+          "environmentSource",
+          "nodeEnv",
+          "port",
+          "timeZone",
+          "mediaDriver",
+          "mediaStorageEnvironment",
+          "mediaDeliveryMode",
+          "assistantWorkerEnabled",
+          "startedAt",
+          "uptimeSeconds",
+          "migration",
+          "databaseVersion",
+          "databaseTimeZone"
+        ]
+      },
+      "SystemStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "overallStatus": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "critical",
+              "unknown"
+            ]
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SystemStatusCheckDto"
+            }
+          },
+          "services": {
+            "$ref": "#/components/schemas/SystemServicesDto"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/SystemResourceDto"
+          },
+          "performance": {
+            "$ref": "#/components/schemas/SystemPerformanceDto"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/SystemRuntimeDto"
+          }
+        },
+        "required": [
+          "overallStatus",
+          "generatedAt",
+          "checks",
+          "services",
+          "resources",
+          "performance",
+          "runtime"
         ]
       }
     }

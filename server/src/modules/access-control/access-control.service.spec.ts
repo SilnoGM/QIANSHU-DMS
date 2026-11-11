@@ -157,8 +157,9 @@ describe('permission constants', () => {
       'assistant-target:manage',
       'assistant-delivery:resend',
       'network-nodes:read',
+      'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 126)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 127)
   })
 })
 
