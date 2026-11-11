@@ -141,6 +141,11 @@
           },
           "hotkeys": "Hotkeys"
         },
+        "sound": {
+          "title": "Sound",
+          "enable": "Toasts and switch sounds",
+          "tip": "Plays sounds for success, failure, warnings, new notifications, and switch changes. Disable to mute the whole app."
+        },
         "app": {
           "title": "Application",
           "account": {

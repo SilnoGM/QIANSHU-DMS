@@ -11,6 +11,7 @@ import type {
 } from './types'
 import { useFaToast } from '@fantastic-admin/components'
 import { markRaw } from 'vue'
+import { playToastSound } from '@/utils/ui-sound'
 import {
   isUsableQsToastId,
   resolveQsToastClosable,
@@ -67,7 +68,7 @@ function showQsToast(
     options.closable,
   )
 
-  return useFaToast().custom(QS_TOAST_COMPONENT, {
+  const id = useFaToast().custom(QS_TOAST_COMPONENT, {
     componentProps: {
       action: options.action,
       closable,
@@ -78,6 +79,8 @@ function showQsToast(
     dismissible: true,
     duration,
   })
+  playToastSound(type)
+  return id
 }
 
 /**

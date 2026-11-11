@@ -2,6 +2,7 @@
 import { BASE_COLORS, THEMES } from '@fantastic-admin/themes'
 import Sortable from 'sortablejs'
 import { localesInfo } from '@/locales'
+import { playToggleSound, useUiSound } from '@/utils/ui-sound'
 import { activeSettingsPanels } from './session'
 
 type Mode = 'settings' | 'preferences'
@@ -25,6 +26,16 @@ const route = useRoute()
 const appSettingsStore = useAppSettingsStore()
 const appPreferencesStore = useAppPreferencesStore()
 const appMenuStore = useAppMenuStore()
+const { enabled: uiSoundEnabled, setEnabled: setUiSoundEnabled } = useUiSound()
+
+function handleUiSoundToggle(value: boolean | undefined) {
+  const enabled = value === true
+  setUiSoundEnabled(enabled)
+  // 关闭时全局开关监听已先播放下落音；开启时引擎刚解除静音，需由这里补上扬音。
+  if (enabled) {
+    playToggleSound(true)
+  }
+}
 
 type BaseColorName = keyof typeof BASE_COLORS
 type ThemeName = keyof typeof THEMES
@@ -726,6 +737,17 @@ function checkVisible<T extends object>(preference: boolean | T | undefined, pro
           {{ t('app.layouts.appSetting.page.hotkeys') }}
         </div>
         <FaSwitch v-model="appSettingsStore.settings.page.hotkeys" />
+      </div>
+    </FaPageMain>
+    <FaPageMain :title="t('app.layouts.appSetting.sound.title')" class="m-0 mb-4 break-inside-avoid light:border-none" title-class="font-bold" main-class="space-y-4">
+      <div class="setting-item">
+        <div class="label">
+          {{ t('app.layouts.appSetting.sound.enable') }}
+          <FaTooltip :text="t('app.layouts.appSetting.sound.tip')">
+            <FaIcon name="i-ri:question-line" class="text-base text-orange cursor-help" />
+          </FaTooltip>
+        </div>
+        <FaSwitch :model-value="uiSoundEnabled" @update:model-value="handleUiSoundToggle" />
       </div>
     </FaPageMain>
     <FaPageMain v-if="mode === 'settings'" :title="t('app.layouts.appSetting.app.title')" class="m-0 mb-4 break-inside-avoid light:border-none" title-class="font-bold" main-class="space-y-4">
