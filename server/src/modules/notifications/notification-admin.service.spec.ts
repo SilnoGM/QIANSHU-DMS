@@ -31,6 +31,7 @@ function recordRow(overrides: Record<string, unknown> = {}) {
   const publishedAt = new Date('2026-11-09T02:00:00.000Z')
   return {
     id: '00000000-0000-4000-8000-000000000001',
+    notificationNo: 'NTF/20261109-000001',
     eventType: 'PURCHASE_REVIEW_PENDING',
     sourceType: 'PURCHASE_ORDER',
     sourceId: 'CG-20261109-0001',
@@ -417,6 +418,7 @@ describe('NotificationAdminService', () => {
       }),
     }))
     expect(result.items[0]).toMatchObject({
+      notificationNo: 'NTF/20261109-000001',
       eventLabel: '采购审核',
       domain: 'PURCHASE',
       requestedByName: '张三',
@@ -481,6 +483,7 @@ describe('NotificationAdminService', () => {
       include: { requestedBy: { select: { displayName: true } } },
     })
     expect(result).toMatchObject({
+      notificationNo: 'NTF/20261109-000001',
       eventLabel: '采购审核',
       domain: 'PURCHASE',
       requestedByName: '张三',

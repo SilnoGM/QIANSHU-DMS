@@ -3,7 +3,15 @@ import { Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
+import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
+import {
+  hashNotificationNumberIdempotencyKey,
+  hashNotificationNumberRequestFingerprint,
+  NOTIFICATION_NUMBER_CONSUMER_CODE,
+  NOTIFICATION_NUMBER_RULE_CODE,
+} from './notification-number'
 import {
   DEFAULT_NOTIFICATION_TTL_SECONDS,
   MAX_NOTIFICATION_DEDUPE_KEY_LENGTH,
@@ -101,10 +109,14 @@ function notificationFailureCode(
  *
  * 只写数据库：解析事件 × 渠道策略、收件人、模板和幂等键，创建逻辑通知与站外交付；
  * 不调用 GeWe、不做重试。配置或模板问题不抛异常，避免通知问题回滚业务事务。
+ * 通知编号是唯一例外：新通知必须在同一事务取得编号，编号域不可用时失败关闭。
  */
 @Injectable()
 export class SystemNotificationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly numbering: NumberingGeneratorService,
+  ) {}
 
   async publish(
     command: SystemNotificationPublishCommand,
@@ -115,10 +127,10 @@ export class SystemNotificationService {
     if (options.transaction !== undefined) {
       return this.publishInTransaction(options.transaction, command, now, dedupeKey)
     }
-    return this.prisma.$transaction(
-      transaction => this.publishInTransaction(transaction, command, now, dedupeKey),
-      { timeout: 30_000 },
-    )
+    return this.prisma.$transaction(async (transaction) => {
+      await applyTransactionTimeouts(transaction)
+      return this.publishInTransaction(transaction, command, now, dedupeKey)
+    }, { timeout: 30_000 })
   }
 
   private effectiveDedupeKey(command: SystemNotificationPublishCommand): string {
@@ -171,9 +183,19 @@ export class SystemNotificationService {
     const priority = command.priority ?? primaryPolicy?.priority ?? 'NORMAL'
     const variables = sanitizeVariables(command.variables)
 
+    // 编号与通知同事务：重复通知在入口已返回，不会消耗编号；业务回滚会一并回滚发号。
+    const issuance = await this.numbering.generateScopedInTransaction(transaction, {
+      consumerCode: NOTIFICATION_NUMBER_CONSUMER_CODE,
+      idempotencyKey: hashNotificationNumberIdempotencyKey(dedupeKey),
+      requestFingerprint: hashNotificationNumberRequestFingerprint(dedupeKey),
+      ruleCode: NOTIFICATION_NUMBER_RULE_CODE,
+    })
+
     const notification = await transaction.notification.create({
       data: {
         eventType: command.eventType,
+        notificationNo: issuance.number,
+        numberingIssuanceId: issuance.issuanceId,
         sourceType: command.source.type.slice(0, 64),
         sourceId: command.source.id.slice(0, 128),
         dedupeKey,

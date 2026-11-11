@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module'
 import { configureApplication } from '../src/app.setup'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
+import { SystemNotificationService } from '../src/modules/notifications/system-notification.service'
 
 const APP_ORIGIN = 'http://127.0.0.1:9000'
 const CSRF_HEADERS = {
@@ -112,6 +113,45 @@ describe('Notification records API with PostgreSQL', () => {
     notificationIds.push(notification.id)
     return notification.id
   }
+
+  it('publishes a numbered notification through the sole service entry point', async () => {
+    const notifications = application.get(SystemNotificationService)
+    const suffix = randomUUID()
+    const command = {
+      channels: [],
+      dedupeKey: `notification-number-e2e:${suffix}`,
+      eventType: 'PURCHASE_REVIEW_PENDING' as const,
+      source: { id: suffix, type: 'E2E' },
+      target: { kind: 'USERS' as const, userIds: [userId] },
+      templateKey: 'purchase.review.pending',
+      variables: { orderNo: suffix },
+    }
+
+    await expect(prisma.$transaction(async (transaction) => {
+      const first = await notifications.publish(command, { transaction })
+      const notification = await transaction.notification.findUniqueOrThrow({
+        where: { id: first.notificationId },
+        select: { notificationNo: true, numberingIssuanceId: true },
+      })
+      expect(notification.notificationNo).toMatch(/^NTF\/[0-9]{8}-[0-9]{6}$/u)
+      expect(notification.numberingIssuanceId).not.toBeNull()
+
+      const issuance = await transaction.numberingIssuance.findUniqueOrThrow({
+        where: { id: notification.numberingIssuanceId as string },
+        select: { consumerCode: true, generatedNumber: true },
+      })
+      expect(issuance.consumerCode).toBe('NOTIFICATION.CREATE')
+      expect(issuance.generatedNumber).toBe(notification.notificationNo)
+
+      const duplicate = await notifications.publish(command, { transaction })
+      expect(duplicate.duplicated).toBe(true)
+      expect(duplicate.notificationId).toBe(first.notificationId)
+      expect(await transaction.notification.count({
+        where: { id: first.notificationId },
+      })).toBe(1)
+      throw new Error('rollback numbering test')
+    })).rejects.toThrow('rollback numbering test')
+  })
 
   it('supports options, filters, detail counts and cancellation', async () => {
     const recordId = await createRecord()

@@ -343,7 +343,8 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
 ])
 
 const columns: QsGenericTableColumn<NotificationRecordDto>[] = [
-  { id: 'publishedAt', accessorKey: 'publishedAt', title: '发布时间', width: 150 },
+  { id: 'notificationNo', accessorKey: 'notificationNo', title: '通知编号', minWidth: 190 },
+  { id: 'time', accessorKey: 'publishedAt', title: '时间', width: 180 },
   { id: 'event', accessorKey: 'eventType', title: '事件', minWidth: 210 },
   {
     id: 'channels',
@@ -366,7 +367,6 @@ const columns: QsGenericTableColumn<NotificationRecordDto>[] = [
   },
   { id: 'requestedByName', accessorKey: 'requestedByName', title: '请求人', width: 140 },
   { id: 'priority', accessorKey: 'priority', title: '优先级', width: 80 },
-  { id: 'completedAt', accessorKey: 'completedAt', title: '完成时间', width: 150 },
   { id: 'templateKey', accessorKey: 'templateKey', title: '模板键', minWidth: 160 },
 ]
 
@@ -436,8 +436,8 @@ defineExpose({ refresh: loadRecords })
       :action-column="{ width: actionColumnWidth }"
       empty-title="暂无通知记录"
       empty-description="当前查询范围内没有可展示的通知记录。"
-      search-placeholder="搜索记录 ID、来源单号、模板键或收件人"
-      table-class="min-w-[1760px]"
+      search-placeholder="搜索通知编号、记录 ID、来源单号、模板键或收件人"
+      table-class="min-w-[1800px]"
       @filter-change="handleFilterChange"
       @pagination-change="handlePaginationChange"
       @retry="loadRecords"
@@ -453,8 +453,22 @@ defineExpose({ refresh: loadRecords })
         />
       </template>
 
-      <template #cell-publishedAt="{ row }">
-        <DateTimeDisplay :value="row.original.publishedAt" />
+      <template #cell-notificationNo="{ row }">
+        <QsCopyableText v-if="row.original.notificationNo !== null" label="通知编号" :text="row.original.notificationNo" />
+        <span v-else class="text-muted-foreground">—</span>
+      </template>
+
+      <template #cell-time="{ row }">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex gap-1.5 items-baseline">
+            <span class="qs-type-meta text-muted-foreground">请求</span>
+            <DateTimeDisplay :value="row.original.publishedAt" />
+          </div>
+          <div class="flex gap-1.5 items-baseline">
+            <span class="qs-type-meta text-muted-foreground">完成</span>
+            <DateTimeDisplay :value="row.original.completedAt" />
+          </div>
+        </div>
       </template>
 
       <template #cell-event="{ row }">
@@ -523,12 +537,14 @@ defineExpose({ refresh: loadRecords })
       </template>
 
       <template #cell-requestedByName="{ row }">
-        <QsPersonDisplay
-          v-if="row.original.requestedByName !== null"
-          :display-name="row.original.requestedByName"
-          size="sm"
-        />
-        <span v-else class="text-muted-foreground">—</span>
+        <div class="flex flex-col gap-0.5 min-w-0">
+          <QsPersonDisplay
+            v-if="row.original.requestedByName !== null"
+            :display-name="row.original.requestedByName"
+            size="sm"
+          />
+          <span v-else class="text-muted-foreground">—</span>
+        </div>
       </template>
 
       <template #cell-priority="{ row }">
@@ -539,10 +555,6 @@ defineExpose({ refresh: loadRecords })
         >
           {{ priorityLabel(row.original.priority) }}
         </FaTag>
-      </template>
-
-      <template #cell-completedAt="{ row }">
-        <DateTimeDisplay :value="row.original.completedAt" />
       </template>
 
       <template #cell-templateKey="{ row }">
@@ -598,12 +610,30 @@ defineExpose({ refresh: loadRecords })
           </div>
 
           <dl class="qs-type-body m-0 gap-3 grid">
-            <div v-if="hasVisibleTableColumn(visibleColumns, 'publishedAt')" class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'notificationNo')" class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
               <dt class="qs-type-compact-label">
-                发布时间
+                通知编号
               </dt>
               <dd class="m-0">
-                <DateTimeDisplay :value="row.publishedAt" />
+                <QsCopyableText v-if="row.notificationNo !== null" label="通知编号" :text="row.notificationNo" />
+                <span v-else class="text-muted-foreground">—</span>
+              </dd>
+            </div>
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'time')" class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+              <dt class="qs-type-compact-label">
+                时间
+              </dt>
+              <dd class="m-0">
+                <div class="flex flex-col gap-0.5">
+                  <div class="flex gap-1.5 items-baseline">
+                    <span class="qs-type-meta text-muted-foreground">请求</span>
+                    <DateTimeDisplay :value="row.publishedAt" />
+                  </div>
+                  <div class="flex gap-1.5 items-baseline">
+                    <span class="qs-type-meta text-muted-foreground">完成</span>
+                    <DateTimeDisplay :value="row.completedAt" />
+                  </div>
+                </div>
               </dd>
             </div>
             <div v-if="hasVisibleTableColumn(visibleColumns, 'channels')" class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
@@ -660,12 +690,14 @@ defineExpose({ refresh: loadRecords })
                 请求人
               </dt>
               <dd class="m-0">
-                <QsPersonDisplay
-                  v-if="row.requestedByName !== null"
-                  :display-name="row.requestedByName"
-                  size="sm"
-                />
-                <span v-else class="text-muted-foreground">—</span>
+                <div class="flex flex-col gap-0.5">
+                  <QsPersonDisplay
+                    v-if="row.requestedByName !== null"
+                    :display-name="row.requestedByName"
+                    size="sm"
+                  />
+                  <span v-else class="text-muted-foreground">—</span>
+                </div>
               </dd>
             </div>
           </dl>

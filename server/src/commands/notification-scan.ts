@@ -2,6 +2,7 @@ import 'dotenv/config'
 
 import { Prisma } from '../generated/prisma/client'
 import { PrismaService } from '../infrastructure/database/prisma.service'
+import { NumberingGeneratorService } from '../modules/numbering/numbering-generator.service'
 import { SystemNotificationService } from '../modules/notifications/system-notification.service'
 
 const SCAN_LOCK_KEY = 'notification-operations-scan'
@@ -322,10 +323,14 @@ export async function runNotificationScanCli(
   } as never)
   try {
     await prisma.$connect()
-    const result = await scanNotifications(prisma, new SystemNotificationService(prisma), {
-      dryRun,
-      ...(now === undefined ? {} : { now: () => now }),
-    })
+    const result = await scanNotifications(
+      prisma,
+      new SystemNotificationService(prisma, new NumberingGeneratorService(prisma)),
+      {
+        dryRun,
+        ...(now === undefined ? {} : { now: () => now }),
+      },
+    )
     output.log(JSON.stringify({ kind: 'notification_scan', ...result }))
     return 0
   }

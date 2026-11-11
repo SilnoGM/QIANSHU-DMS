@@ -31,6 +31,10 @@ const recordIndexes = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261111140000_notification_record_query_indexes/migration.sql'),
   'utf8',
 )
+const notificationNumber = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261111150000_notification_number/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -141,6 +145,30 @@ describe('notification center database contract', () => {
     expect(recordIndexes).toContain('notifications_status_published_idx')
     expect(recordIndexes).toContain('notification_inbox_items_notification_idx')
     expect(recordIndexes).toContain('assistant_deliveries_notification_idx')
+  })
+
+  it('binds new notifications to the NOTIFICATION_NO numbering rule', () => {
+    const notificationModel = schema.match(/model Notification \{([\s\S]*?)\n\}/u)?.[1] ?? ''
+    expect(notificationModel).toContain('notificationNo')
+    expect(notificationModel).toContain('@map("notification_no") @db.VarChar(64)')
+    expect(notificationModel).toContain('numberingIssuanceId')
+    expect(notificationModel).toContain('notifications_number_key')
+    expect(notificationModel).toContain('notifications_numbering_issuance_id_key')
+    expect(schema).toMatch(/model NumberingIssuance \{[\s\S]*?notification Notification\?/u)
+
+    expect(notificationNumber).toContain('ADD COLUMN "notification_no" VARCHAR(64)')
+    expect(notificationNumber).toContain('ADD COLUMN "numbering_issuance_id" UUID')
+    expect(notificationNumber).toContain('"notifications_number_key" UNIQUE ("notification_no")')
+    expect(notificationNumber).toContain('"notifications_numbering_issuance_id_key"')
+    expect(notificationNumber).toContain('"notifications_number_format_check"')
+    expect(notificationNumber).toContain(`CHECK ("notification_no" IS NULL OR "notification_no" ~ '^NTF/[0-9]{8}-[0-9]{6}$')`)
+    expect(notificationNumber).toContain(`'NOTIFICATION_NO'`)
+    expect(notificationNumber).toContain(`'NTF'`)
+    expect(notificationNumber).toContain(`'YYYYMMDD'`)
+    expect(notificationNumber).toContain(
+      `75b357194ff2ee76a33a43bedb272b64e95eb174fd9cb33b9a8f48f23ca29c97`,
+    )
+    expect(notificationNumber).toContain('"status" = \'ENABLED\'')
   })
 
   it('adds exclusive delivery targets, partial unique indexes and seeds', () => {

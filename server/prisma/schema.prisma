@@ -2103,6 +2103,7 @@ model NumberingPeriodState {
 }
 
 model NumberingIssuance {
+  notification Notification?
   containerBatch ContainerBatch?
   slhBill SlhBill?
   reconciliationBatch SlhReconciliationBatch?
@@ -3339,6 +3340,9 @@ enum AssistantDeliveryStatus {
 /// 一条逻辑通知。站内条目与站外交付都挂在它下面。
 model Notification {
   id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// 历史通知在本域上线前没有编号；新通知必须由 NOTIFICATION_NO 规则发号。
+  notificationNo      String?              @unique(map: "notifications_number_key") @map("notification_no") @db.VarChar(64)
+  numberingIssuanceId String?              @unique(map: "notifications_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
   eventType           String               @map("event_type") @db.VarChar(64)
   sourceType          String               @map("source_type") @db.VarChar(64)
   sourceId            String               @map("source_id") @db.VarChar(128)
@@ -3355,9 +3359,10 @@ model Notification {
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  requestedBy User?               @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  deliveries  AssistantDelivery[]
-  inboxItems NotificationInboxItem[]
+  requestedBy        User?                @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries         AssistantDelivery[]
+  inboxItems         NotificationInboxItem[]
 
   @@index([eventType, publishedAt(sort: Desc)], map: "notifications_event_type_published_idx")
   @@index([sourceType, sourceId], map: "notifications_source_idx")

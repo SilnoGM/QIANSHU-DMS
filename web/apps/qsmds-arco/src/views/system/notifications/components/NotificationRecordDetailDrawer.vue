@@ -55,7 +55,7 @@ const assistantTotal = computed(() => detail.value === null ? 0 : deliveryTotal(
 const inAppRead = computed(() => detail.value === null ? 0 : inAppReadCount(detail.value))
 const description = computed(() => detail.value === null
   ? '正在读取通知投递明细…'
-  : `${detail.value.eventLabel} · ${detail.value.id}`)
+  : `${detail.value.notificationNo ?? '历史通知'} · ${detail.value.eventLabel}`)
 
 async function load(): Promise<void> {
   if (props.recordId === null) {
@@ -175,6 +175,15 @@ defineExpose({ reload })
           基本信息
         </h3>
         <dl class="gap-3 grid sm:grid-cols-2">
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label">
+              通知编号
+            </dt>
+            <dd class="qs-type-body m-0 mt-1">
+              <QsCopyableText v-if="detail.notificationNo !== null" label="通知编号" :text="detail.notificationNo" />
+              <span v-else class="text-muted-foreground">历史通知无编号</span>
+            </dd>
+          </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label">
               业务域

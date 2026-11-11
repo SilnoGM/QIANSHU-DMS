@@ -173,6 +173,7 @@ export class NotificationDeliveryDto {
 
 export class NotificationRecordDto {
   @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'string', nullable: true, description: '历史通知可能没有编号' }) notificationNo!: string | null
   @ApiProperty() eventType!: string
   @ApiProperty() eventLabel!: string
   @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string

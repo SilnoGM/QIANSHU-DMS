@@ -107,6 +107,7 @@ function toRecordDto(
 ): NotificationRecordDto {
   return {
     id: row.id,
+    notificationNo: row.notificationNo,
     eventType: row.eventType,
     eventLabel: recordEventLabel(row.eventType),
     domain: recordEventDomain(row.eventType),
@@ -707,6 +708,7 @@ export class NotificationAdminService {
     const keyword = input.keyword?.trim()
     if (keyword !== undefined && keyword.length > 0) {
       const keywordFilters: Prisma.NotificationWhereInput[] = [
+        { notificationNo: { contains: keyword, mode: 'insensitive' } },
         { sourceId: { contains: keyword, mode: 'insensitive' } },
         { templateKey: { contains: keyword, mode: 'insensitive' } },
         {

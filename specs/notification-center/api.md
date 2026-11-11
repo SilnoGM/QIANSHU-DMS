@@ -254,7 +254,7 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
 
-记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
+记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `notificationNo`、`eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`notificationNo` 由 `NOTIFICATION_NO` 规则按 `NTF/YYYYMMDD-######` 发号，历史通知允许为空；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
 
 模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`OPERATIONS`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
 
@@ -360,6 +360,7 @@ export interface SystemNotificationPublishResult {
 // GET /api/notifications/records/:id
 {
   "id": "9a0b...",
+  "notificationNo": "NTF/20261028-000123",
   "eventType": "PURCHASE_REVIEW_PENDING",
   "eventLabel": "采购审核",
   "domain": "PURCHASE",

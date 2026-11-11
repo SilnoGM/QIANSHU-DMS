@@ -473,9 +473,11 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
 
 test('发送记录使用通用表格、大抽屉与取消确认，不引入 Arco 表格', () => {
   assert.match(recordsSource, /<QsGenericTable/u)
+  assert.match(recordsSource, /notificationNo/u)
   assert.match(recordsSource, /<FaDrawer/u)
   assert.match(recordsSource, /<QsDateRangeFilter/u)
   assert.match(recordDetailSource, /<QsGenericDrawer/u)
+  assert.match(recordDetailSource, /notificationNo/u)
   assert.match(recordDetailSource, /逐人交付/u)
   assert.match(recordDetailSource, /逻辑模板/u)
   assert.match(recordDetailSource, /实际模板/u)

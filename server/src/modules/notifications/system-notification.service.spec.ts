@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言调用参数。 */
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
+import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { SystemNotificationService } from './system-notification.service'
 import type { SystemNotificationPublishCommand } from './notification.types'
 
@@ -40,12 +41,34 @@ function template(overrides: Record<string, unknown> = {}) {
   }
 }
 
+
+function createNumbering() {
+  return {
+    generateScopedInTransaction: jest.fn().mockResolvedValue({
+      idempotentReplay: false,
+      issuanceId: 'issuance-1',
+      issuedAt: '2026-11-11T00:00:00.000Z',
+      number: 'NTF/20261111-000001',
+      ruleCode: 'NOTIFICATION_NO',
+      ruleRevision: 1,
+    }),
+  } as unknown as NumberingGeneratorService
+}
+
+function createService(
+  prisma: PrismaService,
+  numbering: NumberingGeneratorService = createNumbering(),
+) {
+  return new SystemNotificationService(prisma, numbering)
+}
+
 describe('SystemNotificationService.publish', () => {
   it('returns the existing notification for a duplicate dedupe key', async () => {
     const transaction = {
       notification: { findUnique: jest.fn().mockResolvedValue({ id: 'existing' }) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const numbering = createNumbering()
+    const service = createService({} as PrismaService, numbering)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -58,6 +81,7 @@ describe('SystemNotificationService.publish', () => {
       where: { dedupeKey: 'PURCHASE_REVIEW_PENDING:purchase-review:order-1' },
       select: { id: true },
     })
+    expect(numbering.generateScopedInTransaction).not.toHaveBeenCalled()
   })
 
   it('records a failed notification when the event has no enabled policy', async () => {
@@ -69,7 +93,7 @@ describe('SystemNotificationService.publish', () => {
       },
       notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([]) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -77,6 +101,13 @@ describe('SystemNotificationService.publish', () => {
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'EVENT_NOT_CONFIGURED' }),
     ]))
+    expect(transaction.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        notificationNo: 'NTF/20261111-000001',
+        numberingIssuanceId: 'issuance-1',
+      }),
+      select: { id: true },
+    })
     const updateCalls = transaction.notification.update.mock.calls as unknown as Array<
       Array<{ data?: { status?: string } }>
     >
@@ -94,7 +125,7 @@ describe('SystemNotificationService.publish', () => {
       notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
       notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -132,7 +163,7 @@ describe('SystemNotificationService.publish', () => {
       },
       notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -163,7 +194,7 @@ describe('SystemNotificationService.publish', () => {
       notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
       notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -209,7 +240,7 @@ describe('SystemNotificationService.publish', () => {
       },
       assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     await service.publish(command, { transaction: transaction as never })
 
@@ -248,7 +279,7 @@ describe('SystemNotificationService.publish', () => {
       },
       notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
@@ -298,7 +329,7 @@ describe('SystemNotificationService.publish', () => {
       },
       assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
     }
-    const service = new SystemNotificationService({} as PrismaService)
+    const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 

@@ -42,6 +42,8 @@
 | 字段 | 类型 | 可空 | 默认 | 说明 |
 | --- | --- | --- | --- | --- |
 | `id` | uuid | 否 | `gen_random_uuid()` | 主键 |
+| `notificationNo` | varchar(64) | 是 | `null` | 通知编号；新通知由 `NOTIFICATION_NO` 规则发号，历史通知为空 |
+| `numberingIssuanceId` | uuid | 是 | `null` | 通知编号发号记录；FK `numbering_issuances(id)` |
 | `eventType` | varchar(64) | 否 | — | 事件类型，对应 `NOTIFICATION_EVENT_TYPES` |
 | `sourceType` | varchar(64) | 否 | — | 业务对象类型，如 `PURCHASE_ORDER` |
 | `sourceId` | varchar(128) | 否 | — | 业务对象 ID |
@@ -60,7 +62,7 @@
 
 索引与约束：
 
-- 唯一 `dedupeKey`。
+- 唯一 `dedupeKey`、`notificationNo` 与 `numberingIssuanceId`；`notificationNo` 为空的历史记录不参与唯一冲突。
 - `(eventType, publishedAt DESC)`、`(sourceType, sourceId)`、`(status, expiresAt)`。
 - CHECK：`jsonb_typeof(requestedChannels) = 'array'`、`jsonb_typeof(variables) = 'object'`。
 
@@ -369,7 +371,7 @@ ASSISTANT_TARGET_MESSAGE_SENT
 
 1. 删除超过 `deliveryRetentionDays` 的 `assistant_deliveries`。
 2. 删除未归档超过 180 天、已归档超过 1 年的 `notification_inbox_items`。
-3. 删除超过 `notificationRetentionDays` 且没有剩余收件箱条目或交付的 `notifications`。
+3. 删除超过 `notificationRetentionDays` 且没有剩余收件箱条目或交付的 `notifications`。通知删除不会删除 `numbering_issuances`，发号台账按编号域规则永久保留。
 4. 回调引入后再增加 `assistant_callback_events` 清理。
 
 实现要求：

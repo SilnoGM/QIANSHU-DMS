@@ -125972,6 +125972,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "notificationNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "历史通知可能没有编号"
+          },
           "eventType": {
             "type": "string"
           },
@@ -126065,6 +126070,7 @@
         },
         "required": [
           "id",
+          "notificationNo",
           "eventType",
           "eventLabel",
           "domain",
@@ -126218,6 +126224,11 @@
             "type": "string",
             "format": "uuid"
           },
+          "notificationNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "历史通知可能没有编号"
+          },
           "eventType": {
             "type": "string"
           },
@@ -126317,6 +126328,7 @@
         },
         "required": [
           "id",
+          "notificationNo",
           "eventType",
           "eventLabel",
           "domain",

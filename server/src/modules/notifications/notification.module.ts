@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common'
 
 import { AuthModule } from '../auth/auth.module'
+import { NumberingModule } from '../numbering/numbering.module'
 import { AssistantAdminController } from './assistant-admin.controller'
 import { AssistantAdminService } from './assistant-admin.service'
 import { NotificationAdminController } from './notification-admin.controller'
@@ -22,7 +23,7 @@ import { SystemNotificationService } from './system-notification.service'
  */
 @Global()
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NumberingModule],
   controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController],
   providers: [
     SystemNotificationService,

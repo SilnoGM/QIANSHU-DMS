@@ -21,6 +21,7 @@ import {
 function record(overrides: Partial<NotificationRecordDto> = {}): NotificationRecordDto {
   return {
     id: '00000000-0000-4000-8000-000000000001',
+    notificationNo: 'NTF/20261109-000001',
     eventType: 'PURCHASE_REVIEW_PENDING',
     eventLabel: '采购审核',
     domain: 'PURCHASE',
