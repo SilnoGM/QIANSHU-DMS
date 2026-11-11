@@ -11,6 +11,7 @@ export const ASSISTANT_GEWE_BASE_URL = 'https://api.geweapi.com' as const
 const DEFAULT_WORKER_POLL_MS = 5_000
 const DEFAULT_WORKER_BATCH = 20
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
+const DEFAULT_MIN_SEND_INTERVAL_MS = 3_000
 
 export interface AssistantConfiguration {
   readonly baseUrl: string
@@ -19,6 +20,7 @@ export interface AssistantConfiguration {
   readonly pollMs: number
   readonly batchSize: number
   readonly requestTimeoutMs: number
+  readonly minSendIntervalMs: number
 }
 
 function boundedInteger(
@@ -50,5 +52,7 @@ export default registerAs('assistant', (): AssistantConfiguration => {
     pollMs: boundedInteger(process.env.ASSISTANT_WORKER_POLL_MS, DEFAULT_WORKER_POLL_MS, 1_000, 300_000),
     batchSize: boundedInteger(process.env.ASSISTANT_WORKER_BATCH, DEFAULT_WORKER_BATCH, 1, 100),
     requestTimeoutMs: boundedInteger(process.env.ASSISTANT_REQUEST_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, 1_000, 60_000),
+    // 队列、管理端测试、绑定验证和群 @ 共用同一最小间隔；0 仅用于本地显式关闭节流。
+    minSendIntervalMs: boundedInteger(process.env.ASSISTANT_MIN_SEND_INTERVAL_MS, DEFAULT_MIN_SEND_INTERVAL_MS, 0, 60_000),
   })
 })

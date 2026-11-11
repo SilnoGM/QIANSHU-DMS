@@ -12,6 +12,7 @@ function configuration(overrides: Partial<AssistantConfiguration> = {}): Assista
     pollMs: 5_000,
     batchSize: 20,
     requestTimeoutMs: 1_000,
+    minSendIntervalMs: 3_000,
     ...overrides,
   }
 }

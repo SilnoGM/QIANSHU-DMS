@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
@@ -20,6 +20,9 @@ import {
 
 const LEASE_ID = 'assistant-dispatch'
 const LEASE_TTL_MS = 30_000
+const LEASE_TTL_MARGIN_MS = 15_000
+const STALE_SENDING_FLOOR_MS = 60_000
+const STALE_SENDING_MARGIN_MS = 30_000
 const MAX_ATTEMPTS = 3
 const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] as const
 const OFFLINE_RETRY_DELAYS_MS = [30_000, 120_000, 300_000] as const
@@ -61,7 +64,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
   private readonly logger = new Logger(AssistantDispatchService.name)
   private readonly ownerId = randomUUID()
   private running = false
-  private lastSentAt = 0
 
   constructor(
     private readonly prisma: PrismaService,
@@ -102,7 +104,9 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
 
   /** 公开给测试直接触发一轮，不依赖真实定时器。 */
   async dispatchOnce(batchSize: number): Promise<void> {
-    if (!await this.acquireLease()) {
+    const config = this.configService.get<AssistantConfiguration>('assistant')
+    const leaseTtlMs = this.resolveLeaseTtlMs(config)
+    if (!await this.acquireLease(leaseTtlMs)) {
       return
     }
     const setting = await this.prisma.notificationChannelSettings.findUnique({
@@ -113,10 +117,11 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       return
     }
 
+    await this.recoverStaleSendingDeliveries(config)
     await this.expireOverdueDeliveries()
     const deliveries = await this.claimDeliveries(batchSize)
     for (const delivery of deliveries) {
-      if (!await this.acquireLease()) {
+      if (!await this.acquireLease(leaseTtlMs)) {
         this.logger.warn('assistant dispatch lease lost during batch')
         break
       }
@@ -124,8 +129,8 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     }
   }
 
-  private async acquireLease(): Promise<boolean> {
-    const expiresAt = new Date(Date.now() + LEASE_TTL_MS)
+  private async acquireLease(ttlMs: number = LEASE_TTL_MS): Promise<boolean> {
+    const expiresAt = new Date(Date.now() + ttlMs)
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       UPDATE "assistant_dispatch_leases"
       SET "owner_id" = ${this.ownerId}::uuid,
@@ -246,7 +251,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     }
 
     let toWxid: string | null = null
-    let isGroup = false
     if (delivery.recipient_user_id !== null) {
       const binding = await this.prisma.assistantBinding.findFirst({
         where: {
@@ -266,7 +270,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       })
       if (target?.enabled === true) {
         toWxid = target.chatroomId
-        isGroup = true
       }
     }
 
@@ -279,8 +282,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       return
     }
 
-    await this.waitForRateLimit(isGroup)
-    this.lastSentAt = Date.now()
     const result = await this.transport.sendText({
       appId: account.appId,
       toWxid,
@@ -495,6 +496,82 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     })
   }
 
+  private resolveLeaseTtlMs(config?: AssistantConfiguration): number {
+    const requestTimeoutMs = config?.requestTimeoutMs ?? 10_000
+    const minSendIntervalMs = config?.minSendIntervalMs ?? 0
+    return Math.max(
+      LEASE_TTL_MS,
+      requestTimeoutMs + minSendIntervalMs + LEASE_TTL_MARGIN_MS,
+    )
+  }
+
+  private resolveStaleSendingMs(config?: AssistantConfiguration): number {
+    const requestTimeoutMs = config?.requestTimeoutMs ?? 10_000
+    const minSendIntervalMs = config?.minSendIntervalMs ?? 0
+    return Math.max(
+      STALE_SENDING_FLOOR_MS,
+      requestTimeoutMs + minSendIntervalMs + STALE_SENDING_MARGIN_MS,
+    )
+  }
+
+  /**
+   * 回收发送中崩溃留下的 SENDING。
+   *
+   * 没有 providerMsgId 时无法判断上游是否已接收，只能按“结果未知”重新排队；
+   * 这会接受极小概率的重复发送，但避免交付永久卡死。已到重试上限的直接落 FAILED。
+   */
+  private async recoverStaleSendingDeliveries(config?: AssistantConfiguration): Promise<void> {
+    const staleBefore = new Date(Date.now() - this.resolveStaleSendingMs(config))
+    const rows = await this.prisma.assistantDelivery.findMany({
+      where: {
+        status: 'SENDING',
+        updatedAt: { lte: staleBefore },
+      },
+      select: { attemptCount: true, id: true, notificationId: true },
+    })
+    if (rows.length === 0) {
+      return
+    }
+
+    const recoveredAt = new Date()
+    const retryable = rows.filter(row => row.attemptCount < MAX_ATTEMPTS)
+    const exhausted = rows.filter(row => row.attemptCount >= MAX_ATTEMPTS)
+    if (retryable.length > 0) {
+      await this.prisma.assistantDelivery.updateMany({
+        where: {
+          id: { in: retryable.map(row => row.id) },
+          status: 'SENDING',
+        },
+        data: {
+          status: 'PENDING',
+          nextAttemptAt: recoveredAt,
+          attemptCount: { increment: 1 },
+          failureCode: 'SENDING_RECOVERED',
+          failureMessage: '发送状态未知，已重新排队',
+          updatedAt: recoveredAt,
+        },
+      })
+    }
+    if (exhausted.length > 0) {
+      await this.prisma.assistantDelivery.updateMany({
+        where: {
+          id: { in: exhausted.map(row => row.id) },
+          status: 'SENDING',
+        },
+        data: {
+          status: 'FAILED',
+          attemptCount: { increment: 1 },
+          failureCode: 'SENDING_RECOVERED',
+          failureMessage: '发送状态未知且已超过重试上限',
+          updatedAt: recoveredAt,
+        },
+      })
+    }
+    for (const notificationId of new Set(rows.map(row => row.notificationId))) {
+      await this.refreshNotificationStatus(notificationId)
+    }
+  }
+
   private async expireOverdueDeliveries(): Promise<void> {
     const rows = await this.prisma.assistantDelivery.findMany({
       where: {
@@ -512,16 +589,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     })
     for (const notificationId of new Set(rows.map(row => row.notificationId))) {
       await this.refreshNotificationStatus(notificationId)
-    }
-  }
-
-  private async waitForRateLimit(isGroup: boolean): Promise<void> {
-    const minimumGap = isGroup
-      ? 2_000 + randomInt(0, 3_000)
-      : 1_000
-    const wait = Math.max(0, this.lastSentAt + minimumGap - Date.now())
-    if (wait > 0) {
-      await sleep(wait)
     }
   }
 }

@@ -23,7 +23,8 @@ interface AssistantTransportOptions {
 /**
  * GeWe 文字消息适配器。
  *
- * 只负责一次 HTTP 调用与响应分类，不做重试、限速或状态更新；这些由派发器负责。
+ * 只负责一次 HTTP 调用与响应分类，不做重试、限速或状态更新；生产注入的是
+ * GatedAssistantTransport，由它在调用本适配器前串行化并执行全局最小间隔。
  * Token 只从配置读取，不进入日志、异常消息或返回值。
  */
 @Injectable()

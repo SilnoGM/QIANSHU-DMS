@@ -14,7 +14,7 @@
 | 前置 | 状态 | 说明 |
 | --- | --- | --- |
 | 设计、契约、数据模型、事件规格 | 完成 | 本文档目录 |
-| 数据库 schema 授权 | **待批** | 10 张表；`notification_inbox_items` 与 `assistant_callback_events` 延后 |
+| 数据库 schema 授权 | **待批** | 11 张表；`assistant_callback_events` 延后 |
 | 15 个权限码授权 | **待批** | `system_only`，授予 `system_admin` |
 | 公共 API 范围授权 | **待批** | `/api/notifications/*` 与 `/api/assistant/*` 首批接口 |
 | GeWe 公司号与 Token | 已准备 | Token 只进环境变量/密钥服务 |
@@ -52,7 +52,7 @@
 - CHECK、部分唯一索引、普通索引写在迁移 SQL。
 - 15 个权限码、`role_permissions` 授予、`permission.constants.ts` 同步。
 - `AuditEventType` 新增 15 个值。
-- 种子：`notification_settings`、`notification_channel_settings`（仅 `ASSISTANT`）、`assistant_dispatch_leases`。
+- 种子：`notification_settings`、`notification_channel_settings`（仅 `ASSISTANT`）、`assistant_dispatch_leases`、`assistant_send_gates`。
 - `notification-schema.spec.ts` 断言表、索引、约束、权限与枚举。
 
 **验收**
@@ -86,8 +86,9 @@
 **范围**
 
 - `AssistantDispatchService` 进程内循环：5 秒轮询、批量 20、串行发送。
-- `assistant_dispatch_leases` 获取/续租/释放；续租失败停止领取。
-- 限速：40 条/分钟、单收件人 ≥1 秒、群消息 2~5 秒抖动。
+- `assistant_dispatch_leases` 获取/续租/释放；TTL 覆盖请求超时与最小发送间隔；续租失败停止领取。
+- 全局发送闸门 `assistant_send_gates`：所有 sendText 串行，发送结束后写 `next_allowed_at`，默认间隔 3000ms。
+- 超时 `SENDING` 回收：结果未知重新排队并记录 `SENDING_RECOVERED`，超过重试上限落 `FAILED`。
 - 重试：5s/30s/2m；离线 30s/2m/5m；4xx 不重试；TTL 兜底。
 - 静默时段：`NORMAL` 延后，`HIGH` 突破。
 - 过期扫描与状态汇总。

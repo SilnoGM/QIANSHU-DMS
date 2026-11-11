@@ -39,6 +39,10 @@ const notificationPriority = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261111160000_notification_priority_fairness/migration.sql'),
   'utf8',
 )
+const assistantSendGate = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261111170000_assistant_send_gate/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -114,6 +118,7 @@ describe('notification center database contract', () => {
       'AssistantTarget',
       'AssistantDelivery',
       'AssistantDispatchLease',
+      'AssistantSendGate',
       'NotificationInboxItem',
     ]) {
       expect(() => block('model', name)).not.toThrow()
@@ -134,6 +139,14 @@ describe('notification center database contract', () => {
   it('adds the binding WeChat avatar snapshot column', () => {
     expect(schema).toContain('wechatAvatarUrl')
     expect(bindingAvatar).toContain('ADD COLUMN "wechat_avatar_url" TEXT')
+  })
+
+  it('creates and seeds the global assistant send gate', () => {
+    expect(assistantSendGate).toContain('CREATE TABLE "assistant_send_gates"')
+    expect(assistantSendGate).toContain('"next_allowed_at" TIMESTAMPTZ(6)')
+    expect(assistantSendGate).toContain('"lock_owner" UUID')
+    expect(assistantSendGate).toContain('"lock_expires_at" TIMESTAMPTZ(6)')
+    expect(assistantSendGate).toContain("VALUES ('assistant-send')")
   })
 
   it('adds business detail links and their ID variables to the in-app templates', () => {

@@ -302,7 +302,9 @@ export interface SystemNotificationPublishResult {
 
 `GET /api/assistant/targets/:id/members` 按需调用 GeWe `getChatroomMemberList`，返回成员 `wxid`、微信昵称、群内昵称、头像、邀请人昵称和角色（`OWNER`/`ADMIN`/`MEMBER`，由 `chatroomOwner`/`adminWxid` 匹配）。GeWe 该接口没有分页参数，返回数量以上游为准。成员列表不落库、不写审计，关闭页面即丢弃；没有可用公司号返回 422 `ASSISTANT_ACCOUNT_UNAVAILABLE`，群目标不存在返回 404 `ASSISTANT_TARGET_NOT_FOUND`，其余上游错误复用统一的 422/429/503 映射。成员是否内部员工不由系统判断。
 
-`POST /api/assistant/targets/:id/mention-message` 请求体为 `{ "memberWxid": "wxid_xxx", "content": "..." }`：内容去空白后 1–1000 字，超限或为空返回 422 `ASSISTANT_TARGET_MESSAGE_INVALID`。群目标停用返回 422 `ASSISTANT_TARGET_DISABLED`，渠道停发返回 422 `ASSISTANT_CHANNEL_DISABLED`，成员不在群内返回 422 `ASSISTANT_TARGET_MEMBER_NOT_FOUND`。服务端按当前群成员资料取 `displayName`（为空回退 `nickName`），自动拼接 `@群内昵称 内容` 并传 `ats=memberWxid`；成功后写 `ASSISTANT_TARGET_MESSAGE_SENT` 审计（成员 wxid 掩码、内容长度、msgId，不写正文）。该发送不创建通知或 `assistant_deliveries` 记录，属于管理员手动外发。
+`POST /api/assistant/targets/:id/mention-message` 请求体为 `{ "memberWxid": "wxid_xxx", "content": "..." }`：内容去空白后 1–1000 字，超限或为空返回 422 `ASSISTANT_TARGET_MESSAGE_INVALID`。群目标停用返回 422 `ASSISTANT_TARGET_DISABLED`，渠道停发返回 422 `ASSISTANT_CHANNEL_DISABLED`，成员不在群内返回 422 `ASSISTANT_TARGET_MEMBER_NOT_FOUND`。服务端按当前群成员资料取 `displayName`（为空回退 `nickName`），自动拼接 `@群内昵称 内容` 并传 `ats=memberWxid`；成功后写 `ASSISTANT_TARGET_MESSAGE_SENT` 审计（成员 wxid 掩码、内容长度、msgId，不写正文）。该发送不创建通知或 `assistant_deliveries` 记录，属于管理员手动外发，但仍与其他 sendText 共用全局发送闸门，同步响应会等待闸门可用。
+
+渠道测试、绑定验证、模板测试和群 `@TA` 消息都不进入业务通知队列，但都经过同一 `AssistantSendGate`；它们与队列消息共享 `ASSISTANT_MIN_SEND_INTERVAL_MS` 最小间隔，不能绕过限速直连 transport。
 
 上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 

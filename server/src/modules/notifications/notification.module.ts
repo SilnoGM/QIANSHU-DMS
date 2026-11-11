@@ -9,6 +9,8 @@ import { NotificationAdminService } from './notification-admin.service'
 import { NotificationInboxController } from './notification-inbox.controller'
 import { NotificationInboxService } from './notification-inbox.service'
 import { AssistantDispatchService } from './assistant-dispatch.service'
+import { AssistantSendGateService } from './assistant-send-gate.service'
+import { GatedAssistantTransport } from './gated-assistant.transport'
 import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
 import { ASSISTANT_ADMIN_TRANSPORT, ASSISTANT_TRANSPORT, ASSISTANT_TRANSPORT_OPTIONS } from './notification.types'
@@ -30,11 +32,13 @@ import { SystemNotificationService } from './system-notification.service'
     AssistantAdminService,
     NotificationAdminService,
     NotificationInboxService,
+    AssistantSendGateService,
     GeweAssistantTransport,
+    GatedAssistantTransport,
     GeweAssistantAdminTransport,
     {
       provide: ASSISTANT_TRANSPORT,
-      useExisting: GeweAssistantTransport,
+      useExisting: GatedAssistantTransport,
     },
     {
       provide: ASSISTANT_ADMIN_TRANSPORT,

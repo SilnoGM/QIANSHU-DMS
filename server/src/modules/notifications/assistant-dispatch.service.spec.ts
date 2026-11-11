@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言 mock 调用参数。 */
 import { ConfigService } from '@nestjs/config'
 
 import type { AssistantConfiguration } from '../../config/assistant.config'
@@ -12,6 +13,7 @@ const configuration: AssistantConfiguration = {
   pollMs: 5_000,
   batchSize: 20,
   requestTimeoutMs: 1_000,
+  minSendIntervalMs: 3_000,
 }
 
 function service(prisma: Record<string, unknown>): AssistantDispatchService {
@@ -200,4 +202,42 @@ describe('AssistantDispatchService', () => {
     expect(result.map(item => item.id)).toEqual(['high-1', 'high-2', 'high-3', 'high-4'])
   })
 
+  it('requeues stale SENDING deliveries and fails exhausted attempts', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 })
+    const prisma = {
+      assistantDelivery: {
+        findMany: jest.fn().mockResolvedValue([
+          { attemptCount: 0, id: 'delivery-retry', notificationId: 'notification-retry' },
+          { attemptCount: 3, id: 'delivery-final', notificationId: 'notification-final' },
+        ]),
+        groupBy: jest.fn().mockResolvedValue([{ _count: { _all: 1 }, status: 'PENDING' }]),
+        updateMany,
+      },
+      notification: { update: jest.fn() },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const instance = service(prisma)
+    const recover = (instance as unknown as {
+      recoverStaleSendingDeliveries: (config?: AssistantConfiguration) => Promise<void>
+    }).recoverStaleSendingDeliveries
+
+    await recover.call(instance, configuration)
+
+    expect(updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      where: { id: { in: ['delivery-retry'] }, status: 'SENDING' },
+      data: expect.objectContaining({
+        attemptCount: { increment: 1 },
+        failureCode: 'SENDING_RECOVERED',
+        status: 'PENDING',
+      }),
+    }))
+    expect(updateMany).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: { id: { in: ['delivery-final'] }, status: 'SENDING' },
+      data: expect.objectContaining({
+        attemptCount: { increment: 1 },
+        failureCode: 'SENDING_RECOVERED',
+        status: 'FAILED',
+      }),
+    }))
+  })
 })

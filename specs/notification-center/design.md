@@ -155,6 +155,7 @@ await this.systemNotifications.publish(
 | `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一（可编辑语义键）、`chatroom_id` 唯一（同步身份）、`name`、`purpose`、`internal_only`、`member_count`、`avatar_url`、`enabled`、`last_synced_at` |
 | `assistant_callback_events` | 千树小助理 | 回调原始记录（可选，后续） | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
 | `assistant_dispatch_leases` | 千树小助理 | 派发器单实例租约 | `id='assistant-dispatch'`、`owner_id`、`expires_at` |
+| `assistant_send_gates` | 千树小助理 | 全局发送闸门 | `id='assistant-send'`、`next_allowed_at`、`lock_owner`、`lock_expires_at` |
 
 设计取舍：
 
@@ -260,9 +261,8 @@ PENDING ──► SENDING ──► ACCEPTED
 
 - `AssistantDispatchService` 在应用启动后启动循环，每 5 秒轮询一次。
 - 用 `assistant_dispatch_leases` 的单行租约保证同一时刻只有一个实例派发：
-  - 获取：`UPDATE ... SET owner_id = $me, expires_at = now() + 30s WHERE id = 'assistant-dispatch' AND (expires_at < now() OR owner_id = $me) RETURNING ...`
-  - 心跳：每 10 秒续租；续租失败立即停止派发。
-  - 进程退出后租约自然过期，其他实例可接管。
+  - 获取/续租：`UPDATE ... SET owner_id = $me, expires_at = now() + lease_ttl WHERE id = 'assistant-dispatch' AND (expires_at < now() OR owner_id = $me) RETURNING ...`；TTL 取 `max(30s, 请求超时 + 最小发送间隔 + 15s)`，每领取一条交付前续租，续租失败立即停止派发。
+  - 进程退出后租约自然过期，其他实例可接管；发送期间不另起独立心跳定时器。
 - 站内通知不需要 worker：收件箱条目在发布事务内创建，读取由查询接口完成。
 - 部署形态不变：不新增 systemd 服务，不需要 Redis。当前通知量很低，可以接受；派发量增大后再拆独立进程。
 
@@ -273,18 +273,19 @@ PENDING ──► SENDING ──► ACCEPTED
 - HIGH 泳道包含 `priority = HIGH`、等待超过 5 分钟、或距过期不足 10 分钟的交付；老化/临期提升只影响本次领取，不回写通知原始优先级。
 - 每次最多连续领取 3 条 HIGH，再领取 1 条 NORMAL；HIGH 空时 NORMAL 一次领取剩余额度，NORMAL 空时 HIGH 继续领取。
 - 两条泳道都使用 `FOR UPDATE OF d2 SKIP LOCKED`，`priority` 不冗余到交付表，排序时 join 通知表。
-- 单实例内部串行发送，不并发调用 GeWe；优先级只改变领取顺序，不改变发送间隔。
+- 派发租约 TTL 至少覆盖一次请求超时 + 最小发送间隔 + 15 秒；每轮开始回收超时仍为 `SENDING` 的交付，按“结果未知”重新排队并记录 `SENDING_RECOVERED`，超过重试上限落 `FAILED`。这会接受极小概率重复发送，但避免交付永久卡死。
+- 队列内部按顺序处理领取结果；所有 sendText 的串行与最小间隔由 5.4 的全局发送闸门保证，优先级只改变领取顺序。
 
-### 5.4 限速
+### 5.4 发送闸门与限速
 
-按公司号维度控制：
+所有 `sendText` 共用数据库单行 `assistant_send_gates`：
 
-- 每分钟不超过 40 条。
-- 同一收件人相邻消息间隔不少于 1 秒。
-- 群消息间隔随机 2~5 秒。
+- 队列派发、渠道测试、绑定验证、模板测试和群目标 `@TA` 消息都经过同一 `GatedAssistantTransport`，不能绕过闸门直连 transport。
+- 同一时刻只允许一个发送租约；上一条消息未完成时，下一条在闸门外等待。
+- 发送结束（成功或失败）后写 `next_allowed_at = 实际结束时间 + ASSISTANT_MIN_SEND_INTERVAL_MS`，默认 `3000ms`；保证范围是我方请求的结束到下一次开始。3000ms 是产品初值，不是微信风控验证值，需按试用期实际返回评估。
+- 发送租约 TTL = 最小间隔 + 请求超时 + 15 秒；进程崩溃时租约到期后可接管，但不能撤回已经发出的 HTTP 请求。这里只能保证请求侧最小间隔，不承诺第三方实际送达间隔，也不保证故障下绝不重复。
+- `ASSISTANT_MIN_SEND_INTERVAL_MS=0` 仅用于本地显式关闭节流，生产不得依赖该值规避风控。
 - 同一批通知采用 HIGH 3 条 + NORMAL 1 条的加权公平顺序；NORMAL 等待超过 5 分钟或距过期不足 10 分钟时进入 HIGH 泳道，避免长期饥饿。
-
-限制器是进程内的软限制；租约切换后计数会重置。这是可接受的，因为限速目的是降低风控概率，不是精确配额。
 
 ### 5.5 错误分类与重试
 
@@ -339,6 +340,7 @@ PENDING ──► SENDING ──► ACCEPTED
 | `ASSISTANT_WORKER_POLL_MS` | 否 | 默认 5000 |
 | `ASSISTANT_WORKER_BATCH` | 否 | 默认 20 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | 默认 10000 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | 默认 3000；所有 sendText 的全局最小间隔，0 仅用于本地关闭节流 |
 
 渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。
 

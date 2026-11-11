@@ -28,6 +28,7 @@
 | `ASSISTANT_WORKER_POLL_MS` | 否 | `5000` | 轮询间隔 |
 | `ASSISTANT_WORKER_BATCH` | 否 | `20` | 单轮领取上限 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | `10000` | GeWe 请求超时 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔；`0` 仅用于本地关闭节流 |
 | `NOTIFICATION_INTERNAL_API_ENABLED` | 否 | `false` | 内部 HTTP 发布入口，阶段 1 关闭 |
 | `NOTIFICATION_INTERNAL_TOKEN` | 否 | — | 内部入口令牌；关闭时不使用 |
 | `ASSISTANT_CALLBACK_SECRET` | 否 | — | 阶段 1 不配置，回调引入后再加 |
@@ -63,9 +64,9 @@ pnpm -C server exec prisma migrate status
 
 迁移包含：
 
-1. 通知/渠道枚举与 10 张表。
+1. 通知/渠道枚举与 11 张表。
 2. CHECK、部分唯一索引、普通索引。
-3. `notification_settings`、`notification_channel_settings`（仅 `ASSISTANT`）、`assistant_dispatch_leases` 种子。
+3. `notification_settings`、`notification_channel_settings`（仅 `ASSISTANT`）、`assistant_dispatch_leases`、`assistant_send_gates` 种子。
 4. 15 个权限码与 `system_admin` 授权。
 5. `AuditEventType` 新增值。
 
@@ -75,10 +76,11 @@ pnpm -C server exec prisma migrate status
 -- 参数绑定执行；不要在脚本里拼接值
 SELECT COUNT(*) FROM notification_channel_settings WHERE channel = 'ASSISTANT';
 SELECT COUNT(*) FROM assistant_dispatch_leases WHERE id = 'assistant-dispatch';
+SELECT COUNT(*) FROM assistant_send_gates WHERE id = 'assistant-send';
 SELECT COUNT(*) FROM permissions WHERE code LIKE 'assistant-%' OR code LIKE 'notification-%';
 ```
 
-预期：`ASSISTANT` 渠道 1 行且 `enabled = false`；租约 1 行；权限 15 行。
+预期：`ASSISTANT` 渠道 1 行且 `enabled = false`；派发租约 1 行；发送闸门 1 行；权限 15 行。
 
 ## 4. 管理端初始化
 

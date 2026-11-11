@@ -3599,3 +3599,15 @@ model AssistantDispatchLease {
 
   @@map("assistant_dispatch_leases")
 }
+
+/// 全局发送闸门，固定 id = 'assistant-send'。
+/// 同一时刻只允许一个 sendText 持有发送租约，并在发送结束后写入下一次最早发送时间。
+model AssistantSendGate {
+  id            String    @id @db.VarChar(64)
+  nextAllowedAt DateTime? @map("next_allowed_at") @db.Timestamptz(6)
+  lockOwner     String?   @map("lock_owner") @db.Uuid
+  lockExpiresAt DateTime? @map("lock_expires_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("assistant_send_gates")
+}

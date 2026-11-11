@@ -15,6 +15,7 @@ const configuration: AssistantConfiguration = {
   pollMs: 5_000,
   batchSize: 20,
   requestTimeoutMs: 1_000,
+  minSendIntervalMs: 3_000,
 }
 
 function service(prisma: Record<string, unknown>) {

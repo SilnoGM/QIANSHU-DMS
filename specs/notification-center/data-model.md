@@ -269,6 +269,18 @@ CHECK：两个保留期都在 `7..3650`。
 
 迁移时插入一行：`INSERT INTO assistant_dispatch_leases (id) VALUES ('assistant-dispatch') ON CONFLICT DO NOTHING`。
 
+### 4.6 `assistant_send_gates`
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `id` | varchar(64) | 否 | — | 主键，固定 `assistant-send` |
+| `nextAllowedAt` | timestamptz(6) | 是 | `null` | 下一次最早发送时间，即上次实际结束时间 + 最小间隔 |
+| `lockOwner` | uuid | 是 | `null` | 当前持有发送租约的进程 token |
+| `lockExpiresAt` | timestamptz(6) | 是 | `null` | 发送租约到期；崩溃后由过期回收接管 |
+| `updatedAt` | timestamptz(6) | 否 | `now()` | — |
+
+迁移时插入一行：`INSERT INTO assistant_send_gates (id) VALUES ('assistant-send') ON CONFLICT DO NOTHING`。所有 `sendText` 入口共用该行串行发送并在结束后更新 `next_allowed_at`。
+
 ## 5. 站内通知与回调预留表
 
 `notification_inbox_items` 已随 `20261108100000_notification_inbox_items` 创建；`20261108110000_notification_inbox_business_links` 为三条站内模板追加业务标识变量与默认详情链接；`20261110120000_notification_effective_template_key` 为站内条目与站外交付补实际模板键；`assistant_callback_events` 仍未创建。
@@ -356,9 +368,9 @@ ASSISTANT_TARGET_MESSAGE_SENT
 
 1. 创建枚举（`notification_*`、`assistant_*`）。
 2. 创建共享表：`notifications`、`notification_templates`、`notification_channel_policies`、`notification_settings`、`notification_channel_settings`。
-3. 创建渠道表：`assistant_accounts`、`assistant_bindings`、`assistant_targets`、`assistant_deliveries`、`assistant_dispatch_leases`。
+3. 创建渠道表：`assistant_accounts`、`assistant_bindings`、`assistant_targets`、`assistant_deliveries`、`assistant_dispatch_leases`、`assistant_send_gates`。
 4. 补充 CHECK、部分唯一索引、普通索引。
-5. 插入种子：`notification_settings` 单例、`notification_channel_settings` 的 `ASSISTANT` 与 `IN_APP` 行、三条站内模板、`assistant_dispatch_leases` 单行。
+5. 插入种子：`notification_settings` 单例、`notification_channel_settings` 的 `ASSISTANT` 与 `IN_APP` 行、三条站内模板、`assistant_dispatch_leases` 单行、`assistant_send_gates` 单行。
 6. 权限迁移（可独立文件）。
 7. 审计枚举迁移（可独立文件，先于使用它的代码）。
 8. 用隔离 schema 重放全部迁移，再跑 `prisma migrate status`。
@@ -390,4 +402,5 @@ ASSISTANT_TARGET_MESSAGE_SENT
 - [ ] `AuditEventType` 新值存在，审计写入测试通过。
 - [ ] `notification_channel_settings` 有 `ASSISTANT` 与 `IN_APP` 两行。
 - [ ] `assistant_dispatch_leases` 有 `assistant-dispatch` 单行。
+- [ ] `assistant_send_gates` 有 `assistant-send` 单行。
 - [ ] `notification_inbox_items` 已创建；`assistant_callback_events` 仍未创建。
