@@ -18,6 +18,7 @@ import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.wor
 import SupplierPaymentProfiles from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
 import SystemNotifications from './modules/system.notifications'
+import SystemStatus from './modules/system.status'
 import {
   ADMIN_WORKBENCH_PERMISSION,
   OPERATIONS_WORKBENCH_PERMISSION,
@@ -126,6 +127,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     },
     children: [
       SystemAudit,
+      SystemStatus,
       ApplicationSettings,
       SystemNotifications,
     ],

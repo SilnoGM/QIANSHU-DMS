@@ -84,7 +84,7 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
   )
   assert.match(
     asyncRoutesSource,
-    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?ApplicationSettings,[\s\S]*?SystemNotifications,/u,
+    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?SystemStatus,[\s\S]*?ApplicationSettings,[\s\S]*?SystemNotifications,/u,
   )
 
   assert.equal(systemNotificationsRoute.path, '/system/notifications')
