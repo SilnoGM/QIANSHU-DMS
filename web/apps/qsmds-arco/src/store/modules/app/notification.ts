@@ -89,6 +89,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
   let newItemInitialized = false
   let newItemFailureCount = 0
   let newItemAbortController: AbortController | null = null
+  let newItemRequest: Promise<void> | null = null
   const newItemSeen = new Set<string>()
   const desktopNotifications: Notification[] = []
 
@@ -154,10 +155,15 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
           return
         }
         const changed = total !== unreadTotal.value
+        const increased = total > unreadTotal.value
         unreadTotal.value = total
         unreadFailureCount = 0
         if (leader && changed) {
           broadcast({ type: 'unread', total })
+        }
+        if (leader && increased) {
+          // 未读数轮询先看到增量时立即拉一次新消息，避免铃铛红点比 Toast 早数秒。
+          void pollNewItems()
         }
       }
       catch (failure) {
@@ -571,11 +577,25 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     newItemFailureCount = 0
     newItemAbortController?.abort()
     newItemAbortController = null
+    newItemRequest = null
     clearNewItemTimer()
     clearNewItemRetry()
   }
 
-  async function pollNewItems(): Promise<void> {
+  function pollNewItems(): Promise<void> {
+    if (newItemRequest !== null) {
+      return newItemRequest
+    }
+    const request = pollNewItemsOnce().finally(() => {
+      if (newItemRequest === request) {
+        newItemRequest = null
+      }
+    })
+    newItemRequest = request
+    return request
+  }
+
+  async function pollNewItemsOnce(): Promise<void> {
     if (!newItemPolling || !leader || newItemCursor === undefined) {
       return
     }
