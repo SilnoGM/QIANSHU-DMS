@@ -29,6 +29,8 @@ import type {
   NotificationEventDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
+  NotificationRecordDto,
+  NotificationRecordOptionsDto,
   NotificationRecordPageDto,
   NotificationRecordQueryDto,
   NotificationTemplateCreateDto,
@@ -47,6 +49,81 @@ const TEST_TEXT = '【千树小助理】模板测试：这是一条测试消息�
 
 function iso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
+}
+
+const NOTIFICATION_RECORD_CHANNELS = ['IN_APP', 'ASSISTANT'] as const
+type NotificationRecordChannel = (typeof NOTIFICATION_RECORD_CHANNELS)[number]
+
+const RECORD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+
+interface InAppRecordCounts {
+  readonly total: number
+  readonly unread: number
+}
+
+type NotificationRecordRow = Prisma.NotificationGetPayload<{
+  include: { requestedBy: { select: { displayName: true } } }
+}>
+
+function requestedRecordChannels(value: Prisma.JsonValue): NotificationRecordChannel[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return NOTIFICATION_RECORD_CHANNELS.filter(channel => value.includes(channel))
+}
+
+function recordEventLabel(eventType: string): string {
+  return NOTIFICATION_EVENT_LABELS[eventType as keyof typeof NOTIFICATION_EVENT_LABELS] ?? eventType
+}
+
+function recordEventDomain(eventType: string): string {
+  return NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType as keyof typeof NOTIFICATION_EVENT_TEMPLATE_DOMAIN] ?? 'SYSTEM'
+}
+
+function resolveRecordChannels(
+  value: Prisma.JsonValue,
+  inAppCount: number,
+  deliveryCounts: Record<string, number>,
+): NotificationRecordChannel[] {
+  const requested = requestedRecordChannels(value)
+  if (requested.length > 0) {
+    return requested
+  }
+
+  const derived: NotificationRecordChannel[] = []
+  if (inAppCount > 0) {
+    derived.push('IN_APP')
+  }
+  if (Object.values(deliveryCounts).some(count => count > 0)) {
+    derived.push('ASSISTANT')
+  }
+  return derived
+}
+
+function toRecordDto(
+  row: NotificationRecordRow,
+  deliveryCounts: Record<string, number>,
+  inApp: InAppRecordCounts,
+): NotificationRecordDto {
+  return {
+    id: row.id,
+    eventType: row.eventType,
+    eventLabel: recordEventLabel(row.eventType),
+    domain: recordEventDomain(row.eventType),
+    sourceType: row.sourceType,
+    sourceId: row.sourceId,
+    priority: row.priority,
+    status: row.status,
+    templateKey: row.templateKey,
+    expiresAt: iso(row.expiresAt),
+    publishedAt: row.publishedAt.toISOString(),
+    completedAt: iso(row.completedAt),
+    requestedByName: row.requestedBy?.displayName ?? null,
+    channels: resolveRecordChannels(row.requestedChannels, inApp.total, deliveryCounts),
+    inAppItemCount: inApp.total,
+    inAppUnreadCount: inApp.unread,
+    deliveryCounts,
+  }
 }
 
 function templateVariables(value: Prisma.JsonValue): NotificationTemplateVariable[] {
@@ -559,35 +636,131 @@ export class NotificationAdminService {
     return result
   }
 
+  private async inAppCounts(notificationIds: readonly string[]): Promise<Map<string, InAppRecordCounts>> {
+    if (notificationIds.length === 0) {
+      return new Map()
+    }
+
+    const ids = [...notificationIds]
+    const [totals, unread] = await Promise.all([
+      this.prisma.notificationInboxItem.groupBy({
+        by: ['notificationId'],
+        where: { notificationId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.prisma.notificationInboxItem.groupBy({
+        by: ['notificationId'],
+        where: { notificationId: { in: ids }, readAt: null },
+        _count: { _all: true },
+      }),
+    ])
+    const unreadById = new Map(unread.map(row => [row.notificationId, row._count._all]))
+    return new Map(totals.map(row => [row.notificationId, {
+      total: row._count._all,
+      unread: unreadById.get(row.notificationId) ?? 0,
+    }]))
+  }
+
+  listRecordOptions(): NotificationRecordOptionsDto {
+    return {
+      events: NOTIFICATION_EVENT_TYPES.map(eventType => ({
+        eventType,
+        label: recordEventLabel(eventType),
+        domain: recordEventDomain(eventType),
+      })),
+    }
+  }
+
   async listRecords(input: NotificationRecordQueryDto): Promise<NotificationRecordPageDto> {
+    const publishedFrom = input.publishedFrom === undefined ? null : new Date(input.publishedFrom)
+    const publishedTo = input.publishedTo === undefined ? null : new Date(input.publishedTo)
+    if (publishedFrom !== null && publishedTo !== null && publishedFrom.getTime() > publishedTo.getTime()) {
+      throw new ApiException(422, 'VALIDATION_FAILED', '发布时间范围无效')
+    }
+
     const where: Prisma.NotificationWhereInput = {
       ...(input.eventType !== undefined && input.eventType.length > 0 ? { eventType: input.eventType } : {}),
       ...(input.status !== undefined ? { status: input.status as 'PENDING' | 'COMPLETED' | 'PARTIAL' | 'FAILED' | 'SKIPPED' | 'EXPIRED' | 'CANCELLED' } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority as 'NORMAL' | 'HIGH' } : {}),
+      ...(input.channel !== undefined
+        ? { requestedChannels: { array_contains: [input.channel] } }
+        : {}),
+      ...(publishedFrom !== null || publishedTo !== null
+        ? {
+            publishedAt: {
+              ...(publishedFrom === null ? {} : { gte: publishedFrom }),
+              ...(publishedTo === null ? {} : { lte: publishedTo }),
+            },
+          }
+        : {}),
     }
+
+    const domainEventTypes = input.domain === undefined
+      ? null
+      : NOTIFICATION_EVENT_TYPES.filter(eventType => NOTIFICATION_EVENT_TEMPLATE_DOMAIN[eventType] === input.domain)
+    if (domainEventTypes !== null) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), {
+        eventType: { in: [...domainEventTypes] },
+      }]
+    }
+
+    const keyword = input.keyword?.trim()
+    if (keyword !== undefined && keyword.length > 0) {
+      const keywordFilters: Prisma.NotificationWhereInput[] = [
+        { sourceId: { contains: keyword, mode: 'insensitive' } },
+        { templateKey: { contains: keyword, mode: 'insensitive' } },
+        {
+          requestedBy: {
+            is: { displayName: { contains: keyword, mode: 'insensitive' } },
+          },
+        },
+        {
+          deliveries: {
+            some: {
+              OR: [
+                { recipientUser: { is: { displayName: { contains: keyword, mode: 'insensitive' } } } },
+                { target: { is: { name: { contains: keyword, mode: 'insensitive' } } } },
+                { failureCode: { contains: keyword, mode: 'insensitive' } },
+                { failureMessage: { contains: keyword, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+        {
+          inboxItems: {
+            some: {
+              user: { displayName: { contains: keyword, mode: 'insensitive' } },
+            },
+          },
+        },
+      ]
+      if (RECORD_UUID_PATTERN.test(keyword)) {
+        keywordFilters.push({ id: keyword })
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: keywordFilters }]
+    }
+
     const [total, rows] = await this.prisma.$transaction([
       this.prisma.notification.count({ where }),
       this.prisma.notification.findMany({
         where,
+        include: { requestedBy: { select: { displayName: true } } },
         orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
         skip: (input.page - 1) * input.pageSize,
         take: input.pageSize,
       }),
     ])
-    const counts = await this.deliveryCounts(rows.map(row => row.id))
+    const ids = rows.map(row => row.id)
+    const [deliveryCounts, inAppCounts] = await Promise.all([
+      this.deliveryCounts(ids),
+      this.inAppCounts(ids),
+    ])
     return {
-      items: rows.map(row => ({
-        id: row.id,
-        eventType: row.eventType,
-        sourceType: row.sourceType,
-        sourceId: row.sourceId,
-        priority: row.priority,
-        status: row.status,
-        templateKey: row.templateKey,
-        expiresAt: iso(row.expiresAt),
-        publishedAt: row.publishedAt.toISOString(),
-        completedAt: iso(row.completedAt),
-        deliveryCounts: counts.get(row.id) ?? {},
-      })),
+      items: rows.map(row => toRecordDto(
+        row,
+        deliveryCounts.get(row.id) ?? {},
+        inAppCounts.get(row.id) ?? { total: 0, unread: 0 },
+      )),
       page: input.page,
       pageSize: input.pageSize,
       total,
@@ -595,34 +768,35 @@ export class NotificationAdminService {
   }
 
   async getRecord(id: string): Promise<NotificationRecordDetailDto> {
-    const notification = await this.prisma.notification.findUnique({ where: { id } })
+    const notification = await this.prisma.notification.findUnique({
+      where: { id },
+      include: { requestedBy: { select: { displayName: true } } },
+    })
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
-    const deliveries = await this.prisma.assistantDelivery.findMany({
-      where: { notificationId: id },
-      include: {
-        recipientUser: { select: { displayName: true } },
-        target: { select: { name: true } },
-      },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    })
+    const [deliveries, inAppCounts] = await Promise.all([
+      this.prisma.assistantDelivery.findMany({
+        where: { notificationId: id },
+        include: {
+          recipientUser: { select: { displayName: true } },
+          target: { select: { name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.inAppCounts([id]),
+    ])
     const counts: Record<string, number> = {}
     for (const delivery of deliveries) {
       counts[delivery.status] = (counts[delivery.status] ?? 0) + 1
     }
+    const record = toRecordDto(
+      notification,
+      counts,
+      inAppCounts.get(id) ?? { total: 0, unread: 0 },
+    )
     return {
-      id: notification.id,
-      eventType: notification.eventType,
-      sourceType: notification.sourceType,
-      sourceId: notification.sourceId,
-      priority: notification.priority,
-      status: notification.status,
-      templateKey: notification.templateKey,
-      expiresAt: iso(notification.expiresAt),
-      publishedAt: notification.publishedAt.toISOString(),
-      completedAt: iso(notification.completedAt),
-      deliveryCounts: counts,
+      ...record,
       deliveries: deliveries.map(delivery => ({
         id: delivery.id,
         recipientName: delivery.recipientUser?.displayName ?? null,

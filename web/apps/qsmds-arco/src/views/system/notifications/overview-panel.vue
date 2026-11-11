@@ -1,141 +1,217 @@
 <script setup lang="ts">
 import type { NotificationOverviewDto } from '@/api/generated/types.gen'
-
-import { onMounted, ref } from 'vue'
-import { getApiClientErrorMessage } from '@/api/errors'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
+import { formatNotificationDateTime } from './template-key-grouping.logic'
+
+defineOptions({ name: 'NotificationOverviewPanel' })
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 const overview = ref<NotificationOverviewDto | null>(null)
+let requestVersion = 0
+let controller: AbortController | null = null
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'Asia/Shanghai',
+const metrics = computed(() => {
+  const counts = overview.value?.last24Hours ?? {}
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0)
+  const oldestPendingAt = typeof overview.value?.queue.oldestNextAttemptAt === 'string'
+    ? overview.value.queue.oldestNextAttemptAt
+    : null
+  return {
+    total,
+    completed: counts.COMPLETED ?? 0,
+    attention: (counts.FAILED ?? 0) + (counts.PARTIAL ?? 0) + (counts.EXPIRED ?? 0),
+    pending: Number(overview.value?.queue.pending ?? 0),
+    oldestPendingLabel: formatNotificationDateTime(oldestPendingAt),
+  }
 })
 
-function formatDate(value: string | null): string {
-  if (value === null) {
-    return '—'
-  }
-  return dateTimeFormatter.format(new Date(value))
-}
-
-function formatCount(value: number | undefined): number {
-  return value ?? 0
-}
-
-async function load(): Promise<void> {
+async function refresh(): Promise<void> {
+  const version = ++requestVersion
+  controller?.abort()
+  controller = new AbortController()
   loading.value = true
   error.value = null
   try {
-    overview.value = (await notificationsApi.overview.get(new AbortController().signal)).data
+    const response = await notificationsApi.overview.get(controller.signal)
+    if (version !== requestVersion) {
+      return
+    }
+    overview.value = response.data
   }
   catch (failure) {
-    error.value = getApiClientErrorMessage(failure as Parameters<typeof getApiClientErrorMessage>[0])
+    if (version !== requestVersion) {
+      return
+    }
+    error.value = getApiClientFailureMessage(failure, '通知概览加载失败')
   }
   finally {
-    loading.value = false
+    if (version === requestVersion) {
+      loading.value = false
+    }
   }
 }
 
 onMounted(() => {
-  void load()
+  void refresh()
 })
+
+onBeforeUnmount(() => {
+  controller?.abort()
+})
+
+defineExpose({ refresh })
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div data-testid="notification-record-overview" class="flex flex-col gap-3">
     <FaAlert v-if="error !== null" variant="destructive" :title="error">
       <template #actions>
-        <FaButton variant="outline" size="sm" @click="load">
+        <FaButton variant="outline" size="sm" @click="refresh">
           重试
         </FaButton>
       </template>
     </FaAlert>
 
-    <div v-else-if="loading" class="text-muted-foreground flex gap-2 min-h-48 items-center justify-center">
-      <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-      正在加载通知中心概览…
+    <div
+      v-if="overview !== null"
+      class="gap-3 grid grid-cols-2 xl:grid-cols-4"
+      :class="loading ? 'opacity-60' : undefined"
+      :aria-busy="loading"
+    >
+      <article class="metric-card metric-card--sky p-4 border border-border rounded-xl bg-card min-w-0">
+        <FaIcon name="i-lucide:send" aria-hidden="true" class="metric-card__motif" />
+        <div class="metric-card__content flex flex-col gap-1 min-w-0">
+          <p class="text-sm text-muted-foreground font-medium m-0">
+            24h 发送
+          </p>
+          <p class="text-2xl text-foreground leading-tight font-semibold m-0 tabular-nums">
+            {{ metrics.total }}
+          </p>
+          <p class="text-xs text-muted-foreground m-0">
+            近 24 小时全量
+          </p>
+        </div>
+      </article>
+
+      <article class="metric-card metric-card--emerald p-4 border border-border rounded-xl bg-card min-w-0">
+        <FaIcon name="i-lucide:circle-check-big" aria-hidden="true" class="metric-card__motif" />
+        <div class="metric-card__content flex flex-col gap-1 min-w-0">
+          <p class="text-sm text-muted-foreground font-medium m-0">
+            24h 完成
+          </p>
+          <p class="text-2xl text-foreground leading-tight font-semibold m-0 tabular-nums">
+            {{ metrics.completed }}
+          </p>
+          <p class="text-xs text-muted-foreground m-0">
+            完成不代表已读
+          </p>
+        </div>
+      </article>
+
+      <article class="metric-card metric-card--amber p-4 border border-border rounded-xl bg-card min-w-0">
+        <FaIcon name="i-lucide:triangle-alert" aria-hidden="true" class="metric-card__motif" />
+        <div class="metric-card__content flex flex-col gap-1 min-w-0">
+          <p class="text-sm text-muted-foreground font-medium m-0">
+            24h 需关注
+          </p>
+          <p class="text-2xl text-foreground leading-tight font-semibold m-0 tabular-nums">
+            {{ metrics.attention }}
+          </p>
+          <p class="text-xs text-muted-foreground m-0">
+            失败 · 部分 · 过期
+          </p>
+        </div>
+      </article>
+
+      <article class="metric-card metric-card--violet p-4 border border-border rounded-xl bg-card min-w-0">
+        <FaIcon name="i-lucide:clock-3" aria-hidden="true" class="metric-card__motif" />
+        <div class="metric-card__content flex flex-col gap-1 min-w-0">
+          <p class="text-sm text-muted-foreground font-medium m-0">
+            待发队列
+          </p>
+          <p class="text-2xl text-foreground leading-tight font-semibold m-0 tabular-nums">
+            {{ metrics.pending }}
+          </p>
+          <p class="text-xs text-muted-foreground m-0">
+            最老计划 {{ metrics.oldestPendingLabel }}
+          </p>
+        </div>
+      </article>
     </div>
 
-    <template v-else-if="overview !== null">
-      <div class="gap-4 grid lg:grid-cols-3">
-        <div class="p-4 border border-border rounded-lg bg-background">
-          <p class="qs-type-compact-label text-muted-foreground">
-            千树小助理
-          </p>
-          <div class="mt-2 flex gap-2 items-center">
-            <FaTag
-              variant="outline"
-              :class="overview.channelEnabled
-                ? 'border-primary/30 bg-primary/10 text-primary'
-                : 'border-border bg-muted text-muted-foreground'"
-            >
-              {{ overview.channelEnabled ? '已启用' : '已停用' }}
-            </FaTag>
-            <FaTag v-if="overview.tokenConfigured" variant="outline" class="text-foreground border-border bg-background">
-              Token 已配置
-            </FaTag>
-            <FaTag v-else variant="outline" class="text-destructive border-destructive/30 bg-destructive/10">
-              Token 未配置
-            </FaTag>
-          </div>
-          <p class="qs-type-meta text-muted-foreground mt-2">
-            {{ overview.accountName ?? '未创建公司号' }} · {{ overview.accountStatus ?? '—' }}
-          </p>
-          <p class="qs-type-meta text-muted-foreground">
-            最后在线：{{ formatDate(overview.lastOnlineAt) }}
-          </p>
-        </div>
-
-        <div class="p-4 border border-border rounded-lg bg-background lg:col-span-2">
-          <p class="qs-type-compact-label text-muted-foreground">
-            近 24 小时
-          </p>
-          <div class="mt-3 gap-3 grid grid-cols-3 sm:grid-cols-7">
-            <div v-for="(label, key) in { PENDING: '待发', COMPLETED: '完成', PARTIAL: '部分', FAILED: '失败', SKIPPED: '跳过', EXPIRED: '过期', CANCELLED: '取消' }" :key="key">
-              <p class="qs-type-data-emphasis">
-                {{ formatCount(overview.last24Hours[key]) }}
-              </p>
-              <p class="qs-type-meta text-muted-foreground">
-                {{ label }}
-              </p>
-            </div>
-          </div>
-        </div>
+    <div v-else-if="loading" class="gap-3 grid grid-cols-2 xl:grid-cols-4" aria-hidden="true">
+      <div v-for="index in 4" :key="index" class="p-4 border border-border rounded-xl bg-muted/30 gap-2 grid">
+        <div class="rounded bg-muted h-4 w-24 animate-pulse" />
+        <div class="rounded bg-muted h-8 w-12 animate-pulse" />
+        <div class="rounded bg-muted h-3 w-28 animate-pulse" />
       </div>
-
-      <div class="gap-4 grid lg:grid-cols-2">
-        <div class="p-4 border border-border rounded-lg bg-background">
-          <p class="qs-type-compact-label text-muted-foreground">
-            队列
-          </p>
-          <p class="qs-type-body mt-2">
-            待发 <span class="qs-type-data-emphasis">{{ formatCount(Number(overview.queue.pending ?? 0)) }}</span> 条
-          </p>
-          <p class="qs-type-meta text-muted-foreground">
-            最老计划时间：{{ formatDate(typeof overview.queue.oldestNextAttemptAt === 'string' ? overview.queue.oldestNextAttemptAt : null) }}
-          </p>
-        </div>
-        <div class="p-4 border border-border rounded-lg bg-background">
-          <p class="qs-type-compact-label text-muted-foreground">
-            说明
-          </p>
-          <p class="qs-type-meta text-muted-foreground mt-2">
-            状态「完成」表示本渠道所有交付均已被 GeWe 接受，不代表员工已阅读。站内通知的已读/归档在阶段 3 接入。
-          </p>
-        </div>
-      </div>
-
-      <FaButton variant="outline" size="sm" @click="load">
-        刷新
-      </FaButton>
-    </template>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.metric-card {
+  position: relative;
+  overflow: hidden;
+  background-repeat: no-repeat;
+}
+
+.metric-card__motif {
+  position: absolute;
+  right: -0.75rem;
+  bottom: -1rem;
+  z-index: 0;
+  width: 6.5rem;
+  height: 6.5rem;
+  pointer-events: none;
+  transform: rotate(-8deg);
+}
+
+.metric-card__content {
+  position: relative;
+  z-index: 1;
+}
+
+.metric-card--sky .metric-card__motif {
+  color: color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 14%, oklch(var(--card)));
+}
+
+.metric-card--emerald .metric-card__motif {
+  color: color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 14%, oklch(var(--card)));
+}
+
+.metric-card--amber .metric-card__motif {
+  color: color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 14%, oklch(var(--card)));
+}
+
+.metric-card--violet .metric-card__motif {
+  color: color-mix(in oklab, oklch(64% 0.18 292deg) 14%, oklch(var(--card)));
+}
+
+.metric-card--sky {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(62.3% 0.214 259.815deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+
+.metric-card--emerald {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(69.6% 0.17 162.48deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+
+.metric-card--amber {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(76.9% 0.188 70.08deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+
+.metric-card--violet {
+  background-image:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in oklab, oklch(64% 0.18 292deg) 14%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in oklab, oklch(64% 0.18 292deg) 20%, oklch(var(--card))) 0%, oklch(var(--card)) 70%);
+}
+</style>

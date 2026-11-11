@@ -79386,6 +79386,36 @@
             }
           },
           {
+            "name": "domain",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SALES",
+                "PURCHASE",
+                "SHIPMENT",
+                "FINANCE",
+                "INVOICE",
+                "RECONCILIATION",
+                "OPERATIONS",
+                "SYSTEM"
+              ]
+            }
+          },
+          {
+            "name": "channel",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "IN_APP",
+                "ASSISTANT"
+              ]
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -79400,6 +79430,45 @@
                 "EXPIRED",
                 "CANCELLED"
               ]
+            }
+          },
+          {
+            "name": "priority",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "NORMAL",
+                "HIGH"
+              ]
+            }
+          },
+          {
+            "name": "publishedFrom",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "publishedTo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
             }
           },
           {
@@ -79447,6 +79516,205 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotificationRecordPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "notifications"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": false,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/notifications/records/options": {
+      "get": {
+        "operationId": "notifications_records_options",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationRecordOptionsDto"
                 }
               }
             }
@@ -125707,6 +125975,22 @@
           "eventType": {
             "type": "string"
           },
+          "eventLabel": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "OPERATIONS",
+              "SYSTEM"
+            ]
+          },
           "sourceType": {
             "type": "string"
           },
@@ -125749,16 +126033,41 @@
             "format": "date-time",
             "nullable": true
           },
+          "requestedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IN_APP",
+                "ASSISTANT"
+              ]
+            }
+          },
+          "inAppItemCount": {
+            "type": "integer",
+            "description": "站内收件箱条目数"
+          },
+          "inAppUnreadCount": {
+            "type": "integer",
+            "description": "站内未读条目数"
+          },
           "deliveryCounts": {
             "type": "object",
             "additionalProperties": {
               "type": "integer"
-            }
+            },
+            "description": "小助理 AssistantDelivery 按状态计数"
           }
         },
         "required": [
           "id",
           "eventType",
+          "eventLabel",
+          "domain",
           "sourceType",
           "sourceId",
           "priority",
@@ -125767,6 +126076,10 @@
           "expiresAt",
           "publishedAt",
           "completedAt",
+          "requestedByName",
+          "channels",
+          "inAppItemCount",
+          "inAppUnreadCount",
           "deliveryCounts"
         ]
       },
@@ -125794,6 +126107,49 @@
           "page",
           "pageSize",
           "total"
+        ]
+      },
+      "NotificationRecordEventOptionDto": {
+        "type": "object",
+        "properties": {
+          "eventType": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "OPERATIONS",
+              "SYSTEM"
+            ]
+          }
+        },
+        "required": [
+          "eventType",
+          "label",
+          "domain"
+        ]
+      },
+      "NotificationRecordOptionsDto": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationRecordEventOptionDto"
+            }
+          }
+        },
+        "required": [
+          "events"
         ]
       },
       "NotificationDeliveryDto": {
@@ -125865,6 +126221,22 @@
           "eventType": {
             "type": "string"
           },
+          "eventLabel": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "SALES",
+              "PURCHASE",
+              "SHIPMENT",
+              "FINANCE",
+              "INVOICE",
+              "RECONCILIATION",
+              "OPERATIONS",
+              "SYSTEM"
+            ]
+          },
           "sourceType": {
             "type": "string"
           },
@@ -125907,11 +126279,34 @@
             "format": "date-time",
             "nullable": true
           },
+          "requestedByName": {
+            "type": "string",
+            "nullable": true
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IN_APP",
+                "ASSISTANT"
+              ]
+            }
+          },
+          "inAppItemCount": {
+            "type": "integer",
+            "description": "站内收件箱条目数"
+          },
+          "inAppUnreadCount": {
+            "type": "integer",
+            "description": "站内未读条目数"
+          },
           "deliveryCounts": {
             "type": "object",
             "additionalProperties": {
               "type": "integer"
-            }
+            },
+            "description": "小助理 AssistantDelivery 按状态计数"
           },
           "deliveries": {
             "type": "array",
@@ -125923,6 +126318,8 @@
         "required": [
           "id",
           "eventType",
+          "eventLabel",
+          "domain",
           "sourceType",
           "sourceId",
           "priority",
@@ -125931,6 +126328,10 @@
           "expiresAt",
           "publishedAt",
           "completedAt",
+          "requestedByName",
+          "channels",
+          "inAppItemCount",
+          "inAppUnreadCount",
           "deliveryCounts",
           "deliveries"
         ]

@@ -93,6 +93,14 @@ const recordsSource = readFileSync(
   new URL('../../src/views/system/notifications/records-panel.vue', import.meta.url),
   'utf8',
 )
+const recordDetailSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/NotificationRecordDetailDrawer.vue', import.meta.url),
+  'utf8',
+)
+const recordCancelSource = readFileSync(
+  new URL('../../src/views/system/notifications/components/NotificationRecordCancelModal.vue', import.meta.url),
+  'utf8',
+)
 const inboxSource = readFileSync(
   new URL('../../src/views/notifications/index.vue', import.meta.url),
   'utf8',
@@ -135,8 +143,8 @@ test('通知中心拆分为 GeWe 助理、通知策略和通知记录三个独�
   assert.match(recordsPageSource, /title="通知记录"/u)
   assert.match(recordsPageSource, /<OverviewPanel/u)
   assert.match(recordsPageSource, /<RecordsPanel/u)
-  assert.match(recordsPageSource, /概览/u)
-  assert.match(recordsPageSource, /发送记录/u)
+  assert.match(recordsPageSource, /刷新/u)
+  assert.doesNotMatch(recordsPageSource, /<section/u)
 })
 
 test('千树小助理面板从控制台导入节点，不提供扫码登录与退出', () => {
@@ -463,12 +471,17 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(rulesSource, /<QsGenericModal/u)
 })
 
-test('发送记录使用表格与详情抽屉，不引入 Arco 表格', () => {
+test('发送记录使用通用表格、大抽屉与取消确认，不引入 Arco 表格', () => {
   assert.match(recordsSource, /<QsGenericTable/u)
   assert.match(recordsSource, /<FaDrawer/u)
-  assert.match(recordsSource, /逐人交付/u)
-  assert.match(recordsSource, /逻辑模板/u)
-  assert.match(recordsSource, /实际模板/u)
+  assert.match(recordsSource, /<QsDateRangeFilter/u)
+  assert.match(recordDetailSource, /<QsGenericDrawer/u)
+  assert.match(recordDetailSource, /逐人交付/u)
+  assert.match(recordDetailSource, /逻辑模板/u)
+  assert.match(recordDetailSource, /实际模板/u)
+  assert.match(recordDetailSource, /站内通知/u)
+  assert.match(recordCancelSource, /<QsGenericModal/u)
+  assert.match(recordCancelSource, /确认取消/u)
   assert.doesNotMatch(recordsSource, /<FaTable/u)
   assert.doesNotMatch(recordsSource, /<FaPagination/u)
 })

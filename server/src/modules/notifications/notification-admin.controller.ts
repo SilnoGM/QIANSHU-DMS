@@ -16,6 +16,7 @@ import {
   NotificationEventDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
+  NotificationRecordOptionsDto,
   NotificationRecordPageDto,
   NotificationRecordQueryDto,
   NotificationTemplateCreateDto,
@@ -153,6 +154,14 @@ export class NotificationAdminController {
   @contract('notifications_records_list')
   listRecords(@Query() query: NotificationRecordQueryDto) {
     return this.notifications.listRecords(query)
+  }
+
+  @Get('records/options')
+  @RequirePermissions('notification-record:read')
+  @ApiContractResponse({ status: 200, type: NotificationRecordOptionsDto })
+  @contract('notifications_records_options')
+  listRecordOptions() {
+    return this.notifications.listRecordOptions()
   }
 
   @Get('records/:id')

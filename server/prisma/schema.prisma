@@ -3362,6 +3362,8 @@ model Notification {
   @@index([eventType, publishedAt(sort: Desc)], map: "notifications_event_type_published_idx")
   @@index([sourceType, sourceId], map: "notifications_source_idx")
   @@index([status, expiresAt], map: "notifications_status_expires_idx")
+  @@index([publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_published_idx")
+  @@index([status, publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_status_published_idx")
   @@map("notifications")
 }
 
@@ -3451,6 +3453,7 @@ model NotificationInboxItem {
   user         User         @relation("NotificationInboxItemUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict)
 
   @@unique([notificationId, userId], map: "notification_inbox_items_notification_user_key")
+  @@index([notificationId], map: "notification_inbox_items_notification_idx")
   @@index([userId, archivedAt, createdAt(sort: Desc)], map: "notification_inbox_items_user_archived_created_idx")
   @@index([userId, eventType, createdAt(sort: Desc)], map: "notification_inbox_items_user_event_created_idx")
   @@index([userId, readAt, archivedAt], map: "notification_inbox_items_user_read_archived_idx")
@@ -3576,6 +3579,7 @@ model AssistantDelivery {
 
   @@index([status, nextAttemptAt], map: "assistant_deliveries_status_next_attempt_idx")
   @@index([accountId, status], map: "assistant_deliveries_account_status_idx")
+  @@index([notificationId], map: "assistant_deliveries_notification_idx")
   @@index([recipientUserId, createdAt(sort: Desc)], map: "assistant_deliveries_recipient_created_idx")
   @@index([targetId, createdAt(sort: Desc)], map: "assistant_deliveries_target_created_idx")
   @@map("assistant_deliveries")

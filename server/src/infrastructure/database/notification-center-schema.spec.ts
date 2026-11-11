@@ -27,6 +27,10 @@ const bindingAvatar = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261109100000_assistant_binding_wechat_avatar/migration.sql'),
   'utf8',
 )
+const recordIndexes = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261111140000_notification_record_query_indexes/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -130,6 +134,13 @@ describe('notification center database contract', () => {
     expect(businessLinks).toContain("'/qs-operations/warehouse-transport/warehouse-arrivals?orderId={{orderId}}'")
     expect(businessLinks).toContain('"name":"orderId"')
     expect(businessLinks).toContain('"name":"invoiceRequestId"')
+  })
+
+  it('adds record list and per-notification lookup indexes', () => {
+    expect(recordIndexes).toContain('notifications_published_idx')
+    expect(recordIndexes).toContain('notifications_status_published_idx')
+    expect(recordIndexes).toContain('notification_inbox_items_notification_idx')
+    expect(recordIndexes).toContain('assistant_deliveries_notification_idx')
   })
 
   it('adds exclusive delivery targets, partial unique indexes and seeds', () => {

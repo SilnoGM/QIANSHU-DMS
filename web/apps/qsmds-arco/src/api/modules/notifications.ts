@@ -33,6 +33,7 @@ import type {
   NotificationInboxUnreadCountDto,
   NotificationOverviewDto,
   NotificationRecordDetailDto,
+  NotificationRecordOptionsDto,
   NotificationRecordPageDto,
   NotificationsRecordsListData,
   NotificationTemplateCreateDto,
@@ -89,6 +90,8 @@ export function createNotificationsApi(client: AxiosInstance) {
         client.get<NotificationRecordPageDto>('notifications/records', { errorPresentation: 'local', params: query, signal }),
       get: (id: string, signal: AbortSignal) =>
         client.get<NotificationRecordDetailDto>(path('notifications', 'records', id), { errorPresentation: 'local', signal }),
+      options: (signal: AbortSignal) =>
+        client.get<NotificationRecordOptionsDto>('notifications/records/options', { errorPresentation: 'local', signal }),
       cancel: (id: string) =>
         client.post<NotificationCancelResultDto>(path('notifications', 'records', id, 'cancel'), {}, { errorPresentation: 'local', retry: false }),
     },

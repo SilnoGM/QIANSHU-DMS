@@ -504,7 +504,7 @@ export type AssistantTransportResult =
 | --- | --- | --- |
 | GeWe助理 | `/system/notifications/assistant` | 渠道开关（页头右侧）、公司号（含个人二维码与发送测试）、管理员绑定（含改绑）、群目标（卡片、搜索筛选、编辑 key） |
 | 通知策略 | `/system/notifications/policies` | 事件驾驶舱（事件 × 渠道策略与消息内容）与模板库 |
-| 通知记录 | `/system/notifications/records` | 概览、近 24 小时状态与发送记录 |
+| 通知记录 | `/system/notifications/records` | 全渠道记录、筛选、详情与取消待发交付 |
 
 父级 `/system/notifications` 只承担分组和权限并集，直接访问时由 `index.vue` 按权限跳转到第一个可用子页面。
 
@@ -557,7 +557,7 @@ views/system/notifications/
 ├── index.vue                    # 旧入口的权限感知跳转
 ├── assistant.vue                # GeWe助理页面壳
 ├── policies.vue                 # 通知策略页面壳
-├── records.vue                  # 通知记录页面壳（概览 + 发送记录）
+├── records.vue                  # 通知记录页面壳（页头刷新 + 权限空态）
 ├── overview-panel.vue
 ├── assistant-panel.vue          # 渠道、账号、绑定、群目标
 ├── rules-panel.vue              # 策略页壳：视图切换、数据加载、模板弹窗
@@ -578,7 +578,7 @@ views/system/notifications/
 │   ├── TemplateKeyDetail.vue    # 右侧模板键详情与渠道卡位
 │   └── TemplateChannelCard.vue  # 单渠道模板卡片
 ├── template-key-grouping.logic.ts # 模板键聚合、过滤与正文分段
-├── records-panel.vue            # 逻辑通知与逐人交付
+├── records-panel.vue            # 全渠道记录筛选、表格、移动端操作与取消编排
 └── qr-image.ts
 ```
 
@@ -596,7 +596,7 @@ views/system/notifications/
 - 断点 768px，与现有表格页一致。
 - 表格在窄屏自动切卡片；自定义 `mobile-row` 时必须用 `hasVisibleTableColumn` 同步列显隐。
 - 二维码弹窗在窄屏全宽，二维码最小 240px；按钮触控高度不小于 44px。
-- 发送记录的操作收进底部 `FaDrawer`，桌面用 `FaDropdown`。
+- 发送记录桌面使用行内操作按钮，窄屏收进底部 `FaDrawer`。
 
 ### 8.5 前端测试契约
 

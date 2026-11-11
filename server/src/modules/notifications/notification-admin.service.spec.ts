@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言查询参数。 */
 import { ConfigService } from '@nestjs/config'
 
 import type { AssistantConfiguration } from '../../config/assistant.config'
@@ -24,6 +25,30 @@ function service(prisma: Record<string, unknown>) {
     { record: jest.fn() } as unknown as AuditService,
     new FakeAssistantTransport(),
   )
+}
+
+function recordRow(overrides: Record<string, unknown> = {}) {
+  const publishedAt = new Date('2026-11-09T02:00:00.000Z')
+  return {
+    id: '00000000-0000-4000-8000-000000000001',
+    eventType: 'PURCHASE_REVIEW_PENDING',
+    sourceType: 'PURCHASE_ORDER',
+    sourceId: 'CG-20261109-0001',
+    dedupeKey: 'dedupe-1',
+    priority: 'NORMAL',
+    status: 'PENDING',
+    templateKey: 'purchase.review.pending',
+    requestedChannels: ['IN_APP', 'ASSISTANT'],
+    variables: {},
+    expiresAt: new Date('2026-11-10T02:00:00.000Z'),
+    publishedAt,
+    completedAt: null,
+    requestedByUserId: 'user-1',
+    createdAt: publishedAt,
+    updatedAt: publishedAt,
+    requestedBy: { displayName: '张三' },
+    ...overrides,
+  }
 }
 
 describe('NotificationAdminService', () => {
@@ -342,5 +367,170 @@ describe('NotificationAdminService', () => {
       include: { updatedBy: { select: { displayName: true } } },
     }))
     expect(policyResult.updatedByName).toBe('超级管理员')
+  })
+
+  it('filters notification records and summarizes in-app and assistant channels', async () => {
+    const row = recordRow()
+    const findMany = jest.fn().mockResolvedValue([row])
+    const count = jest.fn().mockResolvedValue(1)
+    const deliveryGroupBy = jest.fn().mockResolvedValue([
+      { notificationId: row.id, status: 'FAILED', _count: { _all: 1 } },
+    ])
+    const inboxGroupBy = jest.fn()
+      .mockResolvedValueOnce([{ notificationId: row.id, _count: { _all: 3 } }])
+      .mockResolvedValueOnce([{ notificationId: row.id, _count: { _all: 2 } }])
+    const prisma = {
+      notification: { count, findMany },
+      assistantDelivery: { groupBy: deliveryGroupBy },
+      notificationInboxItem: { groupBy: inboxGroupBy },
+      $transaction: jest.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
+    }
+
+    const result = await service(prisma).listRecords({
+      eventType: 'PURCHASE_REVIEW_PENDING',
+      domain: 'PURCHASE',
+      channel: 'IN_APP',
+      status: 'PENDING',
+      priority: 'HIGH',
+      publishedFrom: '2026-11-01T00:00:00.000Z',
+      publishedTo: '2026-11-09T23:59:59.999Z',
+      keyword: '采购',
+      page: 1,
+      pageSize: 20,
+    })
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      include: { requestedBy: { select: { displayName: true } } },
+      where: expect.objectContaining({
+        eventType: 'PURCHASE_REVIEW_PENDING',
+        status: 'PENDING',
+        priority: 'HIGH',
+        requestedChannels: { array_contains: ['IN_APP'] },
+        publishedAt: {
+          gte: new Date('2026-11-01T00:00:00.000Z'),
+          lte: new Date('2026-11-09T23:59:59.999Z'),
+        },
+        AND: expect.arrayContaining([
+          { eventType: { in: expect.arrayContaining(['PURCHASE_REVIEW_PENDING', 'PURCHASE_REVIEW_APPROVED']) } },
+          { OR: expect.any(Array) },
+        ]),
+      }),
+    }))
+    expect(result.items[0]).toMatchObject({
+      eventLabel: '采购审核',
+      domain: 'PURCHASE',
+      requestedByName: '张三',
+      channels: ['IN_APP', 'ASSISTANT'],
+      inAppItemCount: 3,
+      inAppUnreadCount: 2,
+      deliveryCounts: { FAILED: 1 },
+    })
+  })
+
+  it('rejects an inverted published time range before querying', async () => {
+    await expect(service({}).listRecords({
+      publishedFrom: '2026-11-09T00:00:00.000Z',
+      publishedTo: '2026-11-01T00:00:00.000Z',
+      page: 1,
+      pageSize: 20,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+
+  it('lists record event options without exposing template variables', () => {
+    const options = service({}).listRecordOptions()
+
+    expect(options.events).toHaveLength(39)
+    expect(options.events.find(event => event.eventType === 'PURCHASE_REVIEW_PENDING')).toEqual({
+      eventType: 'PURCHASE_REVIEW_PENDING',
+      label: '采购审核',
+      domain: 'PURCHASE',
+    })
+  })
+
+  it('returns record detail with requested-by, channel summaries and deliveries', async () => {
+    const row = recordRow({ status: 'PARTIAL' })
+    const delivery = {
+      id: '00000000-0000-4000-8000-000000000101',
+      recipientUser: { displayName: '李华' },
+      target: null,
+      status: 'ACCEPTED',
+      attemptCount: 1,
+      templateKey: 'purchase.review.pending',
+      failureCode: null,
+      failureMessage: null,
+      acceptedAt: new Date('2026-11-09T02:00:03.000Z'),
+    }
+    const prisma = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(row),
+      },
+      assistantDelivery: {
+        findMany: jest.fn().mockResolvedValue([delivery]),
+      },
+      notificationInboxItem: {
+        groupBy: jest.fn()
+          .mockResolvedValueOnce([{ notificationId: row.id, _count: { _all: 3 } }])
+          .mockResolvedValueOnce([{ notificationId: row.id, _count: { _all: 1 } }]),
+      },
+    }
+
+    const result = await service(prisma).getRecord(row.id)
+
+    expect(prisma.notification.findUnique).toHaveBeenCalledWith({
+      where: { id: row.id },
+      include: { requestedBy: { select: { displayName: true } } },
+    })
+    expect(result).toMatchObject({
+      eventLabel: '采购审核',
+      domain: 'PURCHASE',
+      requestedByName: '张三',
+      channels: ['IN_APP', 'ASSISTANT'],
+      inAppItemCount: 3,
+      inAppUnreadCount: 1,
+      deliveryCounts: { ACCEPTED: 1 },
+      deliveries: [expect.objectContaining({
+        recipientName: '李华',
+        status: 'ACCEPTED',
+        acceptedAt: '2026-11-09T02:00:03.000Z',
+      })],
+    })
+  })
+
+  it('cancels pending deliveries and recomputes the notification status', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 })
+    const update = jest.fn().mockResolvedValue({})
+    const transaction = {
+      assistantDelivery: {
+        updateMany,
+        groupBy: jest.fn().mockResolvedValue([
+          { status: 'CANCELLED', _count: { _all: 2 } },
+        ]),
+      },
+      notification: { update },
+    }
+    const prisma = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: '00000000-0000-4000-8000-000000000001',
+          status: 'PENDING',
+        }),
+      },
+      $transaction: jest.fn(async (callback: (tx: typeof transaction) => Promise<unknown>) => callback(transaction)),
+    }
+
+    const result = await service(prisma).cancelRecord(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      '00000000-0000-4000-8000-000000000001',
+    )
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { notificationId: '00000000-0000-4000-8000-000000000001', status: 'PENDING' },
+      data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
+    })
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: '00000000-0000-4000-8000-000000000001' },
+      data: { status: 'CANCELLED', completedAt: expect.any(Date) },
+    }))
+    expect(result).toEqual({ cancelled: 2, status: 'CANCELLED' })
   })
 })

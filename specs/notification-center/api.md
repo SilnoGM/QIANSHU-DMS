@@ -249,9 +249,12 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/notifications/templates/:id/test` | `notification-template:update` | `notifications_templates_test` | 测试发送；`ASSISTANT` 渠道发管理员本人 |
 | GET | `/api/notifications/channel-policies` | `notification-policy:read` | `notifications_policies_list` | 事件 × 渠道策略 |
 | PUT | `/api/notifications/channel-policies/:eventType/:channel` | `notification-policy:update` | `notifications_policies_update` | 修改单个事件在单个渠道上的策略 |
-| GET | `/api/notifications/records` | `notification-record:read` | `notifications_records_list` | 逻辑通知列表与渠道汇总 |
+| GET | `/api/notifications/records` | `notification-record:read` | `notifications_records_list` | 全渠道通知列表；支持事件、业务域、渠道、状态、优先级、发布时间和关键字筛选 |
+| GET | `/api/notifications/records/options` | `notification-record:read` | `notifications_records_options` | 记录筛选用事件选项，只返回事件、中文名和业务域 |
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
+
+记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
 
 模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`OPERATIONS`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
 
@@ -358,31 +361,40 @@ export interface SystemNotificationPublishResult {
 {
   "id": "9a0b...",
   "eventType": "PURCHASE_REVIEW_PENDING",
-  "source": { "type": "PURCHASE_ORDER", "id": "6f0d..." },
+  "eventLabel": "采购审核",
+  "domain": "PURCHASE",
+  "sourceType": "PURCHASE_ORDER",
+  "sourceId": "6f0d...",
+  "priority": "HIGH",
   "status": "PARTIAL",
   "templateKey": "purchase.review.pending",
-  "createdAt": "2026-10-28T02:00:00.000Z",
-  "channels": [
-    { "channel": "IN_APP", "itemCount": 3, "unreadCount": 2, "readCount": 1 },
-    { "channel": "ASSISTANT", "pending": 0, "accepted": 2, "failed": 1, "expired": 0, "skipped": 0 }
-  ],
-  "assistantDeliveries": [
+  "expiresAt": "2026-10-29T02:00:00.000Z",
+  "publishedAt": "2026-10-28T02:00:00.000Z",
+  "completedAt": "2026-10-28T02:00:16.000Z",
+  "requestedByName": "李广达",
+  "channels": ["IN_APP", "ASSISTANT"],
+  "inAppItemCount": 3,
+  "inAppUnreadCount": 2,
+  "deliveryCounts": { "ACCEPTED": 2, "FAILED": 1 },
+  "deliveries": [
     {
       "id": "b1...",
-      "recipientUserId": "5e2a...",
       "recipientName": "李华",
+      "targetName": null,
       "status": "ACCEPTED",
       "attemptCount": 1,
-      "providerMsgId": "376897...",
-      "providerNewMsgId": "9154...",
+      "templateKey": "purchase.review.pending",
+      "failureCode": null,
+      "failureMessage": null,
       "acceptedAt": "2026-10-28T02:00:03.000Z"
     },
     {
       "id": "b2...",
-      "recipientUserId": "8c1b...",
       "recipientName": "王强",
+      "targetName": null,
       "status": "FAILED",
       "attemptCount": 3,
+      "templateKey": "purchase.review.pending",
       "failureCode": "ACCOUNT_OFFLINE",
       "failureMessage": "公司号离线，通知已过期",
       "acceptedAt": null

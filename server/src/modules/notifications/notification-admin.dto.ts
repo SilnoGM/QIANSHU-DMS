@@ -3,6 +3,7 @@ import { Type } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
+  IsISO8601,
   IsIn,
   IsInt,
   IsObject,
@@ -11,6 +12,7 @@ import {
   IsUUID,
   Matches,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -134,11 +136,27 @@ export class NotificationChannelPolicyPathDto {
 }
 
 export class NotificationRecordQueryDto {
-  @ApiPropertyOptional() @IsOptional() @IsString() eventType?: string
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(64) eventType?: string
+  @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
+  @ApiPropertyOptional({ enum: ['IN_APP', 'ASSISTANT'] }) @IsOptional() @IsIn(['IN_APP', 'ASSISTANT']) channel?: string
   @ApiPropertyOptional({ enum: ['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] })
   @IsOptional() @IsIn(['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED']) status?: string
+  @ApiPropertyOptional({ enum: ['NORMAL', 'HIGH'] }) @IsOptional() @IsIn(['NORMAL', 'HIGH']) priority?: string
+  @ApiPropertyOptional({ type: 'string', format: 'date-time' }) @IsOptional() @IsISO8601() publishedFrom?: string
+  @ApiPropertyOptional({ type: 'string', format: 'date-time' }) @IsOptional() @IsISO8601() publishedTo?: string
+  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() @MaxLength(128) keyword?: string
   @ApiPropertyOptional({ type: 'integer', minimum: 1, default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 100, default: 20 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20
+}
+
+export class NotificationRecordEventOptionDto {
+  @ApiProperty() eventType!: string
+  @ApiProperty() label!: string
+  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
+}
+
+export class NotificationRecordOptionsDto {
+  @ApiProperty({ type: () => [NotificationRecordEventOptionDto] }) events!: NotificationRecordEventOptionDto[]
 }
 
 export class NotificationDeliveryDto {
@@ -156,6 +174,8 @@ export class NotificationDeliveryDto {
 export class NotificationRecordDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() eventType!: string
+  @ApiProperty() eventLabel!: string
+  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
   @ApiProperty() sourceType!: string
   @ApiProperty() sourceId!: string
   @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) priority!: string
@@ -164,7 +184,11 @@ export class NotificationRecordDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) expiresAt!: string | null
   @ApiProperty({ format: 'date-time' }) publishedAt!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) completedAt!: string | null
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' } }) deliveryCounts!: Record<string, number>
+  @ApiProperty({ type: 'string', nullable: true }) requestedByName!: string | null
+  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'], isArray: true }) channels!: Array<'IN_APP' | 'ASSISTANT'>
+  @ApiProperty({ type: 'integer', description: '站内收件箱条目数' }) inAppItemCount!: number
+  @ApiProperty({ type: 'integer', description: '站内未读条目数' }) inAppUnreadCount!: number
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '小助理 AssistantDelivery 按状态计数' }) deliveryCounts!: Record<string, number>
 }
 
 export class NotificationRecordPageDto {
