@@ -30,6 +30,43 @@ class SystemStatusController {
   }
 }
 
+@Controller('auth')
+class AuthController {
+  @Get('me')
+  me(): string {
+    return 'ok'
+  }
+}
+
+@Controller('notifications/me/inbox')
+class NotificationInboxController {
+  @Get('unread-count')
+  unreadCount(): string {
+    return 'ok'
+  }
+}
+
+@Controller('proxy-nodes')
+class ProxyNodesController {
+  @Get('mine/expiry-summary')
+  expirySummary(): string {
+    return 'ok'
+  }
+
+  @Get('expiry-summary')
+  summary(): string {
+    return 'ok'
+  }
+}
+
+@Controller('profile')
+class ProfileController {
+  @Get()
+  get(): string {
+    return 'ok'
+  }
+}
+
 function createContext(
   controller: new () => unknown,
   handler: () => unknown,
@@ -97,6 +134,37 @@ describe('RequestPerformanceInterceptor', () => {
     ))
     await firstValueFrom(interceptor.intercept(
       createContext(SystemStatusController, SystemStatusController.prototype.get),
+      createCallHandler(of('ok')),
+    ))
+
+    expect(metrics.snapshot()).toMatchObject({
+      totalRequests: 0,
+      windowRequests: 0,
+    })
+  })
+
+  it('does not count session, inbox or proxy expiry polling as business requests', async () => {
+    const metrics = new RequestPerformanceMetrics()
+    const interceptor = new RequestPerformanceInterceptor(metrics, new Reflector())
+
+    await firstValueFrom(interceptor.intercept(
+      createContext(AuthController, AuthController.prototype.me),
+      createCallHandler(of('ok')),
+    ))
+    await firstValueFrom(interceptor.intercept(
+      createContext(NotificationInboxController, NotificationInboxController.prototype.unreadCount),
+      createCallHandler(of('ok')),
+    ))
+    await firstValueFrom(interceptor.intercept(
+      createContext(ProxyNodesController, ProxyNodesController.prototype.expirySummary),
+      createCallHandler(of('ok')),
+    ))
+    await firstValueFrom(interceptor.intercept(
+      createContext(ProxyNodesController, ProxyNodesController.prototype.summary),
+      createCallHandler(of('ok')),
+    ))
+    await firstValueFrom(interceptor.intercept(
+      createContext(ProfileController, ProfileController.prototype.get),
       createCallHandler(of('ok')),
     ))
 

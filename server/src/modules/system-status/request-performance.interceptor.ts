@@ -19,6 +19,17 @@ const EXCLUDED_CONTROLLER_PATHS = new Set([
   'health',
   // 状态页自身轮询也不计入，避免页面刷新改变它展示的统计。
   'system/status',
+  // 会话校验与通知未读轮询是页面基础设施请求，不应占据“慢请求”榜。
+  'auth',
+  'notifications/me/inbox',
+])
+
+const EXCLUDED_OPERATIONS = new Set([
+  // 工作台头部与代理节点页摘要轮询，不是业务主查询。
+  'GET /proxy-nodes/mine/expiry-summary',
+  'GET /proxy-nodes/expiry-summary',
+  // 当前用户资料读取，属于页面基础设施。
+  'GET /profile',
 ])
 
 interface ErrorStatusProvider {
@@ -71,11 +82,14 @@ export class RequestPerformanceInterceptor implements NestInterceptor {
       PATH_METADATA,
       context.getClass(),
     )
-    if (controllerPath !== undefined && EXCLUDED_CONTROLLER_PATHS.has(controllerPath)) {
+    const operation = this.resolveOperation(context, controllerPath)
+    if (
+      (controllerPath !== undefined && EXCLUDED_CONTROLLER_PATHS.has(controllerPath))
+      || EXCLUDED_OPERATIONS.has(operation)
+    ) {
       return next.handle()
     }
 
-    const operation = this.resolveOperation(context, controllerPath)
     const startedAt = process.hrtime.bigint()
     let recorded = false
     const response = context.switchToHttp().getResponse<{ statusCode?: number }>()
