@@ -96,7 +96,7 @@ const overallValueClass = computed(() => {
     return 'text-destructive'
   }
   if (overallStatus.value === 'warning') {
-    return 'text-amber-600'
+    return 'text-amber-700'
   }
   if (overallStatus.value === 'ok') {
     return 'text-primary'
@@ -114,7 +114,7 @@ const overallReasonTextClass = computed(() => {
     return 'text-destructive'
   }
   if (tone === 'warning') {
-    return 'text-amber-600'
+    return 'text-amber-700'
   }
   if (tone === 'success') {
     return 'text-primary'
@@ -137,11 +137,6 @@ const diskProgressClass = computed(() => {
       ? 'bg-amber-500'
       : 'bg-primary'
 })
-const diskSummaryProgressClass = computed(() =>
-  diskFreePercent.value !== null && diskFreePercent.value < 10
-    ? 'bg-destructive'
-    : 'bg-amber-500',
-)
 const hostMemoryAvailablePercent = computed(() => {
   const available = resources.value?.host.memoryAvailableBytes
   const total = resources.value?.host.memoryTotalBytes
@@ -180,11 +175,15 @@ const networkCollected = computed(() =>
 const performanceErrorRate = computed(() =>
   performance.value?.errorRatePercent ?? null,
 )
+const performanceErrorDisplay = computed(() => {
+  const value = performanceErrorRate.value
+  return value === null ? null : Math.round(value * 10) / 10
+})
 const performanceErrorToneClass = computed(() =>
-  resolveStatusTagToneClass((performanceErrorRate.value ?? 0) > 0 ? 'danger' : 'success'),
+  resolveStatusTagToneClass((performanceErrorDisplay.value ?? 0) > 0 ? 'danger' : 'success'),
 )
 const performanceErrorCardClass = computed(() =>
-  (performanceErrorRate.value ?? 0) > 0
+  (performanceErrorDisplay.value ?? 0) > 0
     ? 'border-destructive/30 bg-destructive/5'
     : 'border-border bg-muted/10',
 )
@@ -240,7 +239,7 @@ function capabilityClass(value: 'up' | 'down' | 'unknown'): string {
 
 function serviceTitle(check: { key: string }): string {
   if (check.key === 'database') {
-    return `数据库 (${databaseVersionShort.value})`
+    return '数据库'
   }
   if (check.key === 'media') {
     return `媒体存储 (${mediaDriverLabel(status.value?.services.media.driver ?? 'unknown')})`
@@ -364,6 +363,8 @@ onBeforeUnmount(() => {
   <div data-testid="system-status-page" class="flex flex-col min-h-0">
     <FaPageHeader
       class="mb-2"
+      main-class="min-w-0 flex-1"
+      default-class="self-start"
       title="系统状态"
       description="查看服务健康、资源水位、性能与运行信息；数据为采样快照，不是历史监控。"
     >
@@ -472,7 +473,7 @@ onBeforeUnmount(() => {
                   <p class="text-3xl leading-tight font-semibold m-0 tabular-nums" :class="overallValueClass">
                     {{ overallLabel }}
                   </p>
-                  <p class="text-xs leading-5 m-0 mt-auto flex gap-1.5 items-start" :class="overallReasonTextClass">
+                  <p class="text-[13px] leading-5 m-0 mt-auto flex gap-1.5 items-start" :class="overallReasonTextClass">
                     <span class="mt-1.5 rounded-full shrink-0 size-1.5" :class="checkDotClass(overallStatus)" aria-hidden="true" />
                     <span>{{ overallReason.text }}</span>
                   </p>
@@ -511,7 +512,7 @@ onBeforeUnmount(() => {
                     <p class="text-sm text-muted-foreground font-medium m-0">
                       磁盘可用（媒体盘）
                     </p>
-                    <span class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md" :class="diskLevelToneClass">
+                    <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="diskLevelToneClass">
                       {{ diskLevel }}
                     </span>
                   </div>
@@ -519,7 +520,7 @@ onBeforeUnmount(() => {
                     {{ formatPercent(diskFreePercent) }}
                   </p>
                   <div class="mt-1 rounded-full bg-muted h-1.5 w-full overflow-hidden">
-                    <div class="rounded-full h-full" :class="diskSummaryProgressClass" :style="{ width: `${diskUsedPercent ?? 0}%` }" />
+                    <div class="rounded-full h-full" :class="diskProgressClass" :style="{ width: `${diskFreePercent ?? 0}%` }" />
                   </div>
                   <div class="text-xs text-muted-foreground mt-auto flex flex-wrap gap-2 items-center justify-between">
                     <span>可用 {{ formatBytes(resources?.disk.availableBytes ?? null) }} / 总 {{ formatBytes(resources?.disk.totalBytes ?? null) }}</span>
@@ -532,15 +533,15 @@ onBeforeUnmount(() => {
                 <FaIcon name="i-lucide:activity" aria-hidden="true" class="summary-card__motif" />
                 <div class="flex flex-col gap-1.5 h-full relative z-1">
                   <p class="text-sm text-muted-foreground font-medium m-0">
-                    5 分钟请求
+                    5 分钟请求量
                   </p>
                   <p class="text-3xl text-foreground leading-tight font-semibold m-0 tabular-nums">
                     {{ formatCount(performance?.windowRequests ?? null) }}
                     <span class="text-sm text-muted-foreground font-normal ml-1">次</span>
                   </p>
                   <div class="mt-auto pt-1 flex flex-wrap gap-2 items-center">
-                    <span class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md" :class="performanceErrorToneClass">
-                      5xx {{ formatPercent(performance?.errorRatePercent ?? null) }}
+                    <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="performanceErrorToneClass">
+                      5xx {{ formatPercent(performanceErrorDisplay) }}
                     </span>
                     <span class="text-xs text-muted-foreground">P95 {{ formatMilliseconds(performance?.p95Ms ?? null) }}</span>
                   </div>
@@ -561,11 +562,11 @@ onBeforeUnmount(() => {
                 <span class="qs-type-meta text-muted-foreground">后端 · 数据库 · 媒体存储</span>
               </header>
 
-              <div class="gap-3 grid grid-cols-1 xl:grid-cols-3">
+              <div class="gap-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                 <article
                   v-for="check in serviceChecks"
                   :key="check.key"
-                  class="p-3 border rounded-lg"
+                  class="p-4 border rounded-lg"
                   :class="serviceCardClass(check.status)"
                 >
                   <div class="flex gap-3 items-start justify-between">
@@ -595,11 +596,11 @@ onBeforeUnmount(() => {
                   <div class="text-xs text-muted-foreground mt-3 flex flex-wrap gap-2 items-center justify-between">
                     <template v-if="check.key === 'backend'">
                       <span>探测状态：{{ check.status === 'ok' ? '请求已到达' : (check.message ?? '探测失败') }}</span>
-                      <span class="text-foreground font-medium">{{ check.status === 'ok' ? 'HTTP 200' : '—' }}</span>
+                      <span>{{ check.status === 'ok' ? 'HTTP 200' : '—' }}</span>
                     </template>
                     <template v-else-if="check.key === 'database'">
                       <span>连接池：总计 {{ formatCount(status.services.database.connections) }} / 活跃 {{ formatCount(status.services.database.activeConnections) }}</span>
-                      <span>时区 {{ status.services.database.timeZone ?? '—' }}</span>
+                      <span>{{ databaseVersionShort }} · {{ status.services.database.timeZone ?? '—' }}</span>
                     </template>
                     <template v-else>
                       <span class="flex flex-wrap gap-x-2 gap-y-1 items-center">
@@ -627,12 +628,12 @@ onBeforeUnmount(() => {
                 <span class="qs-type-meta text-muted-foreground">采样于 {{ formatTime(resources.sampledAt) }} · 宿主与容器分列</span>
               </header>
 
-              <div class="gap-3 grid grid-cols-1 lg:grid-cols-3">
-                <article class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col">
+              <div class="gap-3 grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2">
+                <article class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col">
                   <div class="flex gap-2 items-start justify-between">
                     <span class="text-sm font-semibold">CPU</span>
                     <span
-                      class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md"
+                      class="text-xs font-medium px-1.5 py-0.5 border rounded-md"
                       :class="resolveStatusTagToneClass(containerCpuCollected ? 'success' : 'neutral')"
                     >
                       {{ containerCpuCollected ? '已采集' : '容器未采集' }}
@@ -651,13 +652,17 @@ onBeforeUnmount(() => {
                       <span class="text-muted-foreground">配额上限</span>
                       <span class="text-right">{{ resources.container.cpuQuotaCores === null ? '无配额（共享宿主）' : formatCores(resources.container.cpuQuotaCores) }}</span>
                     </div>
+                    <div class="flex gap-3 items-start justify-between">
+                      <span class="text-muted-foreground">进程 RSS / Heap</span>
+                      <span class="text-right">{{ formatBytes(resources.process.rssBytes) }} / {{ formatBytes(resources.process.heapUsedBytes) }}</span>
+                    </div>
                   </div>
                 </article>
 
-                <article class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col">
+                <article class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col">
                   <div class="flex gap-2 items-start justify-between">
                     <span class="text-sm font-semibold">内存（宿主 & 容器）</span>
-                    <span class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md" :class="hostMemoryLevelToneClass">
+                    <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="hostMemoryLevelToneClass">
                       {{ hostMemoryLevel }}
                     </span>
                   </div>
@@ -687,10 +692,10 @@ onBeforeUnmount(() => {
                   </div>
                 </article>
 
-                <article class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col">
+                <article class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col">
                   <div class="flex gap-2 items-start justify-between">
-                    <span class="text-sm font-semibold">磁盘（媒体目录所在盘）</span>
-                    <span class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md" :class="diskLevelToneClass">
+                    <span class="text-sm font-semibold">磁盘可用（媒体盘）</span>
+                    <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="diskLevelToneClass">
                       {{ diskLevel }}
                     </span>
                   </div>
@@ -716,11 +721,11 @@ onBeforeUnmount(() => {
                   </div>
                 </article>
 
-                <article class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col lg:col-span-2">
+                <article class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col lg:col-span-2">
                   <div class="flex gap-2 items-start justify-between">
                     <span class="text-sm font-semibold">网络流量（容器网卡）</span>
                     <span
-                      class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md"
+                      class="text-xs font-medium px-1.5 py-0.5 border rounded-md"
                       :class="resolveStatusTagToneClass(networkCollected ? 'success' : 'neutral')"
                     >
                       {{ networkCollected ? '已采集' : '未采集' }}
@@ -749,15 +754,20 @@ onBeforeUnmount(() => {
                   </p>
                 </article>
 
-                <article class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col">
+                <article class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col">
                   <div class="flex flex-wrap gap-2 items-start justify-between">
                     <span class="text-sm font-semibold">数据库体积 ({{ databaseVersionShort }})</span>
                     <span class="text-xs text-muted-foreground">启动于 {{ formatTime(status.services.database.startedAt) }}</span>
                   </div>
                   <div class="mt-3 flex gap-3 items-end justify-between">
-                    <p class="text-xs text-muted-foreground m-0">
-                      当前活跃连接 {{ formatCount(status.services.database.activeConnections) }} / 总连接 {{ formatCount(status.services.database.connections) }}
-                    </p>
+                    <div>
+                      <p class="text-xs text-muted-foreground m-0">
+                        当前活跃连接
+                      </p>
+                      <p class="text-sm font-medium m-0 mt-1 tabular-nums">
+                        {{ formatCount(status.services.database.activeConnections) }} / {{ formatCount(status.services.database.connections) }}
+                      </p>
+                    </div>
                     <div class="text-right">
                       <p class="text-xs text-muted-foreground m-0">
                         已用空间
@@ -796,7 +806,7 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="gap-3 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-                <div class="p-3 border border-border rounded-lg bg-muted/10">
+                <div class="p-4 border border-border rounded-lg bg-muted/10">
                   <p class="text-xs text-muted-foreground m-0">
                     5 分钟请求量
                   </p>
@@ -804,20 +814,20 @@ onBeforeUnmount(() => {
                     {{ formatCount(performance.windowRequests) }}
                   </p>
                 </div>
-                <div class="p-3 border rounded-lg relative" :class="performanceErrorCardClass">
+                <div class="p-4 border rounded-lg relative" :class="performanceErrorCardClass">
                   <span
-                    v-if="(performanceErrorRate ?? 0) > 0"
+                    v-if="(performanceErrorDisplay ?? 0) > 0"
                     class="rounded-full bg-destructive size-1.5 right-2 top-2 absolute"
                     aria-hidden="true"
                   />
                   <p class="text-xs text-muted-foreground m-0">
                     5xx 错误率
                   </p>
-                  <p class="text-xl font-semibold m-0 mt-1 tabular-nums" :class="(performanceErrorRate ?? 0) > 0 ? 'text-destructive' : ''">
-                    {{ formatPercent(performanceErrorRate) }}
+                  <p class="text-xl font-semibold m-0 mt-1 tabular-nums" :class="(performanceErrorDisplay ?? 0) > 0 ? 'text-destructive' : ''">
+                    {{ formatPercent(performanceErrorDisplay) }}
                   </p>
                 </div>
-                <div class="p-3 border border-border rounded-lg bg-muted/10">
+                <div class="p-4 border border-border rounded-lg bg-muted/10">
                   <p class="text-xs text-muted-foreground m-0">
                     4xx 请求数
                   </p>
@@ -825,7 +835,7 @@ onBeforeUnmount(() => {
                     {{ formatCount(performance.clientErrors) }}
                   </p>
                 </div>
-                <div class="p-3 border border-border rounded-lg bg-muted/10">
+                <div class="p-4 border border-border rounded-lg bg-muted/10">
                   <p class="text-xs text-muted-foreground m-0">
                     P95 耗时
                   </p>
@@ -833,7 +843,7 @@ onBeforeUnmount(() => {
                     {{ formatMilliseconds(performance.p95Ms) }}
                   </p>
                 </div>
-                <div class="p-3 border border-border rounded-lg bg-muted/10">
+                <div class="p-4 border border-border rounded-lg bg-muted/10">
                   <p class="text-xs text-muted-foreground m-0">
                     平均耗时
                   </p>
@@ -841,7 +851,7 @@ onBeforeUnmount(() => {
                     {{ formatMilliseconds(performance.averageMs) }}
                   </p>
                 </div>
-                <div class="p-3 border border-border rounded-lg bg-muted/10">
+                <div class="p-4 border border-border rounded-lg bg-muted/10">
                   <p class="text-xs text-muted-foreground m-0">
                     自启动累计请求
                   </p>
@@ -861,19 +871,19 @@ onBeforeUnmount(() => {
                 <table class="text-sm min-w-[760px] w-full border-collapse">
                   <thead>
                     <tr class="text-xs text-muted-foreground text-left border-y border-border">
-                      <th class="font-medium py-2 pr-3">
+                      <th class="font-medium py-2.5 pr-3">
                         耗时
                       </th>
-                      <th class="font-medium py-2 pr-3">
+                      <th class="font-medium py-2.5 pr-3">
                         方法
                       </th>
-                      <th class="font-medium py-2 pr-3">
+                      <th class="font-medium py-2.5 pr-3">
                         路由模板 (Route Pattern)
                       </th>
-                      <th class="font-medium py-2 pr-3">
+                      <th class="font-medium py-2.5 pr-3">
                         状态码
                       </th>
-                      <th class="font-medium py-2">
+                      <th class="font-medium py-2.5">
                         发生时间
                       </th>
                     </tr>
@@ -884,23 +894,23 @@ onBeforeUnmount(() => {
                       :key="`${row.occurredAt}-${row.operation}-${row.durationMs}`"
                       class="border-b border-border/60 last:border-b-0"
                     >
-                      <td class="py-2 pr-3 tabular-nums">
+                      <td class="py-2.5 pr-3 tabular-nums">
                         {{ formatMilliseconds(row.durationMs) }}
                       </td>
-                      <td class="py-2 pr-3">
+                      <td class="py-2.5 pr-3">
                         <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="resolveStatusTagToneClass(methodTone(row.method))">
                           {{ row.method }}
                         </span>
                       </td>
-                      <td class="text-xs py-2 pr-3 break-all">
+                      <td class="text-xs py-2.5 pr-3 break-all line-clamp-2" :title="row.route">
                         {{ row.route }}
                       </td>
-                      <td class="py-2 pr-3">
+                      <td class="py-2.5 pr-3">
                         <span class="text-xs font-medium px-1.5 py-0.5 border rounded-md" :class="resolveStatusTagToneClass(statusCodeTone(row.statusCode))">
                           {{ statusCodeLabel(row.statusCode) }}
                         </span>
                       </td>
-                      <td class="text-xs text-muted-foreground py-2">
+                      <td class="text-xs text-muted-foreground py-2.5">
                         {{ formatTime(row.occurredAt) }}
                       </td>
                     </tr>
@@ -927,7 +937,7 @@ onBeforeUnmount(() => {
                 <span class="qs-type-meta text-muted-foreground">只展示白名单字段，不包含连接串或密钥</span>
               </header>
 
-              <div class="gap-x-6 gap-y-4 grid grid-cols-1 md:grid-cols-3">
+              <div class="runtime-grid gap-x-6 gap-y-4 grid grid-cols-1 md:grid-cols-3">
                 <div class="pb-3 border-b border-border/50">
                   <p class="text-xs text-muted-foreground m-0">
                     Web / Server 版本
@@ -937,7 +947,7 @@ onBeforeUnmount(() => {
                     <span class="text-xs text-foreground font-medium px-2 py-0.5 rounded-md bg-muted inline-flex items-center">Server {{ versionWithPrefix(runtime.version) }}</span>
                     <span
                       v-if="deploymentMismatch"
-                      class="text-[11px] font-medium px-1.5 py-0.5 border rounded-md"
+                      class="text-xs font-medium px-1.5 py-0.5 border rounded-md"
                       :class="resolveStatusTagToneClass('warning')"
                     >
                       部署不一致
@@ -1021,7 +1031,7 @@ onBeforeUnmount(() => {
                   <p class="text-xs text-muted-foreground m-0">
                     最新数据库迁移
                   </p>
-                  <p class="text-xs m-0 mt-1.5 break-all">
+                  <p class="text-sm m-0 mt-1.5 break-all line-clamp-2" :title="runtime.migration ?? ''">
                     {{ runtime.migration ?? '—' }}
                   </p>
                 </div>
@@ -1030,7 +1040,7 @@ onBeforeUnmount(() => {
                   <p class="text-xs text-muted-foreground m-0">
                     数据库版本详情
                   </p>
-                  <p class="text-xs m-0 mt-1.5 truncate" :title="runtime.databaseVersion ?? ''">
+                  <p class="text-sm m-0 mt-1.5 line-clamp-2" :title="runtime.databaseVersion ?? ''">
                     {{ runtime.databaseVersion ?? '—' }}
                   </p>
                 </div>
@@ -1083,5 +1093,19 @@ onBeforeUnmount(() => {
   color: color-mix(in oklab, var(--summary-accent) 18%, oklch(var(--card)));
   transform: rotate(-7deg);
   pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .runtime-grid > div:nth-last-child(-n + 3) {
+    border-bottom-width: 0;
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .runtime-grid > div:last-child {
+    border-bottom-width: 0;
+    padding-bottom: 0;
+  }
 }
 </style>

@@ -354,13 +354,17 @@ export interface OverallReason {
 export function resolveOverallReason(
   input: OverallReasonInput,
 ): OverallReason {
+  const performanceErrorRate = input.performance === null
+    ? null
+    : Math.round((input.performance.errorRatePercent ?? 0) * 10) / 10
   if (
     input.performance !== null
     && input.performance.windowRequests > 0
-    && (input.performance.errorRatePercent ?? 0) >= 5
+    && performanceErrorRate !== null
+    && performanceErrorRate >= 5
   ) {
     return {
-      text: `触发原因：近 5 分钟 5xx 错误率 ${formatPercent(input.performance.errorRatePercent)}`,
+      text: `触发原因：近 5 分钟 5xx 错误率 ${formatPercent(performanceErrorRate)}`,
       tone: 'danger',
     }
   }
@@ -390,7 +394,7 @@ export function resolveOverallReason(
   )
   if (unknown !== undefined) {
     return {
-      text: `数据待补：${unknown.label}暂未采集`,
+      text: `数据待补：${unknown.label} 暂未采集`,
       tone: 'warning',
     }
   }

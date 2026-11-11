@@ -184,6 +184,14 @@ test('磁盘、宿主内存、整体状态与原因文案', () => {
   assert.match(performanceReason.text, /5xx 错误率 20\.3%/u)
   assert.equal(performanceReason.tone, 'danger')
 
+  const roundedReason = resolveOverallReason({
+    overallStatus: 'warning',
+    checks: [],
+    performance: { errorRatePercent: 4.96, windowRequests: 80 },
+  })
+  assert.match(roundedReason.text, /5xx 错误率 5\.0%/u)
+  assert.equal(roundedReason.tone, 'danger')
+
   const okReason = resolveOverallReason({
     overallStatus: 'ok',
     checks: [],
