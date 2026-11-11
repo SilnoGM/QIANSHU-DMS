@@ -38,11 +38,11 @@ export function environmentTone(environment: DeploymentEnvironment): QsStatusTag
   if (environment === 'prod') {
     return 'success'
   }
+  if (environment === 'dev') {
+    return 'success'
+  }
   if (environment === 'test') {
     return 'warning'
-  }
-  if (environment === 'dev') {
-    return 'info'
   }
   return 'neutral'
 }
@@ -176,4 +176,227 @@ export function findCheckStatus(
   key: string,
 ): SystemStatusLevel {
   return checks.find(check => check.key === key)?.status ?? 'unknown'
+}
+
+export interface SplitOperation {
+  readonly method: string
+  readonly route: string
+}
+
+/** 把 `GET /sales-orders/:id` 拆成方法徽标与路由模板。 */
+export function splitOperation(operation: string): SplitOperation {
+  const separator = operation.indexOf(' ')
+  if (separator <= 0) {
+    return { method: 'ANY', route: operation }
+  }
+  const method = operation.slice(0, separator)
+  if (!/^[A-Z]+$/u.test(method)) {
+    return { method: 'ANY', route: operation }
+  }
+  return { method, route: operation.slice(separator + 1).trim() }
+}
+
+export function methodTone(method: string): QsStatusTagTone {
+  if (method === 'GET') {
+    return 'info'
+  }
+  if (method === 'DELETE') {
+    return 'danger'
+  }
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+    return 'warning'
+  }
+  return 'neutral'
+}
+
+export function statusCodeLabel(code: number): string {
+  if (code >= 200 && code < 300) {
+    return `${code} OK`
+  }
+  if (code >= 500) {
+    return `${code} 异常`
+  }
+  if (code >= 400) {
+    return `${code} 请求错误`
+  }
+  return String(code)
+}
+
+export function statusCodeTone(code: number): QsStatusTagTone {
+  if (code >= 200 && code < 300) {
+    return 'success'
+  }
+  if (code >= 500) {
+    return 'danger'
+  }
+  if (code >= 400) {
+    return 'warning'
+  }
+  return 'neutral'
+}
+
+export function capabilityMark(status: 'up' | 'down' | 'unknown'): string {
+  if (status === 'up') {
+    return '✓'
+  }
+  if (status === 'down') {
+    return '✗'
+  }
+  return '—'
+}
+
+export function serviceShortLabel(key: string): string {
+  if (key === 'backend') {
+    return '后端'
+  }
+  if (key === 'database') {
+    return '数据库'
+  }
+  if (key === 'media') {
+    return '媒体存储'
+  }
+  return key
+}
+
+/** 从完整 PostgreSQL version() 中提取 `PostgreSQL 16.14`，供卡片标题使用。 */
+export function databaseShortLabel(version: string | null): string {
+  const match = version?.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/iu)
+  return match === null || match === undefined
+    ? '数据库'
+    : `PostgreSQL ${match[1]}`
+}
+
+export function versionWithPrefix(version: string | null): string {
+  if (version === null || version.trim() === '') {
+    return '—'
+  }
+  return version.startsWith('v') ? version : `v${version}`
+}
+
+export function diskLevelText(freePercent: number | null): string {
+  if (freePercent === null) {
+    return '未知'
+  }
+  if (freePercent < 10) {
+    return '容量不足'
+  }
+  if (freePercent < 20) {
+    return '容量偏低'
+  }
+  return '水位正常'
+}
+
+export function diskLevelTone(freePercent: number | null): QsStatusTagTone {
+  if (freePercent === null) {
+    return 'neutral'
+  }
+  if (freePercent < 10) {
+    return 'danger'
+  }
+  return freePercent < 20 ? 'warning' : 'success'
+}
+
+export function hostMemoryLevelText(availablePercent: number | null): string {
+  if (availablePercent === null) {
+    return '未知'
+  }
+  if (availablePercent < 5) {
+    return '宿主可用不足'
+  }
+  return availablePercent < 20 ? '宿主可用偏低' : '正常'
+}
+
+export function hostMemoryLevelTone(availablePercent: number | null): QsStatusTagTone {
+  if (availablePercent === null) {
+    return 'neutral'
+  }
+  if (availablePercent < 5) {
+    return 'danger'
+  }
+  return availablePercent < 20 ? 'warning' : 'success'
+}
+
+export function overallTone(
+  status: SystemStatusLevel,
+): 'rose' | 'amber' | 'emerald' | 'neutral' {
+  if (status === 'critical') {
+    return 'rose'
+  }
+  if (status === 'warning') {
+    return 'amber'
+  }
+  if (status === 'ok') {
+    return 'emerald'
+  }
+  return 'neutral'
+}
+
+export interface OverallReasonInput {
+  readonly checks: readonly {
+    readonly category: 'service' | 'resource' | 'performance'
+    readonly key: string
+    readonly label: string
+    readonly message: string | null
+    readonly status: SystemStatusLevel
+  }[]
+  readonly overallStatus: SystemStatusLevel
+  readonly performance: {
+    readonly errorRatePercent: number | null
+    readonly windowRequests: number
+  } | null
+}
+
+export interface OverallReason {
+  readonly text: string
+  readonly tone: QsStatusTagTone
+}
+
+export function resolveOverallReason(
+  input: OverallReasonInput,
+): OverallReason {
+  if (
+    input.performance !== null
+    && input.performance.windowRequests > 0
+    && (input.performance.errorRatePercent ?? 0) >= 5
+  ) {
+    return {
+      text: `触发原因：近 5 分钟 5xx 错误率 ${formatPercent(input.performance.errorRatePercent)}`,
+      tone: 'danger',
+    }
+  }
+
+  const critical = input.checks.find(
+    check => check.status === 'critical' && check.key !== 'performance',
+  )
+  if (critical !== undefined) {
+    return {
+      text: `触发原因：${critical.label}${critical.message === null ? '' : ` · ${critical.message}`}`,
+      tone: 'danger',
+    }
+  }
+
+  const warning = input.checks.find(
+    check => check.status === 'warning' && check.key !== 'performance',
+  )
+  if (warning !== undefined) {
+    return {
+      text: `关注原因：${warning.label}${warning.message === null ? '' : ` · ${warning.message}`}`,
+      tone: 'warning',
+    }
+  }
+
+  const unknown = input.checks.find(
+    check => check.status === 'unknown' && check.category !== 'performance',
+  )
+  if (unknown !== undefined) {
+    return {
+      text: `数据待补：${unknown.label}暂未采集`,
+      tone: 'warning',
+    }
+  }
+
+  if (input.overallStatus === 'ok') {
+    return { text: '全部检查通过', tone: 'success' }
+  }
+  return { text: '暂无异常', tone: 'neutral' }
 }

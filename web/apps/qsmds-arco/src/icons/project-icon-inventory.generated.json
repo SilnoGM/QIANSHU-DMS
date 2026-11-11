@@ -1156,6 +1156,15 @@
     ]
   },
   {
+    "name": "i-lucide:alarm-clock",
+    "label": "i-lucide:alarm-clock",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/status/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:align-center",
     "label": "i-lucide:align-center",
     "category": "通用图标",
@@ -1188,7 +1197,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/status/index.vue"
     ]
   },
   {
@@ -2055,7 +2065,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue"
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/views/system/status/index.vue"
     ]
   },
   {
@@ -2401,8 +2412,8 @@
     ]
   },
   {
-    "name": "i-lucide:hard-drive",
-    "label": "i-lucide:hard-drive",
+    "name": "i-lucide:heart-pulse",
+    "label": "i-lucide:heart-pulse",
     "category": "通用图标",
     "source": "iconify",
     "usages": [
@@ -3561,7 +3572,8 @@
       "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue",
-      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/system/status/index.vue"
     ]
   },
   {

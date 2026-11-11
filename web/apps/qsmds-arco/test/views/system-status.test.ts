@@ -7,6 +7,9 @@ import systemStatusRoute from '../../src/router/modules/system.status'
 import {
   capabilityLabel,
   capacityLevelLabel,
+  databaseShortLabel,
+  diskLevelText,
+  diskLevelTone,
   environmentLabel,
   environmentTone,
   findCheckStatus,
@@ -15,9 +18,17 @@ import {
   formatCount,
   formatDuration,
   formatPercent,
+  hostMemoryLevelText,
   isDeploymentMismatch,
   mediaDriverLabel,
+  methodTone,
+  overallTone,
+  resolveOverallReason,
+  splitOperation,
+  statusCodeLabel,
+  statusCodeTone,
   statusTone,
+  versionWithPrefix,
 } from '../../src/views/system/status/status.logic'
 
 const pageSource = readFileSync(
@@ -89,7 +100,7 @@ test('状态与容量文案映射固定为中文', () => {
   assert.equal(statusTone('unknown'), 'neutral')
   assert.equal(environmentTone('prod'), 'success')
   assert.equal(environmentTone('test'), 'warning')
-  assert.equal(environmentTone('dev'), 'info')
+  assert.equal(environmentTone('dev'), 'success')
   assert.equal(environmentTone('unknown'), 'neutral')
   assert.equal(environmentLabel('dev'), '开发环境')
   assert.equal(environmentLabel('test'), '测试环境')
@@ -126,4 +137,69 @@ test('部署版本一致性与检查项查找', () => {
   assert.equal(isDeploymentMismatch(null, '1.5.2'), false)
   assert.equal(findCheckStatus([{ key: 'cpu', status: 'warning' }], 'cpu'), 'warning')
   assert.equal(findCheckStatus([], 'cpu'), 'unknown')
+})
+
+test('慢请求拆分、方法/状态码色调与状态文案', () => {
+  assert.deepEqual(splitOperation('GET /sales-orders/:id'), {
+    method: 'GET',
+    route: '/sales-orders/:id',
+  })
+  assert.deepEqual(splitOperation('unexpected'), {
+    method: 'ANY',
+    route: 'unexpected',
+  })
+  assert.equal(methodTone('GET'), 'info')
+  assert.equal(methodTone('POST'), 'warning')
+  assert.equal(methodTone('DELETE'), 'danger')
+  assert.equal(statusCodeLabel(200), '200 OK')
+  assert.equal(statusCodeLabel(404), '404 请求错误')
+  assert.equal(statusCodeLabel(503), '503 异常')
+  assert.equal(statusCodeTone(200), 'success')
+  assert.equal(statusCodeTone(404), 'warning')
+  assert.equal(statusCodeTone(503), 'danger')
+})
+
+test('磁盘、宿主内存、整体状态与原因文案', () => {
+  assert.equal(diskLevelText(26.3), '水位正常')
+  assert.equal(diskLevelText(15), '容量偏低')
+  assert.equal(diskLevelText(5), '容量不足')
+  assert.equal(diskLevelText(null), '未知')
+  assert.equal(diskLevelTone(26.3), 'success')
+  assert.equal(diskLevelTone(15), 'warning')
+  assert.equal(diskLevelTone(5), 'danger')
+  assert.equal(hostMemoryLevelText(30), '正常')
+  assert.equal(hostMemoryLevelText(12), '宿主可用偏低')
+  assert.equal(hostMemoryLevelText(5), '宿主可用偏低')
+  assert.equal(hostMemoryLevelText(4), '宿主可用不足')
+  assert.equal(overallTone('critical'), 'rose')
+  assert.equal(overallTone('warning'), 'amber')
+  assert.equal(overallTone('ok'), 'emerald')
+  assert.equal(overallTone('unknown'), 'neutral')
+
+  const performanceReason = resolveOverallReason({
+    overallStatus: 'critical',
+    checks: [],
+    performance: { errorRatePercent: 20.3, windowRequests: 80 },
+  })
+  assert.match(performanceReason.text, /5xx 错误率 20\.3%/u)
+  assert.equal(performanceReason.tone, 'danger')
+
+  const okReason = resolveOverallReason({
+    overallStatus: 'ok',
+    checks: [],
+    performance: { errorRatePercent: 0, windowRequests: 80 },
+  })
+  assert.equal(okReason.text, '全部检查通过')
+  assert.equal(okReason.tone, 'success')
+})
+
+test('数据库与版本标签格式', () => {
+  assert.equal(
+    databaseShortLabel('PostgreSQL 16.14 (Debian 16.14-1.pgdg13+1)'),
+    'PostgreSQL 16.14',
+  )
+  assert.equal(databaseShortLabel(null), '数据库')
+  assert.equal(versionWithPrefix('1.5.2'), 'v1.5.2')
+  assert.equal(versionWithPrefix('v1.5.2'), 'v1.5.2')
+  assert.equal(versionWithPrefix(null), '—')
 })
