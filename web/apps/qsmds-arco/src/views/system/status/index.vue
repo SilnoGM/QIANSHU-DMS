@@ -361,26 +361,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div data-testid="system-status-page" class="pb-6 bg-muted/20 min-h-full">
+  <div data-testid="system-status-page" class="flex flex-col min-h-0">
     <FaPageHeader
-      class="mb-0 px-4 pb-4 pt-6 border-b-0 bg-transparent lg:px-6"
+      title="系统状态"
       description="查看服务健康、资源水位、性能与运行信息；数据为采样快照，不是历史监控。"
     >
-      <template #title>
-        <div class="flex flex-wrap gap-2 items-center">
-          <span>系统状态</span>
-          <FaTag
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="resolveStatusTagToneClass(environmentBadgeTone)"
-            :title="runtime?.environmentSource === 'APP_ENV' ? '环境来源：APP_ENV' : '环境来源：媒体存储环境或未配置'"
-          >
-            {{ environmentBadge }}
-          </FaTag>
-        </div>
-      </template>
-
-      <div class="flex flex-wrap gap-3 items-center">
+      <div class="flex flex-wrap gap-2 items-center">
+        <FaTag
+          variant="outline"
+          class="qs-type-status-tag"
+          :class="resolveStatusTagToneClass(environmentBadgeTone)"
+          :title="runtime?.environmentSource === 'APP_ENV' ? '环境来源：APP_ENV' : '环境来源：媒体存储环境或未配置'"
+        >
+          {{ environmentBadge }}
+        </FaTag>
         <span class="qs-type-meta text-muted-foreground">更新于 {{ lastUpdatedLabel }}</span>
         <FaButton
           v-if="canRead"
@@ -397,8 +391,8 @@ onBeforeUnmount(() => {
       </div>
     </FaPageHeader>
 
-    <FaPageMain class="m-0 border-0 rounded-none bg-transparent" main-class="p-0">
-      <div class="px-4 pb-6 flex flex-col gap-4 lg:px-6">
+    <FaPageMain>
+      <div class="flex flex-col gap-4">
         <FaEmpty
           v-if="!canRead"
           icon="i-lucide:shield-x"
