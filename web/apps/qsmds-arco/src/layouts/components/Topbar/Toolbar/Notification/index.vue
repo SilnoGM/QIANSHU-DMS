@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
+
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+
 defineOptions({
   name: 'ToolbarNotification',
 })
@@ -6,11 +10,41 @@ defineOptions({
 const Panel = defineAsyncComponent(() => import('./panel.vue'))
 const store = useAppNotificationStore()
 const accountStore = useAppAccountStore()
+const toast = useQsToast()
+const router = useRouter()
 const open = ref(false)
 
 watch(() => accountStore.userId, (userId) => {
   store.initDesktop(userId)
 }, { immediate: true })
+
+watch(() => store.pendingToastAlerts, () => {
+  const alerts = store.consumeNotificationAlerts()
+  for (const alert of alerts) {
+    if (alert.kind === 'summary') {
+      toast.info(`你有 ${alert.count} 条新通知`, {
+        description: '点击查看通知中心',
+        duration: 8_000,
+        action: {
+          label: '查看',
+          onClick: () => void router.push({ name: 'notificationCenter' }),
+        },
+      })
+      continue
+    }
+    toast.info(alert.item.title, {
+      description: alert.item.body,
+      duration: 6_000,
+      action: {
+        label: '查看',
+        onClick: () => void router.push({
+          name: 'notificationCenter',
+          query: { id: alert.item.id },
+        }),
+      },
+    })
+  }
+}, { deep: true, flush: 'post' })
 
 onMounted(() => {
   store.startPolling()

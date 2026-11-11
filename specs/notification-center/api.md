@@ -401,7 +401,7 @@ export interface SystemNotificationPublishResult {
 | --- | --- | --- |
 | GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=sales/purchase/shipment/finance/invoice/reconciliation/operations/system`、`page`、`pageSize` |
 | GET | `/api/notifications/me/inbox/unread-count` | 未读总数 `{ total }`；只算未读且未归档 |
-| GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供桌面通知使用 |
+| GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供页面内 Toast 与桌面通知使用 |
 | GET | `/api/notifications/me/inbox/:id` | 详情；不属于当前用户返回 404 |
 | POST | `/api/notifications/me/inbox/:id/read` | 标记已读，幂等 |
 | POST | `/api/notifications/me/inbox/:id/unread` | 标记未读，幂等 |

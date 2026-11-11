@@ -56,6 +56,7 @@ declare global {
   const markRaw: typeof import('vue').markRaw
   const matchesAllPermissions: typeof import('../composables/app/auth').matchesAllPermissions
   const matchesAuthorization: typeof import('../composables/app/auth').matchesAuthorization
+  const mergeNotificationToastAlerts: typeof import('../store/modules/app/notification-toast.logic').mergeNotificationToastAlerts
   const nextTick: typeof import('vue').nextTick
   const onActivated: typeof import('vue').onActivated
   const onBeforeMount: typeof import('vue').onBeforeMount
@@ -162,6 +163,9 @@ declare global {
   // @ts-ignore
   export type { NotificationNewPage, CollectedNotificationNewPages } from '../store/modules/app/notification-polling'
   import('../store/modules/app/notification-polling')
+  // @ts-ignore
+  export type { NotificationToastItem, NotificationToastAlert } from '../store/modules/app/notification-toast.logic'
+  import('../store/modules/app/notification-toast.logic')
   // @ts-ignore
   export type { StaleProfileStateError, ProfileMutationResultUnknownError, ProfileLifecycleCoordinator, ProfileState, ProfileLifecycleState, ProfileIdentity, ProfileLifecycleDependencies, LoadProfileOptions } from '../store/modules/app/profile-lifecycle'
   import('../store/modules/app/profile-lifecycle')

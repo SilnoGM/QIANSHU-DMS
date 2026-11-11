@@ -1,3 +1,4 @@
+import type { NotificationToastAlert } from './notification-toast.logic'
 import type { NotificationInboxItemDto, NotificationInboxNewItemDto } from '@/api/generated/types.gen'
 
 import notificationsApi from '@/api/modules/notifications'
@@ -8,6 +9,7 @@ import {
   unreadPollDelay,
   unreadRetryDelay,
 } from './notification-polling'
+import { mergeNotificationToastAlerts } from './notification-toast.logic'
 
 const CHANNEL_NAME = 'qianshu-notification-inbox'
 const DESKTOP_PREFERENCE_PREFIX = 'qianshu.notification.desktop.'
@@ -27,6 +29,9 @@ type InboxChannelMessage = {
   readonly total: number
 } | {
   readonly type: 'refresh'
+} | {
+  readonly type: 'new-items'
+  readonly items: readonly NotificationInboxNewItemDto[]
 } | {
   readonly type: 'desktop'
   readonly enabled: boolean
@@ -60,6 +65,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
   const desktopEnabled = ref(false)
   const desktopSupported = ref(false)
   const desktopPermission = ref<NotificationPermission>('default')
+  const pendingToastAlerts = ref<NotificationToastAlert[]>([])
 
   let started = false
   let leader = false
@@ -75,15 +81,28 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
   let unreadAbortController: AbortController | null = null
 
   let desktopUserId = ''
-  let desktopTimer: ReturnType<typeof setTimeout> | null = null
-  let desktopRetryTimer: ReturnType<typeof setTimeout> | null = null
-  let desktopPolling = false
-  let desktopCursor: string | undefined
-  let desktopInitialized = false
-  let desktopFailureCount = 0
-  let desktopAbortController: AbortController | null = null
-  const desktopSeen = new Set<string>()
+  let newItemTimer: ReturnType<typeof setTimeout> | null = null
+  let newItemRetryTimer: ReturnType<typeof setTimeout> | null = null
+  let newItemPolling = false
+  let newItemCursor: string | undefined
+  let newItemInitialized = false
+  let newItemFailureCount = 0
+  let newItemAbortController: AbortController | null = null
+  const newItemSeen = new Set<string>()
   const desktopNotifications: Notification[] = []
+
+  function enqueueNotificationAlerts(items: readonly NotificationInboxNewItemDto[]): void {
+    if (items.length === 0 || document.visibilityState !== 'visible' || !document.hasFocus()) {
+      return
+    }
+    pendingToastAlerts.value = mergeNotificationToastAlerts(pendingToastAlerts.value, items)
+  }
+
+  function consumeNotificationAlerts(): NotificationToastAlert[] {
+    const alerts = [...pendingToastAlerts.value]
+    pendingToastAlerts.value = []
+    return alerts
+  }
 
   function broadcast(message: InboxChannelMessage): void {
     channel?.postMessage(message)
@@ -103,14 +122,14 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     desktopNotifications.length = 0
   }
 
-  function rememberDesktopSeen(id: string): void {
-    desktopSeen.add(id)
-    while (desktopSeen.size > DESKTOP_SEEN_LIMIT) {
-      const first = desktopSeen.values().next().value
+  function rememberNewItemSeen(id: string): void {
+    newItemSeen.add(id)
+    while (newItemSeen.size > DESKTOP_SEEN_LIMIT) {
+      const first = newItemSeen.values().next().value
       if (first === undefined) {
         break
       }
-      desktopSeen.delete(first)
+      newItemSeen.delete(first)
     }
   }
 
@@ -259,16 +278,14 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
         schedule()
       }
     })
-    if (desktopEnabled.value) {
-      void startDesktopPolling()
-    }
+    void startNewItemPolling()
   }
 
   function resignLeader(): void {
     leader = false
     isLeader.value = false
     clearTimer()
-    stopDesktopPolling()
+    stopNewItemPolling()
   }
 
   function yieldLeadership(): void {
@@ -322,17 +339,20 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       void fetchUnread()
       return
     }
+    if (data.type === 'new-items' && 'items' in data && Array.isArray(data.items)) {
+      enqueueNotificationAlerts(data.items as NotificationInboxNewItemDto[])
+      return
+    }
     if (data.type === 'desktop' && 'enabled' in data && typeof data.enabled === 'boolean') {
       desktopEnabled.value = data.enabled
       if (!data.enabled) {
-        stopDesktopPolling()
         closeDesktopNotifications()
         if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
           yieldLeadership()
         }
       }
       else {
-        void startDesktopPolling()
+        void startNewItemPolling()
       }
     }
   }
@@ -369,7 +389,6 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     if (!desktopSupported.value || userId.length === 0) {
       desktopEnabled.value = false
       desktopPermission.value = 'default'
-      stopDesktopPolling()
       closeDesktopNotifications()
       if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
         yieldLeadership()
@@ -378,14 +397,11 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
     desktopPermission.value = Notification.permission
     desktopEnabled.value = desktopPermission.value === 'granted' && desktopStorageEnabled()
-    if (desktopEnabled.value) {
-      void startDesktopPolling()
+    if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
+      yieldLeadership()
     }
     else {
-      stopDesktopPolling()
-      if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
-        yieldLeadership()
-      }
+      void startNewItemPolling()
     }
   }
 
@@ -394,7 +410,6 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       desktopEnabled.value = false
       persistDesktop(false)
       broadcast({ type: 'desktop', enabled: false })
-      stopDesktopPolling()
       closeDesktopNotifications()
       if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
         yieldLeadership()
@@ -418,7 +433,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       persistDesktop(true)
       broadcast({ type: 'desktop', enabled: true })
       showDesktopTest()
-      await startDesktopPolling()
+      await startNewItemPolling()
       return true
     }
     catch {
@@ -464,127 +479,134 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
   }
 
-  function clearDesktopTimer(): void {
-    if (desktopTimer !== null) {
-      clearTimeout(desktopTimer)
-      desktopTimer = null
+  function clearNewItemTimer(): void {
+    if (newItemTimer !== null) {
+      clearTimeout(newItemTimer)
+      newItemTimer = null
     }
   }
 
-  function clearDesktopRetry(): void {
-    if (desktopRetryTimer !== null) {
-      clearTimeout(desktopRetryTimer)
-      desktopRetryTimer = null
+  function clearNewItemRetry(): void {
+    if (newItemRetryTimer !== null) {
+      clearTimeout(newItemRetryTimer)
+      newItemRetryTimer = null
     }
   }
 
-  function scheduleDesktopRetry(): void {
-    if (!desktopEnabled.value || !desktopSupported.value || !leader) {
+  function scheduleNewItemRetry(): void {
+    if (!leader) {
       return
     }
-    clearDesktopRetry()
-    desktopRetryTimer = setTimeout(() => {
-      desktopRetryTimer = null
-      void startDesktopPolling()
-    }, desktopRetryDelay(desktopFailureCount))
+    clearNewItemRetry()
+    newItemRetryTimer = setTimeout(() => {
+      newItemRetryTimer = null
+      void startNewItemPolling()
+    }, desktopRetryDelay(newItemFailureCount))
   }
 
-  function scheduleDesktop(): void {
-    if (!desktopEnabled.value || !desktopPolling || !leader) {
+  function scheduleNewItem(): void {
+    if (!newItemPolling || !leader) {
       return
     }
-    clearDesktopTimer()
-    const delay = desktopFailureCount === 0
+    clearNewItemTimer()
+    const delay = newItemFailureCount === 0
       ? unreadPollDelay(globalThis.crypto.getRandomValues(new Uint32Array(1))[0]!)
-      : desktopRetryDelay(desktopFailureCount)
-    desktopTimer = setTimeout(() => {
-      void runDesktopPoll()
+      : desktopRetryDelay(newItemFailureCount)
+    newItemTimer = setTimeout(() => {
+      void runNewItemPoll()
     }, delay)
   }
 
-  async function runDesktopPoll(): Promise<void> {
-    await pollDesktop()
-    scheduleDesktop()
+  async function runNewItemPoll(): Promise<void> {
+    await pollNewItems()
+    scheduleNewItem()
   }
 
-  async function startDesktopPolling(): Promise<void> {
-    clearDesktopRetry()
-    if (!desktopEnabled.value || !desktopSupported.value || desktopPermission.value !== 'granted' || !leader || desktopPolling) {
+  async function startNewItemPolling(): Promise<void> {
+    clearNewItemRetry()
+    if (!leader || newItemPolling) {
       return
     }
-    desktopPolling = true
-    if (!desktopInitialized) {
+    newItemPolling = true
+    if (!newItemInitialized) {
       const controller = new AbortController()
-      desktopAbortController = controller
+      newItemAbortController = controller
       try {
         const first = await notificationsApi.inbox.newItems(undefined, controller.signal)
-        if (controller.signal.aborted || !desktopPolling) {
+        if (controller.signal.aborted || !newItemPolling) {
           return
         }
-        desktopCursor = first.data.nextCursor
-        desktopInitialized = true
-        desktopFailureCount = 0
+        newItemCursor = first.data.nextCursor
+        newItemInitialized = true
+        newItemFailureCount = 0
       }
       catch (failure) {
         if (controller.signal.aborted) {
           return
         }
-        desktopPolling = false
+        newItemPolling = false
         if (isUnauthorized(failure)) {
           stopPolling()
           return
         }
-        desktopFailureCount += 1
-        scheduleDesktopRetry()
+        newItemFailureCount += 1
+        scheduleNewItemRetry()
         return
       }
       finally {
-        if (desktopAbortController === controller) {
-          desktopAbortController = null
+        if (newItemAbortController === controller) {
+          newItemAbortController = null
         }
       }
     }
-    scheduleDesktop()
+    scheduleNewItem()
   }
 
-  function stopDesktopPolling(): void {
-    desktopPolling = false
-    desktopInitialized = false
-    desktopCursor = undefined
-    desktopFailureCount = 0
-    desktopAbortController?.abort()
-    desktopAbortController = null
-    clearDesktopTimer()
-    clearDesktopRetry()
+  function stopNewItemPolling(): void {
+    newItemPolling = false
+    newItemInitialized = false
+    newItemCursor = undefined
+    newItemFailureCount = 0
+    newItemAbortController?.abort()
+    newItemAbortController = null
+    clearNewItemTimer()
+    clearNewItemRetry()
   }
 
-  async function pollDesktop(): Promise<void> {
-    if (!desktopEnabled.value || !desktopPolling || !leader || desktopCursor === undefined) {
+  async function pollNewItems(): Promise<void> {
+    if (!newItemPolling || !leader || newItemCursor === undefined) {
       return
     }
     const controller = new AbortController()
-    desktopAbortController = controller
+    newItemAbortController = controller
     try {
       const result = await collectNotificationPages(
-        desktopCursor,
+        newItemCursor,
         cursor => notificationsApi.inbox.newItems(cursor, controller.signal).then(response => response.data),
       )
-      if (controller.signal.aborted || !desktopPolling || !leader) {
+      if (controller.signal.aborted || !newItemPolling || !leader) {
         return
       }
-      desktopCursor = result.cursor
-      desktopFailureCount = 0
+      newItemCursor = result.cursor
+      newItemFailureCount = 0
       unreadTotal.value = result.unreadTotal
       broadcast({ type: 'unread', total: unreadTotal.value })
-      const hidden = document.visibilityState === 'hidden' || !document.hasFocus()
-      for (const item of result.items) {
-        if (desktopSeen.has(item.id)) {
-          continue
-        }
-        rememberDesktopSeen(item.id)
-        if (!hidden) {
-          continue
-        }
+      const freshItems = result.items.filter(item => !newItemSeen.has(item.id))
+      for (const item of freshItems) {
+        rememberNewItemSeen(item.id)
+      }
+      if (freshItems.length === 0) {
+        return
+      }
+      broadcast({ type: 'new-items', items: freshItems })
+      if (document.visibilityState === 'visible' && document.hasFocus()) {
+        enqueueNotificationAlerts(freshItems)
+        return
+      }
+      if (!desktopEnabled.value || desktopPermission.value !== 'granted') {
+        return
+      }
+      for (const item of freshItems) {
         showDesktopItem(item)
         await sleep(200)
       }
@@ -597,11 +619,11 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
         stopPolling()
         return
       }
-      desktopFailureCount += 1
+      newItemFailureCount += 1
     }
     finally {
-      if (desktopAbortController === controller) {
-        desktopAbortController = null
+      if (newItemAbortController === controller) {
+        newItemAbortController = null
       }
     }
   }
@@ -622,9 +644,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
           acquireLeadership()
         }
         void refreshUnread()
-        if (desktopEnabled.value) {
-          void startDesktopPolling()
-        }
+        void startNewItemPolling()
         return
       }
       if (shouldYieldLeadership(document.visibilityState, desktopEnabled.value)) {
@@ -637,9 +657,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
         acquireLeadership()
       }
       void refreshUnread()
-      if (desktopEnabled.value) {
-        void startDesktopPolling()
-      }
+      void startNewItemPolling()
     }
     document.addEventListener('visibilitychange', visibilityListener)
     window.addEventListener('focus', focusListener)
@@ -656,7 +674,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     unreadRequest = null
     unreadRequestToken = null
     clearTimer()
-    stopDesktopPolling()
+    stopNewItemPolling()
     closeDesktopNotifications()
     releaseLeader?.()
     releaseLeader = null
@@ -675,14 +693,15 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     }
     unreadTotal.value = 0
     recent.value = []
+    pendingToastAlerts.value = []
   }
 
   watch(isLeader, (value) => {
     if (!value) {
-      stopDesktopPolling()
+      stopNewItemPolling()
     }
-    else if (desktopEnabled.value) {
-      void startDesktopPolling()
+    else {
+      void startNewItemPolling()
     }
   })
 
@@ -694,6 +713,8 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     desktopEnabled,
     desktopSupported,
     desktopPermission,
+    pendingToastAlerts,
+    consumeNotificationAlerts,
     initDesktop,
     setDesktopEnabled,
     refreshUnread,
