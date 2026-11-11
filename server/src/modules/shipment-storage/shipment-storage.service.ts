@@ -2209,7 +2209,6 @@ export class ShipmentStorageService {
             storageRecordId,
           },
           dedupeKey: `storage-claim-request:${created.id}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
         return created
@@ -2304,7 +2303,6 @@ export class ShipmentStorageService {
           storageRecordId,
         },
         dedupeKey: `storage-claim-rejected:${requestId}`,
-        priority: 'HIGH',
         requestedByUserId: context.actorUserId,
       }, { transaction })
     }, { timeout: 30_000 })

@@ -265,7 +265,6 @@ export class AdvertisingRechargeService {
             rechargeNo: created.rechargeNo,
           },
           dedupeKey: `advertising-recharge-pending:${created.id}:v${created.version}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
         return created.id
@@ -360,7 +359,6 @@ export class AdvertisingRechargeService {
             rechargeNo: row.rechargeNo,
           },
           dedupeKey: `advertising-recharge-rejected:${id}:v${row.version + 1}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
       }, { timeout: 60_000 })
@@ -583,7 +581,6 @@ export class AdvertisingRechargeService {
             rechargeNo: row.rechargeNo,
           },
           dedupeKey: `advertising-recharge-voided:${id}:v${row.version + 1}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
       }, { timeout: 60_000 })

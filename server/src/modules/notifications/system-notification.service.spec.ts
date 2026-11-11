@@ -138,6 +138,38 @@ describe('SystemNotificationService.publish', () => {
     expect(updateCalls[0]?.[0]?.data?.status).toBe('FAILED')
   })
 
+  it('uses the channel policy priority instead of the command priority', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n-priority' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+        priority: 'NORMAL',
+        targetMode: 'GROUP',
+        targetConfig: { targetKeys: ['operations'] },
+      })]) },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template()) },
+      assistantTarget: { findMany: jest.fn().mockResolvedValue([{ id: 'target-1', internalOnly: true }]) },
+      assistantAccount: { findFirst: jest.fn().mockResolvedValue({ id: 'account-1' }) },
+      assistantDelivery: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+      },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+    }
+    const service = createService({} as PrismaService)
+
+    await service.publish({ ...command, priority: 'HIGH' }, { transaction: transaction as never })
+
+    expect(transaction.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ priority: 'NORMAL' }),
+      select: { id: true },
+    })
+  })
+
   it('uses the policy template key when it overrides the command key', async () => {
     const transaction = {
       notification: {

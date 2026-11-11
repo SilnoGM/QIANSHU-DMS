@@ -242,7 +242,6 @@ export class SalesReceiptService {
             paymentType: row.paymentType,
           },
           dedupeKey: `sales-receipt-review:${row.id}:v${row.version}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction: tx })
         return row.id
@@ -351,7 +350,6 @@ export class SalesReceiptService {
           reason: reviewRemark,
         },
         dedupeKey: `sales-receipt-rejected:${id}:v${row.version + 1}`,
-        priority: 'HIGH',
         requestedByUserId: context.actorUserId,
       }, { transaction: tx })
     })

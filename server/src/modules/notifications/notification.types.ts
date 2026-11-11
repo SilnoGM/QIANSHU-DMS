@@ -930,6 +930,7 @@ export interface SystemNotificationPublishCommand {
   readonly templateKey: string
   readonly variables: Readonly<Record<string, string | number | null>>
   readonly dedupeKey?: string
+  /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准。 */
   readonly priority?: NotificationPriority
   readonly expiresAt?: string
   readonly channels?: readonly NotificationChannel[]

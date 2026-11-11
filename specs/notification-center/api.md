@@ -81,6 +81,7 @@ export interface SystemNotificationPublishCommand {
   variables: Record<string, string | number | null>
   /** 同一事件重复触发时的幂等键；省略时按 eventType + source 生成 */
   dedupeKey?: string
+  /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准 */
   priority?: NotificationPriority
   /** 只约束站外投递；站内收件箱不因过期删除 */
   expiresAt?: string
@@ -169,7 +170,6 @@ export interface SystemNotificationPublishResult {
     "itemCount": 3
   },
   "dedupeKey": "purchase-review:6f0d6f4e-7a0e-4a1e-9a4a-2f5a1c9b7d31",
-  "priority": "HIGH",
   "expiresAt": "2026-10-29T12:00:00.000Z",
   "requestedByUserId": "1c2f2a64-1f9c-4f6e-8a14-4f0f6f7f8a11"
 }

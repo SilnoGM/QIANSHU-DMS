@@ -35,6 +35,10 @@ const notificationNumber = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261111150000_notification_number/migration.sql'),
   'utf8',
 )
+const notificationPriority = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261111160000_notification_priority_fairness/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -169,6 +173,17 @@ describe('notification center database contract', () => {
       `75b357194ff2ee76a33a43bedb272b64e95eb174fd9cb33b9a8f48f23ca29c97`,
     )
     expect(notificationNumber).toContain('"status" = \'ENABLED\'')
+  })
+
+  it('normalizes notification priority defaults to urgent events only', () => {
+    expect(notificationPriority).toContain("\"priority\" = 'NORMAL'")
+    expect(notificationPriority).toContain("'ASSISTANT_ACCOUNT_OFFLINE'")
+    expect(notificationPriority).toContain("'FUND_ACCOUNT_REVERSED'")
+    expect(notificationPriority).toContain("'PROXY_NODE_EXPIRED'")
+    expect(notificationPriority).toContain("'ADVERTISING_RECHARGE_VOIDED'")
+    expect(notificationPriority).toContain("'SALES_ORDER_TERMINATED'")
+    expect(notificationPriority).toContain("'PURCHASE_ORDER_CANCELLED'")
+    expect(notificationPriority).not.toContain("'PURCHASE_REVIEW_PENDING'")
   })
 
   it('adds exclusive delivery targets, partial unique indexes and seeds', () => {

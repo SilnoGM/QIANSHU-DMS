@@ -24,6 +24,7 @@ const MAX_ATTEMPTS = 3
 const RETRY_DELAYS_MS = [5_000, 30_000, 120_000] as const
 const OFFLINE_RETRY_DELAYS_MS = [30_000, 120_000, 300_000] as const
 const RATE_LIMIT_RETRY_MS = 60_000
+const HIGH_PRIORITY_BURST = 3
 const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
   day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
 })
@@ -137,7 +138,58 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     return rows.length > 0
   }
 
+  /**
+   * 高优先级消息最多连续领取 3 条，随后插入 1 条普通消息，避免 HIGH 洪峰
+   * 长期饿死 NORMAL。普通消息等待 5 分钟或距离过期不足 10 分钟时进入高优先级
+   * 泳道；老化只影响本次领取顺序，不修改 Notification.priority。
+   */
   private async claimDeliveries(batchSize: number): Promise<ClaimedDelivery[]> {
+    const claimed: ClaimedDelivery[] = []
+    let highExhausted = false
+    let normalExhausted = false
+
+    while (claimed.length < batchSize && !(highExhausted && normalExhausted)) {
+      const remaining = batchSize - claimed.length
+      if (!highExhausted) {
+        const highLimit = Math.min(HIGH_PRIORITY_BURST, remaining)
+        const high = await this.claimDeliveriesByLane(highLimit, true)
+        claimed.push(...high)
+        if (high.length < highLimit) {
+          highExhausted = true
+        }
+      }
+      if (claimed.length >= batchSize) {
+        break
+      }
+      if (!normalExhausted) {
+        const remainingAfterHigh = batchSize - claimed.length
+        const normalLimit = highExhausted ? remainingAfterHigh : 1
+        const normal = await this.claimDeliveriesByLane(normalLimit, false)
+        claimed.push(...normal)
+        if (normal.length < normalLimit) {
+          normalExhausted = true
+        }
+      }
+    }
+
+    return claimed
+  }
+
+  private async claimDeliveriesByLane(limit: number, urgent: boolean): Promise<ClaimedDelivery[]> {
+    if (limit <= 0) {
+      return []
+    }
+
+    // 老化与临期提升都在查询期计算，不回写通知原始优先级。
+    const urgentCondition = Prisma.sql`(
+      n."priority" = 'HIGH'
+      OR d2."created_at" <= now() - interval '5 minutes'
+      OR (n."expires_at" IS NOT NULL AND n."expires_at" <= now() + interval '10 minutes')
+    )`
+    const laneCondition = urgent
+      ? urgentCondition
+      : Prisma.sql`NOT ${urgentCondition}`
+
     return this.prisma.$queryRaw<ClaimedDelivery[]>(Prisma.sql`
       UPDATE "assistant_deliveries" d
       SET "status" = 'SENDING', "updated_at" = now()
@@ -147,9 +199,10 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         JOIN "notifications" n ON n."id" = d2."notification_id"
         WHERE d2."status" = 'PENDING'
           AND d2."next_attempt_at" <= now()
-        ORDER BY n."priority" DESC, d2."created_at" ASC
+          AND ${laneCondition}
+        ORDER BY d2."created_at" ASC, d2."id" ASC
         FOR UPDATE OF d2 SKIP LOCKED
-        LIMIT ${batchSize}
+        LIMIT ${limit}
       )
       RETURNING d."id",
                 d."notification_id",
@@ -296,7 +349,6 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
           reason: result.message,
         },
         dedupeKey: `assistant-account-offline:${delivery.account_id}:${occurredAt.toISOString().slice(0, 10)}`,
-        priority: 'HIGH',
       })
     }
 

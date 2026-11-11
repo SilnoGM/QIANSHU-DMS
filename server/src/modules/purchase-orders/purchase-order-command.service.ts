@@ -435,7 +435,6 @@ export class PurchaseOrderCommandService {
             customerName,
           },
           dedupeKey: `purchase-review:${created.id}`,
-          priority: 'HIGH',
           requestedByUserId: trusted.actorUserId,
         }, { transaction })
         return created.id

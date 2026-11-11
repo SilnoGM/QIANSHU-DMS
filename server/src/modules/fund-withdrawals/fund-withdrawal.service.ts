@@ -180,7 +180,6 @@ export class FundWithdrawalService {
             withdrawalNo: created.withdrawalNo,
           },
           dedupeKey: `fund-withdrawal-review:${created.id}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
         return created.id
@@ -254,7 +253,6 @@ export class FundWithdrawalService {
             withdrawalNo: row.withdrawalNo,
           },
           dedupeKey: `fund-withdrawal-rejected:${id}:v${row.version + 1}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction })
       }, { timeout: 60_000 })

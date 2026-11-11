@@ -350,7 +350,6 @@ export class SalesOrderMutationService {
             reason: reason ?? '订单已终止',
           },
           dedupeKey: `sales-order-terminated:${salesOrderId}`,
-          priority: 'HIGH',
           requestedByUserId: trusted.actorUserId,
         }, { transaction })
       }

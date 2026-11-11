@@ -180,7 +180,8 @@ export class SystemNotificationService {
     const expiresAt = primaryPolicy?.channel === 'ASSISTANT'
       ? this.resolveExpiresAt(command, primaryPolicy.ttlSeconds, now)
       : null
-    const priority = command.priority ?? primaryPolicy?.priority ?? 'NORMAL'
+    // 优先级由事件×渠道策略统一维护，避免业务代码硬编码 HIGH 覆盖管理端配置。
+    const priority = primaryPolicy?.priority ?? command.priority ?? 'NORMAL'
     const variables = sanitizeVariables(command.variables)
 
     // 编号与通知同事务：重复通知在入口已返回，不会消耗编号；业务回滚会一并回滚发号。

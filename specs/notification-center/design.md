@@ -98,7 +98,6 @@ await this.systemNotifications.publish(
     templateKey: 'purchase.review.pending',
     variables: { orderNo: order.orderNo, vendorName: order.vendorName, itemCount: order.itemCount },
     dedupeKey: `purchase-review:${order.id}`,
-    priority: 'HIGH',
   },
   { transaction },
 )
@@ -134,7 +133,7 @@ await this.systemNotifications.publish(
 
 - 新增事件只追加。
 - 每个事件在每个启用渠道上必须有策略与模板；缺失时该渠道跳过，不影响其他渠道。
-- 渠道的收件人、TTL、优先级由 `notification_channel_policies` 维护，不写死在业务代码里。
+- 渠道的收件人、TTL、优先级由 `notification_channel_policies` 维护，不写死在业务代码里；有启用的渠道策略时以策略 `priority` 为准，命令中的 `priority` 仅作兜底。
 
 ## 4. 领域模型
 
@@ -269,24 +268,12 @@ PENDING ──► SENDING ──► ACCEPTED
 
 ### 5.3 领取与并发
 
-每轮领取最多 20 条到期交付：
+每轮领取最多 20 条到期交付，按 HIGH / NORMAL 两条泳道领取：
 
-```sql
-UPDATE assistant_deliveries d
-SET status = 'SENDING', updated_at = now()
-WHERE d.id IN (
-  SELECT d2.id
-  FROM assistant_deliveries d2
-  JOIN notifications n ON n.id = d2.notification_id
-  WHERE d2.status = 'PENDING' AND d2.next_attempt_at <= now()
-  ORDER BY n.priority DESC, d2.created_at ASC
-  FOR UPDATE OF d2 SKIP LOCKED
-  LIMIT 20
-)
-RETURNING d.*;
-```
-
-`SKIP LOCKED` 保证多实例或多轮次不会重复领取。`priority` 不冗余到交付表，排序时 join 通知表。单实例内部串行发送，不并发调用 GeWe。
+- HIGH 泳道包含 `priority = HIGH`、等待超过 5 分钟、或距过期不足 10 分钟的交付；老化/临期提升只影响本次领取，不回写通知原始优先级。
+- 每次最多连续领取 3 条 HIGH，再领取 1 条 NORMAL；HIGH 空时 NORMAL 一次领取剩余额度，NORMAL 空时 HIGH 继续领取。
+- 两条泳道都使用 `FOR UPDATE OF d2 SKIP LOCKED`，`priority` 不冗余到交付表，排序时 join 通知表。
+- 单实例内部串行发送，不并发调用 GeWe；优先级只改变领取顺序，不改变发送间隔。
 
 ### 5.4 限速
 
@@ -295,7 +282,7 @@ RETURNING d.*;
 - 每分钟不超过 40 条。
 - 同一收件人相邻消息间隔不少于 1 秒。
 - 群消息间隔随机 2~5 秒。
-- 同一批通知按 `HIGH` 优先、创建时间升序发送。
+- 同一批通知采用 HIGH 3 条 + NORMAL 1 条的加权公平顺序；NORMAL 等待超过 5 分钟或距过期不足 10 分钟时进入 HIGH 泳道，避免长期饥饿。
 
 限制器是进程内的软限制；租约切换后计数会重置。这是可接受的，因为限速目的是降低风控概率，不是精确配额。
 
@@ -319,7 +306,7 @@ RETURNING d.*;
 
 - 默认 `20:00–08:00`（`Asia/Shanghai`），可在渠道设置或事件×渠道策略覆盖。
 - `NORMAL` 通知在静默时段不发送，`next_attempt_at` 推到窗口开始；若窗口开始晚于 `expiresAt`，直接 `EXPIRED`。
-- `HIGH` 通知不受静默时段限制，例如待审核、提现审批。
+- `HIGH` 通知不受静默时段限制，例如账号离线、资金冲账、代理节点过期。
 - 站内通知没有静默时段，收件箱条目立即创建。
 
 ### 5.7 TTL

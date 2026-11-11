@@ -483,7 +483,6 @@ export class PurchaseOrderMutationService {
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-order-cancelled:${purchaseOrderId}:v${order.version + 1}`,
-        priority: 'HIGH',
         requestedByUserId: trusted.actorUserId,
       }, { transaction })
     })
@@ -543,7 +542,6 @@ export class PurchaseOrderMutationService {
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-review-rejected:${purchaseOrderId}:v${order.version + 1}`,
-        priority: 'HIGH',
         requestedByUserId: trusted.actorUserId,
       }, { transaction })
     })

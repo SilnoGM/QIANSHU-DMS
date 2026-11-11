@@ -233,7 +233,6 @@ export class InvoiceRequestService {
             lineCount: payload.lines.length,
           },
           dedupeKey: `invoice-review:${created.id}:v1`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction: tx })
         return created.id
@@ -308,7 +307,6 @@ export class InvoiceRequestService {
             lineCount: payload.lines.length,
           },
           dedupeKey: `invoice-review:${id}:v${row.version + 1}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction: tx })
       }, { timeout: 60_000 })
@@ -355,7 +353,6 @@ export class InvoiceRequestService {
             reason: input.reason.trim(),
           },
           dedupeKey: `invoice-returned:${id}:v${row.version + 1}`,
-          priority: 'HIGH',
           requestedByUserId: context.actorUserId,
         }, { transaction: tx })
       }, { timeout: 30_000 })
@@ -459,7 +456,6 @@ export class InvoiceRequestService {
               reason: input.reason.trim(),
             },
             dedupeKey: `invoice-cancelled:${id}:v${row.version + 1}`,
-            priority: 'HIGH',
             requestedByUserId: context.actorUserId,
           }, { transaction: tx })
         }

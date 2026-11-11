@@ -46,12 +46,13 @@ describe('AssistantDispatchService', () => {
     const prisma = {
       $queryRaw: jest.fn()
         .mockResolvedValueOnce([{ id: 'assistant-dispatch' }])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
       notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
       assistantDelivery: { findMany: jest.fn().mockResolvedValue([]) },
     }
     await service(prisma).dispatchOnce(20)
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2)
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3)
   })
 
   it('defers NORMAL deliveries during the quiet window', async () => {
@@ -70,6 +71,7 @@ describe('AssistantDispatchService', () => {
             rendered_content: 'test',
             target_id: null,
           }])
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([{ id: 'assistant-dispatch' }]),
         notification: {
           findUnique: jest.fn().mockResolvedValue({
@@ -110,4 +112,92 @@ describe('AssistantDispatchService', () => {
       jest.useRealTimers()
     }
   })
+
+  it('interleaves high and normal lanes with a 3:1 burst', async () => {
+    const claimedDelivery = (id: string) => ({
+      account_id: null,
+      attempt_count: 0,
+      id,
+      notification_id: `notification-${id}`,
+      recipient_user_id: 'user-1',
+      rendered_content: id,
+      target_id: null,
+    })
+    const high = [
+      claimedDelivery('high-1'),
+      claimedDelivery('high-2'),
+      claimedDelivery('high-3'),
+    ]
+    const normal = [claimedDelivery('normal-1')]
+    const $queryRaw = jest.fn()
+      .mockResolvedValueOnce(high)
+      .mockResolvedValueOnce(normal)
+    const instance = service({ $queryRaw })
+    const claim = (instance as unknown as {
+      claimDeliveries: (batchSize: number) => Promise<Array<{ id: string }>>
+    }).claimDeliveries
+
+    const result = await claim.call(instance, 4)
+
+    expect(result.map(item => item.id)).toEqual([
+      'high-1',
+      'high-2',
+      'high-3',
+      'normal-1',
+    ])
+    expect($queryRaw).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the full remaining batch for normal lane when high lane is empty', async () => {
+    const claimedDelivery = (id: string) => ({
+      account_id: null,
+      attempt_count: 0,
+      id,
+      notification_id: `notification-${id}`,
+      recipient_user_id: 'user-1',
+      rendered_content: id,
+      target_id: null,
+    })
+    const normal = [
+      claimedDelivery('normal-1'),
+      claimedDelivery('normal-2'),
+      claimedDelivery('normal-3'),
+    ]
+    const $queryRaw = jest.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(normal)
+    const instance = service({ $queryRaw })
+    const claim = (instance as unknown as {
+      claimDeliveries: (batchSize: number) => Promise<Array<{ id: string }>>
+    }).claimDeliveries
+
+    const result = await claim.call(instance, 3)
+
+    expect(result.map(item => item.id)).toEqual(['normal-1', 'normal-2', 'normal-3'])
+  })
+
+  it('keeps claiming high lane when normal lane is empty', async () => {
+    const claimedDelivery = (id: string) => ({
+      account_id: null,
+      attempt_count: 0,
+      id,
+      notification_id: `notification-${id}`,
+      recipient_user_id: 'user-1',
+      rendered_content: id,
+      target_id: null,
+    })
+    const $queryRaw = jest.fn()
+      .mockResolvedValueOnce([claimedDelivery('high-1'), claimedDelivery('high-2'), claimedDelivery('high-3')])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([claimedDelivery('high-4')])
+    const instance = service({ $queryRaw })
+    const claim = (instance as unknown as {
+      claimDeliveries: (batchSize: number) => Promise<Array<{ id: string }>>
+    }).claimDeliveries
+
+    const result = await claim.call(instance, 4)
+
+    expect(result.map(item => item.id)).toEqual(['high-1', 'high-2', 'high-3', 'high-4'])
+  })
+
 })

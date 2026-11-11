@@ -167,7 +167,6 @@ async function scanExpiredProxyNodes(
         nodeLabel: node.publicIp ?? node.host,
       },
       dedupeKey: `proxy-node-expired:${node.id}:${node.expiresAt.toISOString().slice(0, 10)}`,
-      priority: 'HIGH',
     }, { transaction: prisma })
     published += 1
   }
