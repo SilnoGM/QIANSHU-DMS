@@ -46,8 +46,14 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 29],
-  ['operations_staff', 27],
-  ['purchasing_staff', 15],
+  ['operations_staff', 28],
+  ['purchasing_staff', 16],
+]
+const expectedRolePermissionCodes: ReadonlyArray<
+  readonly [string, readonly string[]]
+> = [
+  ['operations_staff', ['shipment-storage:release']],
+  ['purchasing_staff', ['shipment-storage:release']],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
   ADVERTISING_RECHARGE_NO: 'FIXED(AD) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
@@ -288,6 +294,21 @@ async function expectRoles(prisma: PrismaService) {
     expect({ code, count: role?.permissions.length }).toEqual({ code, count })
     expect(role?.permissions.every(entry => entry.permission.systemOnly === false)).toBe(true)
   }
+  for (const [code, permissionCodes] of expectedRolePermissionCodes) {
+    const role = roles.find(item => item.code === code)
+    const granted = new Set(
+      role?.permissions.map(entry => entry.permission.code) ?? [],
+    )
+    for (const permissionCode of permissionCodes) {
+      expect({ code, granted: granted.has(permissionCode), permissionCode })
+        .toEqual({ code, granted: true, permissionCode })
+    }
+  }
+  // 财务不参与货件释放，不能顺手扩大授权。
+  const finance = roles.find(item => item.code === 'finance_staff')
+  expect(finance?.permissions.some(
+    entry => entry.permission.code === 'shipment-storage:release',
+  )).toBe(false)
 }
 
 async function expectNumberingRules(prisma: PrismaService) {
