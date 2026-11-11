@@ -18,7 +18,7 @@ watch(() => accountStore.userId, (userId) => {
   store.initDesktop(userId)
 }, { immediate: true })
 
-watch(() => store.pendingToastAlerts, () => {
+watch(() => store.toastAlertVersion, () => {
   const alerts = store.consumeNotificationAlerts()
   for (const alert of alerts) {
     if (alert.kind === 'summary') {
@@ -44,7 +44,7 @@ watch(() => store.pendingToastAlerts, () => {
       },
     })
   }
-}, { deep: true, flush: 'post' })
+}, { flush: 'post' })
 
 onMounted(() => {
   store.startPolling()

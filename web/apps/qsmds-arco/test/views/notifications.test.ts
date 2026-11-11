@@ -289,7 +289,7 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(bellSource, /startPolling/u)
   assert.match(bellSource, /initDesktop/u)
   assert.match(bellSource, /useQsToast/u)
-  assert.match(bellSource, /pendingToastAlerts/u)
+  assert.match(bellSource, /toastAlertVersion/u)
   assert.match(bellSource, /consumeNotificationAlerts/u)
   assert.match(inboxStoreSource, /mergeNotificationToastAlerts/u)
   assert.match(inboxStoreSource, /new-items/u)

@@ -66,6 +66,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
   const desktopSupported = ref(false)
   const desktopPermission = ref<NotificationPermission>('default')
   const pendingToastAlerts = ref<NotificationToastAlert[]>([])
+  const toastAlertVersion = ref(0)
 
   let started = false
   let leader = false
@@ -96,6 +97,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
       return
     }
     pendingToastAlerts.value = mergeNotificationToastAlerts(pendingToastAlerts.value, items)
+    toastAlertVersion.value += 1
   }
 
   function consumeNotificationAlerts(): NotificationToastAlert[] {
@@ -714,6 +716,7 @@ export const useAppNotificationStore = defineStore('appNotification', () => {
     desktopSupported,
     desktopPermission,
     pendingToastAlerts,
+    toastAlertVersion,
     consumeNotificationAlerts,
     initDesktop,
     setDesktopEnabled,
