@@ -79,6 +79,15 @@ describe('NotificationAdminService', () => {
       maxLength: 32,
     })
 
+    const salesReceipt = result.find(event => event.eventType === 'SALES_RECEIPT_REVIEW_PENDING')
+    const salesOrderNo = salesReceipt?.variableDefinitions.find(variable => variable.name === 'orderNo')
+    expect(salesOrderNo).toMatchObject({
+      label: '销售单号',
+      sensitive: false,
+      maxLength: 64,
+    })
+    expect(salesOrderNo?.description).toContain('销售订单编号')
+
     const withdrawal = result.find(event => event.eventType === 'FUND_WITHDRAWAL_REVIEW_PENDING')
     expect(withdrawal).toMatchObject({
       label: '提现审核',
@@ -87,7 +96,7 @@ describe('NotificationAdminService', () => {
       variablesKnown: true,
       defaultTemplateKey: 'fund.withdrawal.pending',
     })
-    expect(withdrawal?.variables).toEqual(['withdrawalNo', 'applicantName', 'amount'])
+    expect(withdrawal?.variables).toEqual(expect.arrayContaining(['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt']))
     expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
       sensitive: true,
     })

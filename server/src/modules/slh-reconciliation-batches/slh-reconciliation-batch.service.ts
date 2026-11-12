@@ -24,6 +24,7 @@ import { truncateFundSourceText, type FundSourceDescriptor } from '../fund-accou
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import { formatNotificationDateTime } from '../notifications/notification-display-labels'
 import {
   deriveSalesOrderPaymentStatus,
   formatSalesOrderAmountUnits,
@@ -318,7 +319,7 @@ export class SlhReconciliationBatchService {
         const batch = await tx.slhReconciliationBatch.findUnique({
           where: { id: batchId },
           select: {
-            id: true, batchNo: true,
+            id: true, batchNo: true, completedAt: true,
             bill: { select: { slhBillNo: true } },
             members: {
               // 成员按账单行号排序：同一事务写入的成员行 created_at 完全相同，只用主键兜底
@@ -407,6 +408,7 @@ export class SlhReconciliationBatchService {
           templateKey: 'slh.reconciliation.completed',
           variables: {
             batchNo: batch.batchNo,
+            completedAt: formatNotificationDateTime(batch.completedAt),
             fundPostingCount: postingBatchIds.length,
             memberCount: batch.members.length,
             reconciledMemberCount: batch.members.filter(member => member.reconciledAt !== null).length,

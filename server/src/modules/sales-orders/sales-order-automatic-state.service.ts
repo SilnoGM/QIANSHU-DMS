@@ -10,6 +10,11 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import {
+  salesOrderFulfillmentStatusLabel,
+  salesOrderPaymentStatusLabel,
+  salesOrderStatusLabel,
+} from '../notifications/notification-display-labels'
 import { readSalesOrderReconciliationStates } from './domain/sales-order-reconciliation-state'
 import {
   assertSalesOrderStatusTransition,
@@ -74,7 +79,10 @@ export class SalesOrderAutomaticStateService {
     const order = await transaction.salesOrder.findUnique({
       where: { id: salesOrderId },
       select: {
+        agreedTotalAmount: true,
+        currencyCode: true,
         customerName: true,
+        customerPhone: true,
         fulfillmentStatus: true,
         issuerUserId: true,
         orderNo: true,
@@ -190,9 +198,15 @@ export class SalesOrderAutomaticStateService {
       target: { kind: 'USERS', userIds: [order.issuerUserId] },
       templateKey: 'sales.order.completed',
       variables: {
+        agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
+        currencyCode: order.currencyCode,
         customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        fulfillmentStatus: salesOrderFulfillmentStatusLabel(order.fulfillmentStatus),
         occurredAt: notificationTime(completedAt),
         orderNo: order.orderNo,
+        orderStatus: salesOrderStatusLabel(order.orderStatus),
+        paymentStatus: salesOrderPaymentStatusLabel(order.paymentStatus),
       },
       dedupeKey: `sales-order-completed:${salesOrderId}`,
       priority: 'NORMAL',

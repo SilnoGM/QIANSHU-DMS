@@ -17,6 +17,7 @@ import {
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import { formatNotificationDateTime } from '../notifications/notification-display-labels'
 import {
   FUND_WITHDRAWAL_NO_CONSUMER_CODE,
   FUND_WITHDRAWAL_NO_RULE_CODE,
@@ -154,7 +155,7 @@ export class FundWithdrawalService {
             status: 'PENDING',
             requestKeyHash,
           },
-          select: { id: true, withdrawalNo: true },
+          select: { id: true, currency: true, withdrawalNo: true },
         })
         await this.audit.record(transaction, {
           eventType: AuditEventType.FUND_WITHDRAWAL_SUBMITTED,
@@ -177,6 +178,8 @@ export class FundWithdrawalService {
           variables: {
             amount,
             applicantName: applicant?.displayName ?? '—',
+            currencyCode: created.currency,
+            occurredAt: formatNotificationDateTime(new Date()),
             withdrawalNo: created.withdrawalNo,
           },
           dedupeKey: `fund-withdrawal-review:${created.id}`,
@@ -249,6 +252,8 @@ export class FundWithdrawalService {
           variables: {
             amount: row.amount.toFixed(2),
             applicantName: applicant?.displayName ?? '—',
+            currencyCode: row.currency,
+            occurredAt: formatNotificationDateTime(new Date()),
             reason,
             withdrawalNo: row.withdrawalNo,
           },
@@ -355,6 +360,8 @@ export class FundWithdrawalService {
           variables: {
             amount: row.amount.toFixed(2),
             applicantName: applicant?.displayName ?? '—',
+            currencyCode: row.currency,
+            occurredAt: formatNotificationDateTime(new Date()),
             withdrawalNo: row.withdrawalNo,
           },
           dedupeKey: `fund-withdrawal-approved:${id}:v${row.version + 1}`,
@@ -392,6 +399,7 @@ export class FundWithdrawalService {
     readonly status: string
     readonly userId: string
     readonly version: number
+    readonly currency: string
     readonly withdrawalNo: string
   }> {
     const locks = await transaction.$queryRaw<Array<{ readonly id: string }>>(Prisma.sql`
@@ -408,6 +416,7 @@ export class FundWithdrawalService {
       where: { id },
       select: {
         amount: true,
+        currency: true,
         status: true,
         userId: true,
         version: true,

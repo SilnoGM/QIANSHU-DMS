@@ -874,10 +874,13 @@ export class ShipmentStorageService {
         templateKey: 'shipment.released-to-storage',
         variables: {
           locationScope: input.locationScope === 'OVERSEAS' ? '海外' : '内地',
+          originCustomerName: records[0].originCustomerNameSnapshot,
           originSalesOrderNo: records[0].originSalesOrderNoSnapshot ?? '—',
           reason: input.reason,
           releaseCount: records.length,
           shipmentNos: records.map(record => record.shipmentNoSnapshot).join('、'),
+          shippingMark: records[0].shippingMarkSnapshot ?? '—',
+          warehouseLabel: records[0].warehouseLabelSnapshot ?? '—',
         },
         dedupeKey: `shipment-released-to-storage:${records[0].id}`,
         priority: 'NORMAL',
@@ -2120,8 +2123,11 @@ export class ShipmentStorageService {
             status: true,
             originSalesOrderId: true,
             originAllocations: true,
+            originCustomerNameSnapshot: true,
             costSnapshot: true,
             shipmentNoSnapshot: true,
+            shippingMarkSnapshot: true,
+            warehouseLabelSnapshot: true,
           },
         })
         if (record === null) {
@@ -2204,9 +2210,12 @@ export class ShipmentStorageService {
           target: { kind: 'PERMISSION', permissionCode: 'shipment-storage:claim' },
           templateKey: 'shipment.storage-claim.pending',
           variables: {
+            originCustomerName: record.originCustomerNameSnapshot,
             salesOrderNo: prepared.order.orderNo,
             shipmentNo: record.shipmentNoSnapshot,
+            shippingMark: record.shippingMarkSnapshot ?? '—',
             storageRecordId,
+            warehouseLabel: record.warehouseLabelSnapshot ?? '—',
           },
           dedupeKey: `storage-claim-request:${created.id}`,
           requestedByUserId: context.actorUserId,
@@ -2289,7 +2298,12 @@ export class ShipmentStorageService {
       await this.rejectClaimRequestRow(transaction, context, storageRecordId, requestId, reason)
       const record = await transaction.shipmentStorageRecord.findUnique({
         where: { id: storageRecordId },
-        select: { shipmentNoSnapshot: true },
+        select: {
+          originCustomerNameSnapshot: true,
+          shipmentNoSnapshot: true,
+          shippingMarkSnapshot: true,
+          warehouseLabelSnapshot: true,
+        },
       })
       await this.notifications.publish({
         eventType: 'STORAGE_CLAIM_REQUEST_REJECTED',
@@ -2297,10 +2311,13 @@ export class ShipmentStorageService {
         target: { kind: 'USERS', userIds: [request.applicantUserId] },
         templateKey: 'shipment.storage-claim.rejected',
         variables: {
+          originCustomerName: record?.originCustomerNameSnapshot ?? '—',
           reason,
           salesOrderNo: request.salesOrderNoSnapshot,
           shipmentNo: record?.shipmentNoSnapshot ?? '—',
+          shippingMark: record?.shippingMarkSnapshot ?? '—',
           storageRecordId,
+          warehouseLabel: record?.warehouseLabelSnapshot ?? '—',
         },
         dedupeKey: `storage-claim-rejected:${requestId}`,
         requestedByUserId: context.actorUserId,
@@ -2367,7 +2384,12 @@ export class ShipmentStorageService {
     }, requestId)
     const record = await this.prisma.shipmentStorageRecord.findUnique({
       where: { id: storageRecordId },
-      select: { shipmentNoSnapshot: true },
+      select: {
+        originCustomerNameSnapshot: true,
+        shipmentNoSnapshot: true,
+        shippingMarkSnapshot: true,
+        warehouseLabelSnapshot: true,
+      },
     })
     await this.notifications.publish({
       eventType: 'STORAGE_CLAIM_REQUEST_APPROVED',
@@ -2375,9 +2397,12 @@ export class ShipmentStorageService {
       target: { kind: 'USERS', userIds: [request.applicantUserId] },
       templateKey: 'shipment.storage-claim.approved',
       variables: {
+        originCustomerName: record?.originCustomerNameSnapshot ?? '—',
         salesOrderNo: request.salesOrderNoSnapshot,
         shipmentNo: record?.shipmentNoSnapshot ?? '—',
+        shippingMark: record?.shippingMarkSnapshot ?? '—',
         storageRecordId,
+        warehouseLabel: record?.warehouseLabelSnapshot ?? '—',
       },
       dedupeKey: `storage-claim-approved:${requestId}`,
       priority: 'NORMAL',

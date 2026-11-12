@@ -27,6 +27,7 @@ import { parseSalesOrderIdempotencyKey } from '../sales-order-command.normalizer
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import { noopSystemNotifications } from '../../notifications/noop-system-notification'
 import { SystemNotificationService } from '../../notifications/system-notification.service'
+import { formatNotificationDateTime, salesOrderPaymentTypeLabel } from '../../notifications/notification-display-labels'
 import type { SalesReceiptApproveDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptApprovalContextDto } from '../dto/sales-receipt.dto'
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
 import { assertReceiptCapacity, convertReceiptToCny, receiptFailure } from './sales-receipt-money'
@@ -155,7 +156,7 @@ export class SalesReceiptService {
     order: { id: string, orderNo: string, customerName: string },
     amount: string,
   ) {
-    const paymentTypeLabel = row.paymentType === 'DEPOSIT' ? '定金' : '尾款'
+    const paymentTypeLabel = salesOrderPaymentTypeLabel(row.paymentType)
     return {
       postingTypeCode: 'ORDER_SETTLEMENT', userId: row.accountOwnerUserId, amount, businessId: row.id, businessNo: order.orderNo,
       summary: '销售收款审核入账',
@@ -239,7 +240,10 @@ export class SalesReceiptService {
             currencyCode: row.currencyCode,
             customerName: order.customerName,
             orderNo: order.orderNo,
-            paymentType: row.paymentType,
+            paymentMethod: row.paymentMethodNameSnapshot,
+            paymentType: salesOrderPaymentTypeLabel(row.paymentType),
+            receivedAt: formatNotificationDateTime(row.receivedAt),
+            remark: row.remark ?? '',
           },
           dedupeKey: `sales-receipt-review:${row.id}:v${row.version}`,
           requestedByUserId: context.actorUserId,
@@ -313,7 +317,10 @@ export class SalesReceiptService {
             collectionNo: row.collectionNo ?? '',
             currencyCode: row.currencyCode,
             orderNo: order.orderNo,
-            paymentType: row.paymentType,
+            paymentMethod: row.paymentMethodNameSnapshot,
+            paymentType: salesOrderPaymentTypeLabel(row.paymentType),
+            receivedAt: formatNotificationDateTime(row.receivedAt),
+            remark: row.remark ?? '',
           },
           dedupeKey: `sales-receipt-approved:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
@@ -346,8 +353,11 @@ export class SalesReceiptService {
           collectionNo: row.collectionNo ?? '',
           currencyCode: row.currencyCode,
           orderNo: order.orderNo,
-          paymentType: row.paymentType,
+          paymentMethod: row.paymentMethodNameSnapshot,
+          paymentType: salesOrderPaymentTypeLabel(row.paymentType),
+          receivedAt: formatNotificationDateTime(row.receivedAt),
           reason: reviewRemark,
+          remark: row.remark ?? '',
         },
         dedupeKey: `sales-receipt-rejected:${id}:v${row.version + 1}`,
         requestedByUserId: context.actorUserId,

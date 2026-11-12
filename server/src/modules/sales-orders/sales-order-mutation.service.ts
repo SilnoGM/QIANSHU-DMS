@@ -17,6 +17,11 @@ import { AuditService } from '../audit/audit.service'
 import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import {
+  salesOrderFulfillmentStatusLabel,
+  salesOrderPaymentStatusLabel,
+  salesOrderStatusLabel,
+} from '../notifications/notification-display-labels'
 import { salesOrderScopeWhere } from './sales-order-access'
 import {
   DictionaryLookupService,
@@ -107,6 +112,7 @@ type MutableOrderRow = Prisma.SalesOrderGetPayload<{
     depositDueAmount: true
     balanceDueAmount: true
     customerName: true
+    customerPhone: true
     version: true
   }
 }>
@@ -344,9 +350,15 @@ export class SalesOrderMutationService {
           target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
           templateKey: 'sales.order.terminated',
           variables: {
+            agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
+            currencyCode: order.currencyCode,
             customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            fulfillmentStatus: salesOrderFulfillmentStatusLabel(order.fulfillmentStatus),
             occurredAt: notificationTime(new Date()),
             orderNo: order.orderNo,
+            orderStatus: salesOrderStatusLabel(order.orderStatus),
+            paymentStatus: salesOrderPaymentStatusLabel(order.paymentStatus),
             reason: reason ?? '订单已终止',
           },
           dedupeKey: `sales-order-terminated:${salesOrderId}`,
@@ -458,9 +470,15 @@ export class SalesOrderMutationService {
           target: { kind: 'USERS', userIds: [order.issuerUserId] },
           templateKey: 'shipment.signed',
           variables: {
+            agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
+            currencyCode: order.currencyCode,
             customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            fulfillmentStatus: salesOrderFulfillmentStatusLabel(order.fulfillmentStatus),
             occurredAt: notificationTime(new Date()),
             orderNo: order.orderNo,
+            orderStatus: salesOrderStatusLabel(order.orderStatus),
+            paymentStatus: salesOrderPaymentStatusLabel(order.paymentStatus),
           },
           dedupeKey: `shipment-signed:${salesOrderId}:v${order.version + 1}`,
           priority: 'NORMAL',
@@ -620,6 +638,7 @@ export class SalesOrderMutationService {
         depositDueAmount: true,
         balanceDueAmount: true,
         customerName: true,
+        customerPhone: true,
         version: true,
       },
     })
