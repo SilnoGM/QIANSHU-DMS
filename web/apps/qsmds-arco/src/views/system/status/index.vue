@@ -1056,12 +1056,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .summary-card {
   position: relative;
+  padding: 1rem;
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--summary-accent) 28%, transparent);
-  border-radius: 14px;
   background-color: oklch(var(--card));
   background-image: linear-gradient(135deg, color-mix(in oklab, var(--summary-accent) 10%, oklch(var(--card))) 0%, oklch(var(--card)) 72%);
-  padding: 1rem;
+  border: 1px solid color-mix(in oklab, var(--summary-accent) 28%, transparent);
+  border-radius: 14px;
 }
 
 .summary-card--rose {
@@ -1091,21 +1091,21 @@ onBeforeUnmount(() => {
   width: 7rem;
   height: 7rem;
   color: color-mix(in oklab, var(--summary-accent) 18%, oklch(var(--card)));
-  transform: rotate(-7deg);
   pointer-events: none;
+  transform: rotate(-7deg);
 }
 
-@media (min-width: 768px) {
+@media (width >= 768px) {
   .runtime-grid > div:nth-last-child(-n + 3) {
-    border-bottom-width: 0;
     padding-bottom: 0;
+    border-bottom-width: 0;
   }
 }
 
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .runtime-grid > div:last-child {
-    border-bottom-width: 0;
     padding-bottom: 0;
+    border-bottom-width: 0;
   }
 }
 </style>
