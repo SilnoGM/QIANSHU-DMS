@@ -28,6 +28,7 @@ export async function cleanupFundE2eData(
     requests,
     batches,
     mediaAssets,
+    notifications,
     roles,
   ] = await Promise.all([
     prisma.fundAccount.findMany({
@@ -56,6 +57,11 @@ export async function cleanupFundE2eData(
       where: { createdByUserId: { in: userIds } },
       select: { id: true },
     }),
+    // 通知记录与发号记录对用户/发号表是 RESTRICT 外键，删用户前必须一并清理。
+    prisma.notification.findMany({
+      where: { requestedByUserId: { in: userIds } },
+      select: { id: true, numberingIssuanceId: true },
+    }),
     options.roleCodePrefix === undefined
       ? Promise.resolve([])
       : prisma.role.findMany({
@@ -68,12 +74,16 @@ export async function cleanupFundE2eData(
   const requestIds = requests.map(request => request.id)
   const batchIds = batches.map(batch => batch.id)
   const mediaAssetIds = mediaAssets.map(asset => asset.id)
+  const notificationIds = notifications.map(notification => notification.id)
   const roleIds = roles.map(role => role.id)
   const issuanceIds = [...new Set([
     ...requests.map(request => request.numberingIssuanceId),
     ...batches.flatMap(batch => batch.numberingIssuanceId === null
       ? []
       : [batch.numberingIssuanceId]),
+    ...notifications.flatMap(notification => notification.numberingIssuanceId === null
+      ? []
+      : [notification.numberingIssuanceId]),
   ].filter((value): value is string => typeof value === 'string'))]
 
   await prisma.$transaction(async (transaction) => {
@@ -117,6 +127,17 @@ export async function cleanupFundE2eData(
       })
       await transaction.fundPostingBatch.deleteMany({
         where: { id: { in: batchIds } },
+      })
+    }
+    // 通知对请求人、投递接收人都是 RESTRICT 外键；通知编号发号记录同样受
+    // RESTRICT 保护，因此必须先删通知（收件箱与投递按 CASCADE 一并移除），
+    // 再删用户与发号记录。
+    await transaction.assistantDelivery.deleteMany({
+      where: { recipientUserId: { in: userIds } },
+    })
+    if (notificationIds.length > 0) {
+      await transaction.notification.deleteMany({
+        where: { id: { in: notificationIds } },
       })
     }
     if (issuanceIds.length > 0) {
