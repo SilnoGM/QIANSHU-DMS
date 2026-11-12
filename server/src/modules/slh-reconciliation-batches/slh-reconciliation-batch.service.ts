@@ -366,10 +366,11 @@ export class SlhReconciliationBatchService {
           postingBatchIds = writeBack.postingBatchIds
           backfilledPaymentCount = writeBack.backfilledPaymentCount
         }
+        const completedAt = new Date()
         await tx.slhReconciliationBatch.update({
           where: { id: batchId },
           data: {
-            completedAt: new Date(), completedById: context.actorUserId,
+            completedAt, completedById: context.actorUserId,
             updatedById: context.actorUserId, version: { increment: 1 },
           },
         })
@@ -408,7 +409,7 @@ export class SlhReconciliationBatchService {
           templateKey: 'slh.reconciliation.completed',
           variables: {
             batchNo: batch.batchNo,
-            completedAt: formatNotificationDateTime(batch.completedAt),
+            completedAt: formatNotificationDateTime(completedAt),
             fundPostingCount: postingBatchIds.length,
             memberCount: batch.members.length,
             reconciledMemberCount: batch.members.filter(member => member.reconciledAt !== null).length,
