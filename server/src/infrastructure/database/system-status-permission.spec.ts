@@ -8,7 +8,7 @@ import {
 
 const serverRoot = resolve(__dirname, '../../..')
 const migrationsRoot = resolve(serverRoot, 'prisma/migrations')
-const migrationDirectory = '20261111170000_system_status_permission'
+const migrationDirectory = '20261111170500_system_status_permission'
 const permissionId = '00000000-0000-4000-8000-000000002432'
 
 describe('system status permission migration', () => {
