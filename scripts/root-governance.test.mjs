@@ -319,6 +319,8 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
   // 销售级入仓上下文与弹窗只读取采购单已保存的供应商快照与展示标签，
   // 不新增供应商主数据、增删改入口或独立查询通道。
+  // 入仓服务同样只为通知渲染读取采购单既有的 customSupplierName / supplierValue。
+  'server/src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service.ts',
   'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt-query.service.spec.ts',
   'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt-query.service.ts',
   'server/src/modules/purchase-orders/warehouse-receipts/sales-order-warehouse-receipt.dto.ts',
