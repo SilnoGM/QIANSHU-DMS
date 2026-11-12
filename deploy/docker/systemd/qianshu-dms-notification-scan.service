@@ -1,0 +1,12 @@
+[Unit]
+Description=Qianshu DMS Notification Business Scan (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 扫描时间固定在上海时间 09:05/13:05/17:05/21:05；命令自身还有窗口守卫。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/notification-scan.js
+TimeoutStartSec=180s

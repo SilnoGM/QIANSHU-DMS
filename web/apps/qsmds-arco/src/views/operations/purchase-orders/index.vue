@@ -162,7 +162,7 @@ const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
 const detailVisible = ref(false)
-const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
+const selectedOrder = shallowRef<PurchaseOrderListItemDto | { readonly id: string } | null>(null)
 const cancelModalVisible = ref(false)
 const cancelOrderId = ref<string | null>(null)
 const recordsModalVisible = ref(false)
@@ -577,6 +577,17 @@ function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
   selectedOrder.value = { ...order }
   detailVisible.value = true
 }
+
+function openPurchaseOrderById(id: string): void {
+  selectedOrder.value = { id }
+  detailVisible.value = true
+}
+
+watch(() => route.query.id, (id) => {
+  if (typeof id === 'string' && id.length > 0) {
+    openPurchaseOrderById(id)
+  }
+}, { immediate: true })
 
 function purchaseOrderCancelBlockedReason(order: PurchaseOrderListItemDto): string | null {
   if (props.viewMode !== 'all') {

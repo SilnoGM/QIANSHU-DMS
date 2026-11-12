@@ -30,6 +30,8 @@ import {
 } from '../sales-orders/sales-order-claim-coverage'
 import { findActiveLoadGroupsForShipments } from '../purchase-orders/shipments/shipment-load-group.resolver'
 import { advanceSalesOrderAfterClaim } from '../sales-orders/sales-order-claim-progress'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
   ShipmentStorageCostService,
@@ -586,6 +588,7 @@ export class ShipmentStorageService {
     private readonly dictionary: DictionaryLookupService,
     private readonly ownership: ShipmentOwnershipService,
     private readonly cost: ShipmentStorageCostService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   async release(
@@ -863,6 +866,24 @@ export class ShipmentStorageService {
       select: STORAGE_RECORD_SELECT,
       orderBy: { createdAt: 'asc' },
     })
+    if (records.length > 0) {
+      await this.notifications.publish({
+        eventType: 'SHIPMENT_RELEASED_TO_STORAGE',
+        source: { type: 'SHIPMENT_STORAGE_RELEASE', id: records[0].id },
+        target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
+        templateKey: 'shipment.released-to-storage',
+        variables: {
+          locationScope: input.locationScope === 'OVERSEAS' ? '海外' : '内地',
+          originSalesOrderNo: records[0].originSalesOrderNoSnapshot ?? '—',
+          reason: input.reason,
+          releaseCount: records.length,
+          shipmentNos: records.map(record => record.shipmentNoSnapshot).join('、'),
+        },
+        dedupeKey: `shipment-released-to-storage:${records[0].id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      })
+    }
     return this.finalizeRelease(await this.withCostTransfers(records), context)
   }
 
@@ -2177,6 +2198,19 @@ export class ShipmentStorageService {
             ...claimProductOverrideAudit(prepared.allocations),
           },
         })
+        await this.notifications.publish({
+          eventType: 'STORAGE_CLAIM_REQUEST_PENDING',
+          source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'shipment-storage:claim' },
+          templateKey: 'shipment.storage-claim.pending',
+          variables: {
+            salesOrderNo: prepared.order.orderNo,
+            shipmentNo: record.shipmentNoSnapshot,
+            storageRecordId,
+          },
+          dedupeKey: `storage-claim-request:${created.id}`,
+          requestedByUserId: context.actorUserId,
+        }, { transaction })
         return created
       }, { timeout: 30_000 })
       return this.loadClaimRequestDto(storageRecordId, request.id)
@@ -2244,7 +2278,7 @@ export class ShipmentStorageService {
       await transaction.$queryRaw(Prisma.sql`SELECT id FROM shipment_storage_claim_requests WHERE id = ${requestId}::uuid FOR UPDATE`)
       const request = await transaction.shipmentStorageClaimRequest.findFirst({
         where: { id: requestId, storageRecordId },
-        select: { id: true, status: true },
+        select: { applicantUserId: true, id: true, salesOrderNoSnapshot: true, status: true },
       })
       if (request === null) {
         storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_NOT_FOUND', '调货申请不存在', HttpStatus.NOT_FOUND)
@@ -2253,6 +2287,24 @@ export class ShipmentStorageService {
         storageFailure('SHIPMENT_STORAGE_CLAIM_REQUEST_STATE_CHANGED', '调货申请已处理', HttpStatus.CONFLICT)
       }
       await this.rejectClaimRequestRow(transaction, context, storageRecordId, requestId, reason)
+      const record = await transaction.shipmentStorageRecord.findUnique({
+        where: { id: storageRecordId },
+        select: { shipmentNoSnapshot: true },
+      })
+      await this.notifications.publish({
+        eventType: 'STORAGE_CLAIM_REQUEST_REJECTED',
+        source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: requestId },
+        target: { kind: 'USERS', userIds: [request.applicantUserId] },
+        templateKey: 'shipment.storage-claim.rejected',
+        variables: {
+          reason,
+          salesOrderNo: request.salesOrderNoSnapshot,
+          shipmentNo: record?.shipmentNoSnapshot ?? '—',
+          storageRecordId,
+        },
+        dedupeKey: `storage-claim-rejected:${requestId}`,
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
     }, { timeout: 30_000 })
     return this.loadClaimRequestDto(storageRecordId, requestId)
   }
@@ -2267,7 +2319,9 @@ export class ShipmentStorageService {
       select: {
         id: true,
         status: true,
+        applicantUserId: true,
         salesOrderId: true,
+        salesOrderNoSnapshot: true,
         allocations: true,
         containerChanges: true,
         requestKey: true,
@@ -2305,12 +2359,31 @@ export class ShipmentStorageService {
         HttpStatus.CONFLICT,
       )
     }
-    return this.claim(context, storageRecordId, {
+    const detail = await this.claim(context, storageRecordId, {
       salesOrderId: request.salesOrderId,
       lines: claimRequestLineInputs(allocations),
       containerChanges: containerChangeInputsFromSnapshots(containerChanges),
       requestKey: request.requestKey,
     }, requestId)
+    const record = await this.prisma.shipmentStorageRecord.findUnique({
+      where: { id: storageRecordId },
+      select: { shipmentNoSnapshot: true },
+    })
+    await this.notifications.publish({
+      eventType: 'STORAGE_CLAIM_REQUEST_APPROVED',
+      source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: requestId },
+      target: { kind: 'USERS', userIds: [request.applicantUserId] },
+      templateKey: 'shipment.storage-claim.approved',
+      variables: {
+        salesOrderNo: request.salesOrderNoSnapshot,
+        shipmentNo: record?.shipmentNoSnapshot ?? '—',
+        storageRecordId,
+      },
+      dedupeKey: `storage-claim-approved:${requestId}`,
+      priority: 'NORMAL',
+      requestedByUserId: context.actorUserId,
+    })
+    return detail
   }
 
   private async rejectClaimRequestAfterRecheck(

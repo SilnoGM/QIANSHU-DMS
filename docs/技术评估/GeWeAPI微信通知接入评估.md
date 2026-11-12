@@ -12,6 +12,8 @@
 | 结论 | 技术可行，仅建议作为补充通道 |
 | 关联落地设计 | [通知中心与千树小助理落地设计](../../specs/notification-center/design.md)、[接口契约](../../specs/notification-center/api.md) |
 
+> 实施口径（2026-11-06）：实际接入采用 GeWe 控制台管理节点，系统只导入管理员复制的 `appId`/`wxid` 并用 `checkOnline` 检查在线状态；系统不实现扫码登录、重连或退出。本文关于 `getLoginQrCode`、`checkLogin`、`reconnection`、`logout` 的内容仅作能力调研，不代表系统接口。
+
 ### 依据等级
 
 | 标记 | 含义 |

@@ -4,10 +4,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计稿，触发点已核对代码；待业务确认文案与字段 |
+| 文档状态 | 采购、开票、到仓三个事件已实现；对账事件保留为后续候选 |
 | 关联文档 | [落地设计](./design.md)、[接口契约](./api.md)、[数据模型](./data-model.md) |
-| 适用范围 | 阶段 1 的 3 个事件；阶段 2 的 4 个候选事件只列触发方向 |
-| 最后更新 | 2026-10-28 |
+| 适用范围 | 已实现采购审核、开票审核、货件到仓；阶段 2 候选事件只列触发方向 |
+| 最后更新 | 2026-11-06 |
 
 ## 1. 通用规则
 
@@ -15,8 +15,10 @@
 - 发布位置统一放在业务状态变更与审计写入之后、事务提交之前。
 - `publish()` 不抛业务异常：模板缺失、变量缺失、收件人为空只落失败/跳过记录，不阻断业务。
 - 每个事件必须有唯一 `dedupeKey`；重复触发返回原通知，不重复发送。
-- 阶段 1 的 3 个事件都允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
-- 文案中的 `{变量}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 已实现事件允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
+- 文案中的 `{{变量}}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 实际首批事件为采购审核、开票审核、货件到仓；`SLH_RECONCILIATION_COMPLETED` 章节保留为后续候选，当前没有业务发布点。
+- 站内模板通过 `20261108110000_notification_inbox_business_links` 接收业务标识变量：采购/到仓使用 `orderId`，开票使用 `invoiceRequestId`；详情链接分别打开采购、开票记录和到仓货件页面。
 
 ## 2. `PURCHASE_REVIEW_PENDING`
 
@@ -52,6 +54,7 @@
 | 变量 | 来源 | 敏感 | 说明 |
 | --- | --- | --- | --- |
 | `orderNo` | `issuance.number` | 否 | 采购单号 |
+| `orderId` | `created.id` | 否 | 采购单 UUID，用于站内详情链接 |
 | `vendorName` | 采购单的供货方字段：自定义名称或字典值解析后的显示名 | 否 | 模板变量名固定为 `vendorName`，不直接暴露内部字段名 |
 | `totalAmount` | `command.purchaseTotalAmount` | 是 | 采购总额 |
 | `currencyCode` | `command.currencyCode` | 否 | 币种 |
@@ -64,10 +67,10 @@
 ### 2.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】采购单 {orderNo} 待审核
-客户：{customerName}
-金额：{currencyCode} {totalAmount}
-明细：{lineCount} 行 / {partCount} 个货件
+【千树小助理】采购单 {{orderNo}} 待审核
+客户：{{customerName}}
+金额：{{currencyCode}} {{totalAmount}}
+明细：{{lineCount}} 行 / {{partCount}} 个货件
 请进入千树 DMS 处理。
 ```
 
@@ -76,6 +79,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `purchase.review.pending` |
+| 业务域 | 采购 |
 | 优先级 | `HIGH`（突破静默时段） |
 | 站外 TTL | 24 小时 |
 | `dedupeKey` | `purchase-review:{purchaseOrderId}` |
@@ -124,11 +128,11 @@
 ### 3.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】顺联航对账批次 {batchNo} 已完成
-账单：{slhBillNo}
-明细：{reconciledMemberCount}/{memberCount} 行
-结算金额：¥{settlementTotalCny}
-资金批次：{fundPostingCount} 笔
+【千树小助理】顺联航对账批次 {{batchNo}} 已完成
+账单：{{slhBillNo}}
+明细：{{reconciledMemberCount}}/{{memberCount}} 行
+结算金额：¥{{settlementTotalCny}}
+资金批次：{{fundPostingCount}} 笔
 请进入千树 DMS 查看。
 ```
 
@@ -137,6 +141,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `slh.reconciliation.completed` |
+| 业务域 | 对账 |
 | 优先级 | `NORMAL` |
 | 站外 TTL | 8 小时 |
 | `dedupeKey` | `slh-reconciliation-completed:{batchId}` |
@@ -176,6 +181,7 @@
 | 变量 | 来源 | 敏感 | 说明 |
 | --- | --- | --- | --- |
 | `orderNo` | `WarehouseOrder.orderNo` | 否 | 采购单号 |
+| `orderId` | `order.id` | 否 | 采购单 UUID，用于站内详情链接 |
 | `partNumbers` | 本次 `partIds` 对应货件的 `partNumber`，按数字升序格式化为 `01、02` | 否 | 到仓货件 |
 | `receivedPartCount` | `partIds.length` | 否 | 本次到仓件数 |
 | `receivedAt` | `input.receivedAt ?? recordedAt`，按 `Asia/Shanghai` 格式化 | 否 | 到仓时间 |
@@ -184,10 +190,10 @@
 ### 4.4 文案（阶段 1，纯文本）
 
 ```text
-【千树小助理】采购单 {orderNo} 货件到仓
-货件：{partNumbers}
-到仓时间：{receivedAt}
-客户：{customerName}
+【千树小助理】采购单 {{orderNo}} 货件到仓
+货件：{{partNumbers}}
+到仓时间：{{receivedAt}}
+客户：{{customerName}}
 请进入千树 DMS 处理。
 ```
 
@@ -196,6 +202,7 @@
 | 项目 | 值 |
 | --- | --- |
 | `templateKey` | `shipment.arrived` |
+| 业务域 | 货件运输 |
 | 优先级 | `NORMAL` |
 | 站外 TTL | 8 小时 |
 | `dedupeKey` | `shipment-arrived:{purchaseOrderId}:{sortedPartIds.join(',')}` |
@@ -206,12 +213,29 @@
 
 以下只列触发方向，具体触发点与文案在阶段 2 前补齐。
 
-| 事件 | 触发方向 | 默认目标 | 备注 |
-| --- | --- | --- | --- |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
-| `INVOICE_REQUEST_REVIEW_PENDING` | 开票申请提交/进入待审 | 权限 `invoice-requests:review`，1:1 | 开票时效 |
-| `PACKAGING_COST_PAYMENT_PENDING` | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
-| `PURCHASE_PAYABLE_DUE` | 应付到期扫描 | 应付负责人，1:1 | **仓库没有调度器**，需要 CLI + systemd timer 或复用 worker 的日扫描；先定扫描频率与逾期口径 |
+| 事件 | 业务域 | 触发方向 | 默认目标 | 备注 |
+| --- | --- | --- | --- | --- |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | 财务 | 提现申请提交/进入待审 | 权限 `fund-withdrawals:review`，1:1 | 资金类，`HIGH` |
+| `INVOICE_REQUEST_REVIEW_PENDING` | 发票 | 开票申请提交/进入待审 | 权限 `invoice-requests:review`，1:1 | 开票时效 |
+| `PACKAGING_COST_PAYMENT_PENDING` | 财务 | 包装成本进入待付款 | 权限 `packaging-costs:pay`，1:1 | 建议按日汇总，避免逐单 |
+| `PURCHASE_PAYABLE_PENDING` | 财务 | 采购单存在未付清的定金/尾款 | 财务付款权限，1:1 | 待付款提醒，不依赖到期日；每日扫描需要 CLI + systemd timer，`dedupeKey` 带日期 |
+
+业务域统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域；`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。其余阶段 2 业务域与模板域一一对应。
+
+### 5.1 已接入扩展事件
+
+2026-11-10 起，以下事件已登记并接入业务发布点：
+
+- 销售：`SALES_RECEIPT_REVIEW_PENDING`、`SALES_RECEIPT_APPROVED`、`SALES_RECEIPT_REJECTED`
+- 采购：`PURCHASE_REVIEW_APPROVED`、`PURCHASE_REVIEW_REJECTED`、`PURCHASE_ORDER_CANCELLED`
+- 货件运输：`STORAGE_CLAIM_REQUEST_PENDING`、`STORAGE_CLAIM_REQUEST_APPROVED`、`STORAGE_CLAIM_REQUEST_REJECTED`、`SHIPMENT_RELEASED_TO_STORAGE`
+- 财务：`FUND_WITHDRAWAL_APPROVED`、`FUND_WITHDRAWAL_REJECTED`、`PACKAGING_COST_PAID`
+- 发票：`INVOICE_REQUEST_RETURNED`、`INVOICE_REQUEST_NOTIFIED`、`INVOICE_REQUEST_ISSUED`、`INVOICE_REQUEST_SETTLED`、`INVOICE_REQUEST_CANCELLED`
+- 运营：`MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`
+
+低优先级补充事件：`SALES_ORDER_COMPLETED`、`PURCHASE_ORDER_COMPLETED`、`SHIPMENT_SIGNED`、`SALES_ORDER_TERMINATED`、`FUND_ACCOUNT_ADJUSTED`、`FUND_ACCOUNT_REVERSED`、`PROXY_NODE_EXPIRED`、`ASSISTANT_ACCOUNT_OFFLINE`。所有冲账统一通知原资金批次的个人账户本人。
+
+扫描类事件由 `notifications:scan` 发布：静态节点在剩余 7 天/1 天提醒并补发已过期节点；采购应付和包装待付款按上海日期各发一条汇总。千树小助理默认静默时段为 `22:00–09:00`，`NORMAL` 延后，`HIGH` 保留突破语义。
 
 ## 6. 测试与验收
 
@@ -230,5 +254,8 @@
 
 - `eventType` 只追加，不重命名、不复用已删除的值。
 - 每个事件在每个启用渠道上必须有模板与策略；缺失时该渠道跳过，不影响其他渠道。
+- `NOTIFICATION_EVENT_VARIABLES` 登记事件实际会提供的变量集合；策略显式绑定模板时按它校验占位符，新增事件或调整变量必须同步更新。
+- `NOTIFICATION_VARIABLE_DEFINITIONS` 维护变量中文名、说明、示例、敏感标记、最大长度和建议必填；`GET /api/notifications/events` 以 `variableDefinitions` 暴露，模板编辑器据此展示并插入变量，不再让管理员手填变量名。
+- 事件中文名、模板业务域、默认模板键与是否已接入由服务端常量统一维护，管理端通过 `GET /api/notifications/events` 读取；新增事件时同步补 `NOTIFICATION_EVENT_LABELS`、`NOTIFICATION_EVENT_TEMPLATE_DOMAIN`、`NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY` 并确认 `IMPLEMENTED_NOTIFICATION_EVENT_TYPES`。
 - 文案修改走模板版本，不改 `eventType` 语义。
 - 新增事件前先确认收件人、变量、敏感标记、TTL 与文案；不要先写代码再补口径。

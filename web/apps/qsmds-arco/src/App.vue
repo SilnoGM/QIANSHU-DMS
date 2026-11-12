@@ -11,6 +11,7 @@ import {
 import dayjs from '@/utils/dayjs'
 import eventBus from '@/utils/eventBus'
 import { ua } from '@/utils/ua'
+import { installUiSound } from '@/utils/ui-sound'
 import 'dayjs/locale/en'
 import 'dayjs/locale/zh-cn'
 import 'dayjs/locale/zh-tw'
@@ -28,6 +29,7 @@ const { generateI18nTitle } = useAppMenu()
 const { visible: startupVisible, leaving: startupLeaving } = useAppStartup()
 const changePasswordVisible = ref(false)
 const profileVisible = ref(false)
+let uninstallUiSound: (() => void) | undefined
 
 document.body.setAttribute('data-os', ua.getOS().name || '')
 
@@ -67,12 +69,15 @@ onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
   eventBus.on('global-change-password-visible', openChangePassword)
   eventBus.on('global-profile-visible', openProfile)
+  uninstallUiSound = installUiSound()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleWindowResize)
   eventBus.off('global-change-password-visible', openChangePassword)
   eventBus.off('global-profile-visible', openProfile)
+  uninstallUiSound?.()
+  uninstallUiSound = undefined
 })
 
 function openChangePassword() {

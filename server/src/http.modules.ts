@@ -25,6 +25,8 @@ import { SlhBillModule } from './modules/slh-bills/slh-bill.module'
 import { SlhReconciliationBatchModule } from './modules/slh-reconciliation-batches/slh-reconciliation-batch.module'
 import { InvoiceRequestModule } from './modules/invoice-requests/invoice-request.module'
 import { MachineViewingModule } from './modules/machine-viewings/machine-viewing.module'
+import { NotificationModule } from './modules/notifications/notification.module'
+import { SystemStatusModule } from './modules/system-status/system-status.module'
 import { UsersModule } from './modules/users/users.module'
 
 // 正式运行应用与 OpenAPI preview 必须消费同一清单，避免路由和快照随两份手工列表漂移。
@@ -57,4 +59,6 @@ export const HTTP_MODULES = [
   AdvertisingRechargeModule,
   ProxyNodesModule,
   MachineViewingModule,
+  NotificationModule,
+  SystemStatusModule,
 ] as const

@@ -31,6 +31,8 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
   calculatePurchaseOrderLineTotal,
@@ -69,6 +71,13 @@ import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requir
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 const PAYMENT_TYPES = new Set<PurchaseOrderPaymentType>([
   'DEPOSIT',
   'BALANCE',
@@ -121,6 +130,9 @@ type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
     version: true
     productMode: true
     supplierValue: true
+    customSupplierName: true
+    currencyCode: true
+    createdByUserId: true
     createRequestFingerprintHash: true
     createRequestFingerprintVersion: true
     shippingMarkText: true
@@ -229,6 +241,7 @@ export class PurchaseOrderMutationService {
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
     private readonly dataScope: DataScopeService = dataScopeFallback(),
     private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -374,6 +387,21 @@ export class PurchaseOrderMutationService {
           salesOrderId: order.salesOrderId,
         })
       }
+      await this.notifications.publish({
+        eventType: 'PURCHASE_REVIEW_APPROVED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.review.approved',
+        variables: {
+          currencyCode: order.currencyCode,
+          orderNo: order.orderNo,
+          totalAmount: order.purchaseTotalAmount.toFixed(2),
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-review-approved:${purchaseOrderId}:v${order.version + 1}`,
+        priority: 'NORMAL',
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     }).catch((error: unknown) => {
       // 只有事务退出后才映射失败；不在 aborted transaction 中恢复，也不把其他审核当作本次成功。
       if (error instanceof NumberingGenerationError) throw mapShippingMarkGenerationError(error)
@@ -444,6 +472,19 @@ export class PurchaseOrderMutationService {
         reason ?? '用户取消采购订单',
         null,
       )
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_CANCELLED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.cancelled',
+        variables: {
+          orderNo: order.orderNo,
+          reason: reason ?? '用户取消采购订单',
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-cancelled:${purchaseOrderId}:v${order.version + 1}`,
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
@@ -490,6 +531,19 @@ export class PurchaseOrderMutationService {
         reason,
         { reason },
       )
+      await this.notifications.publish({
+        eventType: 'PURCHASE_REVIEW_REJECTED',
+        source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.review.rejected',
+        variables: {
+          orderNo: order.orderNo,
+          reason,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-review-rejected:${purchaseOrderId}:v${order.version + 1}`,
+        requestedByUserId: trusted.actorUserId,
+      }, { transaction })
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
   }
@@ -1405,6 +1459,9 @@ export class PurchaseOrderMutationService {
         version: true,
         productMode: true,
         supplierValue: true,
+        customSupplierName: true,
+        currencyCode: true,
+        createdByUserId: true,
         createRequestFingerprintHash: true,
         createRequestFingerprintVersion: true,
         shippingMarkText: true,
@@ -1505,6 +1562,22 @@ export class PurchaseOrderMutationService {
         trigger,
       },
     })
+    if (newStatus === 'COMPLETED') {
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_COMPLETED',
+        source: { type: 'PURCHASE_ORDER', id: order.id },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.completed',
+        variables: {
+          occurredAt: notificationTime(new Date()),
+          orderNo: order.orderNo,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-completed:${order.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
   }
 
   private recordAudit(

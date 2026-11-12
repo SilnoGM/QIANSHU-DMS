@@ -8,10 +8,11 @@ import OrderHistory from './OrderHistory.vue'
 import OrderInformation from './OrderInformation.vue'
 import OrderRecords from './OrderRecords.vue'
 
+type PurchaseOrderDrawerOrder = PurchaseOrderListItemDto | { readonly id: string }
 defineOptions({ name: 'QsPurchaseOrderDrawer' })
 const props = defineProps<{
   modelValue: boolean
-  order: PurchaseOrderListItemDto | null
+  order: PurchaseOrderDrawerOrder | null
   detail: PurchaseOrderDetailDto | null
   currencies: readonly CurrencyDescriptor[]
   loading: boolean
@@ -37,7 +38,12 @@ const toast = useQsToast()
 const activeTab = ref<string | number>('information')
 const drawerBody = useTemplateRef<HTMLDivElement>('drawerBody')
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
-const currentOrder = computed(() => props.detail ?? props.order)
+const currentOrder = computed(() => {
+  if (props.detail !== null) {
+    return props.detail
+  }
+  return props.order !== null && 'orderNo' in props.order ? props.order : null
+})
 const title = computed(() => currentOrder.value?.orderNo ?? t('purchaseOrderDrawer.title'))
 const tabs = computed(() => [
   { value: 'information', label: t('purchaseOrderDrawer.information'), icon: 'i-lucide:receipt-text', class: 'dark:data-[state=active]:text-foreground!' },

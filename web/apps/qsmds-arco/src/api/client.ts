@@ -116,6 +116,11 @@ function refreshRequestConfig(
 
   const method = config.method?.toLowerCase()
   if (method !== undefined && ['delete', 'patch', 'post', 'put'].includes(method)) {
+    // Axios XHR adapter 会在 data 为 undefined 时删除 Content-Type；无 body 的 DELETE
+    // 需要显式空 JSON，才能通过服务端 CSRF 守卫。
+    if (method === 'delete' && config.data === undefined) {
+      config.data = {}
+    }
     // FormData 的 multipart boundary 只能由浏览器生成。若通用 Client 强制写成
     // application/json，Axios 还会把 FormData 序列化为 JSON，导致流式 parser
     // 在读取边界前直接拒绝请求。其余写请求继续固定 JSON 语义。

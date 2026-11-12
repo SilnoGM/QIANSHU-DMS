@@ -8,7 +8,7 @@
 | 方案定位 | 通知中心（系统通知）的统一接口；千树小助理是其中的微信出站渠道 |
 | 关联文档 | [文档索引](./README.md)、[落地设计](./design.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 最后更新 | 2026-10-28 |
-| 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约 |
+| 关键决策 | 阶段 1 不接回调；首批 3 个事件；管理员绑定；进程内循环 + 数据库租约；站内 30 秒轮询 |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco/src/api/modules/notifications.ts` |
 
 本文中的 TypeScript 片段是契约示意，不是最终代码；表结构、权限与迁移以评审通过的实施方案为准。
@@ -55,7 +55,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'FUND_WITHDRAWAL_REVIEW_PENDING',
   'INVOICE_REQUEST_REVIEW_PENDING',
   'PACKAGING_COST_PAYMENT_PENDING',
-  'PURCHASE_PAYABLE_DUE',
+  'PURCHASE_PAYABLE_PENDING',
   'SLH_RECONCILIATION_COMPLETED',
   'SHIPMENT_ARRIVED',
 ] as const
@@ -81,6 +81,7 @@ export interface SystemNotificationPublishCommand {
   variables: Record<string, string | number | null>
   /** 同一事件重复触发时的幂等键；省略时按 eventType + source 生成 */
   dedupeKey?: string
+  /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准 */
   priority?: NotificationPriority
   /** 只约束站外投递；站内收件箱不因过期删除 */
   expiresAt?: string
@@ -143,7 +144,7 @@ export interface SystemNotificationPublishResult {
 
 当渠道策略 `allow_sensitive = true` 且 `target_mode = GROUP` 时，只能选择 `internal_only = true` 的群；`COMMAND_TARGET` 的 1:1 只发给 `verified_at` 非空的绑定。
 
-这条规则把「谁应该知道」和「发到哪里」分开：业务模块只知道人，群路由属于千树小助理的渠道配置。
+这条规则把「谁应该知道」和「发到哪里」分开：业务模块只知道人，群路由属于千树小助理的渠道配置。渠道策略查询响应包含 `updatedAt`，供管理端展示最近更新时间。
 
 ### 2.5 收件人解析
 
@@ -169,7 +170,6 @@ export interface SystemNotificationPublishResult {
     "itemCount": 3
   },
   "dedupeKey": "purchase-review:6f0d6f4e-7a0e-4a1e-9a4a-2f5a1c9b7d31",
-  "priority": "HIGH",
   "expiresAt": "2026-10-29T12:00:00.000Z",
   "requestedByUserId": "1c2f2a64-1f9c-4f6e-8a14-4f0f6f7f8a11"
 }
@@ -189,15 +189,19 @@ export interface SystemNotificationPublishResult {
 
 ### 2.7 事件目录（首批候选，需业务确认）
 
-| eventType | source.type | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
-| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
-| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
-| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
-| `PURCHASE_PAYABLE_DUE` | `PURCHASE_ORDER_PAYABLE` | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.due` | NORMAL | 24h | 2 |
-| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
-| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
+| eventType | source.type | 业务域 | 默认渠道 | 千树小助理目标 | templateKey | 优先级 | 站外 TTL | 阶段 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PURCHASE_REVIEW_PENDING` | `PURCHASE_ORDER` | 采购 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.review.pending` | HIGH | 24h | 1 |
+| `FUND_WITHDRAWAL_REVIEW_PENDING` | `FUND_WITHDRAWAL` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `fund.withdrawal.pending` | HIGH | 24h | 2 |
+| `INVOICE_REQUEST_REVIEW_PENDING` | `INVOICE_REQUEST` | 发票 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `invoice.review.pending` | HIGH | 24h | 2 |
+| `PACKAGING_COST_PAYMENT_PENDING` | `PACKAGING_COST` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `packaging.payment.pending` | NORMAL | 48h | 2 |
+| `PURCHASE_PAYABLE_PENDING` | `PURCHASE_ORDER_PAYABLE` | 财务 | `IN_APP` + `ASSISTANT` | `COMMAND_TARGET` | `purchase.payable.pending` | NORMAL | 24h | 2 |
+| `SLH_RECONCILIATION_COMPLETED` | `SLH_RECONCILIATION_BATCH` | 对账 | `IN_APP` + `ASSISTANT` | `GROUP`（`finance`） | `slh.reconciliation.completed` | NORMAL | 8h | 1 |
+| `SHIPMENT_ARRIVED` | `PURCHASE_SHIPMENT` | 货件运输 | `IN_APP` + `ASSISTANT` | `GROUP`（`operations`） | `shipment.arrived` | NORMAL | 8h | 1 |
+
+业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
+
+当前已扩展为 39 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
@@ -235,6 +239,7 @@ export interface SystemNotificationPublishResult {
 | 方法 | 路径 | 权限 | operationId | 说明 |
 | --- | --- | --- | --- | --- |
 | GET | `/api/notifications/overview` | `notification-record:read` | `notifications_overview_get` | 各渠道状态与今日统计 |
+| GET | `/api/notifications/events` | `notification-policy:read` 或 `notification-template:read` | `notifications_events_list` | 事件元数据：名称、业务域、变量契约、默认模板键、是否已接入 |
 | GET | `/api/notifications/settings` | `notification-policy:read` | `notifications_settings_get` | 全局保留期 |
 | PUT | `/api/notifications/settings` | `notification-policy:update` | `notifications_settings_update` | 修改保留期，需 `expectedVersion` |
 | GET | `/api/notifications/templates` | `notification-template:read` | `notifications_templates_list` | 模板列表，可按渠道筛选 |
@@ -244,9 +249,18 @@ export interface SystemNotificationPublishResult {
 | POST | `/api/notifications/templates/:id/test` | `notification-template:update` | `notifications_templates_test` | 测试发送；`ASSISTANT` 渠道发管理员本人 |
 | GET | `/api/notifications/channel-policies` | `notification-policy:read` | `notifications_policies_list` | 事件 × 渠道策略 |
 | PUT | `/api/notifications/channel-policies/:eventType/:channel` | `notification-policy:update` | `notifications_policies_update` | 修改单个事件在单个渠道上的策略 |
-| GET | `/api/notifications/records` | `notification-record:read` | `notifications_records_list` | 逻辑通知列表与渠道汇总 |
+| GET | `/api/notifications/records` | `notification-record:read` | `notifications_records_list` | 全渠道通知列表；支持事件、业务域、渠道、状态、优先级、发布时间和关键字筛选 |
+| GET | `/api/notifications/records/options` | `notification-record:read` | `notifications_records_options` | 记录筛选用事件选项，只返回事件、中文名和业务域 |
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
+
+记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `notificationNo`、`eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`notificationNo` 由 `NOTIFICATION_NO` 规则按 `NTF/YYYYMMDD-######` 发号，历史通知允许为空；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
+
+模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`OPERATIONS`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。
+
+策略的 `templateKey` 非空时即显式绑定：模板必须存在于该渠道，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_NOT_FOUND`；模板占位符必须属于该事件的变量契约，否则返回 422 `NOTIFICATION_POLICY_TEMPLATE_VARIABLES_INVALID`。尚无触发源的事件不登记变量契约，只校验模板存在性。`templateKey` 为空时发布回退到业务命令键。
+
+`GET /api/notifications/events` 的事件元数据由服务端常量派生：`eventType`、`label`、`domain`（模板业务域）、`variables`、`variableDefinitions`、`variablesKnown`、`defaultTemplateKey`（业务命令默认键，无触发源时为 `null`）、`implemented`。`variableDefinitions` 为每个变量提供 `name`、`label`、`description`、`example`、`sensitive`、`maxLength`、`required`，供模板编辑器直接展示和插入；`variables` 保留为变量名数组，供兼容性与策略校验使用。管理端用它展示默认模板、过滤不兼容模板和判断事件是否已接入，不再各自维护事件名与变量清单。
 
 ### 4.2 千树小助理（渠道）
 
@@ -256,25 +270,43 @@ export interface SystemNotificationPublishResult {
 | PUT | `/api/assistant/channel` | `assistant-channel:update` | `assistant_channel_update` | 启停、Base URL、默认静默时段，需 `expectedVersion` |
 | POST | `/api/assistant/channel/test` | `assistant-channel:update` | `assistant_channel_test` | 用公司号自己的文件传输助手发测试消息 |
 | GET | `/api/assistant/accounts` | `assistant-account:read` | `assistant_accounts_list` | 账号列表 |
-| POST | `/api/assistant/accounts` | `assistant-account:operate` | `assistant_accounts_create` | 新增账号记录（首期仅一条） |
-| PATCH | `/api/assistant/accounts/:id` | `assistant-account:operate` | `assistant_accounts_update` | 备注名、区域、代理、启停 |
-| POST | `/api/assistant/accounts/:id/login` | `assistant-account:operate` | `assistant_accounts_login_start` | 获取二维码 |
-| GET | `/api/assistant/accounts/:id/login-status` | `assistant-account:operate` | `assistant_accounts_login_status` | 轮询扫码状态 |
-| GET | `/api/assistant/accounts/:id/qrcode` | `assistant-account:read` | `assistant_accounts_qrcode` | 获取公司号个人二维码，供员工扫码添加好友 |
-| POST | `/api/assistant/accounts/:id/reconnect` | `assistant-account:operate` | `assistant_accounts_reconnect` | 掉线重连 |
-| POST | `/api/assistant/accounts/:id/logout` | `assistant-account:operate` | `assistant_accounts_logout` | 退出登录 |
+| POST | `/api/assistant/accounts` | `assistant-account:operate` | `assistant_accounts_create` | 导入 GeWe 控制台已有节点（`appId` + `wxid`），先校验在线 |
+| PATCH | `/api/assistant/accounts/:id` | `assistant-account:operate` | `assistant_accounts_update` | 备注名、`appId`/`wxid`、启停；`appId` 变化时重新校验在线 |
+| POST | `/api/assistant/accounts/:id/check` | `assistant-account:operate` | `assistant_accounts_check_status` | 调用 `checkOnline` 刷新本地在线状态，不触发登录、重连或退出 |
+| GET | `/api/assistant/accounts/:id/qrcode` | `assistant-account:read` | `assistant_accounts_qrcode` | 获取公司号个人二维码，供员工扫码添加好友；未导入节点返回 422 |
 | GET | `/api/assistant/contacts` | `assistant-binding:read` | `assistant_contacts_list` | 公司号好友列表，供管理员选择绑定对象 |
 | GET | `/api/assistant/bindings` | `assistant-binding:read` | `assistant_bindings_list` | 绑定列表 |
 | POST | `/api/assistant/bindings` | `assistant-binding:manage` | `assistant_bindings_create` | 管理员创建绑定（员工 + 好友 `wxid`） |
-| POST | `/api/assistant/bindings/:id/verify` | `assistant-binding:manage` | `assistant_bindings_verify` | 发送测试消息并标记已验证 |
+| PATCH | `/api/assistant/bindings/:id/reassign` | `assistant-binding:manage` | `assistant_bindings_reassign` | 把现有微信绑定改给另一员工；清空原验证状态，需重新发送测试 |
+| POST | `/api/assistant/bindings/:id/verify` | `assistant-binding:manage` | `assistant_bindings_verify` | 发送自定义测试消息并标记已验证；内容必填且不超过 500 字，30 秒冷却 |
 | DELETE | `/api/assistant/bindings/:id` | `assistant-binding:manage` | `assistant_bindings_delete` | 解绑 |
 | POST | `/api/assistant/bindings/check` | `assistant-binding:manage` | `assistant_bindings_check` | 触发好友关系巡检 |
 | GET | `/api/assistant/targets` | `assistant-target:read` | `assistant_targets_list` | 群目标列表 |
-| POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群 |
-| PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 命名、启用停用 |
+| POST | `/api/assistant/targets/sync` | `assistant-target:manage` | `assistant_targets_sync` | 从公司号通讯录同步群；新群 key 默认使用 `chatroomId` |
+| GET | `/api/assistant/targets/:id/members` | `assistant-target:read` | `assistant_targets_members` | 按需读取群成员与群主/管理员角色，不落库 |
+| POST | `/api/assistant/targets/:id/mention-message` | `assistant-target:manage` | `assistant_targets_mention_message` | 向群发送自由文本并 @ 指定成员 |
+| PATCH | `/api/assistant/targets/:id` | `assistant-target:manage` | `assistant_targets_update` | 编辑语义 key、名称、用途、内部群与启停 |
 | POST | `/api/assistant/deliveries/:id/retry` | `assistant-delivery:resend` | `assistant_deliveries_retry` | 重试单条站外交付；过期拒绝 |
 | GET | `/api/assistant/callback-events` | `assistant-callback:read` | `assistant_callback_events_list` | 回调记录（可选，回调引入后） |
 | GET | `/api/assistant/callback-events/:id` | `assistant-callback:read` | `assistant_callback_events_get` | 回调详情；原始报文脱敏（可选） |
+
+账号登录、掉线重连与退出全部在 GeWe 控制台完成；系统不提供扫码登录、`reconnection` 或 `logout` 接口。系统只保存管理员从控制台复制的 `appId`/`wxid`，并在导入或重新指向节点时调用 `checkOnline` 校验；离线节点拒绝导入。旧版 `REQUIRES_LOGIN` 账号仅作为历史占位，需要在「更新节点」中补齐真实 `appId`。
+
+绑定改绑不会改变微信 `wxid`，但会清空 `verifiedAt`、`verifiedByUserId` 和 `friendCheckedAt`，必须重新发送测试消息。目标员工必须启用，且不能已经绑定同一公司号；冲突返回 409 `ASSISTANT_BINDING_USER_CONFLICT`。改绑审计由一条 `ASSISTANT_BINDING_REVOKED` 与一条 `ASSISTANT_BINDING_CREATED` 组成，metadata 标注 `mode = REASSIGN`。
+
+绑定列表、创建和改绑响应同时返回完整 `wxid` 与 `wxidMasked`：`wxid` 只用于管理员在页面核对和复制，日志、审计与错误信息仍不得写入完整 `wxid`。`wechatNickname` 与 `wechatAvatarUrl` 是好友巡检按需刷新的微信资料快照；列表读取不访问 GeWe。
+
+`POST /api/assistant/bindings/:id/verify` 请求体为 `{ "content": "..." }`：去除首尾空白后不能为空，最长 500 个字符；空内容或超限返回 422 `ASSISTANT_BINDING_CONTENT_INVALID`。服务端先以 `last_test_sent_at` 的条件更新原子占用 30 秒冷却窗口，窗口内重复请求返回 429 `ASSISTANT_BINDING_TEST_COOLDOWN` 且不调用 GeWe；发送成功后写入验证时间并标记 `ACTIVE`。测试内容只用于本次发送，不落库、不进审计；上游失败同样占用冷却窗口，避免连续重试。
+
+群目标的 `chatroomId` 是同步身份，`key` 是管理员可编辑的语义键。同步新群时 `key` 默认等于 `chatroomId`；修改 `key` 不会改变 `chatroomId`，但引用旧 `key` 的渠道策略必须同步更新 `targetConfig.targetKeys`。重复 key 返回 409 `ASSISTANT_TARGET_KEY_EXISTS`。同步群会为前 100 个群调用 GeWe `getChatroomInfo` 刷新名称、头像与 `memberCount`（成员列表长度）；单个群详情被拒绝或返回未知业务错误时跳过该群的详情字段，离线、限流、超时和网络失败仍使整批同步失败。群目标响应包含 `avatarUrl`、`memberCount`、`lastSyncedAt`，列表读取不访问 GeWe。
+
+`GET /api/assistant/targets/:id/members` 按需调用 GeWe `getChatroomMemberList`，返回成员 `wxid`、微信昵称、群内昵称、头像、邀请人昵称和角色（`OWNER`/`ADMIN`/`MEMBER`，由 `chatroomOwner`/`adminWxid` 匹配）。GeWe 该接口没有分页参数，返回数量以上游为准。成员列表不落库、不写审计，关闭页面即丢弃；没有可用公司号返回 422 `ASSISTANT_ACCOUNT_UNAVAILABLE`，群目标不存在返回 404 `ASSISTANT_TARGET_NOT_FOUND`，其余上游错误复用统一的 422/429/503 映射。成员是否内部员工不由系统判断。
+
+`POST /api/assistant/targets/:id/mention-message` 请求体为 `{ "memberWxid": "wxid_xxx", "content": "..." }`：内容去空白后 1–1000 字，超限或为空返回 422 `ASSISTANT_TARGET_MESSAGE_INVALID`。群目标停用返回 422 `ASSISTANT_TARGET_DISABLED`，渠道停发返回 422 `ASSISTANT_CHANNEL_DISABLED`，成员不在群内返回 422 `ASSISTANT_TARGET_MEMBER_NOT_FOUND`。服务端按当前群成员资料取 `displayName`（为空回退 `nickName`），自动拼接 `@群内昵称 内容` 并传 `ats=memberWxid`；成功后写 `ASSISTANT_TARGET_MESSAGE_SENT` 审计（成员 wxid 掩码、内容长度、msgId，不写正文）。该发送不创建通知或 `assistant_deliveries` 记录，属于管理员手动外发，但仍与其他 sendText 共用全局发送闸门，同步响应会等待闸门可用。
+
+渠道测试、绑定验证、模板测试和群 `@TA` 消息都不进入业务通知队列，但都经过同一 `AssistantSendGate`；它们与队列消息共享 `ASSISTANT_MIN_SEND_INTERVAL_MS` 最小间隔，不能绕过限速直连 transport。
+
+上游错误不再全部折叠为通用 503：地址/代理校验失败返回 503 `ASSISTANT_OUTBOUND_BLOCKED`，节点离线返回 422 `ASSISTANT_ACCOUNT_OFFLINE`，上游限流返回 429 `ASSISTANT_RATE_LIMITED`，网络/DNS 失败返回 503 `ASSISTANT_UPSTREAM_UNAVAILABLE`。响应只使用固定文案，不回传 GeWe 原始 `msg`。
 
 ### 4.3 关键响应示例
 
@@ -300,12 +332,29 @@ export interface SystemNotificationPublishResult {
 ```
 
 ```json
-// POST /api/assistant/accounts/:id/login
+// POST /api/assistant/accounts
 {
-  "accountId": "3d0f...",
+  "name": "公司号-01",
   "appId": "wx_wR_U4zPj2M_OTS3BCyoE4",
-  "qrImgBase64": "data:image/jpg;base64,...",
-  "expiresAt": "2026-10-28T02:20:00.000Z"
+  "wxid": "wxid_company01",
+  "nickname": "千树小助理"
+}
+```
+
+```json
+// POST /api/assistant/accounts/:id/check
+{
+  "id": "3d0f...",
+  "name": "公司号-01",
+  "appId": "wx_wR_U4zPj2M_OTS3BCyoE4",
+  "wxidMasked": "wxid****01",
+  "nickname": "千树小助理",
+  "avatarUrl": null,
+  "status": "ONLINE",
+  "enabled": true,
+  "lastOnlineAt": "2026-10-28T02:15:00.000Z",
+  "lastLoginAt": null,
+  "version": 2
 }
 ```
 
@@ -313,32 +362,42 @@ export interface SystemNotificationPublishResult {
 // GET /api/notifications/records/:id
 {
   "id": "9a0b...",
+  "notificationNo": "NTF/20261028-000123",
   "eventType": "PURCHASE_REVIEW_PENDING",
-  "source": { "type": "PURCHASE_ORDER", "id": "6f0d..." },
+  "eventLabel": "采购审核",
+  "domain": "PURCHASE",
+  "sourceType": "PURCHASE_ORDER",
+  "sourceId": "6f0d...",
+  "priority": "HIGH",
   "status": "PARTIAL",
   "templateKey": "purchase.review.pending",
-  "createdAt": "2026-10-28T02:00:00.000Z",
-  "channels": [
-    { "channel": "IN_APP", "itemCount": 3, "unreadCount": 2, "readCount": 1 },
-    { "channel": "ASSISTANT", "pending": 0, "accepted": 2, "failed": 1, "expired": 0, "skipped": 0 }
-  ],
-  "assistantDeliveries": [
+  "expiresAt": "2026-10-29T02:00:00.000Z",
+  "publishedAt": "2026-10-28T02:00:00.000Z",
+  "completedAt": "2026-10-28T02:00:16.000Z",
+  "requestedByName": "李广达",
+  "channels": ["IN_APP", "ASSISTANT"],
+  "inAppItemCount": 3,
+  "inAppUnreadCount": 2,
+  "deliveryCounts": { "ACCEPTED": 2, "FAILED": 1 },
+  "deliveries": [
     {
       "id": "b1...",
-      "recipientUserId": "5e2a...",
       "recipientName": "李华",
+      "targetName": null,
       "status": "ACCEPTED",
       "attemptCount": 1,
-      "providerMsgId": "376897...",
-      "providerNewMsgId": "9154...",
+      "templateKey": "purchase.review.pending",
+      "failureCode": null,
+      "failureMessage": null,
       "acceptedAt": "2026-10-28T02:00:03.000Z"
     },
     {
       "id": "b2...",
-      "recipientUserId": "8c1b...",
       "recipientName": "王强",
+      "targetName": null,
       "status": "FAILED",
       "attemptCount": 3,
+      "templateKey": "purchase.review.pending",
       "failureCode": "ACCOUNT_OFFLINE",
       "failureMessage": "公司号离线，通知已过期",
       "acceptedAt": null
@@ -349,16 +408,25 @@ export interface SystemNotificationPublishResult {
 
 ## 5. 员工侧接口（站内阶段 3 预留）
 
-### 5.1 站内通知（阶段 3 预留）
+### 5.1 站内通知（阶段 3）
+
+全部只要求登录，不要求管理权限；服务端强制 `userId = 当前会话用户`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/notifications/me/inbox` | 本人收件箱，支持未读/已读/已归档筛选 |
-| GET | `/api/notifications/me/inbox/unread-count` | 未读数，供顶栏铃铛 |
-| POST | `/api/notifications/me/inbox/:id/read` | 标记已读 |
-| POST | `/api/notifications/me/inbox/:id/archive` | 归档 |
+| GET | `/api/notifications/me/inbox` | 列表；`status=all/unread/archived`、`domain=sales/purchase/shipment/finance/invoice/reconciliation/operations/system`、`page`、`pageSize` |
+| GET | `/api/notifications/me/inbox/unread-count` | 未读总数 `{ total }`；只算未读且未归档 |
+| GET | `/api/notifications/me/inbox/new` | 增量新消息；`cursor`、`limit`；供页面内 Toast 与桌面通知使用 |
+| GET | `/api/notifications/me/inbox/:id` | 详情；不属于当前用户返回 404 |
+| POST | `/api/notifications/me/inbox/:id/read` | 标记已读，幂等 |
+| POST | `/api/notifications/me/inbox/:id/unread` | 标记未读，幂等 |
+| POST | `/api/notifications/me/inbox/read-all` | 全部已读；请求体可选 `{ domain }` |
+| POST | `/api/notifications/me/inbox/:id/archive` | 归档；未读时同时写 `readAt` |
+| POST | `/api/notifications/me/inbox/:id/unarchive` | 取消归档；`readAt` 保留 |
 
-该组接口在阶段 3 实现，本文只冻结路径与语义。
+列表响应使用 `{ items, page, pageSize, total }`；列表项返回 `id`、`eventType`、`domain`、`title`、`readAt`、`archivedAt`、`createdAt`，正文只在详情返回。增量接口返回 `{ items, unreadTotal, nextCursor, hasMore, serverTime }`，游标编码 `(createdAt, id)`，避免同一时间戳消息漏拉。
+
+完整语义、业务域映射与 30 秒轮询规则见 [站内通知设计](./inapp.md)。
 
 ### 5.2 千树小助理绑定
 
@@ -368,7 +436,7 @@ export interface SystemNotificationPublishResult {
 
 1. `GET /api/assistant/contacts` 获取公司号好友列表。
 2. `POST /api/assistant/bindings` 选择员工与好友 `wxid`，创建绑定。
-3. `POST /api/assistant/bindings/:id/verify` 发送测试消息；员工确认后标记 `verified_at`。
+3. `POST /api/assistant/bindings/:id/verify` 提交自定义测试内容（≤500 字，30 秒冷却）发送测试消息；发送成功即写入 `verified_at`。
 4. 只有 `verified_at` 非空的绑定可以接收 1:1 消息，尤其是金额与客户名称。
 
 ## 6. 机器回调契约（可选，阶段 1 不实现）
@@ -476,6 +544,8 @@ export interface SystemNotificationPublishResult {
 | 已归档 | `archived_at IS NOT NULL` |
 
 ### 7.3 站外交付状态（`assistant_deliveries`）
+
+每条交付包含实际渲染使用的 `templateKey` 与 `templateVersion`；渠道策略覆盖模板时，`templateKey` 可能与通知主表的业务默认键不同，记录详情按交付展示。
 
 | 状态 | 含义 |
 | --- | --- |

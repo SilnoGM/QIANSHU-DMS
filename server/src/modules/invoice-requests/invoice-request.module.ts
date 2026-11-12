@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module'
 import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
+import { NotificationModule } from '../notifications/notification.module'
 import { InvoiceRequestController } from './invoice-request.controller'
 import { InvoiceRequestDocumentService } from './invoice-request-document.service'
 import { InvoiceRequestQueryService } from './invoice-request-query.service'
@@ -18,7 +19,7 @@ import { InvoiceRequestService } from './invoice-request.service'
  * 财务可跨提交人）由服务层按 `invoice-requests:read-all` 解析，见 invoice-request-access.ts。
  */
 @Module({
-  imports: [PrismaModule, AuthModule, MediaModule, NumberingModule, FundAccountsModule],
+  imports: [PrismaModule, AuthModule, MediaModule, NumberingModule, FundAccountsModule, NotificationModule],
   controllers: [InvoiceRequestController],
   providers: [InvoiceRequestService, InvoiceRequestQueryService, InvoiceRequestDocumentService],
 })

@@ -4,22 +4,22 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计稿，关键决策已确认，待实施 |
+| 文档状态 | 设计稿；阶段 1 与站内通知核心已实施，未完成项见任务与部署清单 |
 | 方案定位 | 通知中心（系统通知）为统一能力；站内通知与千树小助理是两个渠道 |
-| 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
+| 关联文档 | [文档索引](./README.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[事件规格](./events.md)、[站内通知设计](./inapp.md)、[任务拆分](./tasks.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md)、[GeWeAPI 评估](../../docs/技术评估/GeWeAPI微信通知接入评估.md) |
 | 适用范围 | `server/src/modules/notifications`、`web/apps/qsmds-arco` |
-| 最后更新 | 2026-10-28 |
-| 实施边界 | 本文不含迁移 SQL、接口实现与页面代码；表结构、权限与迁移需单独评审批准 |
+| 最后更新 | 2026-11-06 |
+| 实施边界 | 本文保留设计决策；迁移、接口与页面代码已在 `feat/notification-center` 分支落地，未完成项见任务与部署清单 |
 
 ## 0. 已确认决策
 
 | 决策 | 结论 | 影响 |
 | --- | --- | --- |
 | 回调 | 阶段 1 不接；只有需要实时掉线/联系人事件时再引入，届时单独做 CSRF 安全评审 | 阶段 1 无公网回调入口，不改 `CsrfProtectionGuard` |
-| 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`SLH_RECONCILIATION_COMPLETED`（财务群）、`SHIPMENT_ARRIVED`（运营群） | 其余 4 个放阶段 2 |
+| 首批事件 | 3 个：`PURCHASE_REVIEW_PENDING`（1:1）、`INVOICE_REQUEST_REVIEW_PENDING`（1:1）、`SHIPMENT_ARRIVED`（按策略） | 原对账完成候选改为开票审核；其余事件放阶段 2 |
 | 敏感内容 | 这 3 个事件允许金额与客户名称；1:1 与内部群都可发；群必须 `internal_only`，1:1 只发给已验证绑定 | 模板按事件 × 渠道开启 `allow_sensitive` |
 | 派发器 | 进程内循环 + 数据库租约；5 秒轮询、批量 20、租约 30 秒 | 不新增 systemd 服务，不引入 Redis |
-| 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息确认后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |
+| 绑定 | 取消员工自助绑定；全部由管理员在后台完成，测试消息发送成功后置 `verified_at` | 不需要绑定码表，也不需要回调处理绑定消息 |
 
 ## 1. 目标与非目标
 
@@ -28,7 +28,7 @@
 - 业务模块只调用一个统一接口 `SystemNotificationService.publish()`，不感知渠道。
 - 通知中心同时支持两个渠道：站内通知（`IN_APP`）与千树小助理（`ASSISTANT`，微信经 GeWe）。
 - 千树小助理只承担「站外提醒」：失败不影响业务事务，业务侧始终有站内或其他降级路径。
-- 管理端能配置渠道与公司号、维护员工绑定与群目标、编辑模板与渠道策略、查看发送记录、一键停发；回调引入后再提供回调记录。
+- 管理端能配置渠道、导入 GeWe 控制台已有节点、维护员工绑定与群目标、编辑模板与渠道策略、查看发送记录、一键停发；回调引入后再提供回调记录。
 - 数据模型为站内通知预留收件箱与已读体系；阶段 1 只启用千树小助理，站内渠道在阶段 3 上线。
 - 所有外部调用可审计、可观测、可限速、可停发。
 
@@ -56,7 +56,7 @@
 ## 2. 总体架构
 
 ```
-业务模块（采购/资金/发票/对账/货件）
+业务模块（销售/采购/货件运输/财务/发票/对账/运营/系统）
         │  publish(command, { transaction })
         ▼
 SystemNotificationService
@@ -98,7 +98,6 @@ await this.systemNotifications.publish(
     templateKey: 'purchase.review.pending',
     variables: { orderNo: order.orderNo, vendorName: order.vendorName, itemCount: order.itemCount },
     dedupeKey: `purchase-review:${order.id}`,
-    priority: 'HIGH',
   },
   { transaction },
 )
@@ -134,7 +133,7 @@ await this.systemNotifications.publish(
 
 - 新增事件只追加。
 - 每个事件在每个启用渠道上必须有策略与模板；缺失时该渠道跳过，不影响其他渠道。
-- 渠道的收件人、TTL、优先级由 `notification_channel_policies` 维护，不写死在业务代码里。
+- 渠道的收件人、TTL、优先级由 `notification_channel_policies` 维护，不写死在业务代码里；有启用的渠道策略时以策略 `priority` 为准，命令中的 `priority` 仅作兜底。
 
 ## 4. 领域模型
 
@@ -145,17 +144,18 @@ await this.systemNotifications.publish(
 | 表 | 归属 | 用途 | 关键字段 |
 | --- | --- | --- | --- |
 | `notifications` | 通知中心 | 逻辑通知 | `event_type`、`source_type`、`source_id`、`dedupe_key` 唯一、`priority`、`status`、`template_key`、`requested_channels`、`variables`、`expires_at`、`published_at`、`completed_at`、`requested_by_user_id` |
-| `notification_inbox_items` | 站内通知 | 收件箱条目（阶段 3） | `notification_id`、`user_id`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
+| `notification_inbox_items` | 站内通知 | 收件箱条目（阶段 3） | `notification_id`、`user_id`、`event_type`、`template_version`、`title_snapshot`、`body_snapshot`、`link_url_snapshot`、`read_at`、`archived_at`；唯一 `(notification_id, user_id)` |
 | `notification_templates` | 通知中心 | 按渠道的模板 | `key`、`channel`、`name`、`title_template`、`body_template`、`link_url_template`、`variables`、`max_length`、`enabled`、`version`；唯一 `(key, channel)` |
 | `notification_channel_policies` | 通知中心 | 事件 × 渠道策略 | `event_type`、`channel`、`target_mode`、`target_config`、`template_key`、`priority`、`ttl_seconds`、`quiet_hours`、`allow_sensitive`、`enabled`、`version`；唯一 `(event_type, channel)` |
 | `notification_settings` | 通知中心 | 全局设置 | `id='default'`、`notification_retention_days`、`delivery_retention_days`、`callback_retention_days`、`version`、`updated_by_user_id` |
 | `notification_channel_settings` | 通知中心 | 渠道开关与默认值 | `channel` 主键、`enabled`、`default_quiet_hours`、`version`、`updated_by_user_id` |
 | `assistant_deliveries` | 千树小助理 | 逐人或逐群发送尝试 | `notification_id`、`recipient_user_id`、`target_id`、`account_id`、`status`、`attempt_count`、`next_attempt_at`、`template_version`、`rendered_content`、`provider_msg_id`、`provider_new_msg_id`、`failure_code`、`accepted_at` |
-| `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一、`wxid`、`status`、`region_id`、`proxy_ip_encrypted`、`last_online_at`、`last_login_at`、`version` |
+| `assistant_accounts` | 千树小助理 | 公司号 | `name`、`app_id` 唯一（控制台节点 ID，由管理员导入）、`wxid`（控制台复制）、`status`、`region_id`/`proxy_ip_encrypted`（历史字段，登录由控制台完成）、`last_online_at`、`last_login_at`、`version` |
 | `assistant_bindings` | 千树小助理 | 员工与公司号绑定 | `user_id`、`account_id`、`wxid`、`wechat_nickname`、`status`、`bound_by_user_id`、`verified_at`、`verified_by_user_id`、`friend_checked_at`、`bound_at`；唯一 `(user_id, account_id)`、`(account_id, wxid)` |
-| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一、`chatroom_id` 唯一、`name`、`purpose`、`internal_only`、`member_count`、`enabled`、`last_synced_at` |
+| `assistant_targets` | 千树小助理 | 群目标 | `key` 唯一（可编辑语义键）、`chatroom_id` 唯一（同步身份）、`name`、`purpose`、`internal_only`、`member_count`、`avatar_url`、`enabled`、`last_synced_at` |
 | `assistant_callback_events` | 千树小助理 | 回调原始记录（可选，后续） | `app_id`、`version`、`kind`、`provider_new_msg_id`、`dedupe_key` 唯一、`raw_payload`、`process_status`、`process_error`、`received_at` |
 | `assistant_dispatch_leases` | 千树小助理 | 派发器单实例租约 | `id='assistant-dispatch'`、`owner_id`、`expires_at` |
+| `assistant_send_gates` | 千树小助理 | 全局发送闸门 | `id='assistant-send'`、`next_allowed_at`、`lock_owner`、`lock_expires_at` |
 
 设计取舍：
 
@@ -209,12 +209,15 @@ PENDING ──► SENDING ──► ACCEPTED
 - `event_type`、`template_key` 不做外键，允许模板或策略缺失时仍写入失败记录；一致性由发布校验和管理端约束保证。
 - 渠道策略约束：`channel = 'IN_APP'` 时 `target_mode != 'GROUP'`、`ttl_seconds` 与 `quiet_hours` 必须为空；`channel = 'ASSISTANT'` 时 `GROUP` 合法且 TTL 必填。
 - 敏感内容约束：`allow_sensitive = true` 且 `target_mode = 'GROUP'` 时，只能选择 `internal_only = true` 的群；1:1 投递只发给 `verified_at` 非空的绑定。
-- 绑定唯一性：`(user_id, account_id)` 与 `(account_id, wxid)`；`verified_at` 为空表示尚未完成测试消息确认。
+- 绑定唯一性：`(user_id, account_id)` 与 `(account_id, wxid)`；`verified_at` 为空表示尚未发送测试消息。
 - 不使用软删除；用 `status` 与时间戳表达生命周期。
 
 ### 4.4 模板与内容
 
 - 模板唯一键是 `(key, channel)`；业务命令只传一个 `templateKey`，系统为每个启用渠道解析自己的模板。
+- 渠道策略配置了 `template_key` 时以策略为准，否则回退到业务命令键；策略显式绑定但模板不存在或已停用时该渠道直接失败，不回退，避免配置错误被默认键掩盖。
+- 策略保存时校验模板存在于对应渠道，且模板占位符属于该事件的变量契约（尚无触发源的事件不登记契约，跳过兼容性校验）；域不一致仍只提示不阻止。
+- 实际渲染使用的模板键写入 `notification_inbox_items.template_key` 与 `assistant_deliveries.template_key`；通知主表 `template_key` 保留业务默认键，用于逻辑归组。
 - 发布时渲染内容：站内写入 `title_snapshot/body_snapshot/link_url_snapshot`，站外写入 `assistant_deliveries.rendered_content`。
 - 模板修改不会改变已入队内容；这是可追溯性的前提。
 - 模板只支持 `{{variable}}` 占位，不执行表达式、不渲染 HTML。
@@ -232,7 +235,7 @@ PENDING ──► SENDING ──► ACCEPTED
 | `assistant_callback_events` | 30 天 | 原始报文可能含消息内容，保留期最短（回调引入后） |
 | `assistant_deliveries` | 90 天 | 站外发送台账，用于排查与对账 |
 | `notifications` | 180 天 | 逻辑通知与统计 |
-| `notification_inbox_items` | 用户归档或 1 年 | 站内消息是用户资产，不随站外 TTL 删除 |
+| `notification_inbox_items` | 未归档 180 天、已归档 1 年 | 站内消息是用户资产，不随站外 TTL 删除 |
 
 清理由 `server/src/commands/notification-operations.ts cleanup` 执行，沿用媒体清理的 systemd timer 模式，每日一次。保留期可在 `notification_settings` 调整，但必须有下限（回调 ≥7 天、站外投递 ≥30 天）。
 
@@ -242,15 +245,15 @@ PENDING ──► SENDING ──► ACCEPTED
 
 `publish()` 在一个事务内完成：
 
-1. 解析事件在 `notification_channel_policies` 中的启用渠道。
+1. 解析事件在 `notification_channel_policies` 中的启用渠道，并按渠道确定实际模板键（策略绑定优先，否则用命令键）。
 2. 对每个渠道解析目标：`COMMAND_TARGET` 用命令目标，其他模式用策略配置；`GROUP` 只用于千树小助理。
 3. 解析收件人为具体用户或群目标。
 4. 计算幂等键；已存在则直接返回原通知。
-5. 站内：为每个用户创建 `notification_inbox_items`，写入渲染快照。
-6. 站外：为每个用户或群创建 `assistant_deliveries`；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
+5. 站内：为每个用户创建 `notification_inbox_items`，写入渲染快照与实际模板键。
+6. 站外：为每个用户或群创建 `assistant_deliveries`，写入实际模板键；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
 7. 汇总通知状态。
 
-阶段 1 的渠道设置只插入并启用 `ASSISTANT`；`IN_APP` 行在阶段 1 不插入，发布请求 `IN_APP` 时返回 `CHANNEL_NOT_CONFIGURED`，不创建收件箱条目。阶段 3 再插入并启用。阶段 1 只配置 3 个事件；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
+阶段 1 先插入并启用 `ASSISTANT`；站内通知迁移已插入并启用 `IN_APP`，并为采购审核、开票审核、货件到仓创建站内模板。事件策略仍由管理员按环境配置；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
 
 ### 5.2 派发器形态与单实例保证
 
@@ -258,43 +261,31 @@ PENDING ──► SENDING ──► ACCEPTED
 
 - `AssistantDispatchService` 在应用启动后启动循环，每 5 秒轮询一次。
 - 用 `assistant_dispatch_leases` 的单行租约保证同一时刻只有一个实例派发：
-  - 获取：`UPDATE ... SET owner_id = $me, expires_at = now() + 30s WHERE id = 'assistant-dispatch' AND (expires_at < now() OR owner_id = $me) RETURNING ...`
-  - 心跳：每 10 秒续租；续租失败立即停止派发。
-  - 进程退出后租约自然过期，其他实例可接管。
+  - 获取/续租：`UPDATE ... SET owner_id = $me, expires_at = now() + lease_ttl WHERE id = 'assistant-dispatch' AND (expires_at < now() OR owner_id = $me) RETURNING ...`；TTL 取 `max(30s, 请求超时 + 最小发送间隔 + 15s)`，每领取一条交付前续租，续租失败立即停止派发。
+  - 进程退出后租约自然过期，其他实例可接管；发送期间不另起独立心跳定时器。
 - 站内通知不需要 worker：收件箱条目在发布事务内创建，读取由查询接口完成。
 - 部署形态不变：不新增 systemd 服务，不需要 Redis。当前通知量很低，可以接受；派发量增大后再拆独立进程。
 
 ### 5.3 领取与并发
 
-每轮领取最多 20 条到期交付：
+每轮领取最多 20 条到期交付，按 HIGH / NORMAL 两条泳道领取：
 
-```sql
-UPDATE assistant_deliveries d
-SET status = 'SENDING', updated_at = now()
-WHERE d.id IN (
-  SELECT d2.id
-  FROM assistant_deliveries d2
-  JOIN notifications n ON n.id = d2.notification_id
-  WHERE d2.status = 'PENDING' AND d2.next_attempt_at <= now()
-  ORDER BY n.priority DESC, d2.created_at ASC
-  FOR UPDATE OF d2 SKIP LOCKED
-  LIMIT 20
-)
-RETURNING d.*;
-```
+- HIGH 泳道包含 `priority = HIGH`、等待超过 5 分钟、或距过期不足 10 分钟的交付；老化/临期提升只影响本次领取，不回写通知原始优先级。
+- 每次最多连续领取 3 条 HIGH，再领取 1 条 NORMAL；HIGH 空时 NORMAL 一次领取剩余额度，NORMAL 空时 HIGH 继续领取。
+- 两条泳道都使用 `FOR UPDATE OF d2 SKIP LOCKED`，`priority` 不冗余到交付表，排序时 join 通知表。
+- 派发租约 TTL 至少覆盖一次请求超时 + 最小发送间隔 + 15 秒；每轮开始回收超时仍为 `SENDING` 的交付，按“结果未知”重新排队并记录 `SENDING_RECOVERED`，超过重试上限落 `FAILED`。这会接受极小概率重复发送，但避免交付永久卡死。
+- 队列内部按顺序处理领取结果；所有 sendText 的串行与最小间隔由 5.4 的全局发送闸门保证，优先级只改变领取顺序。
 
-`SKIP LOCKED` 保证多实例或多轮次不会重复领取。`priority` 不冗余到交付表，排序时 join 通知表。单实例内部串行发送，不并发调用 GeWe。
+### 5.4 发送闸门与限速
 
-### 5.4 限速
+所有 `sendText` 共用数据库单行 `assistant_send_gates`：
 
-按公司号维度控制：
-
-- 每分钟不超过 40 条。
-- 同一收件人相邻消息间隔不少于 1 秒。
-- 群消息间隔随机 2~5 秒。
-- 同一批通知按 `HIGH` 优先、创建时间升序发送。
-
-限制器是进程内的软限制；租约切换后计数会重置。这是可接受的，因为限速目的是降低风控概率，不是精确配额。
+- 队列派发、渠道测试、绑定验证、模板测试和群目标 `@TA` 消息都经过同一 `GatedAssistantTransport`，不能绕过闸门直连 transport。
+- 同一时刻只允许一个发送租约；上一条消息未完成时，下一条在闸门外等待。
+- 发送结束（成功或失败）后写 `next_allowed_at = 实际结束时间 + ASSISTANT_MIN_SEND_INTERVAL_MS`，默认 `3000ms`；保证范围是我方请求的结束到下一次开始。3000ms 是产品初值，不是微信风控验证值，需按试用期实际返回评估。
+- 发送租约 TTL = 最小间隔 + 请求超时 + 15 秒；进程崩溃时租约到期后可接管，但不能撤回已经发出的 HTTP 请求。这里只能保证请求侧最小间隔，不承诺第三方实际送达间隔，也不保证故障下绝不重复。
+- `ASSISTANT_MIN_SEND_INTERVAL_MS=0` 仅用于本地显式关闭节流，生产不得依赖该值规避风控。
+- 同一批通知采用 HIGH 3 条 + NORMAL 1 条的加权公平顺序；NORMAL 等待超过 5 分钟或距过期不足 10 分钟时进入 HIGH 泳道，避免长期饥饿。
 
 ### 5.5 错误分类与重试
 
@@ -316,7 +307,7 @@ RETURNING d.*;
 
 - 默认 `20:00–08:00`（`Asia/Shanghai`），可在渠道设置或事件×渠道策略覆盖。
 - `NORMAL` 通知在静默时段不发送，`next_attempt_at` 推到窗口开始；若窗口开始晚于 `expiresAt`，直接 `EXPIRED`。
-- `HIGH` 通知不受静默时段限制，例如待审核、提现审批。
+- `HIGH` 通知不受静默时段限制，例如账号离线、资金冲账、代理节点过期。
 - 站内通知没有静默时段，收件箱条目立即创建。
 
 ### 5.7 TTL
@@ -328,12 +319,12 @@ RETURNING d.*;
 
 ### 5.8 账号离线与封禁
 
-- 账号状态：`ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED`。
-- 发送前检查账号状态；`ONLINE` 状态超过 60 秒未刷新时调用 `checkOnline`，结果缓存 30 秒。
+- 账号状态：`ONLINE`、`OFFLINE`、`REQUIRES_LOGIN`、`DISABLED`；`REQUIRES_LOGIN` 仅保留给历史占位账号。
+- 发送前读取本地账号状态；系统不主动登录、重连或退出，在线状态由发送结果与管理员手动「检查状态」更新。
 - 离线：交付保持 `PENDING` 并按离线退避；TTL 到期转 `EXPIRED`。
-- 需要重新登录：不再尝试发送，管理端显示红色状态与「重新扫码」入口。
-- 疑似封禁：连续多次登录失败或回调出现退出事件，账号置 `REQUIRES_LOGIN` 并告警；是否停用由管理员决定。
-- 阶段 1 无回调：掉线靠 `checkOnline` 每 60 秒轮询与发送失败发现，检测延迟最长约 60 秒；回调引入后改用事件驱动。
+- 待导入：`REQUIRES_LOGIN` 或 `pending-` 占位 appId 不参与发送；管理端显示红色状态与「更新节点」入口。
+- 疑似封禁：连续发送失败或控制台显示封禁时，账号置 `OFFLINE` 并告警；是否停用由管理员决定。
+- 阶段 1 无回调：掉线靠发送失败与手动 `checkOnline` 检查发现；账号恢复由 GeWe 控制台重连/重新扫码完成。
 - 账号不可用期间，通知不自动改走站内（站内渠道可能已关闭）；降级由业务侧主通道承担。
 
 ### 5.9 环境变量
@@ -349,6 +340,7 @@ RETURNING d.*;
 | `ASSISTANT_WORKER_POLL_MS` | 否 | 默认 5000 |
 | `ASSISTANT_WORKER_BATCH` | 否 | 默认 20 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | 默认 10000 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | 默认 3000；所有 sendText 的全局最小间隔，0 仅用于本地关闭节流 |
 
 渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。
 
@@ -450,7 +442,7 @@ export type AssistantTransportResult =
 
 ### 7.5 绑定不由回调驱动
 
-绑定完全由管理员在后台完成：选择员工、从公司号好友列表选择微信、发送测试消息、员工确认后标记 `verified_at`。回调不处理绑定码，也不需要绑定码表。
+绑定完全由管理员在后台完成：选择员工、从公司号好友列表选择微信、提交自定义测试内容发送；发送成功即标记 `verified_at`。回调不处理绑定码，也不需要绑定码表。
 
 约束：
 
@@ -484,7 +476,7 @@ export type AssistantTransportResult =
 千树小助理（`server/src/modules/notifications/assistant/`）：
 
 - `assistant-channel.controller.ts`：渠道配置、测试、启停。
-- `assistant-account.controller.ts`：账号 CRUD、扫码登录、重连、退出。
+- `assistant-account.controller.ts`：导入/更新控制台已有节点、`checkOnline` 状态检查、个人二维码。
 - `assistant-binding.controller.ts`：公司号好友列表、管理员绑定、测试消息验证、解绑、巡检。
 - `assistant-target.controller.ts`：群目标同步与维护。
 - `assistant-delivery.controller.ts`：单条站外交付重试。
@@ -495,16 +487,15 @@ export type AssistantTransportResult =
 
 ### 8.2 管理端信息架构
 
-单一路由 `/system/notifications`，页面标题「通知中心」，用 `FaTabs` 分页签：
+系统管理下的「通知中心」是分组菜单，包含三个独立页面，不再使用单页 `FaTabs`：
 
-| 页签 | 内容 | 阶段 |
+| 页面 | 路由 | 内容 |
 | --- | --- | --- |
-| 概览 | 渠道状态、公司号在线、今日发送/失败/未读、队列积压 | 1 |
-| 站内通知 | 站内渠道配置与消息治理 | 3，阶段 1 隐藏 |
-| 千树小助理 | 渠道配置、公司号、管理员绑定、群目标 | 1 |
-| 通知规则 | 模板（按渠道）与事件 × 渠道策略 | 1 |
-| 发送记录 | 逻辑通知、渠道汇总、逐人交付、重试/取消 | 1 |
-| 回调记录 | 回调列表与原始报文 | 可选，回调引入后 |
+| GeWe助理 | `/system/notifications/assistant` | 渠道开关（页头右侧）、公司号（含个人二维码与发送测试）、管理员绑定（含改绑）、群目标（卡片、搜索筛选、编辑 key） |
+| 通知策略 | `/system/notifications/policies` | 事件驾驶舱（事件 × 渠道策略与消息内容）与模板库 |
+| 通知记录 | `/system/notifications/records` | 全渠道记录、筛选、详情与取消待发交付 |
+
+父级 `/system/notifications` 只承担分组和权限并集，直接访问时由 `index.vue` 按权限跳转到第一个可用子页面。
 
 路由元数据：
 
@@ -512,42 +503,72 @@ export type AssistantTransportResult =
 {
   path: '/system/notifications',
   name: 'systemNotifications',
-  component: () => import('@/views/system/notifications/index.vue'),
+  component: Layout,
   meta: {
     title: '通知中心',
     icon: 'qs-notification',
     auth: [
       'notification-record:read',
       'notification-template:read',
+      'notification-policy:read',
       'assistant-channel:read',
+      'assistant-account:read',
     ],
-    singleMenu: true,
   },
+  children: [
+    // assistant / policies / records 三个叶子，各自声明读取权限
+  ],
 }
 ```
 
-`meta.auth` 使用 any-of：只有发送记录权限的财务也能进入页面，但只看得到「发送记录」页签。页签内部再按各自权限显示。回调引入后再把 `assistant-callback:read` 加入 auth。
+子页面权限：
 
-图标必须新增品牌资产：`src/assets/icons/qs-notification.svg`、`brand-icons.json` 登记、重跑 `node web/scripts/generate-icon-inventory.mjs`。千树小助理页签如需图标，同时新增 `qs-assistant.svg`；导航图标不能用 `i-lucide:*`。
+- GeWe助理：`assistant-channel:read` 或 `assistant-account:read`。
+- 通知策略：`notification-template:read` 或 `notification-policy:read`。
+- 通知记录：`notification-record:read`。
+
+导航图标使用品牌资产 `qs-gewe-assistant`、`qs-notification-policy`、`qs-notification-records`；新增图标必须放入 `src/assets/icons/`、登记 `brand-icons.json`，并重跑 `node web/scripts/generate-icon-inventory.mjs`。导航图标不能使用 `i-lucide:*`。
+
+GeWe助理页的渠道开关只放在页头右侧，不提供保存按钮；发送测试放在公司号卡片的个人二维码旁边。绑定卡片的「发送测试」打开内容弹窗：默认填入随机内容，可手动编辑（最多 500 字）或点「随机内容」重新生成；发送成功即标记已验证，同一绑定 30 秒内只能发送一次。
+
+群管理使用卡片网格（`sm` 2 列、`xl` 3 列、`2xl` 4 列），卡片展示群头像与启停圆点、名称、用途、仅内部/非内部标签、`chatroomId` 复制胶囊、语义 key、成员数和同步时间；底部只保留「仅内部成员」「启用」两个开关，其余操作收进「更多」。页签支持全部/仅内部/非内部/已停用筛选并占满整行，不提供页面级搜索；页头使用绿色「同步群组」按钮，同步会刷新群头像、名称和成员数。
+
+「更多」包含「查看成员」「查看群组」「编辑信息」。查看成员会把卡片翻转到反面：反面展示群成员头像网格，头像加载失败回退昵称首字，滚动区域隐藏滚动条，头像 hover 显示主题绿色边框；点击头像打开单个成员详情弹窗，展示头像、群内昵称、微信昵称、角色、明文 wxid（可复制）和可解析的邀请人。「返回」翻回正面，同一时间只允许一张卡片处于反面。查看群组打开成员列表弹窗，支持昵称/wxid 搜索并提示「成员是否内部员工需人工核对」。成员数据按需从 GeWe 获取，不落库、不写审计。
+
+成员详情对有 `assistant-target:manage` 的用户展示「@TA消息」：发送弹窗上限 1000 字，服务端按当前群昵称自动拼接 `@群内昵称 内容` 并传递 `ats=wxid`；群目标停用或渠道停发时拒绝发送。发送成功写审计，不创建通知或交付记录。
+
+通知策略页分为「事件配置」和「模板库」，用占满整行的 `QsStatusSwitchToolbar` 切换，两个面板用 `v-show` 保留筛选与选中状态。事件配置在宽度 ≥1440 时使用 `QsGenericTable` 分组表格：父组是业务域，子行是事件，列展示事件、配置状态、站内通知、千树小助理、策略更新和操作，组头灰底、组内事件行白底且不使用斑马纹，组头显示域内事件数与已配齐数，表格右上提供列设置；策略更新列使用 `QsPersonDisplay` 展示人员并附更新时间。宽度 <1440 时改用按业务域分组的卡片列表，每个事件同时展示两个渠道和各自的「站内配置」「小助理配置」入口，避免表格横向滚动和固定操作列遮挡渠道列。两种布局共用加宽搜索框、状态筛选与清除筛选，搜索与筛选在页面侧同时过滤父组和子行，空组不渲染；事件、策略或模板加载失败均提供重试。行操作使用站内蓝色、小助理绿色按钮并分别打开单渠道 `QsGenericDrawer`，抽屉内保留投递配置（目标模式与选择器、优先级、TTL、静默时段、敏感内容、启停）和消息内容块，footer 提供重置与保存，关闭时对未保存草稿二次确认；新策略默认停用，创建后需显式开启。内容块显式区分「业务默认模板」和「策略绑定模板」，展示实际生效模板的名称、Key、版本、业务域、正文摘要和使用数，支持预览、展开全文、编辑、更换模板、恢复默认和按当前 Key 新建；策略绑定键与业务默认键相同时按默认展示且不提供恢复默认，模板占位符超出事件变量时直接在抽屉内提示。模板选择改为 `QsGenericModal`，默认「仅看可绑定」，不兼容模板折叠并说明变量，列表提供正文摘要与预览入口；从抽屉打开时使用 2200 层级，模板编辑弹窗位于抽屉上方时渠道与业务域改为只读展示，避免 FaSelect 浮层被弹窗遮挡。事件没有触发源时提示「可提前配置但不会触发」，并计入独立的「未接入」统计而不是「未配置」。无策略或模板读取权限时按资源降级，不因单个接口 403 整页失败。模板库页签保持左侧业务域/模板键导航加右侧双渠道卡片的主从布局，并显示模板键被多少个事件使用；编辑被多个事件使用的模板时弹窗提示影响范围。模板业务域固定为八个域且只能选一个，采购待付款与包装待付款归财务域；同一模板键在两个渠道必须使用同一业务域，创建第二个渠道时自动沿用并锁定业务域。策略绑定模板时，模板域与事件域不一致会提示但不阻止保存。模板变量白名单使用带表头的紧凑表格，编辑模板弹窗固定高度、内容区滚动，顶部用 `QsStatusSwitchToolbar` 分「基础信息 / 内容配置 / 变量白名单」三视图：基础信息只保留键、渠道、名称、业务域、适用事件、最大长度和启用；标题（站内通知使用）与正文、跳转链接、可用变量一起放在内容配置；变量白名单单独一视图。可用变量面板按「适用事件」展示变量中文名、说明、示例、敏感标记和最大长度，每个变量卡右侧提供「插入」按钮，按当前聚焦输入框的光标位置写入正文/标题/链接并自动加入白名单；适用事件从渠道抽屉自动带入，模板库按默认模板键反查或由管理员手动选择，变量白名单只读展示变量名，并同时列出变量说明、示例、最大长度、必填和敏感标记。站内模板禁用测试发送。
 
 ### 8.3 页面结构
 
 ```
 views/system/notifications/
-├── index.vue                    # FaTabs + 页签编排 + 权限
-├── notifications.logic.ts       # 权限动作、查询构造、状态映射、错误提取
+├── index.vue                    # 旧入口的权限感知跳转
+├── assistant.vue                # GeWe助理页面壳
+├── policies.vue                 # 通知策略页面壳
+├── records.vue                  # 通知记录页面壳（页头刷新 + 权限空态）
 ├── overview-panel.vue
-├── inbox-panel.vue              # 阶段 3
 ├── assistant-panel.vue          # 渠道、账号、绑定、群目标
-├── rules-panel.vue              # 模板 + 事件 × 渠道策略
-├── records-panel.vue            # 逻辑通知与逐人交付
-├── callback-panel.vue
-└── components/
-    ├── qr-login-modal.vue
-    ├── binding-code-modal.vue
-    ├── template-editor-modal.vue
-    ├── channel-policy-editor-modal.vue
-    └── notification-detail-drawer.vue
+├── rules-panel.vue              # 策略页壳：视图切换、数据加载、模板弹窗
+├── event-config.logic.ts        # 事件覆盖态、分组表格映射、兼容性与使用数
+├── event-config.presentation.ts # 事件/渠道状态标签、样式与更新日期
+├── template-variable.logic.ts   # 模板占位符提取与光标插入
+├── policy-draft.logic.ts        # 策略草稿、脏数据与保存载荷
+├── components/
+│   ├── EventConfigPanel.vue     # 事件配置：宽屏表格 / 窄屏卡片调度
+│   ├── EventConfigCards.vue     # 窄屏业务域分组卡片列表
+│   ├── EventFilterBar.vue       # 事件搜索、状态筛选与清除
+│   ├── EventChannelDrawer.vue   # 单渠道配置抽屉
+│   ├── EventChannelCard.vue     # 渠道投递配置表单（卡片/抽屉两种外壳）
+│   ├── EventTemplateBlock.vue   # 默认/绑定/异常模板状态
+│   ├── TemplatePickerDrawer.vue # 模板选择弹窗（文件名保留旧称）
+│   ├── TemplateLibraryPanel.vue # 模板库主从布局
+│   ├── TemplateDomainRail.vue   # 左侧业务域/模板键导航
+│   ├── TemplateKeyDetail.vue    # 右侧模板键详情与渠道卡位
+│   └── TemplateChannelCard.vue  # 单渠道模板卡片
+├── template-key-grouping.logic.ts # 模板键聚合、过滤与正文分段
+├── records-panel.vue            # 全渠道记录筛选、表格、移动端操作与取消编排
+└── qr-image.ts
 ```
 
 约定：
@@ -557,14 +578,14 @@ views/system/notifications/
 - 页头 `FaPageHeader`，内容区 `FaPageMain`，错误 `FaAlert`，空态 `FaEmpty`。
 - 读请求带 `signal` 与 `errorPresentation: 'local'`；写请求 `retry: false`。
 - 列表竞态用请求版本号；分页/筛选用统一微任务合并器，沿用 `views/system/users/index.vue` 的写法。
-- 敏感操作（停发、退出登录、解绑、取消通知）二次确认。
+- 敏感操作（停发、重新指向 appId、解绑、取消通知）二次确认。
 
 ### 8.4 移动端
 
 - 断点 768px，与现有表格页一致。
 - 表格在窄屏自动切卡片；自定义 `mobile-row` 时必须用 `hasVisibleTableColumn` 同步列显隐。
 - 二维码弹窗在窄屏全宽，二维码最小 240px；按钮触控高度不小于 44px。
-- 发送记录的操作收进底部 `FaDrawer`，桌面用 `FaDropdown`。
+- 发送记录桌面使用行内操作按钮，窄屏收进底部 `FaDrawer`。
 
 ### 8.5 前端测试契约
 
@@ -577,8 +598,9 @@ views/system/notifications/
 
 - 员工**不需要**安装任何客户端，也不把自己的微信登录到 GeWe。
 - 员工侧**没有绑定入口**；绑定、解绑、换号全部由管理员在后台完成。员工只需要在微信里添加公司号并接收消息。
-- 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 发送测试消息 → 员工确认后标记 `verified_at`。
-- 阶段 3 的站内通知入口在顶栏铃铛与「站内通知」页；数据来自 `notification_inbox_items`，未读数来自 `read_at IS NULL` 的计数。
+- 新员工入职流程：管理员展示公司号二维码 → 员工扫码添加好友 → 管理员在手机端同意 → 管理员在「千树小助理 > 员工绑定」里从好友列表选择该员工 → 提交测试内容发送 → 发送成功即标记 `verified_at`（同一绑定 30 秒冷却）。
+- 阶段 3 的站内通知入口在顶栏铃铛与 `/notifications` 页面；单列表 + 业务域筛选，30 秒轮询，聚焦与操作后立即刷新；未读数只返回总数。详见 [站内通知设计](./inapp.md)。
+- 桌面浏览器通知为可选增强：通知页开关、仅桌面端、页面隐藏时逐条弹、允许带详情；不做 Web Push。
 - 员工在微信里看到的发送者名称是**公司号微信自己的昵称**，不是系统里的「千树小助理」标签。上线时要把公司号昵称与头像设置为「千树小助理」，否则员工看到的是「公司号-01」。
 
 ## 10. 权限与审计
@@ -598,9 +620,9 @@ views/system/notifications/
 | `assistant-channel:read` | 渠道配置与概览 |
 | `assistant-channel:update` | 修改渠道、启停、测试发送 |
 | `assistant-account:read` | 账号列表与状态 |
-| `assistant-account:operate` | 新增账号、扫码登录、重连、退出 |
+| `assistant-account:operate` | 导入/更新节点、状态检查、启停 |
 | `assistant-binding:read` | 绑定列表、公司号好友列表 |
-| `assistant-binding:manage` | 管理员绑定、测试消息验证、解绑、好友巡检 |
+| `assistant-binding:manage` | 管理员绑定、改绑、测试消息验证、解绑、好友巡检 |
 | `assistant-target:read` | 群目标列表 |
 | `assistant-target:manage` | 同步群、命名、启停 |
 | `assistant-delivery:resend` | 重试单条站外交付 |
@@ -618,15 +640,14 @@ views/system/notifications/
 | `NOTIFICATION_POLICY_UPDATED` | 渠道策略或全局设置变更 | `eventType`、`channel`、`version` |
 | `NOTIFICATION_CANCELLED` | 取消站外交付 | `notificationId`、取消数量 |
 | `ASSISTANT_CHANNEL_UPDATED` | 修改渠道/启停 | 变更字段名，不含 Token |
-| `ASSISTANT_ACCOUNT_LOGIN_STARTED` | 发起扫码 | `accountId`、`appId` |
-| `ASSISTANT_ACCOUNT_LOGGED_IN` | 登录成功 | `accountId`、`wxid` 哈希 |
-| `ASSISTANT_ACCOUNT_LOGGED_OUT` | 主动退出/掉线 | `accountId`、原因码 |
-| `ASSISTANT_ACCOUNT_RECONNECTED` | 重连成功 | `accountId` |
-| `ASSISTANT_BINDING_CREATED` | 管理员创建绑定 | `bindingId`、`userId`、`accountId`、`boundByUserId` |
-| `ASSISTANT_BINDING_VERIFIED` | 测试消息确认后置为已验证 | `bindingId`、`verifiedByUserId` |
-| `ASSISTANT_BINDING_REVOKED` | 解绑 | `bindingId`、操作者 |
+| `ASSISTANT_ACCOUNT_LOGGED_IN` | 导入或重新指向在线节点 | `accountId`、`appId`、`previousAppId`（更新时）、`mode`（`CONSOLE_IMPORT` / `CONSOLE_IMPORT_UPDATE`） |
+| `ASSISTANT_ACCOUNT_LOGIN_STARTED` / `ASSISTANT_ACCOUNT_LOGGED_OUT` / `ASSISTANT_ACCOUNT_RECONNECTED` | 历史枚举，当前流程不再产生 | — |
+| `ASSISTANT_BINDING_CREATED` | 管理员创建绑定；改绑时记录新归属 | `bindingId`、`userId`、`accountId`、`boundByUserId`；改绑带 `mode = REASSIGN`、`previousUserId` |
+| `ASSISTANT_BINDING_VERIFIED` | 测试消息发送成功后置为已验证 | `bindingId`、`verifiedByUserId` |
+| `ASSISTANT_BINDING_REVOKED` | 解绑；改绑时记录旧归属 | `bindingId`、操作者；改绑带 `reassignedToUserId`、`reason = REASSIGNED` |
 | `ASSISTANT_BINDING_INVALIDATED` | 巡检失效 | `bindingId`、原因 |
 | `ASSISTANT_DELIVERY_RESENT` | 手动重试 | `notificationId`、`deliveryId` |
+| `ASSISTANT_TARGET_MESSAGE_SENT` | 管理员在群目标发送 @TA 消息 | `targetId`、掩码成员 wxid、内容长度、`msgId`；不记录正文 |
 | `ASSISTANT_CHANNEL_DISABLED` / `ENABLED` | 停发/恢复 | 操作者、原因 |
 
 审计约束：
@@ -641,7 +662,7 @@ views/system/notifications/
 - **Token**：只从环境读取；管理端只返回 `configured` 与掩码；不进日志、不进审计、不进前端产物。
 - **Base URL**：强制 HTTPS；host 白名单；拒绝私网、回环、保留地址；禁止重定向；固定 DNS 解析结果。
 - **回调**：路径密钥常量时间比较；1 MiB 上限；每分钟 60 次/IP；只接受 JSON；内容按不可信输入处理。
-- **绑定**：仅管理员操作；绑定后发送测试消息，员工确认后才写 `verified_at`；只有已验证绑定可接收敏感内容；解绑、换号写审计。
+- **绑定**：仅管理员操作；绑定后提交自定义测试内容发送，发送成功即写 `verified_at`（同一绑定 30 秒冷却）；只有已验证绑定可接收敏感内容；解绑、换号写审计。
 - **敏感内容**：仅阶段 1 的 3 个事件开启 `allow_sensitive`；1:1 只发已验证绑定；群必须 `internal_only`；手机号、地址、证件号仍脱敏。
 - **内容**：模板变量白名单；不接受外部自由文本；不渲染 HTML。
 - **日志**：统一脱敏 `token`、`secret`、`content`、`wxid`、`phone`；错误对象只保留 `ret/msg`。
@@ -695,8 +716,8 @@ views/system/notifications/
 | 阶段 | 范围 | 出口条件 |
 | --- | --- | --- |
 | 1. 通知中心骨架 + 千树小助理 | 共享表、3 个事件、渠道策略、模板、站外交付、进程内 worker、群目标、管理员绑定与验证、发送记录、渠道停发、管理端「概览/千树小助理/通知规则/发送记录」 | 一名测试员工完成管理员绑定并收到 1:1；内部测试群收到群通知；停发立即生效；站内渠道保持关闭；无回调 |
-| 2. 事件扩展与内容增强 | 其余 4 个事件、链接消息、摘要聚合 | 7 个事件均可配置；通知可跳回系统页面；同一员工短时间内多条待办可合并为一条摘要 |
-| 3. 站内通知中心 | 启用 `IN_APP` 渠道、收件箱页面、顶栏铃铛、已读/归档、未读计数 | 站内与千树小助理共享同一发布接口；业务调用方零改动 |
+| 2. 事件扩展与内容增强 | 其余域事件、链接消息、摘要聚合 | 扩展事件均可按事件域配置；通知可跳回系统页面；同一员工短时间内多条待办可合并为一条摘要 |
+| 3. 站内通知中心 | 启用 `IN_APP` 渠道、`/notifications` 页面、顶栏铃铛、单列表 + 业务域筛选、30 秒轮询、已读/归档、未读计数、页面内 QsToast；桌面通知可选 | 站内与千树小助理共享同一发布接口；业务调用方零改动；桌面通知不依赖新基础设施 |
 | 4. 多公司号与可选回调 | 多账号路由；仅在需要实时掉线/联系人事件时引入回调 | 多号可切换；若引入回调，完成 CSRF 安全评审与回调测试 |
 
 阶段 1 的前置条件：

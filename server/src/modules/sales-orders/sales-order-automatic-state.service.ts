@@ -8,10 +8,20 @@ import {
 } from '../../generated/prisma/enums'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { readSalesOrderReconciliationStates } from './domain/sales-order-reconciliation-state'
 import {
   assertSalesOrderStatusTransition,
 } from './domain/sales-order-state-machine'
+
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 
 export type SalesOrderAutomaticReconciliationTrigger
   = | 'DELIVERY_RECEIPT'
@@ -50,7 +60,10 @@ export interface SalesOrderAutomaticStateContext {
  */
 @Injectable()
 export class SalesOrderAutomaticStateService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
+  ) {}
 
   async advanceWhenEligible(
     transaction: Prisma.TransactionClient,
@@ -61,8 +74,11 @@ export class SalesOrderAutomaticStateService {
     const order = await transaction.salesOrder.findUnique({
       where: { id: salesOrderId },
       select: {
-        orderStatus: true,
+        customerName: true,
         fulfillmentStatus: true,
+        issuerUserId: true,
+        orderNo: true,
+        orderStatus: true,
         paymentStatus: true,
       },
     })
@@ -167,6 +183,21 @@ export class SalesOrderAutomaticStateService {
         trigger,
       },
     })
+    const completedAt = new Date()
+    await this.notifications.publish({
+      eventType: 'SALES_ORDER_COMPLETED',
+      source: { type: 'SALES_ORDER', id: salesOrderId },
+      target: { kind: 'USERS', userIds: [order.issuerUserId] },
+      templateKey: 'sales.order.completed',
+      variables: {
+        customerName: order.customerName,
+        occurredAt: notificationTime(completedAt),
+        orderNo: order.orderNo,
+      },
+      dedupeKey: `sales-order-completed:${salesOrderId}`,
+      priority: 'NORMAL',
+      requestedByUserId: context.actorUserId,
+    }, { transaction })
     return 'COMPLETED'
   }
 }

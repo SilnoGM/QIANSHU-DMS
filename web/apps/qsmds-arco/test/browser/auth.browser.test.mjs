@@ -993,9 +993,9 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await new Promise(resolve => setTimeout(resolve, 200))
   assert.equal(profileSecondaryGets, 1)
   assert.equal(profileSecondaryMeGets, 0)
-  const profileMessages = await profilePrimaryPage.evaluate(
+  const profileMessages = (await profilePrimaryPage.evaluate(
     'globalThis.__qianshuProfileMessages',
-  )
+  )).filter(message => !['desktop', 'refresh', 'unread'].includes(message?.type))
   assert.deepEqual(profileMessages, [{ type: 'PROFILE_CHANGED' }])
   assert.equal(
     JSON.stringify(profileMessages).includes(expectedMobileE164)

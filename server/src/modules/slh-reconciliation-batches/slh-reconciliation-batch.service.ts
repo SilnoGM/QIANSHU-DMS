@@ -22,6 +22,8 @@ import { FundPostingService } from '../fund-accounts/application/fund-posting.co
 import type { FundBusinessTransactionContext, PostBusinessEventInput } from '../fund-accounts/application/fund-posting.contract'
 import { truncateFundSourceText, type FundSourceDescriptor } from '../fund-accounts/application/fund-source-snapshot'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
   deriveSalesOrderPaymentStatus,
   formatSalesOrderAmountUnits,
@@ -156,6 +158,7 @@ export class SlhReconciliationBatchService {
     private readonly audit: AuditService,
     private readonly funds: FundPostingService,
     private readonly salesOrderStates: SalesOrderAutomaticStateService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   /** 与账单写路径同一口径：事务内复核用户状态与权限，前端条件不可信。 */
@@ -378,6 +381,9 @@ export class SlhReconciliationBatchService {
             autoCompletedOrderCount += 1
           }
         }
+        const settlementTotalCny = reconciled
+          .reduce((sum, entry) => sum.add(entry.settlement.settlementAmountCny ?? 0), new Prisma.Decimal(0))
+          .toFixed(2)
         await this.audit.record(tx, {
           eventType: 'SLH_RECONCILIATION_BATCH_COMPLETED', outcome: 'SUCCESS', actorType: 'USER',
           actorUserId: context.actorUserId, requestId: context.requestId,
@@ -394,6 +400,23 @@ export class SlhReconciliationBatchService {
             autoCompletedOrderCount,
           },
         })
+        await this.notifications.publish({
+          eventType: 'SLH_RECONCILIATION_COMPLETED',
+          source: { type: 'SLH_RECONCILIATION_BATCH', id: batchId },
+          target: { kind: 'PERMISSION', permissionCode: 'slh-bills:reconcile' },
+          templateKey: 'slh.reconciliation.completed',
+          variables: {
+            batchNo: batch.batchNo,
+            fundPostingCount: postingBatchIds.length,
+            memberCount: batch.members.length,
+            reconciledMemberCount: batch.members.filter(member => member.reconciledAt !== null).length,
+            settlementTotalCny,
+            slhBillNo: batch.bill.slhBillNo,
+          },
+          dedupeKey: `slh-reconciliation-completed:${batchId}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
         return null
       }, { timeout: 60_000 })
       if (rejection !== null) {

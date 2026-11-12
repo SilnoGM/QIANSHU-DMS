@@ -26,6 +26,7 @@ const props = withDefaults(defineProps<QsGenericModalProps>(), {
   fillHeight: false,
   loading: false,
   modelValue: false,
+  panelClass: undefined,
   size: QS_GENERIC_MODAL_DEFAULT_SIZE,
   submitting: false,
   zIndex: QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
@@ -198,7 +199,7 @@ onBeforeUnmount(() => {
     :model-value="localOpen"
     :title="title"
     :description="description"
-    :class="contentClass"
+    :class="[contentClass, panelClass]"
     :content-class="fillHeight
       ? 'min-h-0 p-0 overflow-hidden flex flex-col'
       : 'min-h-auto p-0 overflow-y-auto'"

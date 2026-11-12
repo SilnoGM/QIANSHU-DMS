@@ -33,6 +33,8 @@
     "slh-bills:backfill-recipients": "node dist/commands/slh-bill-recipient-backfill.js",
     "slh-bills:backfill-amounts": "node dist/commands/slh-bill-amount-backfill.js",
     "auth:cleanup": "node dist/commands/auth-cleanup.js",
+    "notifications:cleanup": "node dist/commands/notification-operations.js cleanup",
+    "notifications:scan": "node dist/commands/notification-scan.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
     "media:accept:cos": "MEDIA_STORAGE_DRIVER=cos node ./scripts/cos-acceptance.cjs",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",

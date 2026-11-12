@@ -1,5 +1,4 @@
 import { setSettings } from '@fantastic-admin/settings'
-import { isMockDataEnabled } from './api/mock-mode'
 import { APP_THEME_BASE_COLORS } from './settings.theme'
 
 export default setSettings({
@@ -55,8 +54,8 @@ export default setSettings({
       enable: true,
       hotkeys: false,
     },
-    // 通知只有 mock 数据源（无服务端实现），因此生产构建默认不显示该入口，避免空铃铛与 404 请求。
-    notification: isMockDataEnabled,
+    // 铃铛已接入真实站内通知接口；所有登录用户都可见。
+    notification: true,
     fullscreen: true,
     pageReload: true,
     layout: [

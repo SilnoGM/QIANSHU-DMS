@@ -3,6 +3,8 @@ import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AuditService } from '../audit/audit.service'
+import { SystemNotificationService } from '../notifications/system-notification.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
 import { truncateFundSourceText } from '../fund-accounts/application/fund-source-snapshot'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
@@ -43,6 +45,13 @@ const REQUEST_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 /** 幂等键与指纹都以 SHA-256 落库，两者都必须是 32 字节。 */
 const digest = (value: string) => Buffer.from(createHash('sha256').update(value).digest('hex'), 'hex')
 const hash = (input: unknown) => createHash('sha256').update(JSON.stringify(input)).digest('hex')
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 
 interface NormalizedLine {
   readonly amount: bigint
@@ -142,6 +151,7 @@ export class InvoiceRequestService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
   // ---------------------------------------------------------------- 提交与重新提交
@@ -210,6 +220,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: created.id,
           metadata: { invoiceNo: created.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
+          source: { type: 'INVOICE_REQUEST', id: created.id },
+          target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
+          templateKey: 'invoice.review.pending',
+          variables: {
+            invoiceNo: created.invoiceNo,
+            invoiceRequestId: created.id,
+            buyerName: payload.buyerName,
+            totalAmount: payload.totalAmount.toString(),
+            lineCount: payload.lines.length,
+          },
+          dedupeKey: `invoice-review:${created.id}:v1`,
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
         return created.id
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
@@ -269,6 +294,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
+          templateKey: 'invoice.review.pending',
+          variables: {
+            invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
+            buyerName: payload.buyerName,
+            totalAmount: payload.totalAmount.toString(),
+            lineCount: payload.lines.length,
+          },
+          dedupeKey: `invoice-review:${id}:v${row.version + 1}`,
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
     }
@@ -301,6 +341,20 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, reason: input.reason.trim() },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_RETURNED',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.createdById] },
+          templateKey: 'invoice.returned',
+          variables: {
+            buyerName: row.buyerName,
+            invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
+            reason: input.reason.trim(),
+          },
+          dedupeKey: `invoice-returned:${id}:v${row.version + 1}`,
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 30_000 })
       return await this.queries.get(context.actorUserId, id)
     }
@@ -331,6 +385,20 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_NOTIFIED',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.createdById] },
+          templateKey: 'invoice.notified',
+          variables: {
+            buyerName: row.buyerName,
+            invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
+          },
+          dedupeKey: `invoice-notified:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 30_000 })
       return await this.queries.get(context.actorUserId, id)
     }
@@ -361,9 +429,10 @@ export class InvoiceRequestService {
           this.assertStatus(row.status, INVOICE_REQUEST_OWNER_CANCEL_STATUS_VALUES, '只有开票审核中或已退回的申请单可以自行取消，请联系财务处理')
         }
         this.assertVersion(row.version, input.expectedVersion)
+        const cancelledAt = new Date()
         await tx.invoiceRequest.update({
           where: { id },
-          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledByUserId: context.actorUserId, cancelReason: input.reason.trim(), version: { increment: 1 } },
+          data: { status: 'CANCELLED', cancelledAt, cancelledByUserId: context.actorUserId, cancelReason: input.reason.trim(), version: { increment: 1 } },
         })
         await this.writeHistory(tx, {
           action: 'CANCEL', fromStatus: row.status, toStatus: 'CANCELLED', reason: input.reason.trim(),
@@ -374,6 +443,22 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, fromStatus: row.status, reason: input.reason.trim(), documentUploaded: row.documentMediaAssetId !== null },
         })
+        if (!isOwner) {
+          await this.notifications.publish({
+            eventType: 'INVOICE_REQUEST_CANCELLED',
+            source: { type: 'INVOICE_REQUEST', id },
+            target: { kind: 'USERS', userIds: [row.createdById] },
+            templateKey: 'invoice.cancelled',
+            variables: {
+              invoiceNo: row.invoiceNo,
+              invoiceRequestId: id,
+              occurredAt: notificationTime(cancelledAt),
+              reason: input.reason.trim(),
+            },
+            dedupeKey: `invoice-cancelled:${id}:v${row.version + 1}`,
+            requestedByUserId: context.actorUserId,
+          }, { transaction: tx })
+        }
       }, { timeout: 30_000 })
       return await this.queries.get(context.actorUserId, id)
     }
@@ -417,6 +502,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, mediaAssetId },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_ISSUED',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.createdById] },
+          templateKey: 'invoice.issued',
+          variables: {
+            buyerName: row.buyerName,
+            invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
+            occurredAt: notificationTime(uploadedAt),
+          },
+          dedupeKey: `invoice-issued:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
     }
@@ -480,6 +580,21 @@ export class InvoiceRequestService {
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
           metadata: { invoiceNo: row.invoiceNo, settleAmountCny: amount, foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(4) },
         })
+        await this.notifications.publish({
+          eventType: 'INVOICE_REQUEST_SETTLED',
+          source: { type: 'INVOICE_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.createdById] },
+          templateKey: 'invoice.settled',
+          variables: {
+            invoiceNo: row.invoiceNo,
+            invoiceRequestId: id,
+            occurredAt: notificationTime(settledAt),
+            settleAmountCny: amount,
+          },
+          dedupeKey: `invoice-settled:${id}:v${row.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 60_000 })
       return await this.queries.get(context.actorUserId, id)
     }

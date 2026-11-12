@@ -1,0 +1,12 @@
+[Unit]
+Description=Qianshu DMS Notification Retention Cleanup (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 与媒体清理相同的宿主 oneshot 形态；命令自带 60 秒预算与分批删除。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/notification-operations.js cleanup
+TimeoutStartSec=120s

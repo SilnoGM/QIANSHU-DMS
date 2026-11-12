@@ -10,6 +10,8 @@ import { ApiException } from '../../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
 import { AuditService, AuditWriteFailedError } from '../../audit/audit.service'
+import { SystemNotificationService } from '../../notifications/system-notification.service'
+import { noopSystemNotifications } from '../../notifications/noop-system-notification'
 import { derivePurchaseOrderStatus } from '../domain/purchase-order-state-machine'
 import { normalizeFactoryShipmentContext, requireFactoryShipmentUuid, type FactoryShipmentMutationContext } from '../factory-shipments/purchase-order-factory-shipment.normalizer'
 import { purchaseOrderScopeWhere } from '../purchase-order-access'
@@ -19,6 +21,7 @@ import { advanceSalesOrderWhenAllShipmentsReceived } from './sales-order-warehou
 
 export const WAREHOUSE_RECEIPT_ORDER_SELECT = {
   id: true, orderNo: true, purchaseType: true, salesOrderId: true, orderStatus: true, fulfillmentStatus: true, paymentStatus: true, version: true,
+  createdByUserId: true, customSupplierName: true, supplierValue: true,
   parts: { orderBy: { id: 'asc' }, select: { id: true, partNumber: true, status: true, shippedAt: true, warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true } },
 } satisfies Prisma.PurchaseOrderSelect
 export type WarehouseOrder = Prisma.PurchaseOrderGetPayload<{ select: typeof WAREHOUSE_RECEIPT_ORDER_SELECT }>
@@ -50,7 +53,7 @@ function formatWarehouseTime(value: Date): string {
 
 @Injectable()
 export class PurchaseOrderWarehouseReceiptService {
-  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly query: PurchaseOrderQueryService, private readonly dataScope: DataScopeService = dataScopeFallback()) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService, private readonly query: PurchaseOrderQueryService, private readonly dataScope: DataScopeService = dataScopeFallback(), private readonly notifications: SystemNotificationService = noopSystemNotifications) {}
 
   async receive(rawContext: FactoryShipmentMutationContext, rawOrderId: unknown, rawInput: unknown) {
     const context = normalizeFactoryShipmentContext(rawContext), orderId = requireFactoryShipmentUuid(rawOrderId, 'purchaseOrderId')
@@ -160,6 +163,53 @@ export class PurchaseOrderWarehouseReceiptService {
       eventType: 'PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PURCHASE_ORDER', targetId: order.id,
       metadata: { partIds, requestFingerprint, expectedVersion: input.expectedVersion, source: input.partIds === null ? 'LEGACY_SIGNED' : 'SHIPMENT_SELECTION', receivedAt: receivedAt.toISOString(), recordedAt: recordedAt.toISOString(), remark: input.remark, fromStatus: order.fulfillmentStatus, toStatus: fulfillmentStatus },
     })
+    let customerName = '—'
+    if (order.salesOrderId !== null) {
+      try {
+        const salesOrder = await transaction.salesOrder.findUnique({
+          where: { id: order.salesOrderId },
+          select: { customerName: true },
+        })
+        customerName = salesOrder?.customerName ?? '—'
+      }
+      catch {
+        // 客户名称只服务通知文案；查询失败不能阻断入仓事实。
+        customerName = '—'
+      }
+    }
+    await this.notifications.publish({
+      eventType: 'SHIPMENT_ARRIVED',
+      source: { type: 'PURCHASE_SHIPMENT', id: order.id },
+      target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:read' },
+      templateKey: 'shipment.arrived',
+      variables: {
+        orderNo: order.orderNo,
+        orderId: order.id,
+        partNumbers: parts.map(part => String(part.partNumber).padStart(2, '0')).join('、'),
+        receivedPartCount: partIds.length,
+        receivedAt: formatWarehouseTime(receivedAt),
+        customerName,
+      },
+      dedupeKey: `shipment-arrived:${order.id}:${partIds.join(',')}`,
+      priority: 'NORMAL',
+      requestedByUserId: context.actorUserId,
+    }, { transaction })
+    if (order.orderStatus !== 'COMPLETED' && orderStatus === 'COMPLETED') {
+      await this.notifications.publish({
+        eventType: 'PURCHASE_ORDER_COMPLETED',
+        source: { type: 'PURCHASE_ORDER', id: order.id },
+        target: { kind: 'USERS', userIds: [order.createdByUserId] },
+        templateKey: 'purchase.order.completed',
+        variables: {
+          occurredAt: formatWarehouseTime(recordedAt),
+          orderNo: order.orderNo,
+          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+        },
+        dedupeKey: `purchase-order-completed:${order.id}`,
+        priority: 'NORMAL',
+        requestedByUserId: context.actorUserId,
+      }, { transaction })
+    }
     return { changed: true, receivedPartCount: partIds.length, fulfillmentStatus, orderStatus }
   }
 

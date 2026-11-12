@@ -199,6 +199,24 @@ enum AuditEventType {
   PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED
   /// 看机预约登记事件。追加在末尾与数据库枚举顺序一致。
   MACHINE_VIEWING_APPOINTMENT_CREATED
+  /// 通知中心模板、策略与取消事件。
+  NOTIFICATION_TEMPLATE_UPDATED
+  NOTIFICATION_POLICY_UPDATED
+  NOTIFICATION_CANCELLED
+  /// 千树小助理渠道、账号、绑定与重投事件。
+  ASSISTANT_CHANNEL_UPDATED
+  ASSISTANT_CHANNEL_ENABLED
+  ASSISTANT_CHANNEL_DISABLED
+  ASSISTANT_ACCOUNT_LOGIN_STARTED
+  ASSISTANT_ACCOUNT_LOGGED_IN
+  ASSISTANT_ACCOUNT_LOGGED_OUT
+  ASSISTANT_ACCOUNT_RECONNECTED
+  ASSISTANT_BINDING_CREATED
+  ASSISTANT_BINDING_VERIFIED
+  ASSISTANT_BINDING_REVOKED
+  ASSISTANT_BINDING_INVALIDATED
+  ASSISTANT_DELIVERY_RESENT
+  ASSISTANT_TARGET_MESSAGE_SENT
 
   @@map("audit_event_type")
 }
@@ -775,6 +793,17 @@ model User {
   shipmentLoadGroupsCreated         ShipmentLoadGroup[]           @relation("ShipmentLoadGroupCreatedBy")
   shipmentLoadGroupsReleased        ShipmentLoadGroup[]           @relation("ShipmentLoadGroupReleasedBy")
   machineViewingAppointmentsCreated MachineViewingAppointment[]   @relation("MachineViewingAppointmentCreator")
+  notificationsRequested            Notification[]                @relation("NotificationRequestedBy")
+  notificationTemplatesCreated      NotificationTemplate[]        @relation("NotificationTemplateCreatedBy")
+  notificationTemplatesUpdated      NotificationTemplate[]        @relation("NotificationTemplateUpdatedBy")
+  notificationPoliciesUpdated       NotificationChannelPolicy[]   @relation("NotificationPolicyUpdatedBy")
+  notificationSettingsUpdated       NotificationSettings[]        @relation("NotificationSettingsUpdatedBy")
+  notificationChannelSettingsUpdated NotificationChannelSettings[] @relation("NotificationChannelSettingsUpdatedBy")
+  assistantBindings                 AssistantBinding[]            @relation("AssistantBindingUser")
+  assistantBindingsCreated          AssistantBinding[]            @relation("AssistantBindingBoundBy")
+  assistantBindingsVerified         AssistantBinding[]            @relation("AssistantBindingVerifiedBy")
+  assistantDeliveries               AssistantDelivery[]           @relation("AssistantDeliveryRecipient")
+  notificationInboxItems            NotificationInboxItem[]       @relation("NotificationInboxItemUser")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -2074,6 +2103,7 @@ model NumberingPeriodState {
 }
 
 model NumberingIssuance {
+  notification Notification?
   containerBatch ContainerBatch?
   slhBill SlhBill?
   reconciliationBatch SlhReconciliationBatch?
@@ -3223,4 +3253,361 @@ model MachineViewingAppointment {
   @@index([createdByUserId, createdAt(sort: Desc), id(sort: Desc)], map: "machine_viewing_appointments_creator_created_idx")
   @@index([appointmentDate, period, hour, id], map: "machine_viewing_appointments_time_idx")
   @@map("machine_viewing_appointments")
+}
+
+// ---------------------------------------------------------------------------
+// 通知中心：通知、模板、事件 × 渠道策略与渠道设置。
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  IN_APP
+  ASSISTANT
+
+  @@map("notification_channel")
+}
+
+enum NotificationPriority {
+  NORMAL
+  HIGH
+
+  @@map("notification_priority")
+}
+
+enum NotificationStatus {
+  PENDING
+  COMPLETED
+  PARTIAL
+  FAILED
+  SKIPPED
+  EXPIRED
+  CANCELLED
+
+  @@map("notification_status")
+}
+
+enum NotificationTargetMode {
+  COMMAND_TARGET
+  USERS
+  ROLE
+  PERMISSION
+  GROUP
+
+  @@map("notification_target_mode")
+}
+
+enum NotificationTemplateDomain {
+  SALES
+  PURCHASE
+  SHIPMENT
+  FINANCE
+  INVOICE
+  RECONCILIATION
+  SYSTEM
+  OPERATIONS
+
+  @@map("notification_template_domain")
+}
+
+enum AssistantAccountStatus {
+  ONLINE
+  OFFLINE
+  REQUIRES_LOGIN
+  DISABLED
+
+  @@map("assistant_account_status")
+}
+
+enum AssistantBindingStatus {
+  ACTIVE
+  INVALID
+  DISABLED
+
+  @@map("assistant_binding_status")
+}
+
+enum AssistantDeliveryStatus {
+  PENDING
+  SENDING
+  ACCEPTED
+  FAILED
+  SKIPPED
+  EXPIRED
+  CANCELLED
+
+  @@map("assistant_delivery_status")
+}
+
+/// 一条逻辑通知。站内条目与站外交付都挂在它下面。
+model Notification {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// 历史通知在本域上线前没有编号；新通知必须由 NOTIFICATION_NO 规则发号。
+  notificationNo      String?              @unique(map: "notifications_number_key") @map("notification_no") @db.VarChar(64)
+  numberingIssuanceId String?              @unique(map: "notifications_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
+  eventType           String               @map("event_type") @db.VarChar(64)
+  sourceType          String               @map("source_type") @db.VarChar(64)
+  sourceId            String               @map("source_id") @db.VarChar(128)
+  dedupeKey           String               @unique(map: "notifications_dedupe_key_key") @map("dedupe_key") @db.VarChar(200)
+  priority            NotificationPriority @default(NORMAL)
+  status              NotificationStatus   @default(PENDING)
+  templateKey         String               @map("template_key") @db.VarChar(64)
+  requestedChannels   Json                 @default("[]") @map("requested_channels") @db.JsonB
+  variables           Json                 @default("{}") @db.JsonB
+  expiresAt           DateTime?            @map("expires_at") @db.Timestamptz(6)
+  publishedAt         DateTime             @default(now()) @map("published_at") @db.Timestamptz(6)
+  completedAt         DateTime?            @map("completed_at") @db.Timestamptz(6)
+  requestedByUserId   String?              @map("requested_by_user_id") @db.Uuid
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  requestedBy        User?                @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  deliveries         AssistantDelivery[]
+  inboxItems         NotificationInboxItem[]
+
+  @@index([eventType, publishedAt(sort: Desc)], map: "notifications_event_type_published_idx")
+  @@index([sourceType, sourceId], map: "notifications_source_idx")
+  @@index([status, expiresAt], map: "notifications_status_expires_idx")
+  @@index([publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_published_idx")
+  @@index([status, publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_status_published_idx")
+  @@map("notifications")
+}
+
+/// 按渠道拆分的模板。业务只传一个 key，每个渠道各有一份渲染。
+model NotificationTemplate {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key             String                   @db.VarChar(64)
+  channel         NotificationChannel
+  name            String                   @db.VarChar(128)
+  domain          NotificationTemplateDomain @default(SYSTEM)
+  titleTemplate   String?                  @map("title_template") @db.Text
+  bodyTemplate    String                   @map("body_template") @db.Text
+  linkUrlTemplate String?                  @map("link_url_template") @db.Text
+  variables       Json                     @default("[]") @db.JsonB
+  maxLength       Int                      @default(2000) @map("max_length")
+  enabled         Boolean                  @default(true)
+  version         Int                      @default(1)
+  createdByUserId String?                  @map("created_by_user_id") @db.Uuid
+  updatedByUserId String?                  @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy User? @relation("NotificationTemplateCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User? @relation("NotificationTemplateUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([key, channel], map: "notification_templates_key_channel_key")
+  @@index([channel, enabled], map: "notification_templates_channel_enabled_idx")
+  @@index([domain, enabled], map: "notification_templates_domain_enabled_idx")
+  @@map("notification_templates")
+}
+
+/// 事件在某个渠道上的目标、模板、TTL 与敏感内容策略。
+model NotificationChannelPolicy {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType       String                 @map("event_type") @db.VarChar(64)
+  channel         NotificationChannel
+  targetMode      NotificationTargetMode @default(COMMAND_TARGET) @map("target_mode")
+  targetConfig    Json                   @default("{}") @map("target_config") @db.JsonB
+  templateKey     String?                @map("template_key") @db.VarChar(64)
+  priority        NotificationPriority   @default(NORMAL)
+  ttlSeconds      Int?                   @map("ttl_seconds")
+  quietHours      Json?                  @map("quiet_hours") @db.JsonB
+  allowSensitive  Boolean                @default(false) @map("allow_sensitive")
+  enabled         Boolean                @default(true)
+  version         Int                    @default(1)
+  updatedByUserId String?                @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("NotificationPolicyUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([eventType, channel], map: "notification_channel_policies_event_channel_key")
+  @@index([channel, enabled], map: "notification_channel_policies_channel_enabled_idx")
+  @@map("notification_channel_policies")
+}
+
+/// 全局保留期设置，单例 id = 'default'。
+model NotificationSettings {
+  id                       String   @id @db.VarChar(32)
+  notificationRetentionDays Int     @default(180) @map("notification_retention_days")
+  deliveryRetentionDays    Int      @default(90) @map("delivery_retention_days")
+  version                  Int      @default(1)
+  updatedByUserId          String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("NotificationSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("notification_settings")
+}
+
+/// 站内收件箱条目：每个逻辑通知对每个收件人生成一条快照。
+model NotificationInboxItem {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId   String    @map("notification_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  eventType        String    @map("event_type") @db.VarChar(64)
+  templateKey      String    @map("template_key") @db.VarChar(64)
+  templateVersion  Int       @map("template_version")
+  titleSnapshot    String    @map("title_snapshot") @db.Text
+  bodySnapshot     String    @map("body_snapshot") @db.Text
+  linkUrlSnapshot  String?   @map("link_url_snapshot") @db.Text
+  readAt           DateTime? @map("read_at") @db.Timestamptz(6)
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  user         User         @relation("NotificationInboxItemUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([notificationId, userId], map: "notification_inbox_items_notification_user_key")
+  @@index([notificationId], map: "notification_inbox_items_notification_idx")
+  @@index([userId, archivedAt, createdAt(sort: Desc)], map: "notification_inbox_items_user_archived_created_idx")
+  @@index([userId, eventType, createdAt(sort: Desc)], map: "notification_inbox_items_user_event_created_idx")
+  @@index([userId, readAt, archivedAt], map: "notification_inbox_items_user_read_archived_idx")
+  @@map("notification_inbox_items")
+}
+
+/// 渠道级开关与默认静默时段。ASSISTANT 可配静默；IN_APP 不使用静默与 TTL。
+model NotificationChannelSettings {
+  channel           NotificationChannel @id
+  enabled           Boolean             @default(false)
+  defaultQuietHours Json?               @map("default_quiet_hours") @db.JsonB
+  version           Int                 @default(1)
+  updatedByUserId   String?             @map("updated_by_user_id") @db.Uuid
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("NotificationChannelSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("notification_channel_settings")
+}
+
+/// 千树小助理的公司号（GeWe 执行节点）。
+model AssistantAccount {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String                 @db.VarChar(64)
+  appId             String                 @unique(map: "assistant_accounts_app_id_key") @map("app_id") @db.VarChar(128)
+  wxid              String?                @db.VarChar(128)
+  nickname          String?                @db.VarChar(128)
+  avatarUrl         String?                @map("avatar_url") @db.Text
+  status            AssistantAccountStatus @default(OFFLINE)
+  regionId          String?                @map("region_id") @db.VarChar(16)
+  proxyIpEncrypted  String?                @map("proxy_ip_encrypted") @db.Text
+  enabled           Boolean                @default(true)
+  lastOnlineAt      DateTime?              @map("last_online_at") @db.Timestamptz(6)
+  lastLoginAt       DateTime?              @map("last_login_at") @db.Timestamptz(6)
+  lastErrorCode     String?                @map("last_error_code") @db.VarChar(64)
+  lastErrorMessage  String?                @map("last_error_message") @db.VarChar(255)
+  version           Int                    @default(1)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bindings   AssistantBinding[]
+  deliveries AssistantDelivery[]
+
+  @@index([status, enabled], map: "assistant_accounts_status_enabled_idx")
+  @@map("assistant_accounts")
+}
+
+/// 员工与公司号的绑定，仅管理员维护；verifiedAt 非空才允许 1:1 发送。
+model AssistantBinding {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String                 @map("user_id") @db.Uuid
+  accountId         String                 @map("account_id") @db.Uuid
+  wxid              String                 @db.VarChar(128)
+  wechatNickname    String?                @map("wechat_nickname") @db.VarChar(128)
+  wechatAvatarUrl   String?                @map("wechat_avatar_url") @db.Text
+  status            AssistantBindingStatus @default(ACTIVE)
+  boundByUserId     String                 @map("bound_by_user_id") @db.Uuid
+  verifiedAt        DateTime?              @map("verified_at") @db.Timestamptz(6)
+  verifiedByUserId  String?                @map("verified_by_user_id") @db.Uuid
+  friendCheckedAt   DateTime?              @map("friend_checked_at") @db.Timestamptz(6)
+  lastTestSentAt    DateTime?              @map("last_test_sent_at") @db.Timestamptz(6)
+  boundAt           DateTime               @default(now()) @map("bound_at") @db.Timestamptz(6)
+  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User             @relation("AssistantBindingUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account    AssistantAccount @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boundBy    User             @relation("AssistantBindingBoundBy", fields: [boundByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  verifiedBy User?            @relation("AssistantBindingVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([userId, accountId], map: "assistant_bindings_user_account_key")
+  @@unique([accountId, wxid], map: "assistant_bindings_account_wxid_key")
+  @@index([status], map: "assistant_bindings_status_idx")
+  @@index([userId], map: "assistant_bindings_user_idx")
+  @@map("assistant_bindings")
+}
+
+/// 已登记的微信群目标；敏感内容只能发到 internalOnly = true 的群。
+model AssistantTarget {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key          String    @unique(map: "assistant_targets_key_key") @db.VarChar(64)
+  chatroomId   String    @unique(map: "assistant_targets_chatroom_id_key") @map("chatroom_id") @db.VarChar(128)
+  name         String    @db.VarChar(128)
+  purpose      String?   @db.VarChar(255)
+  internalOnly Boolean   @default(false) @map("internal_only")
+  memberCount  Int?      @map("member_count")
+  avatarUrl    String?   @map("avatar_url") @db.Text
+  enabled      Boolean   @default(true)
+  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  deliveries AssistantDelivery[]
+
+  @@index([enabled, internalOnly], map: "assistant_targets_enabled_internal_idx")
+  @@map("assistant_targets")
+}
+
+/// 千树小助理的一次发送尝试：个人 1:1 或群目标二选一。
+model AssistantDelivery {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId    String                  @map("notification_id") @db.Uuid
+  recipientUserId   String?                 @map("recipient_user_id") @db.Uuid
+  targetId          String?                 @map("target_id") @db.Uuid
+  accountId         String?                 @map("account_id") @db.Uuid
+  status            AssistantDeliveryStatus @default(PENDING)
+  attemptCount      Int                     @default(0) @map("attempt_count")
+  nextAttemptAt     DateTime                @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  templateKey       String                  @map("template_key") @db.VarChar(64)
+  templateVersion   Int                     @map("template_version")
+  renderedContent   String                  @map("rendered_content") @db.Text
+  providerMsgId     String?                 @map("provider_msg_id") @db.VarChar(64)
+  providerNewMsgId  String?                 @map("provider_new_msg_id") @db.VarChar(64)
+  failureCode       String?                 @map("failure_code") @db.VarChar(64)
+  failureMessage    String?                 @map("failure_message") @db.VarChar(255)
+  acceptedAt        DateTime?               @map("accepted_at") @db.Timestamptz(6)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  notification  Notification      @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  recipientUser User?             @relation("AssistantDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  target        AssistantTarget?  @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       AssistantAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status, nextAttemptAt], map: "assistant_deliveries_status_next_attempt_idx")
+  @@index([accountId, status], map: "assistant_deliveries_account_status_idx")
+  @@index([notificationId], map: "assistant_deliveries_notification_idx")
+  @@index([recipientUserId, createdAt(sort: Desc)], map: "assistant_deliveries_recipient_created_idx")
+  @@index([targetId, createdAt(sort: Desc)], map: "assistant_deliveries_target_created_idx")
+  @@map("assistant_deliveries")
+}
+
+/// 派发器单实例租约，固定 id = 'assistant-dispatch'。
+model AssistantDispatchLease {
+  id        String    @id @db.VarChar(64)
+  ownerId   String?   @map("owner_id") @db.Uuid
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("assistant_dispatch_leases")
+}
+
+/// 全局发送闸门，固定 id = 'assistant-send'。
+/// 同一时刻只允许一个 sendText 持有发送租约，并在发送结束后写入下一次最早发送时间。
+model AssistantSendGate {
+  id            String    @id @db.VarChar(64)
+  nextAllowedAt DateTime? @map("next_allowed_at") @db.Timestamptz(6)
+  lockOwner     String?   @map("lock_owner") @db.Uuid
+  lockExpiresAt DateTime? @map("lock_expires_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("assistant_send_gates")
 }

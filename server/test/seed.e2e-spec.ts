@@ -46,8 +46,14 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 29],
-  ['operations_staff', 27],
-  ['purchasing_staff', 15],
+  ['operations_staff', 28],
+  ['purchasing_staff', 16],
+]
+const expectedRolePermissionCodes: ReadonlyArray<
+  readonly [string, readonly string[]]
+> = [
+  ['operations_staff', ['shipment-storage:release']],
+  ['purchasing_staff', ['shipment-storage:release']],
 ]
 const expectedRuleShapes: Readonly<Record<string, string>> = {
   ADVERTISING_RECHARGE_NO: 'FIXED(AD) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
@@ -62,6 +68,7 @@ const expectedRuleShapes: Readonly<Record<string, string>> = {
   INVOICE_REQUEST: 'FIXED(INV) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   LDC_MARK: 'FIXED(LDC) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   MACHINE_VIEWING_NO: 'FIXED(MV) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
+  NOTIFICATION_NO: 'FIXED(NTF) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(6)',
   PRODUCT: 'FIXED(PROD) SEP(/) SEQ(5)',
   PSJ_MARK: 'FIXED(PSJ) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(4)',
   PURCHASE_ORDER: 'FIXED(PO) SEP(/) DATE(YYYYMMDD) SEP(-) SEQ(5)',
@@ -205,9 +212,9 @@ describe('系统上线内置数据 seed', () => {
     expect(after).toEqual(before)
     const currencies = await prisma.currency.findMany({ select: { code: true, enabled: true } })
     expect(currencies.filter(currency => currency.code !== 'CNY').every(currency => !currency.enabled)).toBe(true)
-    // 资金批次、提款申请、广告充值与看机预约编号规则由 migration 预置（不是 seed 写入），
+    // 资金批次、提款申请、广告充值、看机预约与通知编号规则由 migration 预置（不是 seed 写入），
     // 预览只能保持这个基线。
-    expect(await prisma.numberingRule.count()).toBe(4)
+    expect(await prisma.numberingRule.count()).toBe(5)
   })
 
   it('执行后六类内置数据全部就位', async () => {
@@ -288,6 +295,21 @@ async function expectRoles(prisma: PrismaService) {
     expect({ code, count: role?.permissions.length }).toEqual({ code, count })
     expect(role?.permissions.every(entry => entry.permission.systemOnly === false)).toBe(true)
   }
+  for (const [code, permissionCodes] of expectedRolePermissionCodes) {
+    const role = roles.find(item => item.code === code)
+    const granted = new Set(
+      role?.permissions.map(entry => entry.permission.code) ?? [],
+    )
+    for (const permissionCode of permissionCodes) {
+      expect({ code, granted: granted.has(permissionCode), permissionCode })
+        .toEqual({ code, granted: true, permissionCode })
+    }
+  }
+  // 财务不参与货件释放，不能顺手扩大授权。
+  const finance = roles.find(item => item.code === 'finance_staff')
+  expect(finance?.permissions.some(
+    entry => entry.permission.code === 'shipment-storage:release',
+  )).toBe(false)
 }
 
 async function expectNumberingRules(prisma: PrismaService) {

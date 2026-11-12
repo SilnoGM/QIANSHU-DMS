@@ -9,9 +9,11 @@ import userRolesRoutes, {
 } from '../../src/router/modules/admin.user-roles'
 import applicationSettingsRoute from '../../src/router/modules/application.settings'
 import basicDataRoutes from '../../src/router/modules/basic.data'
+import notificationCenterRoute from '../../src/router/modules/notification.center'
 import productManagementRoutes from '../../src/router/modules/product.management'
 import supplierPaymentProfilesRoute from '../../src/router/modules/supplier.payment.profiles'
 import systemAuditRoute from '../../src/router/modules/system.audit'
+import systemNotificationsRoute from '../../src/router/modules/system.notifications'
 import {
   ADMIN_WORKBENCH_PERMISSION,
   SYSTEM_MANAGEMENT_PERMISSION,
@@ -82,8 +84,74 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
   )
   assert.match(
     asyncRoutesSource,
-    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?ApplicationSettings,/u,
+    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemAudit,[\s\S]*?SystemStatus,[\s\S]*?ApplicationSettings,[\s\S]*?SystemNotifications,/u,
   )
+
+  assert.equal(systemNotificationsRoute.path, '/system/notifications')
+  assert.equal(systemNotificationsRoute.name, 'systemNotifications')
+  assert.equal(systemNotificationsRoute.meta?.title, '通知中心')
+  assert.equal(systemNotificationsRoute.meta?.icon, 'qs-notification')
+  assert.equal(systemNotificationsRoute.meta?.singleMenu, undefined)
+  assert.equal(typeof systemNotificationsRoute.component, 'function')
+  assert.deepEqual(
+    systemNotificationsRoute.meta?.auth,
+    [
+      'notification-record:read',
+      'notification-template:read',
+      'notification-policy:read',
+      'assistant-channel:read',
+      'assistant-account:read',
+    ],
+  )
+  assert.deepEqual(
+    systemNotificationsRoute.children?.map(route => ({
+      auth: route.meta?.auth,
+      icon: route.meta?.icon,
+      menu: route.meta?.menu,
+      name: route.name,
+      path: route.path,
+      title: route.meta?.title,
+    })),
+    [
+      {
+        auth: undefined,
+        icon: undefined,
+        menu: false,
+        name: 'systemNotificationLanding',
+        path: '',
+        title: '通知中心',
+      },
+      {
+        auth: ['assistant-channel:read', 'assistant-account:read'],
+        icon: 'qs-gewe-assistant',
+        menu: undefined,
+        name: 'systemNotificationAssistant',
+        path: 'assistant',
+        title: 'GeWe助理',
+      },
+      {
+        auth: ['notification-template:read', 'notification-policy:read'],
+        icon: 'qs-notification-policy',
+        menu: undefined,
+        name: 'systemNotificationPolicies',
+        path: 'policies',
+        title: '通知策略',
+      },
+      {
+        auth: 'notification-record:read',
+        icon: 'qs-notification-records',
+        menu: undefined,
+        name: 'systemNotificationRecords',
+        path: 'records',
+        title: '通知记录',
+      },
+    ],
+  )
+  assert.equal(notificationCenterRoute.path, 'notifications')
+  assert.equal(notificationCenterRoute.name, 'notificationCenter')
+  assert.equal(notificationCenterRoute.meta?.menu, false)
+  assert.equal(notificationCenterRoute.meta?.auth, undefined)
+  assert.match(routesSource, /NotificationCenter,/u)
 
   // 原「权限体系」分组已解散：管理页面不再位于系统管理主路由内。
   const systemManagementSection = asyncRoutesSource.slice(

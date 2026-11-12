@@ -16,6 +16,8 @@ import { FundCalculationError } from '../fund-accounts/domain/fund-calculation.e
 import { MediaAssetService, MediaAssetLifecycleError } from '../media/media-asset.service'
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { PackagingPaymentProfileService } from '../payment-recipients/packaging-payment-profile.service'
 import { purchaseOrderPartScopeWhere } from '../purchase-orders/purchase-order-access'
 import { packagingCostScopeWhere } from './packaging-cost-access'
@@ -53,6 +55,7 @@ export class PackagingCostService {
     private readonly funds: FundPostingService,
     private readonly recipients: PackagingPaymentProfileService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
   private async authorize(tx: Prisma.TransactionClient, context: PackagingCostContext, permissions: string[]) {
     const user = await tx.user.findUnique({ where: { id: context.actorUserId }, select: { status: true } })
@@ -226,6 +229,20 @@ export class PackagingCostService {
         const now = new Date()
         await tx.packagingCostRequest.update({ where: { id }, data: { paymentVoucherMediaAssetId: voucher.id, recipientQrMediaAssetId: recipient.qrMediaAssetId, recipientSnapshot: recipient.snapshot as unknown as Prisma.InputJsonObject, paymentRemark: payment.remark, paymentFingerprintHash: fingerprint, status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
         await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(2), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
+        await this.notifications.publish({
+          eventType: 'PACKAGING_COST_PAID',
+          source: { type: 'PACKAGING_COST_REQUEST', id },
+          target: { kind: 'USERS', userIds: [row.submittedByUserId] },
+          templateKey: 'packaging.payment.paid',
+          variables: {
+            amount: row.amount.toFixed(2),
+            currencyCode: 'CNY',
+            shipmentNo: row.shipmentNo,
+          },
+          dedupeKey: `packaging-cost-paid:${id}`,
+          priority: 'NORMAL',
+          requestedByUserId: context.actorUserId,
+        }, { transaction: tx })
       }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
     return this.queries.getById(id, context.actorUserId)

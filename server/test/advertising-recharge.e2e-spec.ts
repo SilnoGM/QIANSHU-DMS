@@ -426,9 +426,16 @@ describe('advertising recharge against isolated PostgreSQL', () => {
       where: { createdByUserId: { in: userIds } },
       select: { id: true },
     })
+    // 充值与作废会为申请人生成通知；通知对请求人、发号记录都是 RESTRICT 外键。
+    const notifications = await prisma.notification.findMany({
+      where: { requestedByUserId: { in: userIds } },
+      select: { id: true, numberingIssuanceId: true },
+    })
+    const notificationIds = notifications.map(notification => notification.id)
     const issuanceIds = [...new Set([
       ...requests.map(request => request.numberingIssuanceId),
       ...batches.flatMap(batch => batch.numberingIssuanceId === null ? [] : [batch.numberingIssuanceId]),
+      ...notifications.flatMap(notification => notification.numberingIssuanceId === null ? [] : [notification.numberingIssuanceId]),
     ])]
 
     await prisma.$transaction(async (transaction) => {
@@ -457,6 +464,10 @@ describe('advertising recharge against isolated PostgreSQL', () => {
         await transaction.fundLedgerEntry.deleteMany({ where: { batchId: { in: batchIds } } })
         await transaction.fundPostingBatchSource.deleteMany({ where: { batchId: { in: batchIds } } })
         await transaction.fundPostingBatch.deleteMany({ where: { id: { in: batchIds } } })
+      }
+      await transaction.assistantDelivery.deleteMany({ where: { recipientUserId: { in: userIds } } })
+      if (notificationIds.length > 0) {
+        await transaction.notification.deleteMany({ where: { id: { in: notificationIds } } })
       }
       if (issuanceIds.length > 0) {
         await transaction.numberingIssuance.deleteMany({ where: { id: { in: issuanceIds } } })

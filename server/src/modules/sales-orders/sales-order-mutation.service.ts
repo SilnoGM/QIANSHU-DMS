@@ -15,6 +15,8 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { DataScopeService, dataScopeFallback } from '../access-control/data-scope.service'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { salesOrderScopeWhere } from './sales-order-access'
 import {
   DictionaryLookupService,
@@ -65,6 +67,13 @@ const FULFILLMENT_STATUSES = new Set<SalesOrderFulfillmentStatus>([
 ])
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+const NOTIFICATION_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
+  day: '2-digit', hour: '2-digit', hourCycle: 'h23', minute: '2-digit', month: '2-digit', timeZone: 'Asia/Shanghai', year: 'numeric',
+})
+function notificationTime(value: Date): string {
+  const parts = new Map(NOTIFICATION_TIME_FORMAT.formatToParts(value).map(part => [part.type, part.value]))
+  return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')} ${parts.get('hour')}:${parts.get('minute')}`
+}
 
 export interface SalesOrderMutationContext {
   readonly actorUserId: string
@@ -86,6 +95,8 @@ const SALES_ORDER_MUTATION_DEPENDENCIES = Symbol(
 type MutableOrderRow = Prisma.SalesOrderGetPayload<{
   select: {
     id: true
+    orderNo: true
+    issuerUserId: true
     orderStatus: true
     fulfillmentStatus: true
     paymentStatus: true
@@ -189,6 +200,7 @@ export class SalesOrderMutationService {
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -325,6 +337,22 @@ export class SalesOrderMutationService {
           ...(reason === null ? {} : { reason }),
         },
       })
+      if (toStatus === 'TERMINATED') {
+        await this.notifications.publish({
+          eventType: 'SALES_ORDER_TERMINATED',
+          source: { type: 'SALES_ORDER', id: salesOrderId },
+          target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
+          templateKey: 'sales.order.terminated',
+          variables: {
+            customerName: order.customerName,
+            occurredAt: notificationTime(new Date()),
+            orderNo: order.orderNo,
+            reason: reason ?? '订单已终止',
+          },
+          dedupeKey: `sales-order-terminated:${salesOrderId}`,
+          requestedByUserId: trusted.actorUserId,
+        }, { transaction })
+      }
     })
     return this.query.getById(salesOrderId, trusted.actorUserId)
   }
@@ -423,6 +451,22 @@ export class SalesOrderMutationService {
         salesOrderId,
         'FULFILLMENT',
       )
+      if (toStatus === 'SIGNED') {
+        await this.notifications.publish({
+          eventType: 'SHIPMENT_SIGNED',
+          source: { type: 'SALES_ORDER', id: salesOrderId },
+          target: { kind: 'USERS', userIds: [order.issuerUserId] },
+          templateKey: 'shipment.signed',
+          variables: {
+            customerName: order.customerName,
+            occurredAt: notificationTime(new Date()),
+            orderNo: order.orderNo,
+          },
+          dedupeKey: `shipment-signed:${salesOrderId}:v${order.version + 1}`,
+          priority: 'NORMAL',
+          requestedByUserId: trusted.actorUserId,
+        }, { transaction })
+      }
     })
     return this.query.getById(salesOrderId, trusted.actorUserId)
   }
@@ -564,6 +608,8 @@ export class SalesOrderMutationService {
       where: { id: salesOrderId, ...salesOrderScopeWhere(scope, actorUserId) },
       select: {
         id: true,
+        orderNo: true,
+        issuerUserId: true,
         orderStatus: true,
         fulfillmentStatus: true,
         paymentStatus: true,

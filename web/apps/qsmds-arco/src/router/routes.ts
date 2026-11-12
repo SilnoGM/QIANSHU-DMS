@@ -11,11 +11,14 @@ import ComponentLibraryRoutes, {
 } from './modules/component.library'
 import { financeLegacyRedirects } from './modules/finance-legacy-redirects'
 import { managementLegacyRedirects } from './modules/management-legacy-redirects'
+import NotificationCenter from './modules/notification.center'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement from './modules/product.management'
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
 import SupplierPaymentProfiles from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
+import SystemNotifications from './modules/system.notifications'
+import SystemStatus from './modules/system.status'
 import {
   ADMIN_WORKBENCH_PERMISSION,
   OPERATIONS_WORKBENCH_PERMISSION,
@@ -73,6 +76,7 @@ const systemRoutes: RouteRecordRaw[] = [
           breadcrumb: false,
         },
       },
+      NotificationCenter,
     ],
   },
 ]
@@ -123,7 +127,9 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     },
     children: [
       SystemAudit,
+      SystemStatus,
       ApplicationSettings,
+      SystemNotifications,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)
