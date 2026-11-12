@@ -541,7 +541,7 @@ defineExpose({ refresh: loadRecords })
           <QsPersonDisplay
             v-if="row.original.requestedByName !== null"
             :display-name="row.original.requestedByName"
-            size="sm"
+            size="md"
           />
           <span v-else class="text-muted-foreground">—</span>
         </div>

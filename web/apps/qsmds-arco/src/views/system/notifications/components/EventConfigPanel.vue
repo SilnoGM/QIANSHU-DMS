@@ -286,7 +286,7 @@ defineExpose({
 
       <template #cell-updatedAt="{ row }">
         <div class="flex flex-col gap-0.5 min-w-0">
-          <QsPersonDisplay :display-name="eventRow(row.original)?.updatedByName ?? '—'" size="sm" />
+          <QsPersonDisplay :display-name="eventRow(row.original)?.updatedByName ?? '—'" size="md" />
           <span
             class="qs-type-meta text-muted-foreground whitespace-nowrap"
             :title="formatNotificationDateTime(eventRow(row.original)?.updatedAt ?? null)"
