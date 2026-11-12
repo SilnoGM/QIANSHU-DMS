@@ -7,6 +7,7 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { AuditService } from '../audit/audit.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import { advertisingRechargeStatusLabel, formatNotificationDateTime } from '../notifications/notification-display-labels'
 import {
   ADVERTISING_RECHARGE_FUND_SOURCE,
   ADVERTISING_RECHARGE_PAY_CONSUMER,
@@ -259,10 +260,12 @@ export class AdvertisingRechargeService {
           variables: {
             accountType: accountTypeLabel(input.accountType),
             adAccountName,
+            adAccountNo,
             applicantName: applicant?.displayName ?? '—',
             rechargeAmount: amount,
             rechargeCurrency: currency,
             rechargeNo: created.rechargeNo,
+            status: advertisingRechargeStatusLabel('PENDING'),
           },
           dedupeKey: `advertising-recharge-pending:${created.id}:v${created.version}`,
           requestedByUserId: context.actorUserId,
@@ -354,9 +357,12 @@ export class AdvertisingRechargeService {
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
           templateKey: 'operations.advertising-recharge.rejected',
           variables: {
+            adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(reviewedAt),
+            paidAt: '—',
             reason,
             rechargeNo: row.rechargeNo,
+            status: advertisingRechargeStatusLabel('REJECTED'),
           },
           dedupeKey: `advertising-recharge-rejected:${id}:v${row.version + 1}`,
           requestedByUserId: context.actorUserId,
@@ -474,9 +480,12 @@ export class AdvertisingRechargeService {
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
           templateKey: 'operations.advertising-recharge.paid',
           variables: {
+            adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(paidAt),
+            paidAt: formatNotificationDateTime(paidAt),
             paymentAmountCny: paymentAmount,
             rechargeNo: row.rechargeNo,
+            status: advertisingRechargeStatusLabel('PAID'),
           },
           dedupeKey: `advertising-recharge-paid:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
@@ -575,10 +584,13 @@ export class AdvertisingRechargeService {
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
           templateKey: 'operations.advertising-recharge.voided',
           variables: {
+            adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(voidedAt),
+            paidAt: '—',
             paymentAmountCny: row.paymentAmountCny.toFixed(2),
             reason,
             rechargeNo: row.rechargeNo,
+            status: advertisingRechargeStatusLabel('VOIDED'),
           },
           dedupeKey: `advertising-recharge-voided:${id}:v${row.version + 1}`,
           requestedByUserId: context.actorUserId,

@@ -9,6 +9,12 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
+  machineViewingMachineTypeLabel,
+  machineViewingPeriodLabel,
+  machineViewingSiteLabel,
+  machineViewingStatusLabel,
+} from '../notifications/notification-display-labels'
+import {
   MACHINE_VIEWING_NO_CONSUMER_CODE,
   MACHINE_VIEWING_NO_RULE_CODE,
 } from './machine-viewing.contract'
@@ -164,10 +170,12 @@ export class MachineViewingService {
             appointmentNo: issuance.number,
             contactPerson: normalized.contactPerson,
             customerName: normalized.customerName,
+            customerPhone: normalized.customerPhone ?? '—',
             hour: normalized.hour ?? null,
-            machineType: normalized.machineType,
-            period: normalized.period,
-            site: normalized.site,
+            machineType: machineViewingMachineTypeLabel(normalized.machineType),
+            period: machineViewingPeriodLabel(normalized.period),
+            site: machineViewingSiteLabel(normalized.site),
+            status: machineViewingStatusLabel('PENDING_APPOINTMENT'),
           },
           dedupeKey: `machine-viewing-created:${created.id}`,
           priority: 'NORMAL',

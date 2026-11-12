@@ -35,7 +35,13 @@ function setup(overrides: {
   const transaction = {
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        agreedTotalAmount: { toFixed: () => '1,000.00' },
+        currencyCode: 'CNY',
+        customerName: '张三',
+        customerPhone: '0912345678',
         fulfillmentStatus: overrides.fulfillmentStatus ?? 'SIGNED',
+        issuerUserId: ACTOR_ID,
+        orderNo: 'SO/20261013-0001',
         orderStatus: overrides.orderStatus ?? 'CONFIRMED',
         paymentStatus: overrides.paymentStatus ?? 'PAID',
       }),

@@ -12,6 +12,12 @@ import type { DataScope } from '../../access-control/data-scope'
 import { AuditService, AuditWriteFailedError } from '../../audit/audit.service'
 import { SystemNotificationService } from '../../notifications/system-notification.service'
 import { noopSystemNotifications } from '../../notifications/noop-system-notification'
+import {
+  formatNotificationDate,
+  purchaseOrderFulfillmentStatusLabel,
+  purchaseOrderPaymentStatusLabel,
+  purchaseOrderStatusLabel,
+} from '../../notifications/notification-display-labels'
 import { derivePurchaseOrderStatus } from '../domain/purchase-order-state-machine'
 import { normalizeFactoryShipmentContext, requireFactoryShipmentUuid, type FactoryShipmentMutationContext } from '../factory-shipments/purchase-order-factory-shipment.normalizer'
 import { purchaseOrderScopeWhere } from '../purchase-order-access'
@@ -21,6 +27,7 @@ import { advanceSalesOrderWhenAllShipmentsReceived } from './sales-order-warehou
 
 export const WAREHOUSE_RECEIPT_ORDER_SELECT = {
   id: true, orderNo: true, purchaseType: true, salesOrderId: true, orderStatus: true, fulfillmentStatus: true, paymentStatus: true, version: true,
+  orderDate: true, shippingMarkText: true,
   createdByUserId: true, customSupplierName: true, supplierValue: true,
   parts: { orderBy: { id: 'asc' }, select: { id: true, partNumber: true, status: true, shippedAt: true, warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true } },
 } satisfies Prisma.PurchaseOrderSelect
@@ -189,6 +196,10 @@ export class PurchaseOrderWarehouseReceiptService {
         receivedPartCount: partIds.length,
         receivedAt: formatWarehouseTime(receivedAt),
         customerName,
+        fulfillmentStatus: purchaseOrderFulfillmentStatusLabel(fulfillmentStatus),
+        orderStatus: purchaseOrderStatusLabel(orderStatus),
+        shippingMark: order.shippingMarkText ?? '—',
+        vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
       },
       dedupeKey: `shipment-arrived:${order.id}:${partIds.join(',')}`,
       priority: 'NORMAL',
@@ -202,7 +213,11 @@ export class PurchaseOrderWarehouseReceiptService {
         templateKey: 'purchase.order.completed',
         variables: {
           occurredAt: formatWarehouseTime(recordedAt),
+          orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderStatus: purchaseOrderStatusLabel(orderStatus),
+          paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
+          shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-order-completed:${order.id}`,

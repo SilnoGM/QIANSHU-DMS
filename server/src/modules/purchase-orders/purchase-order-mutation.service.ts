@@ -33,6 +33,11 @@ import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normali
 import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asset.service'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import {
+  formatNotificationDate,
+  purchaseOrderPaymentStatusLabel,
+  purchaseOrderStatusLabel,
+} from '../notifications/notification-display-labels'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import {
   calculatePurchaseOrderLineTotal,
@@ -135,6 +140,7 @@ type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
     createdByUserId: true
     createRequestFingerprintHash: true
     createRequestFingerprintVersion: true
+    orderDate: true
     shippingMarkText: true
     shippingMarkIssuanceId: true
     _count: { select: { parts: true } }
@@ -394,7 +400,11 @@ export class PurchaseOrderMutationService {
         templateKey: 'purchase.review.approved',
         variables: {
           currencyCode: order.currencyCode,
+          orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderStatus: purchaseOrderStatusLabel(order.orderStatus),
+          paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
+          shippingMark: order.shippingMarkText ?? '—',
           totalAmount: order.purchaseTotalAmount.toFixed(2),
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
@@ -478,8 +488,12 @@ export class PurchaseOrderMutationService {
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
         templateKey: 'purchase.order.cancelled',
         variables: {
+          orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderStatus: purchaseOrderStatusLabel(order.orderStatus),
+          paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
           reason: reason ?? '用户取消采购订单',
+          shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-order-cancelled:${purchaseOrderId}:v${order.version + 1}`,
@@ -537,8 +551,12 @@ export class PurchaseOrderMutationService {
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
         templateKey: 'purchase.review.rejected',
         variables: {
+          orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderStatus: purchaseOrderStatusLabel(order.orderStatus),
+          paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
           reason,
+          shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-review-rejected:${purchaseOrderId}:v${order.version + 1}`,
@@ -1464,6 +1482,7 @@ export class PurchaseOrderMutationService {
         createdByUserId: true,
         createRequestFingerprintHash: true,
         createRequestFingerprintVersion: true,
+        orderDate: true,
         shippingMarkText: true,
         shippingMarkIssuanceId: true,
         _count: { select: { parts: true } },
@@ -1570,7 +1589,11 @@ export class PurchaseOrderMutationService {
         templateKey: 'purchase.order.completed',
         variables: {
           occurredAt: notificationTime(new Date()),
+          orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderStatus: purchaseOrderStatusLabel(newStatus),
+          paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
+          shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
         dedupeKey: `purchase-order-completed:${order.id}`,
