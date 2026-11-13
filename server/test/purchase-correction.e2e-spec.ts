@@ -43,8 +43,34 @@ describe('purchase chain correction over isolated PostgreSQL', () => {
   const partFacts = (partId: string) => h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: partId }, select: {
     status: true, shippedAt: true, warehouseReceivedAt: true, loadedAt: true, deliveredAt: true,
   } })
+  async function attachDeliveryReceipt(salesOrderId: string): Promise<string> {
+    return h.prisma.$transaction(async (transaction) => {
+      const asset = await transaction.mediaAsset.create({ data: {
+        mediaType: 'DOCUMENT', status: 'READY', originalFilename: 'delivery-receipt.pdf',
+        objectKey: `assets/test/${randomUUID()}.pdf`, mimeType: 'application/pdf',
+        sizeBytes: 3n, checksumSha256: 'a'.repeat(64), createdByUserId: actorUserId,
+      } })
+      const document = await transaction.salesOrderDocument.create({ data: {
+        salesOrderId, mediaAssetId: asset.id, documentType: 'DELIVERY_RECEIPT',
+        createdByUserId: actorUserId,
+      } })
+      return document.id
+    })
+  }
+  async function markSigned(salesOrderId: string, partId: string): Promise<void> {
+    await h.prisma.$executeRaw`
+      UPDATE purchase_order_parts
+      SET delivered_at = now(), delivered_by_id = ${actorUserId}::uuid, delivered_recorded_at = now()
+      WHERE id = ${partId}::uuid
+    `
+    await h.prisma.salesOrder.update({ where: { id: salesOrderId }, data: {
+      fulfillmentStatus: 'SIGNED', version: { increment: 1 },
+    } })
+  }
+  let fundsSetup: Promise<unknown> | undefined
   async function payBalance(orderId: string) {
-    await h.setupFunds()
+    fundsSetup ??= h.setupFunds()
+    await fundsSetup
     const payable = await h.prisma.purchaseOrderPayable.findFirstOrThrow({
       where: { purchaseOrderId: orderId, paymentType: 'BALANCE' },
     })
@@ -201,20 +227,74 @@ describe('purchase chain correction over isolated PostgreSQL', () => {
     expect((await partFacts(shipment.part.id)).shippedAt).not.toBeNull()
   })
 
-  it('blocks a signed shipment', async () => {
+  it('corrects a signed order and detaches its receipt back to pending purchase', async () => {
     const shipment = await h.shipment({ salesLinked: true })
     const salesOrderId = shipment.source!.id
-    const before = await contextOf(salesOrderId)
+    const payment = await payBalance(shipment.order.id)
     const parent = await batch()
     await item(parent.id, { shipmentId: shipment.part.id })
-    await h.prisma.$executeRaw`
-      UPDATE purchase_order_parts
-      SET delivered_at = now(), delivered_by_id = ${actorUserId}::uuid, delivered_recorded_at = now()
-      WHERE id = ${shipment.part.id}::uuid
-    `
-    const signed = await contextOf(salesOrderId)
-    expect(signed.canApply).toBe(false)
-    expect(signed.blockers.map(blocker => blocker.code)).toContain('PURCHASE_CORRECTION_SIGNED')
-    expect(before.canApply).toBe(true)
+    const receiptId = await attachDeliveryReceipt(salesOrderId)
+    await markSigned(salesOrderId, shipment.part.id)
+
+    const context = await contextOf(salesOrderId)
+    expect(context.canApply).toBe(true)
+    expect(context.signed).toBe(true)
+    expect(context.deliveryReceipts).toEqual([expect.objectContaining({ id: receiptId })])
+    expect(context.salesPaymentCount).toBe(0)
+    expect(context.settlementCount).toBe(0)
+    expect(context.containerItems).toEqual([
+      expect.objectContaining({ action: 'DELETE' }),
+    ])
+    expect(context.payments).toEqual([expect.objectContaining({ id: payment.id, amount: '10.00' })])
+
+    const applyBody = {
+      salesOrderId,
+      expectedSalesOrderVersion: context.version,
+      purchaseOrders: context.purchaseOrders.map(purchase => ({
+        purchaseOrderId: purchase.id,
+        expectedVersion: purchase.version,
+      })),
+      reason: '误建采购链，实际应为寄仓调货',
+      confirmOrderNo: context.salesOrderNo,
+    }
+    const result = (await browser.post('/api/purchase-order-corrections')
+      .set(packagingHeaders)
+      .set('Idempotency-Key', randomUUID())
+      .send(applyBody)
+      .expect(200)).body as PurchaseCorrectionResultDto
+
+    expect(result).toMatchObject({
+      signed: true,
+      fulfillmentStatus: 'PENDING',
+      detachedDeliveryReceipts: [{ id: receiptId }],
+      deletedContainerItems: [expect.objectContaining({ action: 'DELETE' })],
+      reversedPayments: [expect.objectContaining({ id: payment.id, amount: '10.00' })],
+      totalReversedAmount: '10.00',
+    })
+
+    const order = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId } })
+    expect(order.orderStatus).toBe('CONFIRMED')
+    expect(order.fulfillmentStatus).toBe('PENDING')
+    const purchase = await h.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: shipment.order.id } })
+    expect(purchase.orderStatus).toBe('CANCELLED')
+    expect(purchase.fulfillmentStatus).toBe('PREPARING')
+    expect(await partFacts(shipment.part.id)).toEqual({
+      status: 'CANCELLED',
+      shippedAt: null,
+      warehouseReceivedAt: null,
+      loadedAt: null,
+      deliveredAt: null,
+    })
+    expect(await h.prisma.salesOrderDocument.findUniqueOrThrow({ where: { id: receiptId } })).toMatchObject({
+      detachedAt: expect.any(Date) as unknown,
+      detachedByUserId: actorUserId,
+    })
+    expect(await h.prisma.containerLoadingItem.count({ where: { containerBatchId: parent.id } })).toBe(0)
+    expect(await h.prisma.auditEvent.count({
+      where: { eventType: 'SALES_ORDER_DOCUMENT_DETACHED', targetId: receiptId },
+    })).toBe(1)
+    expect(await h.prisma.salesOrderStatusHistory.count({
+      where: { salesOrderId, dimension: 'FULFILLMENT', fromStatus: 'SIGNED', toStatus: 'PENDING' },
+    })).toBe(1)
   })
 })

@@ -69473,6 +69473,7 @@
                 "PURCHASE_CORRECTION_OWNERSHIP_CHANGED",
                 "PURCHASE_CORRECTION_PACKAGING_PAID",
                 "PURCHASE_CORRECTION_RECONCILING",
+                "PURCHASE_CORRECTION_SETTLED",
                 "PURCHASE_CORRECTION_SIGNED",
                 "PURCHASE_CORRECTION_STORAGE_RECORD",
                 "VALIDATION_FAILED"
@@ -125143,6 +125144,23 @@
           "salesOrder"
         ]
       },
+      "PurchaseCorrectionDeliveryReceiptDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt"
+        ]
+      },
       "PurchaseCorrectionPurchaseDto": {
         "type": "object",
         "properties": {
@@ -125301,6 +125319,14 @@
             "type": "boolean",
             "description": "装柜行存在收件人/COD 变更记录；纠正只解绑，不撤销变更历史。"
           },
+          "action": {
+            "type": "string",
+            "enum": [
+              "DELETE",
+              "DETACH"
+            ],
+            "description": "签收纠正中无引用且无变更的装柜行直接删除，其余解绑。"
+          },
           "reconciliations": {
             "type": "array",
             "items": {
@@ -125314,6 +125340,7 @@
           "containerBatchId",
           "containerBatchNo",
           "hasChanges",
+          "action",
           "reconciliations"
         ]
       },
@@ -125367,6 +125394,30 @@
             "type": "number",
             "minimum": 1
           },
+          "signed": {
+            "type": "boolean",
+            "description": "订单或任一货件已签收；纠正会撤销签收事实并软解除全部有效签收单。"
+          },
+          "deliveryReceipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionDeliveryReceiptDto"
+            }
+          },
+          "salesPaymentCount": {
+            "type": "number",
+            "minimum": 0,
+            "description": "该销售单已有的有效收款笔数与金额；纠正不会退回客户收款。"
+          },
+          "salesPaidAmount": {
+            "type": "string",
+            "description": "有效销售收款合计，保留原币种两位小数。"
+          },
+          "settlementCount": {
+            "type": "number",
+            "minimum": 0,
+            "description": "销售单或采购单已有的对账结算记录数；大于 0 时阻断。"
+          },
           "purchaseOrders": {
             "type": "array",
             "items": {
@@ -125417,6 +125468,11 @@
           "orderStatus",
           "fulfillmentStatus",
           "version",
+          "signed",
+          "deliveryReceipts",
+          "salesPaymentCount",
+          "salesPaidAmount",
+          "settlementCount",
           "purchaseOrders",
           "payments",
           "totalPaymentAmount",
@@ -125514,6 +125570,16 @@
           "fulfillmentStatus": {
             "type": "string"
           },
+          "signed": {
+            "type": "boolean",
+            "description": "本次是否撤销了签收事实。"
+          },
+          "detachedDeliveryReceipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionDeliveryReceiptDto"
+            }
+          },
           "cancelledPurchaseOrders": {
             "type": "array",
             "items": {
@@ -125536,6 +125602,12 @@
               "$ref": "#/components/schemas/PurchaseCorrectionPackagingDto"
             }
           },
+          "deletedContainerItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionContainerItemDto"
+            }
+          },
           "detachedContainerItems": {
             "type": "array",
             "items": {
@@ -125554,10 +125626,13 @@
           "salesOrderId",
           "salesOrderNo",
           "fulfillmentStatus",
+          "signed",
+          "detachedDeliveryReceipts",
           "cancelledPurchaseOrders",
           "reversedPayments",
           "totalReversedAmount",
           "cancelledPackagingCosts",
+          "deletedContainerItems",
           "detachedContainerItems",
           "preservedReconciliations"
         ]

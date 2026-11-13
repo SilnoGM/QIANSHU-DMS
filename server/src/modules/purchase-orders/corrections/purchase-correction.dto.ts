@@ -64,8 +64,15 @@ export class PurchaseCorrectionContainerItemDto {
   @ApiProperty() containerBatchNo!: string
   @ApiProperty({ description: '装柜行存在收件人/COD 变更记录；纠正只解绑，不撤销变更历史。' })
   hasChanges!: boolean
+  @ApiProperty({ enum: ['DELETE', 'DETACH'], description: '签收纠正中无引用且无变更的装柜行直接删除，其余解绑。' })
+  action!: 'DELETE' | 'DETACH'
   @ApiProperty({ type: () => [PurchaseCorrectionReconciliationDto] })
   reconciliations!: PurchaseCorrectionReconciliationDto[]
+}
+
+export class PurchaseCorrectionDeliveryReceiptDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ format: 'date-time' }) createdAt!: string
 }
 
 export class PurchaseCorrectionContextDto {
@@ -74,6 +81,16 @@ export class PurchaseCorrectionContextDto {
   @ApiProperty() orderStatus!: string
   @ApiProperty() fulfillmentStatus!: string
   @ApiProperty({ minimum: 1 }) version!: number
+  @ApiProperty({ description: '订单或任一货件已签收；纠正会撤销签收事实并软解除全部有效签收单。' })
+  signed!: boolean
+  @ApiProperty({ type: () => [PurchaseCorrectionDeliveryReceiptDto] })
+  deliveryReceipts!: PurchaseCorrectionDeliveryReceiptDto[]
+  @ApiProperty({ minimum: 0, description: '该销售单已有的有效收款笔数与金额；纠正不会退回客户收款。' })
+  salesPaymentCount!: number
+  @ApiProperty({ description: '有效销售收款合计，保留原币种两位小数。' })
+  salesPaidAmount!: string
+  @ApiProperty({ minimum: 0, description: '销售单或采购单已有的对账结算记录数；大于 0 时阻断。' })
+  settlementCount!: number
   @ApiProperty({ type: () => [PurchaseCorrectionPurchaseDto] })
   purchaseOrders!: PurchaseCorrectionPurchaseDto[]
   @ApiProperty({ type: () => [PurchaseCorrectionPaymentDto] })
@@ -124,6 +141,10 @@ export class PurchaseCorrectionResultDto {
   @ApiProperty({ format: 'uuid' }) salesOrderId!: string
   @ApiProperty() salesOrderNo!: string
   @ApiProperty() fulfillmentStatus!: string
+  @ApiProperty({ description: '本次是否撤销了签收事实。' })
+  signed!: boolean
+  @ApiProperty({ type: () => [PurchaseCorrectionDeliveryReceiptDto] })
+  detachedDeliveryReceipts!: PurchaseCorrectionDeliveryReceiptDto[]
   @ApiProperty({ type: () => [PurchaseCorrectionCancelledOrderDto] })
   cancelledPurchaseOrders!: PurchaseCorrectionCancelledOrderDto[]
   @ApiProperty({ type: () => [PurchaseCorrectionPaymentDto] })
@@ -132,6 +153,8 @@ export class PurchaseCorrectionResultDto {
   totalReversedAmount!: string
   @ApiProperty({ type: () => [PurchaseCorrectionPackagingDto] })
   cancelledPackagingCosts!: PurchaseCorrectionPackagingDto[]
+  @ApiProperty({ type: () => [PurchaseCorrectionContainerItemDto] })
+  deletedContainerItems!: PurchaseCorrectionContainerItemDto[]
   @ApiProperty({ type: () => [PurchaseCorrectionContainerItemDto] })
   detachedContainerItems!: PurchaseCorrectionContainerItemDto[]
   @ApiProperty({ type: () => [PurchaseCorrectionReconciliationDto] })

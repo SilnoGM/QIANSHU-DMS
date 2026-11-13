@@ -60,8 +60,21 @@ const order = {
   version: 7,
 }
 
-function plan(purchases = [purchase()], claimed = new Map<string, number>()) {
-  return buildPurchaseCorrectionPlan({ order, purchases, claimedQuantities: claimed })
+function plan(
+  purchases = [purchase()],
+  claimed = new Map<string, number>(),
+  overrides: Partial<Parameters<typeof buildPurchaseCorrectionPlan>[0]> = {},
+) {
+  return buildPurchaseCorrectionPlan({
+    order,
+    purchases,
+    claimedQuantities: claimed,
+    deliveryReceipts: [],
+    settlementCount: 0,
+    salesPaymentCount: 0,
+    salesPaidAmount: '0.00',
+    ...overrides,
+  })
 }
 
 describe('buildPurchaseCorrectionPlan', () => {
@@ -103,10 +116,41 @@ describe('buildPurchaseCorrectionPlan', () => {
     expect(result.containerItemsToDetach).toHaveLength(1)
   })
 
-  it('签收后阻断', () => {
-    const result = plan([purchase({ parts: [part({ deliveredAt: new Date() })] })])
+  it('已签收订单进入签收纠正计划，签收单随上下文返回', () => {
+    const result = plan(
+      [purchase({ parts: [part({ deliveredAt: new Date('2026-11-10T02:00:00.000Z') })] })],
+      new Map(),
+      { deliveryReceipts: [{ id: '00000000-0000-4000-8000-000000000120', mediaAssetId: '00000000-0000-4000-8000-000000000124', createdAt: new Date('2026-11-10T02:00:00.000Z') }] },
+    )
+    expect(result.canApply).toBe(true)
+    expect(result.blockers.map(row => row.code)).not.toContain('PURCHASE_CORRECTION_SIGNED')
+    expect(result.signed).toBe(true)
+    expect(result.deliveryReceipts).toHaveLength(1)
+    expect(result.containerItemsToDelete).toHaveLength(1)
+    expect(result.containerItemsToDetach).toEqual([])
+  })
+
+  it('已有对账结算时阻断签收纠正', () => {
+    const result = plan([purchase()], new Map(), { settlementCount: 1 })
     expect(result.canApply).toBe(false)
-    expect(result.blockers.map(row => row.code)).toContain('PURCHASE_CORRECTION_SIGNED')
+    expect(result.blockers.map(row => row.code)).toContain('PURCHASE_CORRECTION_SETTLED')
+  })
+
+  it('有变更记录的装柜行在签收纠正中只能解绑', () => {
+    const result = plan([purchase({
+      parts: [part({ deliveredAt: new Date('2026-11-10T02:00:00.000Z') })],
+      containerItems: [{
+        id: '00000000-0000-4000-8000-000000000121',
+        shipmentId: PART_ID,
+        containerBatchId: '00000000-0000-4000-8000-000000000122',
+        containerBatchNo: 'CTN/2026-004',
+        hasChanges: true,
+        reconciliations: [],
+      }],
+    })], new Map(), { deliveryReceipts: [{ id: '00000000-0000-4000-8000-000000000123', mediaAssetId: '00000000-0000-4000-8000-000000000125', createdAt: new Date() }] })
+    expect(result.signed).toBe(true)
+    expect(result.containerItemsToDelete).toEqual([])
+    expect(result.containerItemsToDetach).toHaveLength(1)
   })
 
   it('已付款包装费阻断，待付款包装费进入取消计划', () => {

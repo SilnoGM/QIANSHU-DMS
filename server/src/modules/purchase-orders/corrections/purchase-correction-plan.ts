@@ -97,11 +97,21 @@ export interface PurchaseCorrectionPurchaseSnapshot {
   readonly loadGroups: readonly PurchaseCorrectionLoadGroupSnapshot[]
 }
 
+export interface PurchaseCorrectionDeliveryReceiptSnapshot {
+  readonly id: string
+  readonly mediaAssetId: string
+  readonly createdAt: Date
+}
+
 export interface PurchaseCorrectionPlanInput {
   readonly order: PurchaseCorrectionOrderSnapshot
   readonly purchases: readonly PurchaseCorrectionPurchaseSnapshot[]
   /// 目标销售单已有的寄仓认领数量；任何一行大于 0 都说明不是整单误建。
   readonly claimedQuantities: ReadonlyMap<string, number>
+  readonly deliveryReceipts: readonly PurchaseCorrectionDeliveryReceiptSnapshot[]
+  readonly settlementCount: number
+  readonly salesPaymentCount: number
+  readonly salesPaidAmount: string
 }
 
 export interface PurchaseCorrectionPlan {
@@ -111,9 +121,15 @@ export interface PurchaseCorrectionPlan {
   readonly payments: readonly PurchaseCorrectionPaymentSnapshot[]
   readonly totalPaymentAmount: string
   readonly packagingCostsToCancel: readonly PurchaseCorrectionPackagingSnapshot[]
+  readonly containerItemsToDelete: readonly PurchaseCorrectionContainerItemSnapshot[]
   readonly containerItemsToDetach: readonly PurchaseCorrectionContainerItemSnapshot[]
   readonly loadGroupIds: readonly string[]
   readonly preservedReconciliations: readonly PurchaseCorrectionReconciliationSnapshot[]
+  readonly signed: boolean
+  readonly deliveryReceipts: readonly PurchaseCorrectionDeliveryReceiptSnapshot[]
+  readonly settlementCount: number
+  readonly salesPaymentCount: number
+  readonly salesPaidAmount: string
   readonly canApply: boolean
 }
 
@@ -159,10 +175,12 @@ export function buildPurchaseCorrectionPlan(
 
   const signed = order.fulfillmentStatus === 'SIGNED'
     || purchases.some(purchase => purchase.parts.some(part => part.deliveredAt !== null))
-  if (signed) {
+  // 已签收不再是阻断项：V2 会在同一纠正事务内撤销签收事实、软解除签收单并把订单退回待采购。
+  // 已有对账结算的订单仍然阻断，因为结算/代收/资金不能在本通道内删除。
+  if (input.settlementCount > 0) {
     blockers.push(blocker(
-      'PURCHASE_CORRECTION_SIGNED',
-      '订单或货件已签收，V1 不支持撤销签收后的采购链',
+      'PURCHASE_CORRECTION_SETTLED',
+      '该销售单或采购单已有对账结算记录，签收纠正不能撤销财务结算，请先处理对账',
       'SALES_ORDER',
       order.id,
     ))
@@ -268,6 +286,14 @@ export function buildPurchaseCorrectionPlan(
     .filter(cost => cost.status === 'PENDING_PAYMENT')
   const loadGroupIds = [...new Set(purchases.flatMap(purchase => purchase.loadGroups.map(group => group.id)))].sort()
   const preservedReconciliations = reconciliations.filter(row => row.completedAt !== null)
+  const detachableContainerItems = containerItems.filter(item => item.shipmentId !== null)
+  // 已签收纠正时，没有变更记录且未被对账引用的装柜行可以直接删除，避免柜次里留下无货件的行；
+  // 有变更记录或对账引用的行只能解绑，保留历史。
+  const containerItemsToDelete = signed
+    ? detachableContainerItems.filter(item => !item.hasChanges && item.reconciliations.length === 0)
+    : []
+  const deletedIds = new Set(containerItemsToDelete.map(item => item.id))
+  const containerItemsToDetach = detachableContainerItems.filter(item => !deletedIds.has(item.id))
 
   return {
     blockers,
@@ -281,9 +307,15 @@ export function buildPurchaseCorrectionPlan(
           0n,
         )),
     packagingCostsToCancel,
-    containerItemsToDetach: containerItems.filter(item => item.shipmentId !== null),
+    containerItemsToDelete,
+    containerItemsToDetach,
     loadGroupIds,
     preservedReconciliations,
+    signed,
+    deliveryReceipts: input.deliveryReceipts,
+    settlementCount: input.settlementCount,
+    salesPaymentCount: input.salesPaymentCount,
+    salesPaidAmount: input.salesPaidAmount,
     canApply: blockers.length === 0 && purchases.length > 0,
   }
 }

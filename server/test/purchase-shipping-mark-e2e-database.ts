@@ -18,6 +18,7 @@ const DEFERRED_SHIPMENT_DELIVERY_MIGRATIONS = [
   // 误建采购纠正重写了货件不可变触发器并引用 delivered_at，也必须等签收列就位后再应用。
   '20261113120000_purchase_chain_correction',
   '20261113121000_purchase_chain_correction_shipping_identity',
+  '20261113130000_purchase_chain_correction_signed',
 ] as const
 
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */

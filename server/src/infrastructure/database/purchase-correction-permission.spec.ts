@@ -57,6 +57,7 @@ describe('purchase chain correction permission migration', () => {
     expect(directories).toEqual([
       '20261113120000_purchase_chain_correction',
       '20261113121000_purchase_chain_correction_shipping_identity',
+      '20261113130000_purchase_chain_correction_signed',
     ])
     for (const directory of directories) {
       expect(documented).toContain(`\`${directory}\``)

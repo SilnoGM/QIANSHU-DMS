@@ -20,6 +20,7 @@ import { AccessControlService } from '../../access-control/access-control.servic
 import { DataScopeService } from '../../access-control/data-scope.service'
 import { AuditService } from '../../audit/audit.service'
 import { clearShipmentsContainerLoaded } from '../../container-batches/container-unload-fact'
+import { MediaAssetRetentionService } from '../../media/media-retention.service'
 import { readClaimedQuantitiesBySalesLine } from '../../sales-orders/sales-order-claim-coverage'
 import { salesOrderScopeWhere } from '../../sales-orders/sales-order-access'
 import { parsePurchaseOrderIdempotencyKey } from '../purchase-order-command.normalizer'
@@ -133,6 +134,7 @@ function toReconciliationDto(
 
 function toContainerItemDto(
   item: PurchaseCorrectionContainerItemSnapshot,
+  action: 'DELETE' | 'DETACH',
 ): PurchaseCorrectionContainerItemDto {
   return {
     id: item.id,
@@ -140,6 +142,7 @@ function toContainerItemDto(
     containerBatchId: item.containerBatchId,
     containerBatchNo: item.containerBatchNo,
     hasChanges: item.hasChanges,
+    action,
     reconciliations: item.reconciliations.map(toReconciliationDto),
   }
 }
@@ -153,6 +156,7 @@ export class PurchaseCorrectionService {
     private readonly scope: DataScopeService,
     private readonly mutations: PurchaseOrderMutationService,
     private readonly coverage: SalesOrderPurchaseCoverageService,
+    private readonly mediaRetention: MediaAssetRetentionService,
   ) {}
 
   async context(
@@ -276,6 +280,87 @@ export class PurchaseCorrectionService {
           })),
         })
 
+        if (loaded.plan.signed) {
+          // 签收纠正：先把签收单软解除、销售单退回待采购，再清空签收事实。
+          // 顺序很重要：装柜事实清空要求 delivered_at 已为空；延迟签收约束在
+          // 事务提交时只看到 PENDING，不会把已清空的签收事实判成不一致。
+          const detachedAt = new Date()
+          for (const receipt of loaded.plan.deliveryReceipts) {
+            const updated = await transaction.salesOrderDocument.updateMany({
+              where: {
+                id: receipt.id,
+                salesOrderId: loaded.order.id,
+                detachedAt: null,
+              },
+              data: { detachedAt, detachedByUserId: context.actorUserId },
+            })
+            if (updated.count !== 1) stateChanged()
+            await this.audit.record(transaction, {
+              eventType: AuditEventType.SALES_ORDER_DOCUMENT_DETACHED,
+              outcome: AuditOutcome.SUCCESS,
+              actorType: AuditActorType.USER,
+              actorUserId: context.actorUserId,
+              requestId: context.requestId,
+              targetType: 'SALES_ORDER_DOCUMENT',
+              targetId: receipt.id,
+              metadata: {
+                correctionId: correction.id,
+                salesOrderId: loaded.order.id,
+                source: CORRECTION_PAYMENT_SOURCE,
+              },
+            })
+            // 签收单是 READY 媒体资产的引用之一；解除最后一个引用后必须把资产转为待清理，
+            // 否则媒体 READY 引用约束会拒绝整笔纠正。仍有其他引用时保持 READY 即可。
+            const retention = await this.mediaRetention.markUnreferencedForTrash(
+              transaction,
+              receipt.mediaAssetId,
+            )
+            if (retention === 'STATE_CONFLICT') stateChanged()
+          }
+          if (loaded.order.fulfillmentStatus !== 'PENDING') {
+            await transaction.salesOrder.update({
+              where: { id: loaded.order.id },
+              data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+            })
+            await transaction.salesOrderStatusHistory.create({ data: {
+              salesOrderId: loaded.order.id,
+              dimension: 'FULFILLMENT',
+              fromStatus: loaded.order.fulfillmentStatus,
+              toStatus: 'PENDING',
+              reason: '误建采购链纠正：撤销签收并退回待采购',
+              changedByUserId: context.actorUserId,
+            } })
+            await this.audit.record(transaction, {
+              eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+              outcome: AuditOutcome.SUCCESS,
+              actorType: AuditActorType.USER,
+              actorUserId: context.actorUserId,
+              requestId: context.requestId,
+              targetType: 'SALES_ORDER',
+              targetId: loaded.order.id,
+              metadata: {
+                automatic: false,
+                correctionId: correction.id,
+                fromStatus: loaded.order.fulfillmentStatus,
+                toStatus: 'PENDING',
+                trigger: CORRECTION_PAYMENT_SOURCE,
+              },
+            })
+          }
+          // 签收事实必须单独清空：现有触发器禁止普通路径清空 delivered_at，
+          // 只有进行中的纠正记录可以走这里新增的受控分支。
+          await transaction.$executeRaw(Prisma.sql`
+            UPDATE "purchase_order_parts"
+            SET "delivered_at" = NULL,
+                "delivered_by_id" = NULL,
+                "delivered_recorded_at" = NULL,
+                "delivery_remark" = NULL
+            WHERE "id" IN (${Prisma.join(loaded.plan.partIds.map(id => Prisma.sql`${id}::uuid`))})
+              AND ("delivered_at" IS NOT NULL OR "delivered_by_id" IS NOT NULL
+                OR "delivered_recorded_at" IS NOT NULL OR "delivery_remark" IS NOT NULL)
+          `)
+        }
+
         for (const payment of loaded.plan.payments) {
           await this.mutations.voidPaymentInTransaction(
             transaction,
@@ -310,6 +395,33 @@ export class PurchaseCorrectionService {
           })
         }
 
+        for (const item of loaded.plan.containerItemsToDelete) {
+          const previousShipmentId = item.shipmentId
+          // 无变更记录且未被对账引用的装柜行直接删除，避免柜次留下无货件的幽灵行；
+          // 有变更记录或对账引用的行在下方按解绑处理。
+          await transaction.containerLoadingItem.delete({ where: { id: item.id } })
+          await transaction.containerBatch.update({
+            where: { id: item.containerBatchId },
+            data: { version: { increment: 1 }, updatedById: context.actorUserId },
+          })
+          await this.audit.record(transaction, {
+            eventType: AuditEventType.CONTAINER_LOADING_ITEM_UPDATED,
+            outcome: AuditOutcome.SUCCESS,
+            actorType: AuditActorType.USER,
+            actorUserId: context.actorUserId,
+            requestId: context.requestId,
+            targetType: 'CONTAINER_LOADING_ITEM',
+            targetId: item.id,
+            metadata: {
+              action: 'DELETE',
+              containerBatchId: item.containerBatchId,
+              correctionId: correction.id,
+              previousShipmentId,
+              source: CORRECTION_PAYMENT_SOURCE,
+            },
+          })
+        }
+
         for (const item of loaded.plan.containerItemsToDetach) {
           const previousShipmentId = item.shipmentId
           await transaction.containerLoadingItem.update({
@@ -333,6 +445,7 @@ export class PurchaseCorrectionService {
             targetType: 'CONTAINER_LOADING_ITEM',
             targetId: item.id,
             metadata: {
+              action: 'DETACH',
               containerBatchId: item.containerBatchId,
               correctionId: correction.id,
               previousShipmentId,
@@ -451,6 +564,11 @@ export class PurchaseCorrectionService {
           salesOrderId: loaded.order.id,
           salesOrderNo: loaded.order.orderNo,
           fulfillmentStatus: 'PENDING',
+          signed: loaded.plan.signed,
+          detachedDeliveryReceipts: loaded.plan.deliveryReceipts.map(receipt => ({
+            id: receipt.id,
+            createdAt: receipt.createdAt.toISOString(),
+          })),
           cancelledPurchaseOrders: loaded.purchases.map<PurchaseCorrectionCancelledOrderDto>(purchase => ({
             id: purchase.id,
             orderNo: purchase.orderNo,
@@ -458,7 +576,8 @@ export class PurchaseCorrectionService {
           reversedPayments: loaded.plan.payments.map(toPaymentDto),
           totalReversedAmount: loaded.plan.totalPaymentAmount,
           cancelledPackagingCosts: loaded.plan.packagingCostsToCancel.map(toPackagingDto),
-          detachedContainerItems: loaded.plan.containerItemsToDetach.map(toContainerItemDto),
+          deletedContainerItems: loaded.plan.containerItemsToDelete.map(item => toContainerItemDto(item, 'DELETE')),
+          detachedContainerItems: loaded.plan.containerItemsToDetach.map(item => toContainerItemDto(item, 'DETACH')),
           preservedReconciliations: loaded.plan.preservedReconciliations.map(toReconciliationDto),
         }
 
@@ -481,12 +600,17 @@ export class PurchaseCorrectionService {
           metadata: {
             cancelledPurchaseOrderCount: loaded.purchases.length,
             correctionId: correction.id,
+            deletedContainerItemCount: loaded.plan.containerItemsToDelete.length,
             detachedContainerItemCount: loaded.plan.containerItemsToDetach.length,
+            detachedDeliveryReceiptCount: loaded.plan.deliveryReceipts.length,
             paymentCount: loaded.plan.payments.length,
             preservedReconciliationCount: loaded.plan.preservedReconciliations.length,
             purchaseOrderNos: loaded.purchases.map(purchase => purchase.orderNo).join(','),
             reasonProvided: true,
             salesOrderNo: loaded.order.orderNo,
+            salesPaymentCount: loaded.plan.salesPaymentCount,
+            settlementCount: loaded.plan.settlementCount,
+            signed: loaded.plan.signed,
             totalReversedAmount: loaded.plan.totalPaymentAmount,
           },
         })
@@ -659,6 +783,32 @@ export class PurchaseCorrectionService {
       salesOrderId,
       order.lines.map(line => line.id),
     )
+    const deliveryReceipts = await transaction.salesOrderDocument.findMany({
+      where: {
+        salesOrderId,
+        documentType: 'DELIVERY_RECEIPT',
+        detachedAt: null,
+      },
+      select: { id: true, mediaAssetId: true, createdAt: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    })
+    const settlementCount = purchaseIds.length === 0
+      ? 0
+      : await transaction.slhReconciliationSettlement.count({
+          where: {
+            OR: [
+              { salesOrderId },
+              { purchaseOrderId: { in: purchaseIds } },
+            ],
+          },
+        })
+    const salesPaymentAggregate = await transaction.salesOrderPayment.aggregate({
+      where: { salesOrderId, voidedAt: null },
+      _sum: { amount: true },
+      _count: { _all: true },
+    })
+    const salesPaidAmount = salesPaymentAggregate._sum.amount?.toFixed(2) ?? '0.00'
+    const salesPaymentCount = salesPaymentAggregate._count._all
 
     const purchaseSnapshots: PurchaseCorrectionPurchaseSnapshot[] = purchases.map(purchase => ({
       id: purchase.id,
@@ -709,6 +859,14 @@ export class PurchaseCorrectionService {
       },
       purchases: purchaseSnapshots,
       claimedQuantities,
+      deliveryReceipts: deliveryReceipts.map(receipt => ({
+        id: receipt.id,
+        mediaAssetId: receipt.mediaAssetId,
+        createdAt: receipt.createdAt,
+      })),
+      settlementCount,
+      salesPaymentCount,
+      salesPaidAmount,
     })
 
     return {
@@ -746,10 +904,24 @@ export class PurchaseCorrectionService {
         ORDER BY "id" FOR UPDATE
       `)
     }
+    if (loaded.plan.containerItemsToDelete.length > 0) {
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "container_loading_items"
+        WHERE "id" IN (${Prisma.join(loaded.plan.containerItemsToDelete.map(item => Prisma.sql`${item.id}::uuid`))})
+        ORDER BY "id" FOR UPDATE
+      `)
+    }
     if (loaded.plan.containerItemsToDetach.length > 0) {
       await transaction.$queryRaw(Prisma.sql`
         SELECT "id" FROM "container_loading_items"
         WHERE "id" IN (${Prisma.join(loaded.plan.containerItemsToDetach.map(item => Prisma.sql`${item.id}::uuid`))})
+        ORDER BY "id" FOR UPDATE
+      `)
+    }
+    if (loaded.plan.deliveryReceipts.length > 0) {
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "sales_order_documents"
+        WHERE "id" IN (${Prisma.join(loaded.plan.deliveryReceipts.map(receipt => Prisma.sql`${receipt.id}::uuid`))})
         ORDER BY "id" FOR UPDATE
       `)
     }
@@ -780,8 +952,19 @@ export class PurchaseCorrectionService {
       payments: loaded.plan.payments.map(toPaymentDto),
       totalPaymentAmount: loaded.plan.totalPaymentAmount,
       packagingCosts: loaded.plan.packagingCostsToCancel.map(toPackagingDto),
-      containerItems: loaded.plan.containerItemsToDetach.map(toContainerItemDto),
+      containerItems: [
+        ...loaded.plan.containerItemsToDelete.map(item => toContainerItemDto(item, 'DELETE')),
+        ...loaded.plan.containerItemsToDetach.map(item => toContainerItemDto(item, 'DETACH')),
+      ],
       preservedReconciliations: loaded.plan.preservedReconciliations.map(toReconciliationDto),
+      signed: loaded.plan.signed,
+      deliveryReceipts: loaded.plan.deliveryReceipts.map(receipt => ({
+        id: receipt.id,
+        createdAt: receipt.createdAt.toISOString(),
+      })),
+      salesPaymentCount: loaded.plan.salesPaymentCount,
+      salesPaidAmount: loaded.plan.salesPaidAmount,
+      settlementCount: loaded.plan.settlementCount,
       blockers: loaded.plan.blockers.map(blocker => ({
         code: blocker.code,
         message: blocker.message,
