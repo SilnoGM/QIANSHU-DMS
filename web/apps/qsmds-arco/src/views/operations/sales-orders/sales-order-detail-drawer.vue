@@ -39,13 +39,12 @@ const drawerVisible = computed({
 })
 
 // 纠正会同时反冲采购付款并清空物流事实，前端同时要求纠正与付款权限；
-// 已签收订单不在 V1 范围内，入口不展示，服务端仍会再次拦截。
+// 已签收订单也允许纠正（V2 会撤销签收事实并解除签收单），对账终态由服务端阻断。
 const canCorrectPurchase = computed(() => {
   const order = props.order
   return order !== null
     && authAll(['purchase-orders:correction', 'purchase-orders:payment'])
     && order.orderStatus === 'CONFIRMED'
-    && order.fulfillmentStatus !== 'SIGNED'
 })
 
 function cancelDetailRequest(): void {

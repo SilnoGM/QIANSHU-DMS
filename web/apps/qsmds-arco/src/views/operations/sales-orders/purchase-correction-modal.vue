@@ -136,7 +136,9 @@ async function submit(): Promise<void> {
       return
     }
     const result = response.data
-    toast.success(`已退回待采购，反冲付款 ${result.totalReversedAmount} CNY；请到寄仓认领正确货件`)
+    toast.success(result.signed
+      ? `已撤销签收并退回待采购，反冲付款 ${result.totalReversedAmount} CNY；请到寄仓认领正确货件`
+      : `已退回待采购，反冲付款 ${result.totalReversedAmount} CNY；请到寄仓认领正确货件`)
     emit('corrected')
     emit('update:modelValue', false)
     reset()
@@ -203,7 +205,7 @@ onBeforeUnmount(reset)
       <FaAlert
         variant="destructive"
         title="此操作不可撤销"
-        description="将作废采购付款并生成资金反冲、取消待付款包装费、解绑装柜行、清空发货与到仓事实，并把销售订单退回待采购。采购单、编号和审计历史保留。"
+        description="将作废采购付款并生成资金反冲、取消待付款包装费、处理装柜行、清空发货/到仓/签收事实，并把销售订单退回待采购。采购单、货件、编号和审计历史保留；签收单只解除关联。"
       />
 
       <div v-if="order" class="p-4 border border-border rounded-lg bg-muted/20 space-y-2">
@@ -226,6 +228,32 @@ onBeforeUnmount(reset)
           :key="`${blocker.code}-${blocker.targetId}`"
           variant="destructive"
           :description="blocker.message"
+        />
+
+        <FaAlert
+          v-if="context.signed"
+          variant="destructive"
+          title="订单已签收"
+          description="纠正会撤销签收事实，并解除全部有效签收单；订单退回待采购后需要重新确认签收。"
+        />
+        <section v-if="context.deliveryReceipts.length > 0" class="p-4 border border-border rounded-lg space-y-2">
+          <h3 class="text-sm font-medium m-0">
+            将解除关联的签收单
+          </h3>
+          <p
+            v-for="receipt in context.deliveryReceipts"
+            :key="receipt.id"
+            class="text-sm m-0"
+          >
+            {{ receipt.createdAt }}
+          </p>
+        </section>
+        <FaAlert
+          v-if="context.salesPaymentCount > 0"
+          variant="default"
+          icon="i-lucide:info"
+          title="客户收款保留"
+          :description="`该订单已有 ${context.salesPaymentCount} 笔有效收款，合计 ${context.salesPaidAmount}；纠正不会退回客户收款。`"
         />
 
         <section class="p-4 border border-border rounded-lg space-y-3">
@@ -273,7 +301,7 @@ onBeforeUnmount(reset)
 
         <section v-if="context.containerItems.length > 0" class="p-4 border border-border rounded-lg space-y-2">
           <h3 class="text-sm font-medium m-0">
-            将解绑的装柜行
+            将处理的装柜行
           </h3>
           <div
             v-for="item in context.containerItems"
@@ -281,12 +309,15 @@ onBeforeUnmount(reset)
             class="text-sm"
           >
             <p class="m-0">
-              {{ item.containerBatchNo }} · 货件 {{ item.shipmentId }}
+              {{ item.containerBatchNo }} · 货件 {{ item.shipmentId }} ·
+              {{ item.action === 'DELETE' ? '删除' : '解绑' }}
             </p>
             <p class="text-xs text-muted-foreground m-0">
-              装柜行保留在柜次中，认领正确货件后可重新关联。
-              <template v-if="item.hasChanges">
-                该行有收件人/COD 变更记录，纠正只解绑不撤销变更历史。
+              <template v-if="item.action === 'DELETE'">
+                该行无变更记录且未被对账引用，纠正会从柜次删除。
+              </template>
+              <template v-else>
+                该行有变更记录或对账引用，纠正只解绑，保留历史。
               </template>
             </p>
           </div>
@@ -297,7 +328,7 @@ onBeforeUnmount(reset)
           variant="default"
           icon="i-lucide:info"
           title="已完成的对账批次将保留"
-          :description="`${context.preservedReconciliations.map(row => row.batchNo).join('、')} 的结算与资金记录不撤销；纠正只解绑装柜行。`"
+          :description="`${context.preservedReconciliations.map(row => row.batchNo).join('、')} 的结算与资金记录不撤销；纠正只处理货件事实。`"
         />
 
         <div>
