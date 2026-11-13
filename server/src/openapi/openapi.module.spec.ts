@@ -11,6 +11,9 @@ import { ConfigService } from '@nestjs/config'
 import { NestApplication, NestFactory } from '@nestjs/core'
 import pg from 'pg'
 
+// 预览应用会扫描全部 HTTP module；并行跑全量单测时默认 5 秒超时不足。
+jest.setTimeout(30_000)
+
 const mockPrismaServiceConstructor = jest.fn()
 
 jest.mock('../infrastructure/database/prisma.service', () => {

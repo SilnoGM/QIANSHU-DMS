@@ -572,6 +572,7 @@ export class PurchaseOrderMutationService {
     trusted: PurchaseOrderMutationContext,
     reason: string,
     rejection: { readonly reason: string } | null,
+    options: { readonly recalculateCoverage?: boolean } = {},
   ): Promise<void> {
     await transaction.purchaseOrder.update({
       where: { id: order.id },
@@ -634,7 +635,12 @@ export class PurchaseOrderMutationService {
         : { action: 'REJECT', fromStatus: order.orderStatus, toStatus: 'CANCELLED', reason: rejection.reason },
     })
     // 审核驳回不改变销售覆盖：待审核采购从未计入覆盖。取消仍需按来源重算。
-    if (rejection === null && order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+    if (
+      rejection === null
+      && options.recalculateCoverage !== false
+      && order.purchaseType === 'SALES_LINKED'
+      && order.salesOrderId !== null
+    ) {
       await this.salesOrderCoverage.recalculateAfterPurchaseCancellation(
         transaction,
         {
@@ -986,64 +992,157 @@ export class PurchaseOrderMutationService {
     const body = requireRecord(input)
     rejectUnknownKeys(body, ['reason'])
     const reason = requireText(body.reason, 'reason', 500)
-    const now = this.dependencies.now()
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
-      const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
-      const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
-      const payment = await transaction.purchaseOrderPayment.findFirst({
-        where: { id: paymentId, purchaseOrderId },
-        select: { id: true, amount: true, voidedAt: true, payableId: true, fundPostingBatchId: true },
-      })
-      if (payment === null) {
-        throw new ApiException(
-          HttpStatus.NOT_FOUND,
-          'PURCHASE_ORDER_PAYMENT_NOT_FOUND',
-          '实际付款记录不存在',
-        )
-      }
-      if (payment.voidedAt !== null) {
-        return purchaseOrderRuleFailure(
-          'PURCHASE_ORDER_PAYMENT_ALREADY_VOIDED',
-          '实际付款记录已作废',
-        )
-      }
-      const oldPaidAmount = await this.readPaidAmount(
-        transaction,
-        purchaseOrderId,
-      )
-      const newPaidAmount = formatPurchaseOrderAmountUnits(
-        parsePurchaseOrderAmountUnits(oldPaidAmount)
-        - parsePurchaseOrderAmountUnits(fixed2(payment.amount)),
-      )
-      const newStatus = derivePurchaseOrderPaymentStatus(
-        fixed2(order.purchaseTotalAmount),
-        newPaidAmount,
-      )
-      const fundReversalBatchId = await this.payables.reversePayment(transaction, trusted, payment, reason)
-      await transaction.purchaseOrderPayment.update({
-        where: { id: paymentId },
-        data: {
-          fundReversalBatchId,
-          voidedAt: now,
-          voidedByUserId: trusted.actorUserId,
-          voidReason: reason,
-        },
-      })
-      await this.writePaymentAndOrderStatus(
-        transaction,
-        trusted,
-        order,
-        newStatus,
-        `作废付款 ${fixed2(payment.amount)} CNY，重算累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
-      )
-      await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_VOIDED,
-        targetId: paymentId,
-        metadata: { purchaseOrderId, reasonProvided: true },
-      })
+      await this.voidPaymentInTransaction(transaction, trusted, purchaseOrderId, paymentId, reason)
     })
     return this.query.getById(purchaseOrderId, trusted.actorUserId)
+  }
+
+  /**
+   * 事务内作废付款，供普通入口与误建采购纠正共用。
+   * 调用方必须已经按销售来源行 -> 采购单 -> 销售单的顺序持有锁；本方法会再次
+   * 锁定采购单并以事务内事实重算付款状态，重复作废由 `voidedAt` 拒绝。
+   */
+  async voidPaymentInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: PurchaseOrderMutationContext,
+    purchaseOrderId: string,
+    paymentId: string,
+    reason: string,
+    auditMetadata: Record<string, string | number | boolean | null> = {},
+  ): Promise<{ readonly amount: string, readonly fundReversalBatchId: string | null }> {
+    const trusted = validateContext(context)
+    const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+    const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
+    const payment = await transaction.purchaseOrderPayment.findFirst({
+      where: { id: paymentId, purchaseOrderId },
+      select: { id: true, amount: true, voidedAt: true, payableId: true, fundPostingBatchId: true },
+    })
+    if (payment === null) {
+      throw new ApiException(
+        HttpStatus.NOT_FOUND,
+        'PURCHASE_ORDER_PAYMENT_NOT_FOUND',
+        '实际付款记录不存在',
+      )
+    }
+    if (payment.voidedAt !== null) {
+      return purchaseOrderRuleFailure(
+        'PURCHASE_ORDER_PAYMENT_ALREADY_VOIDED',
+        '实际付款记录已作废',
+      )
+    }
+    const oldPaidAmount = await this.readPaidAmount(
+      transaction,
+      purchaseOrderId,
+    )
+    const newPaidAmount = formatPurchaseOrderAmountUnits(
+      parsePurchaseOrderAmountUnits(oldPaidAmount)
+      - parsePurchaseOrderAmountUnits(fixed2(payment.amount)),
+    )
+    const newStatus = derivePurchaseOrderPaymentStatus(
+      fixed2(order.purchaseTotalAmount),
+      newPaidAmount,
+    )
+    const fundReversalBatchId = await this.payables.reversePayment(transaction, trusted, payment, reason)
+    const now = this.dependencies.now()
+    await transaction.purchaseOrderPayment.update({
+      where: { id: paymentId },
+      data: {
+        fundReversalBatchId,
+        voidedAt: now,
+        voidedByUserId: trusted.actorUserId,
+        voidReason: reason,
+      },
+    })
+    await this.writePaymentAndOrderStatus(
+      transaction,
+      trusted,
+      order,
+      newStatus,
+      `作废付款 ${fixed2(payment.amount)} CNY，重算累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed2(order.purchaseTotalAmount)} CNY`,
+    )
+    await this.recordAudit(transaction, trusted, {
+      eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_VOIDED,
+      targetId: paymentId,
+      metadata: { purchaseOrderId, reasonProvided: true, ...auditMetadata },
+    })
+    return { amount: fixed2(payment.amount), fundReversalBatchId }
+  }
+
+  /**
+   * 误建采购链纠正专用取消：跳过“已发货不可整单取消”的前置判断，
+   * 但仍要求没有有效付款，并复用普通取消的应付、归属、图片草稿、历史与通知清理。
+   * 销售覆盖重算由纠正服务在全部采购单取消后统一执行。
+   */
+  async cancelForCorrection(
+    transaction: Prisma.TransactionClient,
+    context: PurchaseOrderMutationContext,
+    purchaseOrderId: string,
+    reason: string,
+  ): Promise<void> {
+    const trusted = validateContext(context)
+    const scope = await this.dataScope.resolveInTransaction(transaction, trusted.actorUserId)
+    const order = await this.lockOrder(transaction, purchaseOrderId, scope, trusted.actorUserId)
+    if (order.orderStatus === 'CANCELLED') return
+    if (
+      order.orderStatus !== 'CONFIRMED'
+      && order.orderStatus !== 'PENDING_REVIEW'
+      && order.orderStatus !== 'COMPLETED'
+    ) {
+      return purchaseOrderRuleFailure(
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+        '只有待审核、已确认或已完成的采购订单可以纠正',
+      )
+    }
+    const paidAmount = await this.readPaidAmount(transaction, purchaseOrderId)
+    if (parsePurchaseOrderAmountUnits(paidAmount) > 0n) {
+      return purchaseOrderRuleFailure(
+        'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS',
+        '已有有效付款的采购订单不能取消',
+      )
+    }
+    // 纠正已经清空发货/到仓事实；把仍停在已发货的履约状态收回到备货，
+    // 避免取消后的采购单继续显示 SHIPPED。
+    if (
+      (order.orderStatus === 'CONFIRMED' || order.orderStatus === 'COMPLETED')
+      && (
+        order.fulfillmentStatus === 'PARTIALLY_SHIPPED'
+        || order.fulfillmentStatus === 'SHIPPED'
+        || order.fulfillmentStatus === 'SIGNED'
+      )
+    ) {
+      await transaction.purchaseOrder.update({
+        where: { id: order.id },
+        data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+      })
+      await transaction.purchaseOrderStatusHistory.create({ data: {
+        purchaseOrderId: order.id,
+        dimension: 'FULFILLMENT',
+        fromStatus: order.fulfillmentStatus,
+        toStatus: 'PREPARING',
+        reason: '误建采购链纠正，清除发货与到仓事实',
+        changedByUserId: trusted.actorUserId,
+      } })
+      await this.recordAudit(transaction, trusted, {
+        eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED,
+        targetId: order.id,
+        metadata: {
+          automatic: true,
+          fromStatus: order.fulfillmentStatus,
+          toStatus: 'PREPARING',
+          trigger: 'PURCHASE_CHAIN_CORRECTION',
+        },
+      })
+    }
+    await this.closePurchaseOrderAsCancelled(
+      transaction,
+      order,
+      trusted,
+      reason,
+      null,
+      { recalculateCoverage: false },
+    )
   }
 
   /**

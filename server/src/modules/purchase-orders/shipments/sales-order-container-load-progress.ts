@@ -113,6 +113,8 @@ export interface RetreatSalesOrdersWhenUnloadedInput {
   readonly requestId: string
   readonly shipmentIds: readonly string[]
   readonly salesOrderIds: readonly string[]
+  /// 误建采购纠正会作废整条采购链；未签收时即使已上传签收单也要允许退回待采购。
+  readonly ignoreActiveDeliveryReceipt?: boolean
 }
 
 /** 已有客户签收事实时说明物理流程已越过待装柜，不再回退订单。 */
@@ -156,7 +158,7 @@ export async function retreatSalesOrdersWhenShipmentsUnloaded(
     const state = await readSalesOrderLoadState(transaction, salesOrderId)
     if (state.allLoaded && state.covered) continue
     if (await hasDeliveredShipment(transaction, salesOrderId)) continue
-    if (await hasActiveDeliveryReceipt(transaction, salesOrderId)) continue
+    if (!input.ignoreActiveDeliveryReceipt && await hasActiveDeliveryReceipt(transaction, salesOrderId)) continue
 
     await transaction.salesOrder.update({
       where: { id: salesOrderId },

@@ -40,6 +40,9 @@ export interface AdvanceSalesOrderPurchaseProgressInput {
   readonly purchaseOrderNo: string
   readonly requestId: string
   readonly salesOrderId: string
+  /// 纠正等特殊入口可以覆盖默认历史原因与审计 trigger；普通取消保持原口径。
+  readonly historyReason?: string
+  readonly trigger?: string
 }
 
 export interface AdvanceSalesOrderFactoryShipmentInput {
@@ -414,7 +417,7 @@ export class SalesOrderPurchaseCoverageService {
       dimension: 'FULFILLMENT',
       fromStatus: order.fulfillmentStatus,
       toStatus,
-      reason: '取消采购订单后重新计算销售产品采购覆盖',
+      reason: input.historyReason ?? '取消采购订单后重新计算销售产品采购覆盖',
       changedByUserId: input.actorUserId,
     } })
     await this.audit.record(transaction, {
@@ -431,7 +434,7 @@ export class SalesOrderPurchaseCoverageService {
         purchaseOrderId: input.purchaseOrderId,
         purchaseOrderNo: input.purchaseOrderNo,
         toStatus,
-        trigger: 'PURCHASE_CANCELLATION',
+        trigger: input.trigger ?? 'PURCHASE_CANCELLATION',
       },
     })
   }

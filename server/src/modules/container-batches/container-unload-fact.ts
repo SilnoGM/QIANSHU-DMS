@@ -1,8 +1,8 @@
 import { Prisma } from '../../generated/prisma/client'
 import { AuditService } from '../audit/audit.service'
 
-/** 撤销装柜事实的来源：解绑最后一条装柜明细，或一次性清理历史孤立事实。 */
-export type ContainerUnloadSource = 'ITEM_UPDATE' | 'ORPHAN_CLEANUP'
+/** 撤销装柜事实的来源：解绑最后一条装柜明细、清理历史孤立事实或误建采购纠正。 */
+export type ContainerUnloadSource = 'ITEM_UPDATE' | 'ORPHAN_CLEANUP' | 'CORRECTION'
 
 export interface ContainerUnloadedFact {
   readonly id: string

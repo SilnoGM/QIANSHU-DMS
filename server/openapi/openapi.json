@@ -68967,6 +68967,521 @@
         }
       }
     },
+    "/api/purchase-order-corrections/context/{salesOrderId}": {
+      "get": {
+        "operationId": "purchase_order_correction_context",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseCorrectionContextDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-order-corrections"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": false,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/purchase-order-corrections": {
+      "post": {
+        "operationId": "purchase_order_correction_apply",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseCorrectionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseCorrectionResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-order-corrections"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_CORRECTION_IDEMPOTENCY_CONFLICT",
+                "PURCHASE_CORRECTION_IN_PROGRESS",
+                "PURCHASE_CORRECTION_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_CORRECTION_CONFIRMATION_MISMATCH",
+                "PURCHASE_CORRECTION_LOAD_GROUP_MISMATCH",
+                "PURCHASE_CORRECTION_NOT_ALLOWED",
+                "PURCHASE_CORRECTION_NO_ACTIVE_PURCHASE",
+                "PURCHASE_CORRECTION_OTHER_COVERAGE",
+                "PURCHASE_CORRECTION_OWNERSHIP_CHANGED",
+                "PURCHASE_CORRECTION_PACKAGING_PAID",
+                "PURCHASE_CORRECTION_RECONCILING",
+                "PURCHASE_CORRECTION_SIGNED",
+                "PURCHASE_CORRECTION_STORAGE_RECORD",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/packaging-payment-profiles/CHENGXIN": {
       "get": {
         "operationId": "packaging_payment_profiles_get",
@@ -82716,7 +83231,9 @@
                 "ASSISTANT_BINDING_REVOKED",
                 "ASSISTANT_BINDING_INVALIDATED",
                 "ASSISTANT_DELIVERY_RESENT",
-                "ASSISTANT_TARGET_MESSAGE_SENT"
+                "ASSISTANT_TARGET_MESSAGE_SENT",
+                "PURCHASE_ORDER_CORRECTION_APPLIED",
+                "PACKAGING_COST_CANCELLED"
               ]
             }
           },
@@ -82943,7 +83460,8 @@
               "type": "string",
               "enum": [
                 "PENDING_PAYMENT",
-                "PAID"
+                "PAID",
+                "CANCELLED"
               ]
             }
           },
@@ -124625,6 +125143,425 @@
           "salesOrder"
         ]
       },
+      "PurchaseCorrectionPurchaseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "orderStatus": {
+            "type": "string"
+          },
+          "fulfillmentStatus": {
+            "type": "string"
+          },
+          "paymentStatus": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "orderNo",
+          "orderStatus",
+          "fulfillmentStatus",
+          "paymentStatus",
+          "version"
+        ]
+      },
+      "PurchaseCorrectionPaymentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purchaseOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purchaseOrderNo": {
+            "type": "string"
+          },
+          "paymentType": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "purchaseOrderId",
+          "purchaseOrderNo",
+          "paymentType",
+          "amount",
+          "paidAt",
+          "paymentMethod"
+        ]
+      },
+      "PurchaseCorrectionPackagingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "purchaseOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "description": "CNY amount with two decimal places."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_PAYMENT",
+              "PAID",
+              "CANCELLED"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "purchaseOrderId",
+          "shipmentId",
+          "shipmentNo",
+          "amount",
+          "status"
+        ]
+      },
+      "PurchaseCorrectionReconciliationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batchNo": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "batchNo",
+          "completedAt"
+        ]
+      },
+      "PurchaseCorrectionContainerItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shipmentId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true
+          },
+          "containerBatchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "containerBatchNo": {
+            "type": "string"
+          },
+          "hasChanges": {
+            "type": "boolean",
+            "description": "装柜行存在收件人/COD 变更记录；纠正只解绑，不撤销变更历史。"
+          },
+          "reconciliations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionReconciliationDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "shipmentId",
+          "containerBatchId",
+          "containerBatchNo",
+          "hasChanges",
+          "reconciliations"
+        ]
+      },
+      "PurchaseCorrectionBlockerDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "SALES_ORDER",
+              "PURCHASE_ORDER",
+              "PURCHASE_ORDER_PART",
+              "PACKAGING_COST",
+              "RECONCILIATION_BATCH"
+            ]
+          },
+          "targetId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "targetType",
+          "targetId"
+        ]
+      },
+      "PurchaseCorrectionContextDto": {
+        "type": "object",
+        "properties": {
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "salesOrderNo": {
+            "type": "string"
+          },
+          "orderStatus": {
+            "type": "string"
+          },
+          "fulfillmentStatus": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number",
+            "minimum": 1
+          },
+          "purchaseOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionPurchaseDto"
+            }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionPaymentDto"
+            }
+          },
+          "totalPaymentAmount": {
+            "type": "string",
+            "description": "全部待反冲采购付款的 CNY 合计。"
+          },
+          "packagingCosts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionPackagingDto"
+            }
+          },
+          "containerItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionContainerItemDto"
+            }
+          },
+          "preservedReconciliations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionReconciliationDto"
+            }
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionBlockerDto"
+            }
+          },
+          "canApply": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "salesOrderId",
+          "salesOrderNo",
+          "orderStatus",
+          "fulfillmentStatus",
+          "version",
+          "purchaseOrders",
+          "payments",
+          "totalPaymentAmount",
+          "packagingCosts",
+          "containerItems",
+          "preservedReconciliations",
+          "blockers",
+          "canApply"
+        ]
+      },
+      "PurchaseCorrectionOrderVersionDto": {
+        "type": "object",
+        "properties": {
+          "purchaseOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "purchaseOrderId",
+          "expectedVersion"
+        ]
+      },
+      "PurchaseCorrectionRequestDto": {
+        "type": "object",
+        "properties": {
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedSalesOrderVersion": {
+            "type": "number",
+            "minimum": 1
+          },
+          "purchaseOrders": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionOrderVersionDto"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "confirmOrderNo": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "必须与销售单号完全一致。"
+          }
+        },
+        "required": [
+          "salesOrderId",
+          "expectedSalesOrderVersion",
+          "purchaseOrders",
+          "reason",
+          "confirmOrderNo"
+        ]
+      },
+      "PurchaseCorrectionCancelledOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "orderNo"
+        ]
+      },
+      "PurchaseCorrectionResultDto": {
+        "type": "object",
+        "properties": {
+          "correctionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "salesOrderNo": {
+            "type": "string"
+          },
+          "fulfillmentStatus": {
+            "type": "string"
+          },
+          "cancelledPurchaseOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionCancelledOrderDto"
+            }
+          },
+          "reversedPayments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionPaymentDto"
+            }
+          },
+          "totalReversedAmount": {
+            "type": "string",
+            "description": "本次反冲的采购付款 CNY 合计。"
+          },
+          "cancelledPackagingCosts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionPackagingDto"
+            }
+          },
+          "detachedContainerItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionContainerItemDto"
+            }
+          },
+          "preservedReconciliations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseCorrectionReconciliationDto"
+            }
+          }
+        },
+        "required": [
+          "correctionId",
+          "salesOrderId",
+          "salesOrderNo",
+          "fulfillmentStatus",
+          "cancelledPurchaseOrders",
+          "reversedPayments",
+          "totalReversedAmount",
+          "cancelledPackagingCosts",
+          "detachedContainerItems",
+          "preservedReconciliations"
+        ]
+      },
       "PaymentRecipientPersonDto": {
         "type": "object",
         "properties": {
@@ -126913,7 +127850,9 @@
               "ASSISTANT_BINDING_REVOKED",
               "ASSISTANT_BINDING_INVALIDATED",
               "ASSISTANT_DELIVERY_RESENT",
-              "ASSISTANT_TARGET_MESSAGE_SENT"
+              "ASSISTANT_TARGET_MESSAGE_SENT",
+              "PURCHASE_ORDER_CORRECTION_APPLIED",
+              "PACKAGING_COST_CANCELLED"
             ]
           },
           "outcome": {
@@ -127199,7 +128138,8 @@
             "type": "string",
             "enum": [
               "PENDING_PAYMENT",
-              "PAID"
+              "PAID",
+              "CANCELLED"
             ]
           },
           "submittedBy": {
@@ -127269,11 +128209,15 @@
           },
           "PAID": {
             "type": "number"
+          },
+          "CANCELLED": {
+            "type": "number"
           }
         },
         "required": [
           "PENDING_PAYMENT",
-          "PAID"
+          "PAID",
+          "CANCELLED"
         ]
       },
       "PackagingCostRequestPageDto": {
@@ -127341,7 +128285,8 @@
             "type": "string",
             "enum": [
               "PENDING_PAYMENT",
-              "PAID"
+              "PAID",
+              "CANCELLED"
             ]
           },
           "submittedBy": {

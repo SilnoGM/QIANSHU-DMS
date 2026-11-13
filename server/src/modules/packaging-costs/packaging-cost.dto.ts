@@ -4,7 +4,7 @@ import { ArrayMaxSize, IsArray, IsDefined, IsIn, ValidateNested, IsEnum, IsInt, 
 import { PaymentRecipientAccountDto, PaymentRecipientAccountInputDto, PaymentRecipientProfileDto } from '../payment-recipients/payment-recipient.dto'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 
-export enum PackagingCostStatusDto { PENDING_PAYMENT = 'PENDING_PAYMENT', PAID = 'PAID' }
+export enum PackagingCostStatusDto { PENDING_PAYMENT = 'PENDING_PAYMENT', PAID = 'PAID', CANCELLED = 'CANCELLED' }
 export enum PackagingCostVendorDto { CHENGXIN = 'CHENGXIN', OTHER = 'OTHER' }
 export enum PackagingCostImageKindDto { PACKAGING = 'PACKAGING', QUOTATION = 'QUOTATION', PAYMENT = 'PAYMENT' }
 export class PackagingCostIdDto {
@@ -93,6 +93,7 @@ export class PackagingCostRequestDto {
 export class PackagingCostStatusCountsDto {
   @ApiProperty() PENDING_PAYMENT!: number
   @ApiProperty() PAID!: number
+  @ApiProperty() CANCELLED!: number
 }
 export class PackagingCostRequestPageDto {
   @ApiProperty({ type: [PackagingCostRequestDto] }) items!: PackagingCostRequestDto[]

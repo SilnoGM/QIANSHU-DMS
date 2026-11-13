@@ -88,13 +88,14 @@ export class PackagingCostQueryService {
     // 数据范围同时约束列表、分页总数与状态数量，SELF 下不能借计数推断他人提报。
     const scoped: Prisma.PackagingCostRequestWhereInput = { ...common, ...packagingCostScopeWhere(scope, actorUserId) }
     const where = { ...scoped, ...(input.status ? { status: input.status } : {}) }
-    // 列表、分页总数及两个视图数量使用同一个快照，付款中的并发变更不会造成数量错位。
+    // 列表、分页总数及各视图数量使用同一个快照，付款中的并发变更不会造成数量错位。
     return this.prisma.$transaction(async tx => {
-      const [rows, total, pending, paid] = await Promise.all([
+      const [rows, total, pending, paid, cancelled] = await Promise.all([
         tx.packagingCostRequest.findMany({ where, include, orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
         tx.packagingCostRequest.count({ where }),
         tx.packagingCostRequest.count({ where: { ...scoped, status: 'PENDING_PAYMENT' } }),
         tx.packagingCostRequest.count({ where: { ...scoped, status: 'PAID' } }),
+        tx.packagingCostRequest.count({ where: { ...scoped, status: 'CANCELLED' } }),
       ])
       const profiles = await this.recipients.getForRequests(
         tx,
@@ -108,7 +109,7 @@ export class PackagingCostQueryService {
         total,
         page,
         pageSize,
-        statusCounts: { PENDING_PAYMENT: pending, PAID: paid },
+        statusCounts: { PENDING_PAYMENT: pending, PAID: paid, CANCELLED: cancelled },
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }

@@ -23,6 +23,10 @@ import {
 
 const INVALID_ARGUMENTS_MESSAGE = 'Invalid OpenAPI generator arguments'
 
+// 生成完整快照会遍历全部 controller；并行跑全量单测时 5 秒默认超时不足，
+// 这里给生成类用例固定上限，避免 CPU 竞争把真实回归淹没成偶发超时。
+jest.setTimeout(30_000)
+
 function expectedServerRoot(): string {
   return dirname(dirname(defaultSnapshotPath))
 }
