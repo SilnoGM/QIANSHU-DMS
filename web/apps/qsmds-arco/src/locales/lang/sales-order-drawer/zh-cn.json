@@ -30,6 +30,7 @@
     "reload": "重新加载",
     "print": "打印",
     "printNotice": "该功能将在后续版本推出，敬请期待",
+    "correctPurchase": "退回待采购（误建采购）",
     "paymentTypes": {
       "DEPOSIT": "定金",
       "PROGRESS": "过程款",

@@ -3,7 +3,8 @@
     "intro": "查看仓储包装费用提报，确认付款金额并记录付款状态。",
     "status": {
       "PENDING_PAYMENT": "待付款",
-      "PAID": "已付款"
+      "PAID": "已付款",
+      "CANCELLED": "已取消"
     },
     "shipmentNo": "货件编号",
     "shippingMarkText": "货件唛头",

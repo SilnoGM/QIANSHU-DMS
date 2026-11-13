@@ -172,6 +172,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   ASSISTANT_BINDING_INVALIDATED: '员工绑定已失效',
   ASSISTANT_DELIVERY_RESENT: '小助理投递已重试',
   ASSISTANT_TARGET_MESSAGE_SENT: '群目标 @消息已发送',
+  PURCHASE_ORDER_CORRECTION_APPLIED: '误建采购链已纠正',
+  PACKAGING_COST_CANCELLED: '打木架费用已取消',
 }
 
 export function auditMetadataEntries(

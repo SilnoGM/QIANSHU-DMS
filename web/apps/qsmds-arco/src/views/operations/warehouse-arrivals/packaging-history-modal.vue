@@ -75,7 +75,7 @@ async function saveAmount() {
               <FaIcon :name="selectedId === record.id ? 'i-lucide:circle-check' : 'i-lucide:circle'" class="size-4" :class="selectedId === record.id ? 'text-primary' : 'text-muted-foreground'" aria-hidden="true" />
               {{ t('warehousePackagingCost.history.record', { index: index + 1 }) }}
             </FaButton>
-            <FaTag variant="outline" class="shrink-0" :class="record.status === 'PAID' ? 'text-primary border-primary/30 bg-primary/10 dark:text-emerald-300' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">
+            <FaTag variant="outline" class="shrink-0" :class="record.status === 'PAID' ? 'text-primary border-primary/30 bg-primary/10 dark:text-emerald-300' : record.status === 'CANCELLED' ? 'text-muted-foreground border-border bg-muted/30' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">
               {{ t(`warehousePackagingCost.history.status.${record.status}`) }}
             </FaTag>
           </div>
@@ -153,7 +153,7 @@ async function saveAmount() {
         </div>
         <FaAlert v-if="needsReload && saveError" :title="saveError" :description="t('warehousePackagingCost.history.reloadBeforeEdit')" variant="destructive" />
         <p v-if="!editing && !loading && !error && records.length" class="qs-type-meta text-muted-foreground m-0">
-          {{ t(selected?.status === 'PAID' ? 'warehousePackagingCost.history.paidLocked' : 'warehousePackagingCost.history.selectHint') }}
+          {{ t(selected?.status === 'PAID' ? 'warehousePackagingCost.history.paidLocked' : selected?.status === 'CANCELLED' ? 'warehousePackagingCost.history.cancelledLocked' : 'warehousePackagingCost.history.selectHint') }}
         </p>
         <div class="flex flex-wrap gap-2 justify-end">
           <FaButton variant="outline" :disabled="busy" @click="emit('update:modelValue', false)">

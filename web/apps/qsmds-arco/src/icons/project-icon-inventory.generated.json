@@ -2546,6 +2546,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-mark-summary.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/purchase-correction-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-terminate-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
@@ -3891,6 +3892,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/purchase-correction-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
     ]
   },

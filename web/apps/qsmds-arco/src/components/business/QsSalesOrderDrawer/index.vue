@@ -15,11 +15,13 @@ const props = defineProps<{
   loading: boolean
   error: string | null
   terminationHint?: string | null
+  canCorrectPurchase?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'closed': []
+  'correctPurchase': []
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -129,7 +131,18 @@ function onClosed() {
       </template>
     </div>
     <template #footer>
-      <div class="flex justify-end">
+      <div class="flex gap-2 justify-end">
+        <FaButton
+          v-if="canCorrectPurchase"
+          type="button"
+          variant="outline"
+          size="sm"
+          class="text-destructive px-3 border-destructive/30 h-8 hover:bg-destructive/8"
+          :disabled="loading || !detail || Boolean(error)"
+          @click="emit('correctPurchase')"
+        >
+          <FaIcon name="i-lucide:undo-2" class="size-4" aria-hidden="true" />{{ t('salesOrderDrawer.correctPurchase') }}
+        </FaButton>
         <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="loading || !detail || Boolean(error)" @click="toast.info(t('salesOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('salesOrderDrawer.print') }}
         </FaButton>

@@ -2,6 +2,9 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
   FactoryShipmentResultDto,
+  PurchaseCorrectionContextDto,
+  PurchaseCorrectionRequestDto,
+  PurchaseCorrectionResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
   SalesOrderFactoryShipmentContextDto,
@@ -198,6 +201,25 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       `sales-orders/${encodeURIComponent(salesOrderId)}/termination`,
       data,
       { errorPresentation: 'local', retry: false, signal },
+    ),
+    purchaseCorrectionContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<PurchaseCorrectionContextDto>(
+        `purchase-order-corrections/context/${encodeURIComponent(salesOrderId)}`,
+        { errorPresentation: 'local', signal },
+      ),
+    applyPurchaseCorrection: (
+      data: PurchaseCorrectionRequestDto,
+      idempotencyKey: string,
+      signal: AbortSignal,
+    ) => client.post<PurchaseCorrectionResultDto>(
+      'purchase-order-corrections',
+      data,
+      {
+        errorPresentation: 'local',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        retry: false,
+        signal,
+      },
     ),
     recordPayment: (
       salesOrderId: string,

@@ -32,11 +32,11 @@ const page = ref(1)
 const pageSize = ref(20)
 const items = shallowRef<PackagingCostRequestDto[]>([])
 const total = ref(0)
-const counts = ref({ PENDING_PAYMENT: 0, PAID: 0 })
+const counts = ref({ PENDING_PAYMENT: 0, PAID: 0, CANCELLED: 0 })
 const loading = ref(false)
 const error = ref('')
 let controller: AbortController | null = null
-const tabs = computed(() => (['PENDING_PAYMENT', 'PAID'] as const).map(value => ({ value, label: t(`packagingPayment.status.${value}`), count: counts.value[value] })))
+const tabs = computed(() => (['PENDING_PAYMENT', 'PAID', 'CANCELLED'] as const).map(value => ({ value, label: t(`packagingPayment.status.${value}`), count: counts.value[value] })))
 const columns = computed<QsGenericTableColumn<PackagingCostRequestDto>[]>(() => [
   { id: 'shipmentNo', accessorKey: 'shipmentNo', title: t('packagingPayment.shipmentNo'), minWidth: 177, fixed: 'left', copyable: true, copyMode: 'text' },
   { id: 'shippingMarkText', accessorKey: 'shippingMarkText', title: t('packagingPayment.shippingMarkText'), minWidth: 250, copyable: true },
@@ -90,7 +90,7 @@ function search() {
   void load()
 }
 function selectStatus(value: string | number) {
-  if (value === 'PENDING_PAYMENT' || value === 'PAID') {
+  if (value === 'PENDING_PAYMENT' || value === 'PAID' || value === 'CANCELLED') {
     status.value = value
     search()
   }
@@ -108,7 +108,7 @@ function openPaidDetail(record: PackagingCostRequestDto) {
 watch([enabled, () => account.authEpoch], () => {
   items.value = []
   total.value = 0
-  counts.value = { PENDING_PAYMENT: 0, PAID: 0 }
+  counts.value = { PENDING_PAYMENT: 0, PAID: 0, CANCELLED: 0 }
   void load()
 }, { immediate: true, flush: 'sync' })
 onMounted(() => active.value = true)

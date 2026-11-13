@@ -83,6 +83,7 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { mediaThumbnailUrl } from '@/utils/media-variant'
 import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
+import PurchaseCorrectionModal from './purchase-correction-modal.vue'
 import SalesOrderCancelModal from './sales-order-cancel-modal.vue'
 import { getSalesOrderCancelBlockedReason } from './sales-order-cancel.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
@@ -199,6 +200,8 @@ const cancelModalVisible = ref(false)
 const cancelOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const terminateModalVisible = ref(false)
 const terminateOrder = shallowRef<SalesOrderListItemDto | null>(null)
+const correctionModalVisible = ref(false)
+const correctionOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditVisible = ref(false)
 const purchaseStartVisible = ref(false)
 const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
@@ -620,6 +623,19 @@ function openSalesOrderTerminate(order: SalesOrderListItemDto): void {
 }
 
 function handleSalesOrderTerminated(): void {
+  scheduleQueryRefresh(true)
+}
+
+function openPurchaseCorrection(): void {
+  correctionOrder.value = detailOrder.value === null ? null : { ...detailOrder.value }
+  correctionModalVisible.value = true
+}
+
+function handlePurchaseCorrected(): void {
+  correctionModalVisible.value = false
+  // 纠正后订单回到待采购，详情抽屉里的采购链与履约状态全部过期；
+  // 关闭抽屉并重新拉取列表，避免继续展示旧的采购/装柜数据。
+  detailVisible.value = false
   scheduleQueryRefresh(true)
 }
 
@@ -2452,7 +2468,14 @@ onBeforeUnmount(() => {
       v-model="detailVisible"
       :order="detailOrder"
       :currencies="currencyCatalog.currencies.value"
+      @correct-purchase="openPurchaseCorrection"
       @closed="handleSalesOrderDetailClosed"
+    />
+
+    <PurchaseCorrectionModal
+      v-model="correctionModalVisible"
+      :order="correctionOrder"
+      @corrected="handlePurchaseCorrected"
     />
 
     <SalesOrderRecordsModal
