@@ -76,11 +76,12 @@ export const SALES_RECEIPT_PERMISSION_CODES = [
 ] as const
 
 /**
- * 采购订单域按读取、创建、备货创建、审核、通用更新、付款和凭证拆分权限。
+ * 采购订单域按读取、创建、备货创建、审核、通用更新、付款、凭证和误建纠正拆分权限。
  *
- * `purchase-orders:create-stock` 在数据库中标记为 systemOnly，只能保留给
- * `system_admin`；服务端仍必须在创建事务中复核该能力，不能只依赖前端隐藏按钮。
- * `purchase-orders:review` 默认仅授予系统管理员，但允许通过角色权限管理配置。
+ * `purchase-orders:create-stock` 与 `purchase-orders:correction` 在数据库中标记为
+ * systemOnly，只能保留给 `system_admin`；服务端仍必须在各自事务中复核能力，
+ * 不能只依赖前端隐藏按钮。`purchase-orders:review` 默认仅授予系统管理员，
+ * 但允许通过角色权限管理配置。
  */
 export const PURCHASE_ORDER_PERMISSION_CODES = [
   'purchase-orders:read',
@@ -90,6 +91,7 @@ export const PURCHASE_ORDER_PERMISSION_CODES = [
   'purchase-orders:update',
   'purchase-orders:payment',
   'purchase-orders:document',
+  'purchase-orders:correction',
 ] as const
 
 /**

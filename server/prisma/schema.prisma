@@ -217,6 +217,9 @@ enum AuditEventType {
   ASSISTANT_BINDING_INVALIDATED
   ASSISTANT_DELIVERY_RESENT
   ASSISTANT_TARGET_MESSAGE_SENT
+  /// 误建采购链纠正与伴随的包装费取消。追加在末尾与数据库枚举顺序一致。
+  PURCHASE_ORDER_CORRECTION_APPLIED
+  PACKAGING_COST_CANCELLED
 
   @@map("audit_event_type")
 }
@@ -792,6 +795,7 @@ model User {
   proxyNodesAssignedBy              ProxyNode[]                     @relation("ProxyNodeAssigner")
   shipmentLoadGroupsCreated         ShipmentLoadGroup[]           @relation("ShipmentLoadGroupCreatedBy")
   shipmentLoadGroupsReleased        ShipmentLoadGroup[]           @relation("ShipmentLoadGroupReleasedBy")
+  purchaseChainCorrections          PurchaseChainCorrection[]     @relation("PurchaseChainCorrectionActor")
   machineViewingAppointmentsCreated MachineViewingAppointment[]   @relation("MachineViewingAppointmentCreator")
   notificationsRequested            Notification[]                @relation("NotificationRequestedBy")
   notificationTemplatesCreated      NotificationTemplate[]        @relation("NotificationTemplateCreatedBy")
@@ -1115,6 +1119,8 @@ model Product {
 enum PackagingCostStatus {
   PENDING_PAYMENT
   PAID
+  /// 误建采购链纠正时由受控流程取消；已付款提报没有取消入口。
+  CANCELLED
 
   @@map("packaging_cost_status")
 }
@@ -1273,6 +1279,7 @@ model SalesOrder {
   shipmentOwnershipEvents  ShipmentOwnershipEvent[]   @relation("ShipmentOwnershipEventSalesOrder")
   shipmentOwnershipCurrent ShipmentOwnershipCurrent[] @relation("ShipmentOwnershipCurrentSalesOrder")
   shipmentLoadGroups       ShipmentLoadGroup[]
+  purchaseChainCorrections PurchaseChainCorrection[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_statuses_order_date_id_idx")
@@ -1460,6 +1467,7 @@ model PurchaseOrder {
   statusHistory PurchaseOrderStatusHistory[]
   amountRevisions PurchaseOrderAmountRevision[]
   shipmentLoadGroups ShipmentLoadGroup[]
+  purchaseChainCorrections PurchaseChainCorrectionOrder[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_statuses_order_date_id_idx")
@@ -1579,6 +1587,41 @@ model PurchaseOrderPartItem {
   @@index([purchaseOrderLineId, purchaseOrderId], map: "purchase_order_part_items_line_order_idx")
   @@index([purchaseOrderId], map: "purchase_order_part_items_order_idx")
   @@map("purchase_order_part_items")
+}
+
+/// 误建采购链纠正：一次受控动作把同一销售单下的错误采购链退回待采购。
+/// 记录保留为审计事实，不物理删除；applied_at 为空表示申请已开始但事务尚未落库。
+model PurchaseChainCorrection {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId   String    @map("sales_order_id") @db.Uuid
+  actorUserId    String    @map("actor_user_id") @db.Uuid
+  reason         String    @db.VarChar(500)
+  requestKey     String    @map("request_key") @db.Uuid
+  payloadHash    Bytes     @map("payload_hash") @db.ByteA
+  resultSnapshot Json?     @map("result_snapshot") @db.JsonB
+  appliedAt      DateTime? @map("applied_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  salesOrder SalesOrder                      @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actor      User                            @relation("PurchaseChainCorrectionActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  orders     PurchaseChainCorrectionOrder[]
+
+  @@unique([actorUserId, requestKey], map: "purchase_chain_corrections_actor_request_key")
+  @@index([salesOrderId, createdAt(sort: Desc)], map: "purchase_chain_corrections_sales_order_created_idx")
+  @@map("purchase_chain_corrections")
+}
+
+/// 纠正涉及的采购单集合；触发器用它判断某次事实清空是否属于进行中的纠正。
+model PurchaseChainCorrectionOrder {
+  correctionId    String @map("correction_id") @db.Uuid
+  purchaseOrderId String @map("purchase_order_id") @db.Uuid
+
+  correction    PurchaseChainCorrection @relation(fields: [correctionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder           @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([correctionId, purchaseOrderId])
+  @@index([purchaseOrderId], map: "purchase_chain_correction_orders_purchase_idx")
+  @@map("purchase_chain_correction_orders")
 }
 
 /// 货件归属事实：只追加，不修改、不删除；sequence 在同一货件内连续。

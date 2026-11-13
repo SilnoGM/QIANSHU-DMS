@@ -323,6 +323,7 @@ describe('purchase order domain schema', () => {
       'purchase-orders:update',
       'purchase-orders:payment',
       'purchase-orders:document',
+      'purchase-orders:correction',
     ])
     expect(MANAGEMENT_PERMISSION_CODES).toEqual(
       expect.arrayContaining([...PURCHASE_ORDER_PERMISSION_CODES]),
