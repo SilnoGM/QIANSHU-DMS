@@ -38,6 +38,10 @@ export interface ShipmentCostTransferInput {
   readonly shipmentNo: string | null
   readonly userId: string
   readonly amountCny: string
+  /** 认领方向承接成本的客户；缺省回退寄仓记录冻结的原客户快照。 */
+  readonly customerName?: string
+  /** 认领方向的目标销售单号，写进来源说明供财务核对货件去向。 */
+  readonly targetSalesOrderNo?: string
 }
 
 export interface ShipmentCostTransferResult {
@@ -96,9 +100,13 @@ export class ShipmentStorageCostService {
         shipmentNoSnapshot: true,
       },
     })
-    // 转入方向是随货件调拨收回的成本，业务上叫「调货成本」；转出仍叫寄仓成本转出，
-    // 因为它由取消/拒收把货件回收进寄仓触发，与调货无关。
-    const directionLabel = release ? '寄仓成本转出' : '调货成本转入'
+    // 退还方向由取消/拒收把货件回收进寄仓触发，成本退回原客户与公司；
+    // 转入方向随货件调拨由承接方承担，主体要跟着换到调入销售单的客户。
+    const directionLabel = release ? '寄仓货物成本退还' : '调寄仓货物成本转入'
+    const subjectName = release
+      ? record?.originCustomerNameSnapshot
+      : input.customerName ?? record?.originCustomerNameSnapshot
+    const targetSalesOrderNo = release ? undefined : input.targetSalesOrderNo
     const shipmentNo = input.shipmentNo ?? record?.shipmentNoSnapshot ?? null
     const postingInput = {
       amount: amount.toFixed(2),
@@ -108,21 +116,20 @@ export class ShipmentStorageCostService {
       summary: directionLabel,
       source: {
         headline: `${shipmentNo ?? '寄仓记录'} · ${directionLabel}`,
-        ...(record?.originCustomerNameSnapshot === undefined
-          ? {}
-          : { subject: record.originCustomerNameSnapshot }),
+        ...(subjectName === undefined ? {} : { subject: subjectName }),
         action: directionLabel,
-        ...(record?.originCustomerNameSnapshot === undefined
-          ? {}
-          : { customerName: record.originCustomerNameSnapshot }),
+        ...(subjectName === undefined ? {} : { customerName: subjectName }),
         ...(shipmentNo === null ? {} : { documentNo: shipmentNo }),
         link: { kind: 'SHIPMENT_STORAGE' as const, id: input.storageRecordId },
         detail: [
-          { label: '成本方向', value: release ? '转出（退还）' : '转入（收回）' },
+          { label: '成本方向', value: release ? '退还（入账）' : '转入（出账）' },
           ...(record === null
             ? []
             : [
                 { label: '原销售单', value: record.originSalesOrderNoSnapshot },
+                ...(targetSalesOrderNo === undefined
+                  ? []
+                  : [{ label: '调入销售单', value: targetSalesOrderNo }]),
                 { label: '原采购单', value: record.originPurchaseOrderNoSnapshot },
           ...(record.shippingMarkSnapshot
             ? [{ label: '唛头', value: truncateFundSourceText(record.shippingMarkSnapshot) }]

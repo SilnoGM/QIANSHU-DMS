@@ -290,21 +290,36 @@ const BACKFILL_STATEMENTS: readonly BackfillStatement[] = Object.freeze([
       'SHIPMENT_STORAGE'::"fund_posting_source_kind" AS "source_kind",
       COALESCE(record."shipment_no_snapshot", '寄仓记录') || ' · '
         || CASE batch."posting_type_code_snapshot"
-             -- 与写入文案保持一致：认领（调货）收回成本叫调货成本转入，转出保持寄仓口径。
-             WHEN 'SHIPMENT_STORAGE_RELEASE' THEN '寄仓成本转出'
-             ELSE '调货成本转入' END AS "headline",
-      record."origin_customer_name_snapshot" AS "customer_name",
+             -- 与写入文案保持一致：退还在原客户侧，转入在调入销售单客户侧。
+             WHEN 'SHIPMENT_STORAGE_RELEASE' THEN '寄仓货物成本退还'
+             ELSE '调寄仓货物成本转入' END AS "headline",
+      -- 退还主体是原客户；转入主体是认领后的销售单客户，记录未被认领时才回退原客户。
+      CASE batch."posting_type_code_snapshot"
+        WHEN 'SHIPMENT_STORAGE_RELEASE' THEN record."origin_customer_name_snapshot"
+        ELSE COALESCE(claimed_order."customer_name", record."origin_customer_name_snapshot")
+      END AS "customer_name",
       NULL::varchar AS "supplier_name",
       record."shipment_no_snapshot" AS "document_no",
       'SHIPMENT_STORAGE' AS "link_kind",
       record."id"::text AS "link_id",
       jsonb_build_array(
-        jsonb_build_object('label', '原销售单', 'value', record."origin_sales_order_no_snapshot"),
+        jsonb_build_object('label', '原销售单', 'value', record."origin_sales_order_no_snapshot")
+      )
+      || CASE
+           WHEN batch."posting_type_code_snapshot" <> 'SHIPMENT_STORAGE_RELEASE'
+             AND claimed_order."order_no" IS NOT NULL
+           THEN jsonb_build_array(
+             jsonb_build_object('label', '调入销售单', 'value', claimed_order."order_no")
+           )
+           ELSE '[]'::jsonb
+         END
+      || jsonb_build_array(
         jsonb_build_object('label', '原采购单', 'value', record."origin_purchase_order_no_snapshot")
       ) AS "detail",
       2 AS "resolver_version"
     FROM "fund_posting_batches" AS batch
     JOIN "shipment_storage_records" AS record ON record."id"::text = batch."business_id"
+    LEFT JOIN "sales_orders" AS claimed_order ON claimed_order."id" = record."claimed_sales_order_id"
     WHERE batch."kind" = 'BUSINESS'::"fund_posting_batch_kind"
       AND batch."business_source_code_snapshot" = 'SHIPMENT_STORAGE'
       AND ${needsBackfill(force)}
@@ -425,7 +440,7 @@ interface LabelStatement {
  * 只补 subject_name / action_label，不重写 headline。
  *
  * 拆解的是**已存在**的 headline，所以历史文案原样保留（例如认领行仍是
- * 「寄仓成本转入」），不会因为当前代码里的新叫法把旧流水刷成新名。
+ * 「调货成本转入」），不会因为当前代码里的新叫法把旧流水刷成新名。
  * 条件只挑两列都为空的投影行，重复执行不会覆盖后续写入的内容。
  */
 function labelStatement(

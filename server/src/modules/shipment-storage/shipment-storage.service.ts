@@ -316,6 +316,7 @@ interface PreparedClaim {
   readonly order: {
     readonly id: string
     readonly orderNo: string
+    readonly customerName: string
     readonly issuerUserId: string
   }
   readonly allocations: readonly PreparedClaimAllocation[]
@@ -1470,12 +1471,14 @@ export class ShipmentStorageService {
         storageFailure('SHIPMENT_STORAGE_STATE_CHANGED', '销售订单状态已变化，请刷新后重试', HttpStatus.CONFLICT)
       }
       // 认领即按新出单人比例收回成本：乙 −bC、公司 −(1−b)C，与认领事实同事务。
-      // 出单人资金账户比例已在 prepareClaimTarget 内校验。
+      // 成本主体跟着货件换到调入销售单的客户，来源说明里补调入单号，便于财务对上这一进一出。
       await this.cost.transfer(transaction, context, 'CLAIM', {
         amountCny: totalCostFromSnapshot(record.costSnapshot),
+        customerName: order.customerName,
         shipmentId: record.shipmentId,
         shipmentNo: record.shipmentNoSnapshot,
         storageRecordId,
+        targetSalesOrderNo: order.orderNo,
         userId: order.issuerUserId,
       })
       if (claimRequestId !== undefined) {
@@ -1520,6 +1523,7 @@ export class ShipmentStorageService {
       select: {
         id: true,
         orderNo: true,
+        customerName: true,
         orderStatus: true,
         fulfillmentStatus: true,
         issuerUserId: true,

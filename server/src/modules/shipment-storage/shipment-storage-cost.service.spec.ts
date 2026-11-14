@@ -15,8 +15,15 @@ const input = {
   storageRecordId: RECORD_ID,
   userId: USER_ID,
 }
+const storageRecord = {
+  originCustomerNameSnapshot: '李育泉',
+  originPurchaseOrderNoSnapshot: 'PO/20261114-00820',
+  originSalesOrderNoSnapshot: 'SO/20261114-00825',
+  shippingMarkSnapshot: 'QS-001',
+  shipmentNoSnapshot: 'PKG/20261029-00001',
+}
 
-function setup() {
+function setup(options: { readonly record?: typeof storageRecord } = {}) {
   const preview = jest.fn().mockResolvedValue({
     businessAmount: '100.00',
     companyShareRate: '70.00',
@@ -54,7 +61,9 @@ function setup() {
   const transaction = {
     shipmentCostEvent: { create: jest.fn().mockResolvedValue({}) },
     // 来源说明读取寄仓记录上冻结的客户与单号快照；没有记录时仍要能入账。
-    shipmentStorageRecord: { findUnique: jest.fn().mockResolvedValue(null) },
+    shipmentStorageRecord: {
+      findUnique: jest.fn().mockResolvedValue(options.record ?? null),
+    },
   } as unknown as Prisma.TransactionClient
   const audit = { record: jest.fn().mockResolvedValue({}) }
   const service = new ShipmentStorageCostService(funds, audit)
@@ -63,13 +72,17 @@ function setup() {
 
 describe('ShipmentStorageCostService', () => {
   it('posts a claim charge with the claim consumer and records one cost event', async () => {
-    const fixture = setup()
+    const fixture = setup({ record: storageRecord })
 
     await expect(fixture.service.transfer(
       fixture.transaction,
       context,
       'CLAIM',
-      input,
+      {
+        ...input,
+        customerName: '胡憲政',
+        targetSalesOrderNo: 'SO/20261114-00824',
+      },
     )).resolves.toEqual({ amountCny: '100.00', batchId: BATCH_ID })
 
     expect(fixture.preview).toHaveBeenCalledWith(
@@ -83,10 +96,20 @@ describe('ShipmentStorageCostService', () => {
         idempotencyKey: `${RECORD_ID}:CLAIM`,
         postingTypeCode: 'SHIPMENT_STORAGE_CLAIM',
         userId: USER_ID,
-        // 认领即调货：收回的是随货件转移的采购与包装成本，不叫寄仓成本。
-        summary: '调货成本转入',
+        // 认领是承接方承担随货件转移的成本，主体与动作都站在承接方一侧。
+        summary: '调寄仓货物成本转入',
         source: expect.objectContaining({
-          headline: 'PKG/20261029-00001 · 调货成本转入',
+          action: '调寄仓货物成本转入',
+          customerName: '胡憲政',
+          detail: [
+            { label: '成本方向', value: '转入（出账）' },
+            { label: '原销售单', value: 'SO/20261114-00825' },
+            { label: '调入销售单', value: 'SO/20261114-00824' },
+            { label: '原采购单', value: 'PO/20261114-00820' },
+            { label: '唛头', value: 'QS-001' },
+          ],
+          headline: 'PKG/20261029-00001 · 调寄仓货物成本转入',
+          subject: '胡憲政',
         }) as unknown,
       }),
     )
@@ -120,7 +143,7 @@ describe('ShipmentStorageCostService', () => {
   })
 
   it('posts a release refund with the release consumer', async () => {
-    const fixture = setup()
+    const fixture = setup({ record: storageRecord })
 
     await fixture.service.transfer(fixture.transaction, context, 'RELEASE', input)
 
@@ -130,8 +153,41 @@ describe('ShipmentStorageCostService', () => {
       expect.objectContaining({
         idempotencyKey: `${RECORD_ID}:RELEASE`,
         postingTypeCode: 'SHIPMENT_STORAGE_RELEASE',
-        // 转出方向由取消/拒收回收进寄仓触发，保持寄仓口径，不随调货改名。
-        summary: '寄仓成本转出',
+        // 退还方向由取消/拒收把货件回收进寄仓触发，金额退回原客户与公司。
+        summary: '寄仓货物成本退还',
+        source: expect.objectContaining({
+          action: '寄仓货物成本退还',
+          customerName: '李育泉',
+          detail: [
+            { label: '成本方向', value: '退还（入账）' },
+            { label: '原销售单', value: 'SO/20261114-00825' },
+            { label: '原采购单', value: 'PO/20261114-00820' },
+            { label: '唛头', value: 'QS-001' },
+          ],
+          subject: '李育泉',
+        }) as unknown,
+      }),
+    )
+  })
+
+  it('falls back to the frozen origin customer when the claim has no target customer', async () => {
+    const fixture = setup({ record: storageRecord })
+
+    await fixture.service.transfer(fixture.transaction, context, 'CLAIM', input)
+
+    expect(fixture.preview).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({ consumerCode: 'SHIPMENT_STORAGE.CLAIM' }),
+      expect.objectContaining({
+        source: expect.objectContaining({
+          detail: [
+            { label: '成本方向', value: '转入（出账）' },
+            { label: '原销售单', value: 'SO/20261114-00825' },
+            { label: '原采购单', value: 'PO/20261114-00820' },
+            { label: '唛头', value: 'QS-001' },
+          ],
+          subject: '李育泉',
+        }) as unknown,
       }),
     )
   })

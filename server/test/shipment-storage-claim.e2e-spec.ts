@@ -71,6 +71,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     issuerUserId: string = h.fixture.actor.id,
     lineCount = 1,
     productName = 'Custom item',
+    customerName?: string,
   ) {
     const origin = await h.prisma.salesOrder.findUniqueOrThrow({ where: { id: originId } })
     const lineAmount = String(10 * lineCount)
@@ -82,7 +83,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
         orderDate: origin.orderDate,
         issuerUserId,
         currencyCode: origin.currencyCode,
-        customerName: origin.customerName,
+        customerName: customerName ?? origin.customerName,
         customerPhone: origin.customerPhone,
         customerCountryRegionId: origin.customerCountryRegionId,
         customerProvinceStateId: origin.customerProvinceStateId,
@@ -483,7 +484,7 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
 
   it('advances the claiming order and rejects a second claim after it leaves pending purchase', async () => {
     const origin = await h.shipment({ partCount: 2, salesLinked: true })
-    const target = await createTargetOrder(origin.source!.id)
+    const target = await createTargetOrder(origin.source!.id, h.fixture.actor.id, 1, 'Custom item', '胡憲政')
     const context = { actorUserId: h.fixture.actor.id, requestId: randomUUID() }
 
     // 释放接口要求采购款已付清，付款链路不在本用例范围；直接准备等价的寄仓事实。
@@ -598,6 +599,19 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
       ['USER', 'DEBIT', '30.00'],
       ['COMPANY', 'DEBIT', '70.00'],
     ])
+    // 认领流水的来源说明跟着货件换到调入客户，并带上调入单号，财务才能把一进一出对上。
+    const source = await h.prisma.fundPostingBatchSource.findUniqueOrThrow({
+      where: { batchId: batch.id },
+      select: { actionLabel: true, customerName: true, detail: true, subjectName: true },
+    })
+    expect(source).toMatchObject({
+      actionLabel: '调寄仓货物成本转入',
+      customerName: '胡憲政',
+      subjectName: '胡憲政',
+    })
+    expect(source.detail).toEqual(expect.arrayContaining([
+      { label: '调入销售单', value: target.orderNo },
+    ]) as unknown)
     expect((await h.prisma.fundAccount.findUniqueOrThrow({
       where: { userId: h.fixture.actor.id },
       select: { balance: true },
