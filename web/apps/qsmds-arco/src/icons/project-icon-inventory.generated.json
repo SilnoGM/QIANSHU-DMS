@@ -1607,6 +1607,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/components/AppVersionEntry/index.vue",
       "apps/qsmds-arco/src/components/business/QsDateTimeField/index.vue",
       "apps/qsmds-arco/src/components/business/QsGenericTable/GroupHeader.vue",
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
@@ -3679,6 +3680,15 @@
       "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
       "apps/qsmds-arco/src/views/component_library/business/part-configurator.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:sprout",
+    "label": "i-lucide:sprout",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppVersionEntry/index.vue"
     ]
   },
   {
