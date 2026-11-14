@@ -47822,7 +47822,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "货件编号、唛头、来源销售单号、来源采购单号或客户名称",
+            "description": "货件编号、货件唛头、装柜唛头、来源销售单号、来源采购单号或客户名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -48097,7 +48097,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "货件编号、唛头、来源销售单号、来源采购单号或客户名称",
+            "description": "货件编号、货件唛头、装柜唛头、来源销售单号、来源采购单号或客户名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -125308,6 +125308,11 @@
             "format": "uuid",
             "nullable": true
           },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true,
+            "description": "货件编号；历史货件未编号时为空。"
+          },
           "containerBatchId": {
             "type": "string",
             "format": "uuid"
@@ -125337,6 +125342,7 @@
         "required": [
           "id",
           "shipmentId",
+          "shipmentNo",
           "containerBatchId",
           "containerBatchNo",
           "hasChanges",

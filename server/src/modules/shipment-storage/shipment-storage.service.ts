@@ -1181,6 +1181,8 @@ export class ShipmentStorageService {
         { originSalesOrderNoSnapshot: match },
         { originPurchaseOrderNoSnapshot: match },
         { originCustomerNameSnapshot: match },
+        // 卡片上的装柜唛头来自货件的实时装柜行，关键词必须与展示同源，不能只查寄仓快照。
+        { shipment: { containerLoadingItems: { some: { oceanShippingMarkText: match } } } },
       ]
     }
     return where

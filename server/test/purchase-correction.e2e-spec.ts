@@ -133,6 +133,7 @@ describe('purchase chain correction over isolated PostgreSQL', () => {
     expect(context.purchaseOrders).toHaveLength(1)
     expect(context.containerItems).toHaveLength(1)
     expect(context.containerItems[0].shipmentId).toBe(shipment.part.id)
+    expect(context.containerItems[0].shipmentNo).toBe(shipment.part.shipmentNo)
     expect(context.payments).toEqual([expect.objectContaining({ id: payment.id, amount: '10.00' })])
     expect(context.totalPaymentAmount).toBe('10.00')
 
@@ -243,7 +244,7 @@ describe('purchase chain correction over isolated PostgreSQL', () => {
     expect(context.salesPaymentCount).toBe(0)
     expect(context.settlementCount).toBe(0)
     expect(context.containerItems).toEqual([
-      expect.objectContaining({ action: 'DELETE' }),
+      expect.objectContaining({ action: 'DELETE', shipmentNo: shipment.part.shipmentNo }),
     ])
     expect(context.payments).toEqual([expect.objectContaining({ id: payment.id, amount: '10.00' })])
 
@@ -267,7 +268,7 @@ describe('purchase chain correction over isolated PostgreSQL', () => {
       signed: true,
       fulfillmentStatus: 'PENDING',
       detachedDeliveryReceipts: [{ id: receiptId }],
-      deletedContainerItems: [expect.objectContaining({ action: 'DELETE' })],
+      deletedContainerItems: [expect.objectContaining({ action: 'DELETE', shipmentNo: shipment.part.shipmentNo })],
       reversedPayments: [expect.objectContaining({ id: payment.id, amount: '10.00' })],
       totalReversedAmount: '10.00',
     })

@@ -54,6 +54,8 @@ export interface PurchaseCorrectionReconciliationSnapshot {
 export interface PurchaseCorrectionContainerItemSnapshot {
   readonly id: string
   readonly shipmentId: string | null
+  /// 货件编号；历史货件未编号时为空，界面按“未编号”展示，不能回退到内部 ID。
+  readonly shipmentNo: string | null
   readonly containerBatchId: string
   readonly containerBatchNo: string
   readonly hasChanges: boolean

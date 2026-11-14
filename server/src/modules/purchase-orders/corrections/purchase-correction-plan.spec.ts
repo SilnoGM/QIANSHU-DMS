@@ -42,6 +42,7 @@ function purchase(overrides: Partial<PurchaseCorrectionPurchaseSnapshot> = {}): 
     containerItems: [{
       id: '00000000-0000-4000-8000-000000000104',
       shipmentId: PART_ID,
+      shipmentNo: 'PKG/20261113-00001',
       containerBatchId: '00000000-0000-4000-8000-000000000105',
       containerBatchNo: 'CTN/2026-001',
       hasChanges: false,
@@ -114,6 +115,7 @@ describe('buildPurchaseCorrectionPlan', () => {
     expect(result.totalPaymentAmount).toBe('1500.50')
     expect(result.packagingCostsToCancel).toHaveLength(1)
     expect(result.containerItemsToDetach).toHaveLength(1)
+    expect(result.containerItemsToDetach[0]?.shipmentNo).toBe('PKG/20261113-00001')
   })
 
   it('已签收订单进入签收纠正计划，签收单随上下文返回', () => {
@@ -142,6 +144,7 @@ describe('buildPurchaseCorrectionPlan', () => {
       containerItems: [{
         id: '00000000-0000-4000-8000-000000000121',
         shipmentId: PART_ID,
+        shipmentNo: 'PKG/20261113-00001',
         containerBatchId: '00000000-0000-4000-8000-000000000122',
         containerBatchNo: 'CTN/2026-004',
         hasChanges: true,
@@ -174,6 +177,7 @@ describe('buildPurchaseCorrectionPlan', () => {
       containerItems: [{
         id: '00000000-0000-4000-8000-000000000110',
         shipmentId: PART_ID,
+        shipmentNo: 'PKG/20261113-00001',
         containerBatchId: '00000000-0000-4000-8000-000000000111',
         containerBatchNo: 'CTN/2026-002',
         hasChanges: true,
@@ -191,6 +195,7 @@ describe('buildPurchaseCorrectionPlan', () => {
       containerItems: [{
         id: '00000000-0000-4000-8000-000000000113',
         shipmentId: PART_ID,
+        shipmentNo: 'PKG/20261113-00001',
         containerBatchId: '00000000-0000-4000-8000-000000000114',
         containerBatchNo: 'CTN/2026-003',
         hasChanges: false,

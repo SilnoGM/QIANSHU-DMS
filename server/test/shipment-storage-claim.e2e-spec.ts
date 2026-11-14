@@ -862,6 +862,12 @@ describe('shipment storage claim over isolated PostgreSQL', () => {
     const origin = await h.shipment({ partCount: 1, salesLinked: true })
     const container = await createContainerItem(origin.part.id)
     const recordId = await createStorageRecord(origin)
+    // 列表关键词必须能命中装柜行的海运唛头；状态计数与列表共用同一谓词。
+    const byContainerMark = await storage.list({ keyword: 'J-030549-01' })
+    expect(byContainerMark.items.map(row => row.id)).toContain(recordId)
+    expect((await storage.list({ keyword: 'NO-SUCH-CONTAINER-MARK' })).total).toBe(0)
+    const countsByMark = await storage.statusCounts({ keyword: 'J-030549-01' })
+    expect(countsByMark.items.find(item => item.value === 'ALL')?.count).toBe(1)
     const target = await createTargetOrder(origin.source!.id)
     const sourceLineId = await allocationLineId(recordId)
     const targetLine = target.lines[0]

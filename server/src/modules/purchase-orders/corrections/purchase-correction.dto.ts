@@ -60,6 +60,8 @@ export class PurchaseCorrectionReconciliationDto {
 export class PurchaseCorrectionContainerItemDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ format: 'uuid', nullable: true }) shipmentId!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: '货件编号；历史货件未编号时为空。' })
+  shipmentNo!: string | null
   @ApiProperty({ format: 'uuid' }) containerBatchId!: string
   @ApiProperty() containerBatchNo!: string
   @ApiProperty({ description: '装柜行存在收件人/COD 变更记录；纠正只解绑，不撤销变更历史。' })

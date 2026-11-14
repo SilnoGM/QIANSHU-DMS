@@ -52,7 +52,7 @@ export class ShipmentStorageListQueryDto {
   @Matches(WAREHOUSE_VALUE_PATTERN)
   warehouseValue?: string
 
-  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '货件编号、唛头、来源销售单号、来源采购单号或客户名称' })
+  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '货件编号、货件唛头、装柜唛头、来源销售单号、来源采购单号或客户名称' })
   @IsOptional()
   @IsString()
   @IsUnicodeCodePointLength(1, 128)

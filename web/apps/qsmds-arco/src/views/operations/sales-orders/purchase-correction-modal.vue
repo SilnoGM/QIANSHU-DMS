@@ -309,7 +309,7 @@ onBeforeUnmount(reset)
             class="text-sm"
           >
             <p class="m-0">
-              {{ item.containerBatchNo }} · 货件 {{ item.shipmentId }} ·
+              {{ item.containerBatchNo }} · 货件 {{ item.shipmentNo ?? '未编号' }} ·
               {{ item.action === 'DELETE' ? '删除' : '解绑' }}
             </p>
             <p class="text-xs text-muted-foreground m-0">

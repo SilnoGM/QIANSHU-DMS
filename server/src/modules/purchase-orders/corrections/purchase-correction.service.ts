@@ -139,6 +139,7 @@ function toContainerItemDto(
   return {
     id: item.id,
     shipmentId: item.shipmentId,
+    shipmentNo: item.shipmentNo,
     containerBatchId: item.containerBatchId,
     containerBatchNo: item.containerBatchNo,
     hasChanges: item.hasChanges,
@@ -685,8 +686,12 @@ export class PurchaseCorrectionService {
     })
 
     const partToPurchase = new Map<string, string>()
+    const partToShipmentNo = new Map<string, string | null>()
     for (const purchase of purchases) {
-      for (const part of purchase.parts) partToPurchase.set(part.id, purchase.id)
+      for (const part of purchase.parts) {
+        partToPurchase.set(part.id, purchase.id)
+        partToShipmentNo.set(part.id, part.shipmentNo)
+      }
     }
     // 包装费按采购单读取，而不是只读当前有效货件：已取消货件上的待付款提报
     // 同样会被提交时的延迟约束检查，必须先进入取消计划或阻断。
@@ -735,6 +740,7 @@ export class PurchaseCorrectionService {
       rows.push({
         id: item.id,
         shipmentId: item.shipmentId,
+        shipmentNo: partToShipmentNo.get(item.shipmentId) ?? null,
         containerBatchId: item.containerBatchId,
         containerBatchNo: item.containerBatch.containerBatchNo,
         hasChanges: item.changes.length > 0,

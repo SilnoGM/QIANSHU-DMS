@@ -383,8 +383,8 @@ onMounted(() => {
             type="search"
             clearable
             class="w-full sm:w-80"
-            placeholder="货件编号、唛头、销售单、采购单或客户"
-            aria-label="搜索货件、唛头、销售单、采购单或客户"
+            placeholder="货件编号、货件/装柜唛头、销售单、采购单或客户"
+            aria-label="搜索货件编号、货件或装柜唛头、销售单、采购单或客户"
           >
             <template #start>
               <FaIcon name="i-lucide:search" />

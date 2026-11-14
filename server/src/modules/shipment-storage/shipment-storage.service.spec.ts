@@ -581,6 +581,28 @@ describe('ShipmentStorageService', () => {
     }))
   })
 
+  it('matches container shipping marks in the keyword filter', async () => {
+    const groupBy = jest.fn().mockResolvedValue([])
+    const prisma = {
+      shipmentStorageRecord: { groupBy },
+    }
+
+    await service(prisma).statusCounts({ keyword: 'J-030549-01' })
+
+    // 卡片上的装柜唛头来自货件的实时装柜行，关键词必须走同一条关系，不能只查寄仓快照。
+    expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([{
+          shipment: {
+            containerLoadingItems: {
+              some: { oceanShippingMarkText: { contains: 'J-030549-01', mode: 'insensitive' } },
+            },
+          },
+        }]) as unknown,
+      }) as unknown,
+    }))
+  })
+
   it('derives the first location event start from the release audit', async () => {
     const occurredAt = new Date('2026-10-29T01:00:00.000Z')
     const updatedAt = new Date('2026-10-29T02:00:00.000Z')
