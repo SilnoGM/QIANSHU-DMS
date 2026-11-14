@@ -70,10 +70,18 @@ export class OperationsOceanContainerService {
   ): Promise<OperationsOceanContainerPageDto> {
     const personal = personalWhere(actorUserId)
     const search = query.search?.trim()
+    const match = search === undefined || search === '' ? null : { contains: search, mode: 'insensitive' as const }
     const where: Prisma.ContainerBatchWhereInput = {
       ...(options.personalOnly ? { items: { some: personal } } : {}),
       ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}),
-      ...(search ? { OR: [{ containerBatchName: { contains: search, mode: 'insensitive' } }, { containerBatchNo: { contains: search, mode: 'insensitive' } }] } : {}),
+      ...(match === null ? {} : { OR: [
+        { containerBatchName: match },
+        { containerBatchNo: match },
+        // SELF 只按包含本人明细的那一行匹配收件人，避免同柜他人的姓名把柜次带回“我的柜次”。
+        options.personalOnly
+          ? { items: { some: { ...personal, recipientName: match } } }
+          : { items: { some: { recipientName: match } } },
+      ] }),
     }
     return this.prisma.$transaction(async tx => {
       const rows = await tx.containerBatch.findMany({ where, select: overviewSelect, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { containerBatchNo: 'desc' } })

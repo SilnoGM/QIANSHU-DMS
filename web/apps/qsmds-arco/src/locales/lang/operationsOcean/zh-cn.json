@@ -8,7 +8,7 @@
     "backToMine": "返回我的柜次",
     "filteredEmptyHint": "当前列表只显示包含你装柜明细的柜次，可查看全部柜次。",
     "search": "搜索",
-    "searchPlaceholder": "搜索柜次名称或编号",
+    "searchPlaceholder": "搜索柜次名称、编号或收件人姓名",
     "noAccess": "暂无查看权限",
     "noAccessDescription": "请登录具有销售订单查看权限的账户。",
     "listError": "柜次列表加载失败，请重试。",

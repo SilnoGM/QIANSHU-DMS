@@ -114,7 +114,16 @@ export class ContainerBatchService {
   }
   async list(query: ContainerBatchListQueryDto) {
     const search = query.search?.trim()
-    const where: Prisma.ContainerBatchWhereInput = { ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}), ...(search ? { OR: [{ containerBatchName: { contains: search, mode: 'insensitive' } }, { containerBatchNo: { contains: search, mode: 'insensitive' } }] } : {}) }
+    const match = search === undefined || search === '' ? null : { contains: search, mode: 'insensitive' as const }
+    // 收件人姓名存在装柜行上，未关联货件的行也能按收件人找回柜次。
+    const where: Prisma.ContainerBatchWhereInput = {
+      ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}),
+      ...(match === null ? {} : { OR: [
+        { containerBatchName: match },
+        { containerBatchNo: match },
+        { items: { some: { recipientName: match } } },
+      ] }),
+    }
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.containerBatch.findMany({ where, include: containerSummaryInclude, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { containerBatchNo: 'desc' } }),
       this.prisma.containerBatch.count({ where }),
@@ -130,6 +139,7 @@ export class ContainerBatchService {
       { goodsName: { contains: search, mode: 'insensitive' } },
       { oceanShippingMarkText: { contains: search, mode: 'insensitive' } },
       { warehouseReceiptReference: { contains: search, mode: 'insensitive' } },
+      { recipientName: { contains: search, mode: 'insensitive' } },
     ] } : {}) }
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.containerLoadingItem.findMany({ where, include: { shipment: { select: { shipmentNo: true, shippingMarkText: true, purchaseOrder: { select: { id: true, orderNo: true, salesOrder: { select: { id: true, orderNo: true } } } }, ownershipCurrent: { select: { ownerSalesOrder: { select: { id: true, orderNo: true, customerName: true } } } } } } }, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { lineNumber: 'asc' } }),

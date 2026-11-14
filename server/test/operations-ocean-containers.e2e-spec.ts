@@ -40,6 +40,8 @@ interface Page<T> { items: T[], total: number }
 interface OverviewPage extends Page<Overview> { dataScope: 'SELF' | 'ALL' }
 
 const basePath = '/api/operations/ocean-containers'
+// 收件人搜索必须能区分"我的行"与"同柜他人的行"，用专属姓名验证 SELF 口径。
+const BOB_RECIPIENT = 'Bob专属收件人'
 const overviewKeys = ['id', 'containerBatchNo', 'containerBatchName', 'loadingDate', 'warehouseValue', 'warehouseName', 'itemCount', 'myItemCount', 'grossWeightKgTotal', 'volumeCaiTotal'].sort()
 // shipmentNo 是「可查看采购」的查看者才拿到的辅助字段（货件唛头下的 PKG 编号），DTO 增列后这里必须同步。
 const personalLineKeys = ['id', 'containerBatchId', 'version', 'lineNumber', 'oceanShippingMarkText', 'goodsName', 'shippingMark', 'shipmentNo', 'salesOrderId', 'salesOrderNo', 'purchaseOrderId', 'purchaseOrderNo', 'recipientName', 'codAmountTwd', 'warehouseReceiptReference', 'recipientPhone', 'recipientAddress', 'packageCount', 'packageUnit', 'grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'remark'].sort()
@@ -122,7 +124,7 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
       ownIds.push((await createLine(mixedId, index + 1, { shipmentId: aliceShipment.part.id, ...data })).id)
     }
     for (const [index, data] of [
-      { shipmentId: bobShipment.part.id, grossWeightKg: '400', volumeCai: '20' },
+      { shipmentId: bobShipment.part.id, grossWeightKg: '400', volumeCai: '20', recipientName: BOB_RECIPIENT },
       { shipmentId: stockShipment.part.id, grossWeightKg: '200', volumeCai: '11' },
       { shipmentId: null, grossWeightKg: '50', volumeCai: '5.12' },
     ].entries()) {
@@ -219,6 +221,11 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
       expect(first.total).toBe(2)
       expect(second.total).toBe(2)
       expect([...first.items, ...second.items].map(item => item.id)).toEqual([incompleteId, mixedId])
+      // 收件人搜索只命中本人行：他人专属收件人不进入 SELF 结果，默认收件人仍能找回本人柜次。
+      const bobOnly = (await alice.browser.get(basePath).query({ search: BOB_RECIPIENT }).expect(200)).body as OverviewPage
+      expect(bobOnly.items).toEqual([])
+      const ownRecipient = (await alice.browser.get(basePath).query({ search: '测试收件人' }).expect(200)).body as OverviewPage
+      expect(ownRecipient.items.map(item => item.id)).toEqual([incompleteId, mixedId])
     }
     finally {
       await h.prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: alice.role.id, permissionId: selfScope.id } } }).catch(() => undefined)
@@ -277,6 +284,9 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     expect(allList.items[3]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '2050', volumeCaiTotal: '206.22' })
     const searched = (await alice.browser.get(`${basePath}/all`).query({ search: '0919' }).expect(200)).body as OverviewPage
     expect(searched.items.map(item => item.id)).toEqual([incompleteId])
+    // ALL 视图允许按柜内任意行的收件人命中。
+    const byRecipient = (await alice.browser.get(`${basePath}/all`).query({ search: BOB_RECIPIENT }).expect(200)).body as OverviewPage
+    expect(byRecipient.items.map(item => item.id)).toEqual([mixedId])
 
     const allLines = (await alice.browser.get(`${basePath}/all/${mixedId}/items`).expect(200)).body as Page<AllLine>
     expect(allLines.total).toBe(6)

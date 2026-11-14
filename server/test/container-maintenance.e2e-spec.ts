@@ -92,6 +92,21 @@ describe('container maintenance with isolated PostgreSQL', () => {
     expect((await browser.get('/api/container-batches').query({ search: 'not-a-container' }).expect(200)).body as { total: number }).toMatchObject({ total: 0 })
   })
 
+  it('finds containers by loading row recipient name and filters rows by recipient', async () => {
+    const parent = await batch()
+    const marker = `收件人-${randomUUID().slice(0, 8)}`
+    const target = await item(parent, { goodsName: '收件人搜索', recipientName: marker })
+    const other = await item({ ...parent, version: parent.version + 1 }, { goodsName: '其他明细', recipientName: '其他收件人' })
+    const found = (await browser.get('/api/container-batches').query({ search: marker }).expect(200)).body as { items: ContainerBatchDto[] }
+    expect(found.items.map(row => row.id)).toEqual([parent.id])
+    expect((await browser.get('/api/container-batches').query({ search: '不存在的收件人' }).expect(200)).body as { total: number }).toMatchObject({ total: 0 })
+    const rows = (await browser.get(`/api/container-batches/${parent.id}/items`).query({ search: marker }).expect(200)).body as { total: number, items: ContainerLoadingItemDto[] }
+    expect(rows.items.map(row => row.id)).toEqual([target.id])
+    expect(rows.total).toBe(1)
+    const otherRows = (await browser.get(`/api/container-batches/${parent.id}/items`).query({ search: '其他收件人' }).expect(200)).body as { items: ContainerLoadingItemDto[] }
+    expect(otherRows.items.map(row => row.id)).toEqual([other.id])
+  })
+
   it('recalculates editable rows, aggregates exact totals, keeps missing values and redacts source references', async () => {
     const parent = await batch(), shipment = await h.shipment({ salesLinked: true })
     const before = await h.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: shipment.part.id } })
@@ -181,11 +196,11 @@ describe('container maintenance with isolated PostgreSQL', () => {
 
   it('filters loading rows by goods, ocean mark or warehouse receipt before pagination and count', async () => {
     const parent = await batch()
-    const first = await item(parent, { goodsName: '履带', oceanShippingMarkText: 'OCEAN-A1', warehouseReceiptReference: 'RECEIPT-ONE' })
+    const first = await item(parent, { goodsName: '履带', oceanShippingMarkText: 'OCEAN-A1', warehouseReceiptReference: 'RECEIPT-ONE', recipientName: '收件人甲' })
     const second = await item({ ...parent, version: 2 }, { goodsName: '叉车', oceanShippingMarkText: 'OCEAN-B2', warehouseReceiptReference: 'RECEIPT-TWO' })
     await item({ ...parent, version: 3 }, { goodsName: '机械配件', oceanShippingMarkText: 'OTHER', warehouseReceiptReference: 'OTHER' })
     const path = `/api/container-batches/${parent.id}/items`
-    for (const [search, expectedId] of [['履带', first.id], ['ocean-b2', second.id], ['receipt-one', first.id]]) {
+    for (const [search, expectedId] of [['履带', first.id], ['ocean-b2', second.id], ['receipt-one', first.id], ['收件人甲', first.id]]) {
       const result = (await browser.get(path).query({ search }).expect(200)).body as { total: number, items: ContainerLoadingItemDto[] }
       expect(result.total).toBe(1)
       expect(result.items.map(row => row.id)).toEqual([expectedId])
