@@ -1,14 +1,18 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { VOLUME_CAI_DIVISOR } from '../ocean-freight-calculation/ocean-freight-calculation'
-import { formatDecimal, parseDecimal, power, roundRatio } from '../ocean-freight-calculation/ocean-decimal'
+import { ceilRatioToHalfUnits, formatDecimal, parseDecimal, power, roundRatio } from '../ocean-freight-calculation/ocean-decimal'
 
 /** 账单来源数据的精度口径：尺寸 0 位、重量 0 位、金额 2 位、材积 2 位。 */
 export const SLH_DIMENSION_SCALE = 0
-export const SLH_WEIGHT_SCALE = 0
+/** 出货毛重按 0.5 kg 向上取整后以两位小数记录，按重量计价时直接作为计费数量。 */
+export const SLH_WEIGHT_SCALE = 2
 export const SLH_AMOUNT_SCALE = 2
 export const SLH_VOLUME_SCALE = 2
 export const SLH_AMOUNT_PRECISION = 30
 export const SLH_VOLUME_PRECISION = 24
+
+/** 0.5 材在两位记录精度下的最小单位数；与装柜计费材数共用同一进位粒度。 */
+const SLH_HALF_VOLUME_UNITS = power(SLH_VOLUME_SCALE) / 2n
 
 /**
  * 账单口径的材积分母：长 × 宽 × 高 ÷ 28316 × 箱数。装柜明细使用同一个常量
@@ -60,12 +64,12 @@ export function deriveSlhPricingBasis(unitPriceAmount: string | null): SlhPricin
 
 /**
  * 按计价方式记录材积：按重量计价的行只是信息，四舍五入到 2 位小数；
- * 按材积计价的行材积就是计费数量，必须向上取整。
+ * 按材积计价的行材积就是计费数量，必须向上取到 0.5 材的整数倍。
  */
 export function recordSlhVolume(ratio: { numerator: bigint, denominator: bigint }, basis: SlhPricingBasisValue): string {
-  // 向上取整得到的是计费数量本身，需按记录精度放大后才能交给同一格式化路径。
+  // 向上取到 0.5 材后，还需按记录精度放大才能交给同一格式化路径。
   const value = basis === 'VOLUME'
-    ? ((ratio.numerator + ratio.denominator - 1n) / ratio.denominator) * power(SLH_VOLUME_SCALE)
+    ? ceilRatioToHalfUnits(ratio.numerator, ratio.denominator) * SLH_HALF_VOLUME_UNITS
     : roundRatio(ratio.numerator * power(SLH_VOLUME_SCALE), ratio.denominator)
   return formatDecimal(value, SLH_VOLUME_PRECISION, SLH_VOLUME_SCALE, 'volumeCai')
 }

@@ -7,6 +7,7 @@ import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.
 import { hasOceanContainerDetails, isOceanContainerLineActionable, isOceanContainerLineHighlighted, isOwnOceanContainer, visibleOceanContainerColumns } from './logic'
 import OceanContainerRecipient from './OceanContainerRecipient.vue'
 import OceanContainerSource from './OceanContainerSource.vue'
+import { formatContainerWeight } from '@/views/workbenches/containers/display.logic'
 
 const props = defineProps<{
   item: OceanContainerSummary
@@ -127,7 +128,7 @@ function measurement(value: string | null, precision: number) {
             {{ weightLabel }}
           </dt>
           <dd class="qs-type-data m-0">
-            {{ measurement(item.grossWeightKgTotal, 0) }}<span v-if="item.grossWeightKgTotal !== null" class="qs-type-meta text-muted-foreground ml-1">kg</span>
+            {{ formatContainerWeight(item.grossWeightKgTotal) ?? '—' }}<span v-if="item.grossWeightKgTotal !== null" class="qs-type-meta text-muted-foreground ml-1">kg</span>
           </dd>
         </div>
         <div class="flex gap-2 items-baseline">

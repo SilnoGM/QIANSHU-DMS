@@ -12,7 +12,7 @@ import { computed, effectScope, ref, watch } from 'vue'
 import { parse } from 'vue/compiler-sfc'
 import { resolveDictionaryCatalogValue } from '../../src/dictionary-catalog/options'
 import { resolveContainerBindingStats } from '../../src/views/workbenches/containers/binding-stats.logic'
-import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../../src/views/workbenches/containers/display.logic'
 
 async function fixture(options: { permissions?: string[], created?: { id: string } | null } = {}) {
   const source = await readFile(new URL('../../src/views/workbenches/containers/index.vue', import.meta.url), 'utf8')
@@ -31,6 +31,7 @@ async function fixture(options: { permissions?: string[], created?: { id: string
     ref,
     watch,
     formatContainerMeasurement,
+    formatContainerWeight,
     resolveContainerBindingStats,
     defineOptions: () => {},
     useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
@@ -100,6 +101,6 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 10 }, 0), '10/10 [containerPage.bindingAll]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0 }, 0), '0/10 [containerPage.bindingNone]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0, itemCount: 0 }, 0), '0/0 [containerPage.bindingEmpty]')
-  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 kg 25.14 材')
+  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173.4 kg 25.14 材')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
 })

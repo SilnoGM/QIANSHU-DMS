@@ -14,6 +14,7 @@ import { managementLegacyRedirects } from './modules/management-legacy-redirects
 import NotificationCenter from './modules/notification.center'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement from './modules/product.management'
+import ReleaseNotes from './modules/release.notes'
 import { financeWorkbench, purchaseTransportWorkbench } from './modules/role.workbenches'
 import SupplierPaymentProfiles from './modules/supplier.payment.profiles'
 import SystemAudit from './modules/system.audit'
@@ -77,6 +78,7 @@ const systemRoutes: RouteRecordRaw[] = [
         },
       },
       NotificationCenter,
+      ReleaseNotes,
     ],
   },
 ]

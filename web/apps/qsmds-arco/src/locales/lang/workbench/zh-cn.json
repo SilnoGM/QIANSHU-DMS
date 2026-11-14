@@ -166,6 +166,7 @@
       "SUBTOTAL_MISMATCH": "账单小计与明细累加不一致",
       "NET_AMOUNT_MISMATCH": "台币净额与明细累加不一致",
       "DIMENSION_PRECISION": "尺寸精度告警",
+      "WEIGHT_PRECISION": "重量精度告警",
       "RATE_MISSING": "账单未自带汇率",
       "REMARK_NOTE": "备注片段未计入费用"
     },

@@ -5,7 +5,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
-import { formatContainerMeasurement } from '../../workbenches/containers/display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../../workbenches/containers/display.logic'
 import { calculateFreightEstimate, HEAVY_CARGO_THRESHOLD_KG, OCEAN_FREIGHT_VOLUME_RATE_CNY, OCEAN_FREIGHT_WEIGHT_RATE_CNY } from './freight-estimate.logic'
 import { buildOceanContainerRecipientText } from './recipient-copy.logic'
 
@@ -21,7 +21,7 @@ const visible = defineModel<boolean>({ required: true })
 const { t } = useI18n()
 const toast = useQsToast()
 const copying = ref(false)
-const weight = computed(() => formatContainerMeasurement(props.line?.grossWeightKg ?? null, 0))
+const weight = computed(() => formatContainerWeight(props.line?.grossWeightKg ?? null))
 const volume = computed(() => formatContainerMeasurement(props.line?.volumeCai ?? null, 2))
 const dimensions = computed(() => {
   if (!props.line) {

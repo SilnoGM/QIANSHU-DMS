@@ -1,4 +1,4 @@
-import { importCellNumber, importCellNumberCeil, importPackageCount } from './import-parser.numbers'
+import { importCellNumber, importCellNumberCeil, importCellNumberHalfUnit, importPackageCount } from './import-parser.numbers'
 import { VOLUME_CAI_SCALE } from '../ocean-freight-calculation/ocean-freight-calculation'
 import { ContainerWorkbookParseError, type ParsedContainerRow, type WorkbookCell, type WorkbookSheet } from './import-parser.types'
 import { readContainerWorkbook } from './import-parser.workbook'
@@ -85,6 +85,10 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     try { return importCellNumberCeil(cell(field), sheet, 18, true) }
     catch { errors.push(`${label}${cell(field)?.formula !== null && cell(field)?.formula !== undefined ? '公式无法可靠解析或结果无效' : '必须为有效数值'}`); return null }
   }
+  const weight = (field: Field, label: string) => {
+    try { return importCellNumberHalfUnit(cell(field), sheet, 18, true) }
+    catch { errors.push(`${label}${cell(field)?.formula !== null && cell(field)?.formula !== undefined ? '公式无法可靠解析或结果无效' : '必须为有效数值'}`); return null }
+  }
   const goodsName = text('goodsName', '品名', 255) ?? ''
   if (!goodsName) errors.push('品名不能为空')
   let count = 0
@@ -97,6 +101,9 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     const places = sourceDecimalPlaces(cell(field)?.value)
     if (places > 0) warnings.push(`${label}在来源里保留 ${places} 位小数，已向上取整到整数厘米，材积复算可能有偏差`)
   }
+  // 毛重按 0.5 kg 向上取整；来源超过两位小数时说明进位依据，而不是静默丢弃。
+  const weightPlaces = sourceDecimalPlaces(cell('grossWeightKg')?.value)
+  if (weightPlaces > 2) warnings.push(`整行毛重在来源里保留 ${weightPlaces} 位小数，已向上取到 0.5 kg`)
   const sourceData: ParsedContainerRow['sourceData'] = { cells: {} }
   for (const value of cells.values()) {
     const { value: raw, formula, type, sharedFormulaIndex, mergedFrom } = value
@@ -111,7 +118,7 @@ function parseRow(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, Wo
     rowKey: `${sheet.index + 1}:${rowNumber}`, sourceSheetName: sheet.name, sourceRowNumber: rowNumber,
     containerBatchName, warehouseReceiptReference: text('warehouseReceiptReference', '入仓参考', 500), oceanShippingMarkText: text('oceanShippingMarkText', '海运唛头', 128),
     goodsName, packageCount: count, packageUnit: text('packageUnit', '包装单位', 32),
-    grossWeightKg: numeric('grossWeightKg', '整行毛重', 0, 18, true), lengthCm: dimension('lengthCm', '每件长度'),
+    grossWeightKg: weight('grossWeightKg', '整行毛重'), lengthCm: dimension('lengthCm', '每件长度'),
     widthCm: dimension('widthCm', '每件宽度'), heightCm: dimension('heightCm', '每件高度'),
     reportedVolumeCai: numeric('reportedVolumeCai', '来源材积', VOLUME_CAI_SCALE, 24),
     recipientName: text('recipientName', '收件人', 128), recipientPhone, recipientAddress,

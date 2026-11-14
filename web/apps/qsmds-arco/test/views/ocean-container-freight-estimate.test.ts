@@ -17,14 +17,14 @@ function input(overrides: Partial<FreightEstimateInput> = {}): FreightEstimateIn
   }
 }
 
-test('计费材积按 28316 向上取整', () => {
+test('计费材积按 28316 向上取到 0.5 材', () => {
   assert.equal(calculateChargeableVolume(input()), 13)
-  // 14157×2×1×1 = 28314 → 0.9999 材，向上取整为 1。
+  // 14157×2×1×1 = 28314 → 0.9999 材，向上取到 1。
   assert.equal(calculateChargeableVolume(input({ lengthCm: '14157', widthCm: '2', heightCm: '1', packageCount: 1 })), 1)
   // 14158×2×1×1 = 28316 → 正好 1 材。
   assert.equal(calculateChargeableVolume(input({ lengthCm: '14158', widthCm: '2', heightCm: '1', packageCount: 1 })), 1)
-  // 14159×2×1×1 = 28318 → 超过 1 材一点，向上取整为 2。
-  assert.equal(calculateChargeableVolume(input({ lengthCm: '14159', widthCm: '2', heightCm: '1', packageCount: 1 })), 2)
+  // 14159×2×1×1 = 28318 → 超过 1 材一点，向上取到 1.5。
+  assert.equal(calculateChargeableVolume(input({ lengthCm: '14159', widthCm: '2', heightCm: '1', packageCount: 1 })), 1.5)
 })
 
 test('尺寸或箱数缺失时不产生计费材积', () => {
@@ -68,6 +68,13 @@ test('重量 150kg 是附加费边界，140kg 不计附加费', () => {
   const below = calculateFreightEstimate(input({ grossWeightKg: '140' }))
   assert.equal(below.surcharge, null)
   assert.equal(below.total, '730.00')
+})
+
+test('小数毛重参与按重量估算，附加费按数值比较', () => {
+  const result = calculateFreightEstimate(input({ grossWeightKg: '180.5' }))
+  assert.equal(result.weightKg, '180.5')
+  assert.equal(result.byWeight, '902.50')
+  assert.equal(result.surcharge, '100.00')
 })
 
 test('毛重缺失时仅按材积，省略重量与附加费', () => {

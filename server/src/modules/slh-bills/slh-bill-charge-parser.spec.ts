@@ -33,6 +33,23 @@ describe('slh bill charge parser', () => {
     expect(sumSlhCharges(charges, 'TWD')).toBe('4125.00')
   })
 
+  it('maps long, wide and high oversize wording to the oversize fee', () => {
+    // 顺联航用「超長費 / 超寬費 / 超高費」表达超尺寸，繁简两种写法都要认。
+    for (const alias of ['超长费', '超長費', '超宽费', '超寬費', '超高费', '超高費']) {
+      const { charges, notes } = parseSlhRemarks(`重货费100${alias}1500NT`)
+      expect(charges[1]).toMatchObject({ chargeType: 'OVERSIZE', currencyCode: 'TWD', amount: '1500.00' })
+      expect(notes).toEqual([])
+    }
+  })
+
+  it('maps waiting wording in both scripts', () => {
+    for (const alias of ['等待费', '等待費', '待时费', '待時費']) {
+      const { charges, notes } = parseSlhRemarks(`重货费100${alias}500NT`)
+      expect(charges[1]).toMatchObject({ chargeType: 'WAITING', currencyCode: 'TWD', amount: '500.00' })
+      expect(notes).toEqual([])
+    }
+  })
+
   it('keeps the supplement marker out of the notes', () => {
     const { charges, notes } = parseSlhRemarks('补 卸货费2000NT')
     expect(charges).toEqual([{ chargeType: 'UNLOADING', currencyCode: 'TWD', amount: '2000.00', sourceRemarkText: '补 卸货费2000NT' }])
@@ -70,6 +87,15 @@ describe('slh bill charge parser', () => {
   it('records an unrecognised fee as other with its original text', () => {
     const { charges } = parseSlhRemarks('码头操作费800NT')
     expect(charges).toEqual([{ chargeType: 'OTHER', currencyCode: 'TWD', amount: '800.00', sourceRemarkText: '码头操作费800NT' }])
+  })
+
+  it('keeps an unrecognised fee out of the amount-free notes', () => {
+    // 整段原文已作为「其他」费用行保留，不能重复报成「没有金额、未计入」。
+    expect(parseSlhRemarks('码头操作费800NT').notes).toEqual([])
+    expect(parseSlhRemarks('补 码头操作费800NT').notes).toEqual([])
+    expect(parseSlhRemarks('重货费100码头操作费800NT').notes).toEqual([])
+    // 真正没有金额的尾部文字仍保留为说明。
+    expect(parseSlhRemarks('码头操作费800NT 优待免收低消').notes).toEqual(['优待免收低消'])
   })
 
   it('returns nothing for an empty remark', () => {

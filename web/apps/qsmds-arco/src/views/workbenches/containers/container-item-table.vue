@@ -10,7 +10,7 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { CONTAINER_ITEM_ACTION_COLUMN_WIDTH } from './action-column.logic'
 import ContainerRemark from './container-remark.vue'
-import { formatContainerMeasurement } from './display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from './display.logic'
 
 const props = defineProps<{
   rows: ContainerLoadingItemDto[]
@@ -64,7 +64,7 @@ const actionColumn = computed<QsGenericTableActionColumn>(() => ({
 const { currencies, errorMessage: currencyError, reload: reloadCurrencies } = useCurrencyCatalog()
 const value = (input: string | number | null) => input ?? t('containerPage.unknown')
 const measurement = (input: string | null, places: 0 | 2 = 0) => value(formatContainerMeasurement(input, places))
-const weightText = (row: ContainerLoadingItemDto) => row.grossWeightKg === null ? t('containerPage.unknown') : `${measurement(row.grossWeightKg)} kg`
+const weightText = (row: ContainerLoadingItemDto) => row.grossWeightKg === null ? t('containerPage.unknown') : `${value(formatContainerWeight(row.grossWeightKg))} kg`
 const dimensionsText = (row: ContainerLoadingItemDto) => `${[row.lengthCm, row.widthCm, row.heightCm].map(item => measurement(item)).join(' × ')} cm`
 const columns = computed<QsGenericTableColumn<ContainerLoadingItemDto>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorFn: row => `${row.goodsName} ${row.oceanShippingMarkText ?? ''}`, width: 240, minWidth: 240, maxWidth: 240, fixed: 'left' },

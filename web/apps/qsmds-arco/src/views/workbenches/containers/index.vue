@@ -13,7 +13,7 @@ import ContainerBindingStats from './container-binding-stats.vue'
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerRemark from './container-remark.vue'
 import ContainerSwapModal from './container-swap-modal.vue'
-import { formatContainerMeasurement } from './display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from './display.logic'
 import { useContainerMutation } from './use-container-mutation'
 import { useContainerResource } from './use-container-resource'
 
@@ -62,6 +62,10 @@ function measurement(value: string | null, places: 0 | 2, unit: string) {
   const formatted = formatContainerMeasurement(value, places)
   return formatted === null ? t('containerPage.unknown') : `${formatted} ${unit}`
 }
+function weight(value: string | null, unit: string) {
+  const formatted = formatContainerWeight(value)
+  return formatted === null ? t('containerPage.unknown') : `${formatted} ${unit}`
+}
 function quantities(row: ContainerBatchDto) {
   return [
     { label: 'itemCount', value: row.itemCount },
@@ -70,7 +74,7 @@ function quantities(row: ContainerBatchDto) {
 }
 function totals(row: ContainerBatchDto) {
   return [
-    { label: 'totalWeightLabel', value: measurement(row.grossWeightKgTotal, 0, 'kg') },
+    { label: 'totalWeightLabel', value: weight(row.grossWeightKgTotal, 'kg') },
     { label: 'totalVolumeLabel', value: measurement(row.volumeCaiTotal, 2, t('containerManagement.volumeUnit')) },
   ]
 }

@@ -159,12 +159,12 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     expect(result.total).toBe(4)
     expect(result.items.map(item => item.id)).toEqual([emptyId, noPersonalId, incompleteId, mixedId])
     for (const item of result.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
-    expect(result.items[0]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0', volumeCaiTotal: '0.00' })
-    expect(result.items[1]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12', volumeCaiTotal: '1.00' })
+    expect(result.items[0]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0.00', volumeCaiTotal: '0.00' })
+    expect(result.items[1]).toMatchObject({ itemCount: 1, myItemCount: 0, grossWeightKgTotal: '12.00', volumeCaiTotal: '1.00' })
     expect(result.items[2]).toMatchObject({ itemCount: 2, myItemCount: 1, grossWeightKgTotal: null, volumeCaiTotal: null })
     expect(result.items[3]).toMatchObject({
       itemCount: 6, myItemCount: 3, loadingDate: '2026-09-20', warehouseValue: TEST_DESTINATION_WAREHOUSE,
-      grossWeightKgTotal: '2050', volumeCaiTotal: '206.22',
+      grossWeightKgTotal: '2050.00', volumeCaiTotal: '206.22',
     })
     expect(result.items[3].warehouseName).toBeTruthy()
     const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 2 }).expect(200)).body as OverviewPage
@@ -215,7 +215,7 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
       expect(result.items.every(item => item.myItemCount > 0)).toBe(true)
       // SELF 的合计取本人明细：mixedId 的 3 行完整；incompleteId 的本人行缺毛重。
       expect(result.items[0]).toMatchObject({ itemCount: 2, myItemCount: 1, grossWeightKgTotal: null, volumeCaiTotal: '9.00' })
-      expect(result.items[1]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '1400', volumeCaiTotal: '170.10' })
+      expect(result.items[1]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '1400.00', volumeCaiTotal: '170.10' })
       const first = (await alice.browser.get(basePath).query({ page: 1, pageSize: 1 }).expect(200)).body as OverviewPage
       const second = (await alice.browser.get(basePath).query({ page: 2, pageSize: 1 }).expect(200)).body as OverviewPage
       expect(first.total).toBe(2)
@@ -279,9 +279,9 @@ describe('operations ocean containers with isolated PostgreSQL', () => {
     expect(allList.total).toBe(4)
     expect(allList.items.map(item => item.id)).toEqual([emptyId, noPersonalId, incompleteId, mixedId])
     for (const item of allList.items) expect(Object.keys(item).sort()).toEqual(overviewKeys)
-    expect(allList.items[0]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0', volumeCaiTotal: '0.00' })
+    expect(allList.items[0]).toMatchObject({ itemCount: 0, myItemCount: 0, grossWeightKgTotal: '0.00', volumeCaiTotal: '0.00' })
     expect(allList.items[2]).toMatchObject({ itemCount: 2, myItemCount: 1 })
-    expect(allList.items[3]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '2050', volumeCaiTotal: '206.22' })
+    expect(allList.items[3]).toMatchObject({ itemCount: 6, myItemCount: 3, grossWeightKgTotal: '2050.00', volumeCaiTotal: '206.22' })
     const searched = (await alice.browser.get(`${basePath}/all`).query({ search: '0919' }).expect(200)).body as OverviewPage
     expect(searched.items.map(item => item.id)).toEqual([incompleteId])
     // ALL 视图允许按柜内任意行的收件人命中。

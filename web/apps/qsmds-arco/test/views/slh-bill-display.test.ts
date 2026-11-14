@@ -58,9 +58,9 @@ test('尺寸缺边或单位缺失时不用零或猜测单位补位', () => {
   assert.equal(formatSlhBillDimensions({ heightCm: '108.25', lengthCm: '240.00', widthCm: '164.00' }), '240×164×109')
   assert.equal(formatSlhBillDimensions({ heightCm: null, lengthCm: '240.00', widthCm: '164.00' }), null)
   assert.equal(formatSlhBillDimensions({}), null)
-  // 重量与录入口径一致：整数 kg 展示。
+  // 重量按有效数位展示；服务端已把来源值向上取到 0.5 kg。
   assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.000', weightUnit: 'KGS' }), '1173 KGS')
-  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.456' }), '1173')
+  assert.equal(formatSlhBillWeight({ grossWeightKg: '1173.456' }), '1173.46')
   assert.equal(formatSlhBillWeight({ grossWeightKg: null, weightUnit: 'KGS' }), null)
 })
 

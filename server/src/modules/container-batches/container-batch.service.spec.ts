@@ -17,6 +17,7 @@ function harness(previous?: Partial<ContainerLoadingItem>) {
       findUnique: jest.fn().mockResolvedValue(previous ?? null), aggregate: jest.fn().mockResolvedValue({ _max: { lineNumber: null } }),
       create: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...data, id: randomUUID(), version: 1,
         ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])),
+        chargeableVolumeCai: typeof data.chargeableVolumeCai === 'number' ? new Prisma.Decimal(data.chargeableVolumeCai) : null,
       })),
     },
     shipmentLoadGroupMember: { findMany: jest.fn().mockResolvedValue([]) },
@@ -42,8 +43,8 @@ describe('ContainerBatchService measurement calculation', () => {
   it('persists row volume and ceiling once while preserving source volume and total weight', async () => {
     const test = harness()
     const result = await test.service.createItem(test.context, test.batchId, { goodsName: '履带', packageCount: 10, expectedVersion: 1, lengthCm: '128', widthCm: '19', heightCm: '15', grossWeightKg: '180', reportedVolumeCai: '12.88' }, test.key)
-    expect(result).toMatchObject({ packageCount: 10, grossWeightKg: '180', lengthCm: '128', volumeCai: '12.88', chargeableVolumeCai: 13, reportedVolumeCai: '12.88', volumeDifferenceCai: '0.00' })
-    expect(test.tx.containerLoadingItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ volumeCai: '12.88', chargeableVolumeCai: 13, reportedVolumeCai: '12.88', grossWeightKg: '180' }) as unknown }))
+    expect(result).toMatchObject({ packageCount: 10, grossWeightKg: '180.00', lengthCm: '128', volumeCai: '12.88', chargeableVolumeCai: 13, reportedVolumeCai: '12.88', volumeDifferenceCai: '0.00' })
+    expect(test.tx.containerLoadingItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ volumeCai: '12.88', chargeableVolumeCai: 13, reportedVolumeCai: '12.88', grossWeightKg: '180.00' }) as unknown }))
     expect(test.audit.record).toHaveBeenCalledTimes(1)
   })
 

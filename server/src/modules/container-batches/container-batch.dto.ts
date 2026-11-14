@@ -40,7 +40,7 @@ export class ContainerLoadingItemCreateDto {
   @ApiProperty({ minimum: 1, maximum: 1_000_000 }) @IsInt() @Min(1) @Max(1_000_000) packageCount!: number
   @ApiPropertyOptional({ type: String, maxLength: 32, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 32) packageUnit?: string | null
   @ApiPropertyOptional({ type: String, maxLength: 500, nullable: true }) @IsOptional() @IsString() @IsUnicodeCodePointLength(0, 500) remark?: string | null
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) grossWeightKg?: string | null
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive total row weight in kg; decimal(18,2), rounded up to the next 0.5 kg. Never multiplied by packageCount.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) grossWeightKg?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package length in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) lengthCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package width in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) widthCm?: string | null
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 19, description: 'Positive per-package height in cm; decimal(18,2), matching the bill table record precision.' }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 19) heightCm?: string | null
@@ -104,7 +104,7 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) widthCm!: string | null
   @ApiProperty({ type: String, nullable: true }) heightCm!: string | null
   @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume using the shared 28316 divisor, rounded to two decimals; decimal(24,2); null when dimensions are incomplete.' }) volumeCai!: string | null
-  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 2_147_483_647, description: 'Ceiling of the exact row volume, used as the billable quantity when pricing by volume.' }) chargeableVolumeCai!: number | null
+  @ApiProperty({ type: Number, nullable: true, minimum: 0.5, maximum: 2_147_483_647, description: 'Exact row volume rounded up to the next 0.5 cai, used as the billable quantity when pricing by volume.' }) chargeableVolumeCai!: number | null
   @ApiProperty({ type: String, nullable: true }) reportedVolumeCai!: string | null
   @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume minus reported source volume; null when either is missing.' }) volumeDifferenceCai!: string | null
 }

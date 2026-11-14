@@ -157,6 +157,7 @@
       "SUBTOTAL_MISMATCH": "Bill subtotal disagrees with line total",
       "NET_AMOUNT_MISMATCH": "Net TWD amount disagrees with line total",
       "DIMENSION_PRECISION": "Dimension precision warning",
+      "WEIGHT_PRECISION": "Weight precision warning",
       "RATE_MISSING": "Bill embeds no exchange rate",
       "REMARK_NOTE": "Remark fragment left out of charges"
     },
