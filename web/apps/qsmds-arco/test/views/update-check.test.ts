@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 校验更新检测的版本比较与清单清洗。
 import test from 'node:test'
 import {
-  isAllReleaseAudience,
   isNewerVersion,
   normalizeReleaseManifest,
+} from '../../src/components/AppCheckUpdates/logic'
+import {
+  isAllReleaseAudience,
   parseReleaseNoteItem,
   resolveReleaseSectionAudience,
-} from '../../src/components/AppCheckUpdates/logic'
+} from '../../src/components/business/QsReleaseNotesContent/logic'
 
 test('只有严格更高的稳定版本才视为更新', () => {
   assert.equal(isNewerVersion('1.2.0', '1.1.9'), true)
