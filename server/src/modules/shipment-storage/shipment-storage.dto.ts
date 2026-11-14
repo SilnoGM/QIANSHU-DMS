@@ -394,7 +394,7 @@ export class ShipmentStorageContainerItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly widthCm!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly heightCm!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly volumeCai!: string | null
-  @ApiProperty({ type: 'integer', nullable: true }) readonly chargeableVolumeCai!: number | null
+  @ApiProperty({ type: 'number', nullable: true }) readonly chargeableVolumeCai!: number | null
   @ApiProperty({ type: 'string', nullable: true }) readonly reportedVolumeCai!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly recipientName!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly recipientPhone!: string | null

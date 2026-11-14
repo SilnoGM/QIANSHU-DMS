@@ -52,8 +52,14 @@ describe('slh bill calculation', () => {
       expect(recordSlhVolume(ratio, 'WEIGHT')).toBe('38.89')
     })
 
-    it('rounds up when priced by volume, matching the bill value 39', () => {
+    it('rounds up to the next half cai when priced by volume, matching the bill value 39', () => {
       expect(recordSlhVolume(ratio, 'VOLUME')).toBe('39.00')
+    })
+
+    it('rounds up to the next half cai on the 0.5 boundary', () => {
+      // 71.58 材 → 72.00；98.03 材 → 98.50。
+      expect(recordSlhVolume({ numerator: 7158n, denominator: 100n }, 'VOLUME')).toBe('72.00')
+      expect(recordSlhVolume({ numerator: 9803n, denominator: 100n }, 'VOLUME')).toBe('98.50')
     })
   })
 
@@ -64,6 +70,10 @@ describe('slh bill calculation', () => {
 
     it('multiplies unit price by the ceiling volume when priced by volume', () => {
       expect(calculateSlhFreight({ unitPriceAmount: '30', pricingBasis: 'VOLUME', grossWeightKg: '213', volumeCai: '39' })).toBe('1170.00')
+    })
+
+    it('multiplies unit price by the half-cai billable volume', () => {
+      expect(calculateSlhFreight({ unitPriceAmount: '30', pricingBasis: 'VOLUME', grossWeightKg: null, volumeCai: '98.50' })).toBe('2955.00')
     })
 
     it('rounds the product of price and fractional weight to two decimals', () => {

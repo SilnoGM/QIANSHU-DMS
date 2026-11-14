@@ -119076,7 +119076,7 @@
             "nullable": true
           },
           "chargeableVolumeCai": {
-            "type": "integer",
+            "type": "number",
             "nullable": true
           },
           "reportedVolumeCai": {
@@ -129221,9 +129221,9 @@
           "chargeableVolumeCai": {
             "type": "number",
             "nullable": true,
-            "minimum": 1,
+            "minimum": 0.5,
             "maximum": 2147483647,
-            "description": "Ceiling of the exact row volume, used as the billable quantity when pricing by volume."
+            "description": "Exact row volume rounded up to the next 0.5 cai, used as the billable quantity when pricing by volume."
           },
           "reportedVolumeCai": {
             "type": "string",

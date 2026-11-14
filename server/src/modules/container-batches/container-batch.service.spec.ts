@@ -17,6 +17,7 @@ function harness(previous?: Partial<ContainerLoadingItem>) {
       findUnique: jest.fn().mockResolvedValue(previous ?? null), aggregate: jest.fn().mockResolvedValue({ _max: { lineNumber: null } }),
       create: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...data, id: randomUUID(), version: 1,
         ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])),
+        chargeableVolumeCai: typeof data.chargeableVolumeCai === 'number' ? new Prisma.Decimal(data.chargeableVolumeCai) : null,
       })),
     },
     shipmentLoadGroupMember: { findMany: jest.fn().mockResolvedValue([]) },

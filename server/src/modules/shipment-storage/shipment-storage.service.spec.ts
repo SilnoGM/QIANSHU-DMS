@@ -688,7 +688,7 @@ describe('ShipmentStorageService', () => {
             widthCm: { toFixed: () => '34' },
             heightCm: { toFixed: () => '35' },
             volumeCai: { toFixed: () => '1.55' },
-            chargeableVolumeCai: 2,
+            chargeableVolumeCai: { toNumber: () => 2 },
             reportedVolumeCai: null,
             recipientName: '收件人甲',
             recipientPhone: '0900000001',

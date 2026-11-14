@@ -104,7 +104,7 @@ export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) widthCm!: string | null
   @ApiProperty({ type: String, nullable: true }) heightCm!: string | null
   @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume using the shared 28316 divisor, rounded to two decimals; decimal(24,2); null when dimensions are incomplete.' }) volumeCai!: string | null
-  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 2_147_483_647, description: 'Ceiling of the exact row volume, used as the billable quantity when pricing by volume.' }) chargeableVolumeCai!: number | null
+  @ApiProperty({ type: Number, nullable: true, minimum: 0.5, maximum: 2_147_483_647, description: 'Exact row volume rounded up to the next 0.5 cai, used as the billable quantity when pricing by volume.' }) chargeableVolumeCai!: number | null
   @ApiProperty({ type: String, nullable: true }) reportedVolumeCai!: string | null
   @ApiProperty({ type: String, nullable: true, description: 'Calculated row volume minus reported source volume; null when either is missing.' }) volumeDifferenceCai!: string | null
 }

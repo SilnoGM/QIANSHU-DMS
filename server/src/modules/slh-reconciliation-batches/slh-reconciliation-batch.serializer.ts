@@ -186,7 +186,7 @@ function serializeBatchMember(
       widthCm: item.widthCm?.toFixed(0) ?? null,
       heightCm: item.heightCm?.toFixed(0) ?? null,
       volumeCai: item.volumeCai?.toFixed(2) ?? null,
-      chargeableVolumeCai: item.chargeableVolumeCai,
+      chargeableVolumeCai: item.chargeableVolumeCai?.toNumber() ?? null,
       reportedVolumeCai: item.reportedVolumeCai?.toFixed(2) ?? null,
       codAmountTwd: item.codAmountTwd?.toFixed(2) ?? null,
       recipientName: item.recipientName,

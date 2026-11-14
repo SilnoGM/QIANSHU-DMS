@@ -35,6 +35,17 @@ export function roundRatio(numerator: bigint, denominator: bigint): bigint {
   return numerator < 0n ? -rounded : rounded
 }
 
+/**
+ * 把精确比值向上取到 0.5 的整数倍，返回 0.5 的个数（即 ceil(2x)）。
+ *
+ * 账单的按材积计价运费与装柜的计费材数共用这一口径：两侧必须是同一套取整，
+ * 否则同一唛头会出现账单计费数量与装柜计费数量不一致。比值本身必须非负。
+ */
+export function ceilRatioToHalfUnits(numerator: bigint, denominator: bigint): bigint {
+  if (denominator <= 0n || numerator < 0n) throw new OceanCalculationError('volumeCai')
+  return (2n * numerator + denominator - 1n) / denominator
+}
+
 export function normalizeOceanDecimal(value: unknown, precision: number, scale: number, field: string, positive = false): string | null {
   if (value === null) return null
   if (typeof value !== 'string') throw new OceanCalculationError(field)
