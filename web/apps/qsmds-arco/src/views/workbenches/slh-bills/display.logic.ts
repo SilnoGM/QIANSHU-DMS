@@ -1,6 +1,6 @@
 import type { SlhBillLineChargeDto, SlhBillLineDto } from '@/api/generated/types.gen'
 import Decimal from 'decimal.js'
-import { formatContainerMeasurement } from '../containers/display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../containers/display.logic'
 
 /** 金额、汇率与材积一律 2 位小数展示，只格式化不回写，计费继续使用服务端原始精度。 */
 export function formatSlhBillRate(value: string | null | undefined): string | null {
@@ -88,7 +88,7 @@ export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 
 
 /** 重量与单位同源展示；单位缺失时只显示数值。重量按两位小数展示，服务端已向上取到 0.5 kg。 */
 export function formatSlhBillWeight(line: Pick<SlhBillLineDto, 'grossWeightKg' | 'weightUnit'>): string | null {
-  const weight = formatContainerMeasurement(line.grossWeightKg ?? null, 2)
+  const weight = formatContainerWeight(line.grossWeightKg ?? null)
   if (weight === null) {
     return null
   }

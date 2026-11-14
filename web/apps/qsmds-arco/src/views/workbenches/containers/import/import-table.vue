@@ -6,7 +6,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { formatContainerMeasurement } from '../display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../display.logic'
 import ImportMatchSummary from './import-match-summary.vue'
 
 const props = defineProps<{ rows: ImportDisplayRow[], status: ImportFilter, disabled: boolean }>()
@@ -22,6 +22,7 @@ const visibleRows = computed(() => filtered.value.slice((page.value - 1) * pageS
 watch([() => props.status, search, pageSize], () => page.value = 1)
 watch(() => filtered.value.length, count => page.value = Math.max(1, Math.min(page.value, Math.ceil(count / pageSize.value))))
 const measurement = (value: string | null, places: 0 | 2 = 0) => formatContainerMeasurement(value, places) ?? '—'
+const weight = (value: string | null) => formatContainerWeight(value) ?? '—'
 const dimensions = (row: ImportDisplayRow) => `${[row.lengthCm, row.widthCm, row.heightCm].map(value => measurement(value)).join(' × ')} cm`
 const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'goods', title: t('containerPage.goods'), accessorKey: 'goodsName', width: 250, minWidth: 250, maxWidth: 250, fixed: 'left' },
@@ -29,7 +30,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 260, minWidth: 260, maxWidth: 260, cellClass: 'qs-type-data whitespace-normal [overflow-wrap:anywhere]' },
   { id: 'orders', title: t('containerImport.orders'), accessorFn: row => row.selectedShipment?.purchaseOrderNo, width: 230, minWidth: 230, maxWidth: 230 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit || ''}`, width: 100, minWidth: 100, maxWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg, 2)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
+  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${weight(row.grossWeightKg)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volume', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 185, minWidth: 185, maxWidth: 185 },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
   { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right' },
@@ -70,7 +71,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
     <template #cell-measurements="{ row }">
       <QsTableStackedCell class="w-full whitespace-normal">
         <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
-          {{ measurement(row.original.grossWeightKg, 2) }} kg
+          {{ weight(row.original.grossWeightKg) }} kg
         </QsTableStackedLine>
         <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
           {{ dimensions(row.original) }}
@@ -135,7 +136,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
             {{ row.packageCount }} {{ row.packageUnit }}
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
-            {{ measurement(row.grossWeightKg, 2) }} kg
+            {{ weight(row.grossWeightKg) }} kg
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
             {{ dimensions(row) }}

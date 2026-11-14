@@ -2,7 +2,7 @@
 import type { ImportDisplayRow } from './use-container-import'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { formatContainerMeasurement } from '../display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../display.logic'
 
 defineOptions({ name: 'ShipmentSourceSummary' })
 
@@ -56,7 +56,7 @@ const recipientText = computed(() => [props.row.recipientName, props.row.recipie
           {{ t('containerPage.weightLabel') }}
         </p>
         <p class="qs-type-data m-0 mt-0.5">
-          {{ measurement(row.grossWeightKg, 2) }} kg
+          {{ formatContainerWeight(row.grossWeightKg) ?? '—' }} kg
         </p>
       </div>
       <div class="min-w-0">

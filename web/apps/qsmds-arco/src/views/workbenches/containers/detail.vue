@@ -10,7 +10,7 @@ import ContainerItemTable from './container-item-table.vue'
 import ContainerRelatedDrawers from './container-related-drawers.vue'
 import ContainerRemark from './container-remark.vue'
 import ContainerSourceFile from './container-source-file.vue'
-import { formatContainerMeasurement } from './display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from './display.logic'
 import LoadingItemFormDrawer from './loading-item-form-drawer.vue'
 import ShipmentPicker from './shipment-picker.vue'
 import { useContainerImportParse } from './use-container-import-parse'
@@ -95,7 +95,7 @@ const summary = computed(() => batch.value
   ? [
       { label: 'itemCount', amount: batch.value.itemCount, unit: '' },
       { label: 'shipmentCount', amount: batch.value.shipmentCount, unit: '' },
-      { label: 'totalWeightLabel', amount: formatContainerMeasurement(batch.value.grossWeightKgTotal, 2), unit: 'kg' },
+      { label: 'totalWeightLabel', amount: formatContainerWeight(batch.value.grossWeightKgTotal), unit: 'kg' },
       { label: 'totalVolumeLabel', amount: formatContainerMeasurement(batch.value.volumeCaiTotal, 2), unit: t('containerManagement.volumeUnit') },
     ] as const
   : [])
