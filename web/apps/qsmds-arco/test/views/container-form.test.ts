@@ -46,12 +46,14 @@ test('invalid precision, signs, exponent, zero and quantity are rejected; source
     draft.lengthCm = value
     assert.ok(validateLoadingItemDraft(draft).lengthCm, value)
   }
-  // 尺寸与毛重均按整数存储：同一张表单里不再接受小数。
+  // 尺寸按整数厘米；毛重允许最多两位小数，保存时由服务端向上取到 0.5 kg。
   draft.lengthCm = '1'
   draft.grossWeightKg = '1'
   draft.reportedVolumeCai = '0'
   assert.deepEqual(validateLoadingItemDraft(draft), {})
   draft.grossWeightKg = '0.1'
+  assert.deepEqual(validateLoadingItemDraft(draft), {})
+  draft.grossWeightKg = '1.001'
   assert.ok(validateLoadingItemDraft(draft).grossWeightKg)
   draft.grossWeightKg = '1'
   for (const value of ['0', '1.5', '1000001', '1e2']) {

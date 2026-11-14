@@ -21,7 +21,7 @@ const visible = defineModel<boolean>({ required: true })
 const { t } = useI18n()
 const toast = useQsToast()
 const copying = ref(false)
-const weight = computed(() => formatContainerMeasurement(props.line?.grossWeightKg ?? null, 0))
+const weight = computed(() => formatContainerMeasurement(props.line?.grossWeightKg ?? null, 2))
 const volume = computed(() => formatContainerMeasurement(props.line?.volumeCai ?? null, 2))
 const dimensions = computed(() => {
   if (!props.line) {

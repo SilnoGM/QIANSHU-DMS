@@ -45,7 +45,7 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
     assert.ok(columns.some(column => column.id === id), id)
   }
   const display = (id: string, row: Record<string, unknown>) => columns.find(column => column.id === id)!.accessorFn!(row)
-  assert.equal(display('weightDimensions', { grossWeightKg: '1173.000', lengthCm: '240.000', widthCm: '164.000', heightCm: '108.000' }), '1173 kg 240 × 164 × 108 cm')
+  assert.equal(display('weightDimensions', { grossWeightKg: '1173.000', lengthCm: '240.000', widthCm: '164.000', heightCm: '108.000' }), '1173.00 kg 240 × 164 × 108 cm')
   assert.equal(display('volumeCai', { volumeCai: '12.88272063' }), '12.88')
   assert.equal(display('reportedVolumeCai', { reportedVolumeCai: '12.885' }), '12.89')
   assert.equal(display('volumeDifferenceCai', { volumeDifferenceCai: '-0.125' }), '-0.13')
@@ -99,7 +99,7 @@ test('柜次详情汇总按整数重量和两位材积展示，缺值不会被�
   })) as { summary: { value: Array<{ label: string, amount: unknown, unit?: string }> }, warehouseLabel: { value: string } }
   batch.value = { itemCount: 2, shipmentCount: 1, packageCountTotal: 10, grossWeightKgTotal: '1173.000', volumeCaiTotal: '150.11759720', chargeableVolumeCaiTotal: 151, warehouseValue: 'B5' }
   const amount = (label: string) => state.summary.value.find(item => item.label === label)?.amount
-  assert.equal(amount('totalWeightLabel'), '1173')
+  assert.equal(amount('totalWeightLabel'), '1173.00')
   assert.equal(amount('totalVolumeLabel'), '150.12')
   assert.equal(state.summary.value.find(item => item.label === 'totalWeightLabel')?.unit, 'kg')
   assert.equal(state.summary.value.find(item => item.label === 'totalVolumeLabel')?.unit, '材')

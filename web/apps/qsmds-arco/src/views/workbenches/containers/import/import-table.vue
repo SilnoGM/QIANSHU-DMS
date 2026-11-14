@@ -29,7 +29,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
   { id: 'receipt', title: t('containerPage.receipt'), accessorKey: 'warehouseReceiptReference', width: 260, minWidth: 260, maxWidth: 260, cellClass: 'qs-type-data whitespace-normal [overflow-wrap:anywhere]' },
   { id: 'orders', title: t('containerImport.orders'), accessorFn: row => row.selectedShipment?.purchaseOrderNo, width: 230, minWidth: 230, maxWidth: 230 },
   { id: 'package', title: t('containerPage.packageCount'), accessorFn: row => `${row.packageCount} ${row.packageUnit || ''}`, width: 100, minWidth: 100, maxWidth: 100, cellClass: 'qs-type-data', align: 'right' },
-  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
+  { id: 'measurements', title: t('containerPage.weightDimensions'), accessorFn: row => `${measurement(row.grossWeightKg, 2)} kg ${dimensions(row)}`, width: 240, minWidth: 240, maxWidth: 240 },
   { id: 'volume', title: t('containerPage.volume'), accessorFn: row => measurement(row.volumeCai, 2), width: 185, minWidth: 185, maxWidth: 185 },
   { id: 'recipient', title: t('containerPage.recipientInfo'), accessorFn: row => [row.recipientName, row.recipientPhone, row.recipientAddress].filter(Boolean).join(' '), width: 380, minWidth: 380, maxWidth: 380 },
   { id: 'cod', title: t('containerPage.cod'), accessorKey: 'codAmountTwd', width: 170, minWidth: 170, maxWidth: 170, align: 'right' },
@@ -70,7 +70,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
     <template #cell-measurements="{ row }">
       <QsTableStackedCell class="w-full whitespace-normal">
         <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
-          {{ measurement(row.original.grossWeightKg) }} kg
+          {{ measurement(row.original.grossWeightKg, 2) }} kg
         </QsTableStackedLine>
         <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
           {{ dimensions(row.original) }}
@@ -135,7 +135,7 @@ const columns = computed<QsGenericTableColumn<ImportDisplayRow>[]>(() => [
             {{ row.packageCount }} {{ row.packageUnit }}
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.weightLabel')" content-class="qs-type-data">
-            {{ measurement(row.grossWeightKg) }} kg
+            {{ measurement(row.grossWeightKg, 2) }} kg
           </QsTableStackedLine>
           <QsTableStackedLine :label="t('containerPage.dimensionsLabel')" content-class="qs-type-data">
             {{ dimensions(row) }}

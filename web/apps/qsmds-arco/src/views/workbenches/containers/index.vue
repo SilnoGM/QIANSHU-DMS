@@ -70,7 +70,7 @@ function quantities(row: ContainerBatchDto) {
 }
 function totals(row: ContainerBatchDto) {
   return [
-    { label: 'totalWeightLabel', value: measurement(row.grossWeightKgTotal, 0, 'kg') },
+    { label: 'totalWeightLabel', value: measurement(row.grossWeightKgTotal, 2, 'kg') },
     { label: 'totalVolumeLabel', value: measurement(row.volumeCaiTotal, 2, t('containerManagement.volumeUnit')) },
   ]
 }

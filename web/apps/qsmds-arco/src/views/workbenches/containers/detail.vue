@@ -95,7 +95,7 @@ const summary = computed(() => batch.value
   ? [
       { label: 'itemCount', amount: batch.value.itemCount, unit: '' },
       { label: 'shipmentCount', amount: batch.value.shipmentCount, unit: '' },
-      { label: 'totalWeightLabel', amount: formatContainerMeasurement(batch.value.grossWeightKgTotal, 0), unit: 'kg' },
+      { label: 'totalWeightLabel', amount: formatContainerMeasurement(batch.value.grossWeightKgTotal, 2), unit: 'kg' },
       { label: 'totalVolumeLabel', amount: formatContainerMeasurement(batch.value.volumeCaiTotal, 2), unit: t('containerManagement.volumeUnit') },
     ] as const
   : [])

@@ -86,9 +86,9 @@ export function formatSlhBillDimensions(line: Pick<SlhBillLineDto, 'lengthCm' | 
   return sides.join('×')
 }
 
-/** 重量与单位同源展示；单位缺失时只显示数值。重量按整数 kg 展示。 */
+/** 重量与单位同源展示；单位缺失时只显示数值。重量按两位小数展示，服务端已向上取到 0.5 kg。 */
 export function formatSlhBillWeight(line: Pick<SlhBillLineDto, 'grossWeightKg' | 'weightUnit'>): string | null {
-  const weight = formatContainerMeasurement(line.grossWeightKg ?? null, 0)
+  const weight = formatContainerMeasurement(line.grossWeightKg ?? null, 2)
   if (weight === null) {
     return null
   }

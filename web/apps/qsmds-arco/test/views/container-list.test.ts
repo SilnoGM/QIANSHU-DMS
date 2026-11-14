@@ -100,6 +100,6 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 10 }, 0), '10/10 [containerPage.bindingAll]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0 }, 0), '0/10 [containerPage.bindingNone]')
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0, itemCount: 0 }, 0), '0/0 [containerPage.bindingEmpty]')
-  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173 kg 25.14 材')
+  assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173.40 kg 25.14 材')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
 })

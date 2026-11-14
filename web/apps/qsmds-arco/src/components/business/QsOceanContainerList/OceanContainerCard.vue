@@ -127,7 +127,7 @@ function measurement(value: string | null, precision: number) {
             {{ weightLabel }}
           </dt>
           <dd class="qs-type-data m-0">
-            {{ measurement(item.grossWeightKgTotal, 0) }}<span v-if="item.grossWeightKgTotal !== null" class="qs-type-meta text-muted-foreground ml-1">kg</span>
+            {{ measurement(item.grossWeightKgTotal, 2) }}<span v-if="item.grossWeightKgTotal !== null" class="qs-type-meta text-muted-foreground ml-1">kg</span>
           </dd>
         </div>
         <div class="flex gap-2 items-baseline">

@@ -56,7 +56,7 @@ const recipientText = computed(() => [props.row.recipientName, props.row.recipie
           {{ t('containerPage.weightLabel') }}
         </p>
         <p class="qs-type-data m-0 mt-0.5">
-          {{ measurement(row.grossWeightKg) }} kg
+          {{ measurement(row.grossWeightKg, 2) }} kg
         </p>
       </div>
       <div class="min-w-0">

@@ -1457,7 +1457,7 @@ test('账单明细行面板：顶部信息块 + 货物明细 / 费用结算 / �
   assert.equal(cargo.fields[2]?.label, '[slhBill.line.packageCount]')
   assert.equal(cargo.fields[2]?.value, '12 箱')
   assert.equal(cargo.fields[3]?.label, '[slhBill.line.weight]')
-  assert.equal(cargo.fields[3]?.value, '121 KG')
+  assert.equal(cargo.fields[3]?.value, '120.50 KG')
   assert.equal(cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
   // 材积主值取系统计算，括号里给与账单自报的差异（本例系统更大）。
   assert.equal(cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
@@ -1628,7 +1628,7 @@ test('装柜明细行面板：顶部信息块 + 货物明细 + 代收货款块 +
   assert.equal(panel.cargo.fields[2]?.label, '[slhBill.line.packageCount]')
   assert.equal(panel.cargo.fields[2]?.value, '12 箱')
   assert.equal(panel.cargo.fields[3]?.label, '[slhBill.line.weight]')
-  assert.equal(panel.cargo.fields[3]?.value, '121 KG')
+  assert.equal(panel.cargo.fields[3]?.value, '120.50 KG')
   assert.equal(panel.cargo.fields[4]?.value, '215×137×113 [slhBill.unit.cm]')
   // 系统计算 − 账单自报 = +0.03：括注与账单面板同一措辞。
   assert.equal(panel.cargo.fields[5]?.value, '1.23 [slhBill.unit.cai]（[slhBill.line.volumeDifferenceCai] +0.03）')
