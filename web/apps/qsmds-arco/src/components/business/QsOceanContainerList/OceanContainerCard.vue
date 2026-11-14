@@ -4,10 +4,10 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import { Decimal } from 'decimal.js'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import { formatContainerWeight } from '@/views/workbenches/containers/display.logic'
 import { hasOceanContainerDetails, isOceanContainerLineActionable, isOceanContainerLineHighlighted, isOwnOceanContainer, visibleOceanContainerColumns } from './logic'
 import OceanContainerRecipient from './OceanContainerRecipient.vue'
 import OceanContainerSource from './OceanContainerSource.vue'
-import { formatContainerWeight } from '@/views/workbenches/containers/display.logic'
 
 const props = defineProps<{
   item: OceanContainerSummary

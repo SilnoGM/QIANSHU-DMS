@@ -15,8 +15,8 @@ import QsShipmentStorageCard from '@/components/business/QsShipmentStorageCard/i
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
-import ShipmentStorageClaimModal from '@/views/workbenches/purchase-storage/claim-modal.vue'
 import { formatContainerWeight } from '@/views/workbenches/containers/display.logic'
+import ShipmentStorageClaimModal from '@/views/workbenches/purchase-storage/claim-modal.vue'
 import { buildStorageQuery, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from '@/views/workbenches/shipment-storage/logic'
 
 defineOptions({ name: 'QsOperationsGoodsStorage' })
