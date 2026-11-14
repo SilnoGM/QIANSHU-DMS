@@ -113,6 +113,7 @@ declare global {
   const useAppNotificationStore: typeof import('../store/modules/app/notification').useAppNotificationStore
   const useAppPage: typeof import('../composables/app/page').useAppPage
   const useAppPreferencesStore: typeof import('../store/modules/app/preferences').useAppPreferencesStore
+  const useAppReleaseUpdateStore: typeof import('../store/modules/app/release-update').useAppReleaseUpdateStore
   const useAppRouteStore: typeof import('../store/modules/app/route').useAppRouteStore
   const useAppSettingsStore: typeof import('../store/modules/app/settings').useAppSettingsStore
   const useAppStartup: typeof import('../composables/app/startup').useAppStartup

@@ -44,6 +44,39 @@ test('侧边栏版本入口以卡片整体链接到版本更新日志', () => {
   assert.match(subSidebarSource, /<AppVersionEntry :collapsed="isCollapse" \/>/u)
 })
 
+test('存在新版本时版本入口展示红色 New 标记', () => {
+  const entrySource = readRelativeSource('../../src/components/AppVersionEntry/index.vue')
+  const updateCheckSource = readRelativeSource('../../src/components/AppCheckUpdates/index.vue')
+  const storeSource = readRelativeSource('../../src/store/modules/app/release-update.ts')
+
+  // Store 只记录“远端更高版本”这一结论，默认没有更新。
+  assert.match(storeSource, /defineStore\('appReleaseUpdate'/u)
+  assert.match(storeSource, /const latestVersion = ref<string \| null>\(null\)/u)
+  assert.match(storeSource, /const hasUpdate = computed\(\(\) => latestVersion\.value !== null\)/u)
+
+  // 版本入口读取共享状态，并把 New 放在版本号之后。
+  assert.match(entrySource, /useAppReleaseUpdateStore\(\)/u)
+  assert.match(entrySource, /v-if="hasUpdate"/u)
+  assert.match(entrySource, /bg-destructive\/10/u)
+  assert.match(entrySource, /text-destructive/u)
+  assert.match(entrySource, /v\{\{ version \}\}<\/span>[\s\S]{0,300}?>\s*New\s*</u)
+  // 折叠态没有文字空间，用红点保留提示且可被读屏识别。
+  assert.match(entrySource, /v-if="collapsed && hasUpdate"/u)
+  assert.match(entrySource, /aria-label="New"/u)
+
+  // 检测侧先标记再弹窗；网络失败不清标记，清单未更高时必须撤销，避免回滚后残留 New。
+  assert.match(updateCheckSource, /releaseUpdateStore\.setLatestVersion\(release\.version\)/u)
+  const fetchIndex = updateCheckSource.indexOf('const release = await fetchReleaseManifest()')
+  const nullGuardIndex = updateCheckSource.indexOf('if (release === null)')
+  const clearIndex = updateCheckSource.indexOf('releaseUpdateStore.setLatestVersion(null)')
+  const markIndex = updateCheckSource.indexOf('releaseUpdateStore.setLatestVersion(release.version)')
+  const modalIndex = updateCheckSource.indexOf('updateNoticeVisible.value = true')
+  assert.ok(fetchIndex !== -1 && nullGuardIndex > fetchIndex, '拉取失败必须先返回，不清除已有标记')
+  assert.ok(clearIndex > nullGuardIndex, '版本未更高时必须撤销标记')
+  assert.ok(markIndex > clearIndex, '更高版本必须在分支内标记')
+  assert.ok(modalIndex > markIndex, '标记必须早于弹窗，稍后提醒关闭后仍保留 New')
+})
+
 test('版本更新日志路由对所有登录用户开放且不进入菜单', () => {
   const routeSource = readRelativeSource('../../src/router/modules/release.notes.ts')
   const routesSource = readRelativeSource('../../src/router/routes.ts')

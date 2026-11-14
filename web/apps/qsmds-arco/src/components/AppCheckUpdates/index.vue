@@ -15,6 +15,7 @@ defineOptions({
 
 const { t } = useI18n()
 const appSettingsStore = useAppSettingsStore()
+const releaseUpdateStore = useAppReleaseUpdateStore()
 
 const currentVersion = __SYSTEM_INFO__.pkg.version
 const releaseInfo = ref<ReleaseManifest | null>(null)
@@ -88,9 +89,16 @@ async function checkUpdates() {
   checking.value = true
   try {
     const release = await fetchReleaseManifest()
-    if (release === null || !isNewerVersion(release.version, currentVersion)) {
+    if (release === null) {
       return
     }
+    if (!isNewerVersion(release.version, currentVersion)) {
+      // 清单回滚或仍是同一版本时撤销标记，避免侧边栏残留过期的 New。
+      releaseUpdateStore.setLatestVersion(null)
+      return
+    }
+    // 先标记再弹窗：用户点“稍后提醒”后弹窗关闭，侧边栏版本入口仍需保留新版本提示。
+    releaseUpdateStore.setLatestVersion(release.version)
     releaseInfo.value = release
     // handled 是一次性提示锁，用户取消或按 Escape 后也不能在本次会话反复打扰。
     updateNoticeHandled.value = true
