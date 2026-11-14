@@ -56,6 +56,9 @@ describe('海运计算的精确值与缺值边界', () => {
   it('重量采用整行毛重，材积采用整数材数，不依据单价或货类猜测', () => {
     expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '0.000028' }, cargo).amount).toBe('0.01')
     expect(calculateOceanCharge({ pricingBasis: 'VOLUME', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, cargo).amount).toBe('260.00')
+    // 毛重按两位小数定点；标度换算错误会把金额放大 100 倍。
+    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { grossWeightKg: '180.50', chargeableVolumeCai: null }).amount).toBe('3610.00')
+    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { grossWeightKg: '180', chargeableVolumeCai: null }).amount).toBe('3600.00')
     expect(() => calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { ...cargo, grossWeightKg: null })).toThrow()
     expect(() => calculateOceanCharge({ pricingBasis: undefined as never, currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, cargo)).toThrow()
   })

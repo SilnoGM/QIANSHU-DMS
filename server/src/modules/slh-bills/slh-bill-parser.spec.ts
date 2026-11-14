@@ -150,6 +150,17 @@ describe('slh bill workbook parser', () => {
     expect(result.findings.some(finding => finding.kind === 'DIMENSION_PRECISION' && finding.lineNumber === 1)).toBe(true)
   })
 
+  it('rounds the source gross weight up to the next 0.5 kg and flags extra decimals', async () => {
+    const rows = [
+      { B: '46024', C: '0102-01柜', D: '千树贸易', E: 'WG-0102-0092', F: 'L-010229', G: '农用履带旋耕机', H: '1', I: 'CTN', J: '180.456', K: 'KGS', L: '215', M: '137', N: '113', O: '117.55', P: '5', Q: '5', R: '902.5', S: '0', T: '0', U: '902.5', V: '0', W: '0', X: '无', Y: '测试收货人二' },
+    ]
+    const result = await parseSlhBillWorkbook(createSlhBillFixture({
+      rows, subtotal: { payable: '902.5', cod: '0', ntd: '0' }, netValue: '0',
+    }))
+    expect(result.lines[0].grossWeightKg).toBe('180.5')
+    expect(result.findings.some(finding => finding.kind === 'WEIGHT_PRECISION' && finding.lineNumber === 1)).toBe(true)
+  })
+
   it('rejects a workbook without the bill header', async () => {
     const other = containerImportZip({
       '[Content_Types].xml': '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>',

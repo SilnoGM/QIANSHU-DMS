@@ -129353,7 +129353,7 @@
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount."
+            "description": "Positive total row weight in kg; decimal(18,2), rounded up to the next 0.5 kg. Never multiplied by packageCount."
           },
           "lengthCm": {
             "type": "string",
@@ -129485,7 +129485,7 @@
             "type": "string",
             "nullable": true,
             "maxLength": 19,
-            "description": "Positive total row weight in kg; decimal(18,3). Never multiplied by packageCount."
+            "description": "Positive total row weight in kg; decimal(18,2), rounded up to the next 0.5 kg. Never multiplied by packageCount."
           },
           "lengthCm": {
             "type": "string",
@@ -130022,7 +130022,7 @@
           "grossWeightKgTotal": {
             "type": "string",
             "nullable": true,
-            "description": "Gross weight in kg. SELF: sum of the current user's lines; ALL: whole-container sum; null when any counted line is missing a value."
+            "description": "Gross weight in kg, rounded up to the next 0.5 kg. SELF: sum of the current user's lines; ALL: whole-container sum; null when any counted line is missing a value."
           },
           "volumeCaiTotal": {
             "type": "string",
@@ -130796,6 +130796,7 @@
               "SUBTOTAL_MISMATCH",
               "NET_AMOUNT_MISMATCH",
               "DIMENSION_PRECISION",
+              "WEIGHT_PRECISION",
               "RATE_MISSING",
               "REMARK_NOTE"
             ]

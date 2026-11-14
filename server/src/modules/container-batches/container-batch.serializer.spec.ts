@@ -51,4 +51,12 @@ describe('serializeContainerBatch 绑定统计', () => {
     ] })
     expect(dto.chargeableVolumeCaiTotal).toBe(3)
   })
+
+  it('毛重合计按两位小数汇总', () => {
+    const dto = serializeContainerBatch({ ...batch, items: [
+      { ...line(null), grossWeightKg: new Prisma.Decimal('180.50') },
+      { ...line(null), grossWeightKg: new Prisma.Decimal('0.50') },
+    ] })
+    expect(dto.grossWeightKgTotal).toBe('181.00')
+  })
 })

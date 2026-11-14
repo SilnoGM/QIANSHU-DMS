@@ -76,6 +76,10 @@ describe('slh bill calculation', () => {
       expect(calculateSlhFreight({ unitPriceAmount: '30', pricingBasis: 'VOLUME', grossWeightKg: null, volumeCai: '98.50' })).toBe('2955.00')
     })
 
+    it('multiplies unit price by the half-kilo gross weight when priced by weight', () => {
+      expect(calculateSlhFreight({ unitPriceAmount: '4.7', pricingBasis: 'WEIGHT', grossWeightKg: '639.50', volumeCai: null })).toBe('3005.65')
+    })
+
     it('rounds the product of price and fractional weight to two decimals', () => {
       expect(calculateSlhFreight({ unitPriceAmount: '4.7', pricingBasis: 'WEIGHT', grossWeightKg: '639', volumeCai: '55.3' })).toBe('3003.30')
     })

@@ -4,7 +4,8 @@ import { ceilRatioToHalfUnits, formatDecimal, parseDecimal, power, roundRatio } 
 
 /** 账单来源数据的精度口径：尺寸 0 位、重量 0 位、金额 2 位、材积 2 位。 */
 export const SLH_DIMENSION_SCALE = 0
-export const SLH_WEIGHT_SCALE = 0
+/** 出货毛重按 0.5 kg 向上取整后以两位小数记录，按重量计价时直接作为计费数量。 */
+export const SLH_WEIGHT_SCALE = 2
 export const SLH_AMOUNT_SCALE = 2
 export const SLH_VOLUME_SCALE = 2
 export const SLH_AMOUNT_PRECISION = 30

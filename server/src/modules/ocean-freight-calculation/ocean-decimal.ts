@@ -46,6 +46,19 @@ export function ceilRatioToHalfUnits(numerator: bigint, denominator: bigint): bi
   return (2n * numerator + denominator - 1n) / denominator
 }
 
+/**
+ * 毛重归一：精确值向上取到 0.5 kg，按两位小数固化。
+ * 入参最多两位小数；更多位数应在取数阶段用精确有理数进位，不在这里二次取整。
+ */
+export function normalizeOceanWeightHalfUnit(value: unknown, precision: number, field: string, positive = false): string | null {
+  if (value === null) return null
+  if (typeof value !== 'string') throw new OceanCalculationError(field)
+  const parsed = parseDecimal(value, precision, 2, field)
+  if (positive && parsed <= 0n) throw new OceanCalculationError(field)
+  const halfUnits = ceilRatioToHalfUnits(parsed, 100n)
+  return formatDecimal(halfUnits * 50n, precision, 2, field)
+}
+
 export function normalizeOceanDecimal(value: unknown, precision: number, scale: number, field: string, positive = false): string | null {
   if (value === null) return null
   if (typeof value !== 'string') throw new OceanCalculationError(field)

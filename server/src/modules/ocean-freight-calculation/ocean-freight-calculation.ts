@@ -7,7 +7,7 @@ import type {
   OceanLineInput, OceanLineResult, OceanVolumeInput,
 } from './ocean-freight-calculation.types'
 
-export { normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError } from './ocean-decimal'
+export { normalizeOceanDecimal, normalizeOceanDecimalCeil, normalizeOceanWeightHalfUnit, OceanCalculationError } from './ocean-decimal'
 export type * from './ocean-freight-calculation.types'
 
 /**
@@ -71,9 +71,10 @@ export function calculateOceanCharge(input: OceanChargeInput, cargo: OceanCharge
     unitPrice = parseDecimal(input.unitPriceAmount, 30, 6, 'unitPriceAmount')
     if (input.pricingBasis === 'WEIGHT') {
       if (cargo.grossWeightKg === null) throw new OceanCalculationError('grossWeightKg')
-      const weight = parseDecimal(cargo.grossWeightKg, 18, 0, 'grossWeightKg')
+      const weight = parseDecimal(cargo.grossWeightKg, 18, 2, 'grossWeightKg')
       if (weight <= 0n) throw new OceanCalculationError('grossWeightKg')
-      quantity = weight * power(8)
+      // 毛重是两位小数定点；保持 quantity 的 10^8 标度，金额除数不变。
+      quantity = weight * power(6)
     } else {
       if (cargo.chargeableVolumeCai === null) throw new OceanCalculationError('chargeableVolumeCai')
       // 计费材数按 0.5 材步进、不再是整数；按两位定点解析后保持 quantity 的 10^8 标度。

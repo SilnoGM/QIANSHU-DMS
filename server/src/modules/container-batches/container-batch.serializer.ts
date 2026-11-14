@@ -24,7 +24,7 @@ function summarize(items: SummaryItem[]) {
     return Number(sum) / 100
   }
   // 绑定统计按装柜明细行计，同一货件占多行也各算一行；签收不会清 shipmentId，解绑才会变未绑定。
-  return { itemCount: items.length, boundItemCount: items.filter(item => item.shipmentId !== null).length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 0), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: chargeableTotal() }
+  return { itemCount: items.length, boundItemCount: items.filter(item => item.shipmentId !== null).length, shipmentCount: new Set(items.flatMap(item => item.shipmentId ? [item.shipmentId] : [])).size, packageCountTotal: items.reduce((sum, item) => sum + item.packageCount, 0), grossWeightKgTotal: total('grossWeightKg', 2), volumeCaiTotal: total('volumeCai', 2), chargeableVolumeCaiTotal: chargeableTotal() }
 }
 export function serializeContainerBatch(row: ContainerBatch & { items?: SummaryItem[] }): ContainerBatchDto {
   return { ...summarize(row.items ?? []), createdById: row.createdById, id: row.id, containerBatchNo: row.containerBatchNo, containerBatchName: row.containerBatchName, loadingDate: row.loadingDate.toISOString().slice(0, 10), sequenceInDay: row.sequenceInDay, warehouseValue: row.warehouseValue, sourceFileId: row.sourceFileId, remark: row.remark, version: row.version, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }
@@ -39,7 +39,7 @@ export function serializeContainerItem(row: ContainerLoadingItem & ItemReference
     ownerCustomerName: canPurchase && canSales ? row.shipment?.ownershipCurrent?.ownerSalesOrder?.customerName ?? null : null,
     recipientName: row.recipientName ?? null, recipientPhone: row.recipientPhone ?? null, recipientAddress: row.recipientAddress ?? null, codAmountTwd: row.codAmountTwd?.toFixed(2) ?? null,
     id: row.id, containerBatchId: row.containerBatchId, shipmentId: row.shipmentId, lineNumber: row.lineNumber, oceanShippingMarkText: row.oceanShippingMarkText, warehouseReceiptReference: row.warehouseReceiptReference, goodsName: row.goodsName, packageCount: row.packageCount, packageUnit: row.packageUnit, remark: row.remark, version: row.version,
-    grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,
+    grossWeightKg: row.grossWeightKg?.toFixed(2) ?? null,
     lengthCm: row.lengthCm?.toFixed(0) ?? null, widthCm: row.widthCm?.toFixed(0) ?? null, heightCm: row.heightCm?.toFixed(0) ?? null,
     volumeCai: row.volumeCai?.toFixed(2) ?? null, chargeableVolumeCai: row.chargeableVolumeCai?.toNumber() ?? null,
     reportedVolumeCai: row.reportedVolumeCai?.toFixed(2) ?? null,

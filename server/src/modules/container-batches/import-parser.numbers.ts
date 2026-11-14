@@ -1,5 +1,6 @@
 import type { WorkbookCell, WorkbookSheet } from './import-parser.types'
 import { cellPosition } from './import-parser.workbook'
+import { ceilRatioToHalfUnits, formatDecimal } from '../ocean-freight-calculation/ocean-decimal'
 
 interface Ratio { numerator: bigint, denominator: bigint }
 function bounded(value: Ratio): Ratio {
@@ -81,6 +82,19 @@ export function importCellNumberCeil(cell: WorkbookCell | undefined, sheet: Work
   const ceil = (value.numerator + value.denominator - 1n) / value.denominator
   if (ceil.toString().length > precision || (positive && ceil === 0n)) throw new Error('Decimal out of range')
   return ceil.toString()
+}
+/**
+ * 毛重专用：来源可带任意小数位，精确值向上取到 0.5 kg 后按两位小数返回。
+ * 不能先按两位四舍五入再进位：180.501 会被先舍成 180.50，漏掉进位到 181.00。
+ */
+export function importCellNumberHalfUnit(cell: WorkbookCell | undefined, sheet: WorkbookSheet, precision: number, positive: boolean): string | null {
+  if (!cell || (!cell.value?.trim() && cell.formula === null)) return null
+  const value = cellRatio(cell, sheet, new Set())
+  if (value.numerator < 0n || (positive && value.numerator === 0n)) throw new Error('Non-positive value')
+  const halfUnits = ceilRatioToHalfUnits(value.numerator, value.denominator)
+  const scaled = halfUnits * 50n
+  if (scaled.toString().length > precision || (positive && scaled === 0n)) throw new Error('Decimal out of range')
+  return formatDecimal(scaled, precision, 2, 'grossWeightKg').replace(/\.?0+$/u, '')
 }
 export function importPackageCount(cell: WorkbookCell | undefined, sheet: WorkbookSheet): number {
   const value = cellRatio(cell, sheet, new Set())
