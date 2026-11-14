@@ -89,6 +89,15 @@ describe('slh bill charge parser', () => {
     expect(charges).toEqual([{ chargeType: 'OTHER', currencyCode: 'TWD', amount: '800.00', sourceRemarkText: '码头操作费800NT' }])
   })
 
+  it('keeps an unrecognised fee out of the amount-free notes', () => {
+    // 整段原文已作为「其他」费用行保留，不能重复报成「没有金额、未计入」。
+    expect(parseSlhRemarks('码头操作费800NT').notes).toEqual([])
+    expect(parseSlhRemarks('补 码头操作费800NT').notes).toEqual([])
+    expect(parseSlhRemarks('重货费100码头操作费800NT').notes).toEqual([])
+    // 真正没有金额的尾部文字仍保留为说明。
+    expect(parseSlhRemarks('码头操作费800NT 优待免收低消').notes).toEqual(['优待免收低消'])
+  })
+
   it('returns nothing for an empty remark', () => {
     expect(parseSlhRemarks(null)).toEqual({ charges: [], notes: [] })
     expect(parseSlhRemarks('   ')).toEqual({ charges: [], notes: [] })

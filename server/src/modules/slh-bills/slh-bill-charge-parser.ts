@@ -101,8 +101,8 @@ export function parseSlhRemarks(remark: string | null): SlhParsedRemarks {
       amount: slhNormalizeAmount(amount[0]),
       sourceRemarkText: remark.slice(boundary, end + length).trim(),
     })
-    // 关键词之前的文字（如「补」）是性质说明而不是费别，保留为说明。
-    const prefix = segment.slice(0, keyword?.index ?? segment.length).trim()
+    // 关键词未识别时，整段原文已作为「其他」费用行保留，不再重复报成没有金额的说明。
+    const prefix = keyword === null ? '' : segment.slice(0, keyword.index).trim()
     if (prefix && !NATURE_MARKERS.has(prefix)) notes.push(prefix)
     boundary = end + length
   }
