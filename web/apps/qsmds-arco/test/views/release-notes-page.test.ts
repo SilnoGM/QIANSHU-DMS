@@ -57,6 +57,14 @@ test('版本摘要保留早期自定义分类并汇总角色与条目数', () =>
   assert.equal(countVersionItems(sections), 4)
 })
 
+test('版本更新日志在面包屑里显示页面标题而不是只剩主页', () => {
+  const routeSource = readRelativeSource('../../src/router/modules/release.notes.ts')
+  assert.match(routeSource, /title: '版本更新日志'/u)
+  assert.match(routeSource, /menu: false/u)
+  // breadcrumb: false 会让匹配链被跳过，面包屑只剩首页项；页面必须作为最后一级显示。
+  assert.doesNotMatch(routeSource, /breadcrumb: false/u)
+})
+
 test('页面采用主从阅读布局并支持深链切换版本', () => {
   const pageSource = readRelativeSource('../../src/views/release-notes/index.vue')
   const logicSource = readRelativeSource('../../src/views/release-notes/logic.ts')

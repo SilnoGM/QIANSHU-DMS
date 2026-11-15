@@ -11,7 +11,6 @@ const route: RouteRecordRaw = {
   meta: {
     title: '版本更新日志',
     menu: false,
-    breadcrumb: false,
   },
 }
 
