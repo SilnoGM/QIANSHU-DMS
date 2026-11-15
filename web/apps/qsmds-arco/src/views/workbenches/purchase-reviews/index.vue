@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.purchaseReviews')" :description="t('purchaseReview.intro')">
+    <FaPageHeader :title="t('workbench.purchaseReviews')" :description="t('purchaseReview.intro')" default-class="flex flex-wrap gap-2">
       <span v-if="canBatchReview" data-testid="purchase-batch-open-wrapper" class="hidden md:inline-flex">
         <FaButton
           type="button"

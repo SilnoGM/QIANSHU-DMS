@@ -225,6 +225,7 @@ onBeforeUnmount(() => {
     <FaPageHeader
       :title="t('purchasePayment.records.title')"
       :description="t('purchasePayment.records.description')"
+      default-class="flex flex-wrap gap-2"
     >
       <FaButton
         variant="outline"
