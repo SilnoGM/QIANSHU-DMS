@@ -138,6 +138,35 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(logicSource, /cache: 'no-store'/u)
 })
 
+test('发布文案条目的圆点与角色标签风格统一', () => {
+  const contentSource = readRelativeSource('../../src/components/business/QsReleaseNotesContent/index.vue')
+
+  // 圆点放在 16px 宽轨道内居中：中心与分类图标中心对齐，正文起点也与标题对齐。
+  assert.match(contentSource, /w-4/u)
+  assert.match(contentSource, /justify-center/u)
+  assert.match(contentSource, /mt-\[9px\]/u)
+  // 缺陷修复与已知问题的圆点跟随分类色变橙，未知分类用中性灰。
+  assert.match(contentSource, /bullet: 'bg-primary\/70'/u)
+  assert.match(contentSource, /bullet: 'bg-amber-500\/80'/u)
+  assert.match(contentSource, /bullet: 'bg-muted-foreground\/60'/u)
+  // 适用角色改为微型胶囊：分类级展示一次，条目级内联在正文末尾，不再单独占一行。
+  assert.match(contentSource, /app\.components\.releaseNotes\.audienceLabel/u)
+  assert.match(contentSource, /v-for="role in item\.roles"/u)
+  assert.doesNotMatch(contentSource, /roles\.join\('、'\)/u)
+})
+
+test('角色标签文案在三种语言下齐全', () => {
+  for (const locale of ['zh-cn', 'zh-tw', 'en']) {
+    const localeSource = readRelativeSource(
+      `../../../../packages/locales/lang/app/components/release-notes/${locale}.json`,
+    )
+    const messages = JSON.parse(localeSource) as {
+      app: { components: { releaseNotes: Record<string, string> } }
+    }
+    assert.equal(typeof messages.app.components.releaseNotes.audienceLabel, 'string', `${locale} 缺少 audienceLabel`)
+  }
+})
+
 test('构建产物与 nginx 都为历史清单提供 no-store 稳定路径', () => {
   const pluginSource = readRelativeSource('../../vite/release-manifest.ts')
   const nginxSource = readRelativeSource('../../../../../deploy/docker/nginx/qianshu-dms.conf')

@@ -16,13 +16,19 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const SECTION_PRESENTATION: Record<string, { icon: string, tone: string }> = {
-  功能新增: { icon: 'i-lucide:sparkles', tone: 'text-primary' },
-  功能优化: { icon: 'i-lucide:trending-up', tone: 'text-primary' },
-  缺陷修复: { icon: 'i-lucide:wrench', tone: 'text-amber-600 dark:text-amber-300' },
-  已知问题: { icon: 'i-lucide:triangle-alert', tone: 'text-amber-600 dark:text-amber-300' },
+const ROLE_TAG_CLASS = 'inline-flex items-center align-middle bg-muted text-muted-foreground px-1.5 rounded font-medium text-[11px] leading-4'
+
+const SECTION_PRESENTATION: Record<string, { icon: string, tone: string, bullet: string }> = {
+  功能新增: { icon: 'i-lucide:sparkles', tone: 'text-primary', bullet: 'bg-primary/70' },
+  功能优化: { icon: 'i-lucide:trending-up', tone: 'text-primary', bullet: 'bg-primary/70' },
+  缺陷修复: { icon: 'i-lucide:wrench', tone: 'text-amber-600 dark:text-amber-300', bullet: 'bg-amber-500/80' },
+  已知问题: { icon: 'i-lucide:triangle-alert', tone: 'text-amber-600 dark:text-amber-300', bullet: 'bg-amber-500/80' },
 }
-const DEFAULT_SECTION_PRESENTATION = { icon: 'i-lucide:info', tone: 'text-muted-foreground' }
+const DEFAULT_SECTION_PRESENTATION = {
+  icon: 'i-lucide:info',
+  tone: 'text-muted-foreground',
+  bullet: 'bg-muted-foreground/60',
+}
 
 /** 分类标题来自文案；早期版本允许自定义分类，未知标题按中性样式渲染。 */
 const renderedSections = computed(() => props.sections.map((section) => {
@@ -61,26 +67,32 @@ const renderedSections = computed(() => props.sections.map((section) => {
         </FaTag>
       </div>
 
-      <p v-if="section.audience.commonRoles" class="text-xs text-muted-foreground m-0 mb-2">
-        {{ t('app.components.checkUpdates.audience', { roles: section.audience.commonRoles.join('、') }) }}
+      <p
+        v-if="section.audience.commonRoles"
+        class="text-xs text-muted-foreground m-0 mb-2 flex flex-wrap gap-1 items-center"
+      >
+        <span>{{ t('app.components.releaseNotes.audienceLabel') }}</span>
+        <span v-for="role in section.audience.commonRoles" :key="role" :class="ROLE_TAG_CLASS">
+          {{ role }}
+        </span>
       </p>
 
       <ul class="m-0 p-0 list-none space-y-2">
-        <li
-          v-for="(item, index) in section.items"
-          :key="`${section.title}-${index}`"
-          class="flex gap-2"
-        >
-          <span class="mt-2 rounded-full bg-primary/70 shrink-0 size-1.5" aria-hidden="true" />
+        <li v-for="(item, index) in section.items" :key="`${section.title}-${index}`" class="flex gap-2">
+          <span class="mt-[9px] flex shrink-0 w-4 justify-center" aria-hidden="true">
+            <span class="rounded-full size-1.5" :class="section.presentation.bullet" />
+          </span>
           <div class="min-w-0">
             <p class="text-sm text-foreground leading-6 m-0 break-words">
               {{ item.text }}
-            </p>
-            <p
-              v-if="section.audience.showItemRoles && item.roles.length > 0 && !isAllReleaseAudience(item.roles)"
-              class="text-xs text-muted-foreground m-0 mt-0.5"
-            >
-              {{ t('app.components.checkUpdates.audience', { roles: item.roles.join('、') }) }}
+              <span v-if="section.audience.showItemRoles && item.roles.length > 0 && !isAllReleaseAudience(item.roles)">
+                <span
+                  v-for="role in item.roles"
+                  :key="role"
+                  :class="ROLE_TAG_CLASS"
+                  class="ms-1"
+                >{{ role }}</span>
+              </span>
             </p>
           </div>
         </li>
