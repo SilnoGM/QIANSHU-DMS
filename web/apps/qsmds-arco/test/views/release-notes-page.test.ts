@@ -84,11 +84,21 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /selectedMeta/u)
   // 左栏只保留版本号与时间，不再重复分类计数和适用角色。
   assert.doesNotMatch(pageSource, /row\.summary|row\.roles/u)
-  // 版本多时左栏内部滚动，但不显示滚动条。
-  assert.match(pageSource, /max-h-\[70vh\]/u)
-  assert.match(pageSource, /overflow-y-auto/u)
+  // 页面吃满视口剩余高度：FaPageMain 作为内滚容器，左右两栏各自滚动。
+  assert.match(pageSource, /class="release-notes-page flex flex-col min-h-0"/u)
+  assert.match(pageSource, /height: calc\(/u)
+  assert.match(pageSource, /100dvh/u)
+  assert.match(pageSource, /var\(--g-header-actual-height/u)
+  assert.match(pageSource, /var\(--g-topbar-actual-height/u)
+  assert.match(pageSource, /<FaPageMain class="mt-0 flex-1 min-h-0" main-class="flex flex-col flex-1 min-h-0 h-auto">/u)
+  assert.ok(
+    (pageSource.match(/overflow-y-auto/gu) ?? []).length >= 2,
+    '左栏版本列表与右侧详情内容都必须独立滚动',
+  )
+  // 左栏仍隐藏滚动条，且不再用视口百分比限制高度。
   assert.match(pageSource, /\[scrollbar-width:none\]/u)
   assert.match(pageSource, /\[&::-webkit-scrollbar\]:hidden/u)
+  assert.doesNotMatch(pageSource, /max-h-\[70vh\]/u)
 
   assert.match(logicSource, /RELEASE_NOTES_HISTORY_PATH = 'release-notes\.json'/u)
   assert.match(logicSource, /cache: 'no-store'/u)

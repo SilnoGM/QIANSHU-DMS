@@ -92,9 +92,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div data-testid="release-notes-page" class="flex flex-col min-h-0">
+  <div data-testid="release-notes-page" class="release-notes-page flex flex-col min-h-0">
     <FaPageHeader
-      class="mb-2"
+      class="mb-2 shrink-0"
       main-class="min-w-0 flex-1"
       default-class="self-start"
       title="版本更新日志"
@@ -116,9 +116,9 @@ onBeforeUnmount(() => {
       </div>
     </FaPageHeader>
 
-    <FaPageMain class="mt-0">
-      <div class="flex flex-col gap-4 lg:flex-row">
-        <div v-if="versions.length > 0" class="lg:hidden">
+    <FaPageMain class="mt-0 flex-1 min-h-0" main-class="flex flex-col flex-1 min-h-0 h-auto">
+      <div class="flex flex-col gap-4 h-full min-h-0 lg:flex-row">
+        <div v-if="versions.length > 0" class="shrink-0 lg:hidden">
           <FaSelect
             :model-value="selectedVersion ?? undefined"
             :options="versionOptions"
@@ -130,10 +130,10 @@ onBeforeUnmount(() => {
 
         <nav
           v-if="versions.length > 0"
-          class="shrink-0 hidden lg:w-[212px] lg:block"
+          class="shrink-0 min-h-0 hidden lg:w-[212px] lg:block"
           aria-label="版本列表"
         >
-          <div class="p-1.5 overscroll-contain border rounded-lg flex flex-col gap-0.5 max-h-[70vh] [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+          <div class="p-1.5 overscroll-contain border rounded-lg flex flex-col gap-0.5 h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
             <button
               v-for="row in versionRows"
               :key="row.version"
@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
           </div>
         </nav>
 
-        <div class="flex-1 min-w-0">
+        <div class="flex flex-1 flex-col min-h-0 min-w-0">
           <div v-if="loading" class="flex flex-col gap-3" aria-busy="true">
             <span class="sr-only">正在加载发布记录</span>
             <div class="rounded-lg bg-muted/40 h-16 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
@@ -190,8 +190,8 @@ onBeforeUnmount(() => {
             class="min-h-64"
           />
 
-          <article v-else data-testid="release-notes-detail" class="border rounded-lg bg-background">
-            <header class="px-4 py-3 border-b flex flex-wrap gap-2 items-center">
+          <article v-else data-testid="release-notes-detail" class="border rounded-lg bg-background flex flex-1 flex-col min-h-0 overflow-hidden">
+            <header class="px-4 py-3 border-b flex shrink-0 flex-wrap gap-2 items-center">
               <h2 class="font-qs-data-mono text-lg font-semibold m-0">
                 {{ formatReleaseVersion(selectedEntry.version) }}
               </h2>
@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
               </FaTag>
               <span class="qs-type-meta ms-auto">{{ selectedMeta }}</span>
             </header>
-            <div class="p-4">
+            <div class="p-4 flex-1 min-h-0 overflow-y-auto">
               <QsReleaseNotesContent :sections="selectedEntry.sections" />
             </div>
           </article>
@@ -216,3 +216,13 @@ onBeforeUnmount(() => {
     </FaPageMain>
   </div>
 </template>
+
+<style scoped>
+/*
+ * 页面固定在视口剩余高度内：顶部固定区与底部插槽的高度都由布局变量给出，
+ * 扣掉后 FaPageMain 才能作为内滚容器使用，让左右两栏各自滚动而不是整页滚动。
+ */
+.release-notes-page {
+  height: calc(100dvh - var(--g-slots-layout-top-height, 0px) - var(--g-header-actual-height, 0px) - var(--g-topbar-actual-height, 0px) - var(--g-main-container-padding-top, 0px) - var(--g-slots-layout-bottom-height, 0px) - var(--g-main-container-padding-bottom, 0px));
+}
+</style>
