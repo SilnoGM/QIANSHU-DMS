@@ -145,14 +145,22 @@ onBeforeUnmount(() => {
               :aria-current="row.version === selectedVersion ? 'true' : undefined"
               @click="selectVersion(row.version)"
             >
-              <span class="font-qs-data-mono text-sm font-medium">
-                {{ row.label }}
+              <span class="flex gap-1.5 items-center">
+                <span class="font-qs-data-mono text-sm font-medium">
+                  {{ row.label }}
+                </span>
+                <span
+                  v-if="row.version === latestVersion"
+                  class="text-primary leading-4 qs-type-tag px-1 rounded bg-primary/10"
+                >
+                  最新版本
+                </span>
               </span>
               <span
                 v-if="row.releasedAt !== null"
-                class="qs-type-meta mt-0.5 block tabular-nums"
+                class="qs-type-meta mt-0.5 block"
               >
-                {{ row.releasedAt }}
+                发布时间<span class="ms-[1ch] tabular-nums">{{ row.releasedAt }}</span>
               </span>
             </button>
           </div>
@@ -207,7 +215,7 @@ onBeforeUnmount(() => {
               </FaTag>
               <span class="qs-type-meta ms-auto">{{ selectedMeta }}</span>
             </header>
-            <div class="p-4 flex-1 min-h-0 overflow-y-auto">
+            <div class="p-4 overscroll-contain flex-1 min-h-0 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
               <QsReleaseNotesContent :sections="selectedEntry.sections" />
             </div>
           </article>

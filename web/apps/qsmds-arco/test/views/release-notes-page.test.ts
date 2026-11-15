@@ -82,6 +82,11 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /row\.releasedAt/u)
   assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
   assert.match(pageSource, /selectedMeta/u)
+  // 左栏日期行写明「发布时间」，与日期之间保留一个字符宽度的空隙。
+  assert.match(pageSource, /发布时间<span class="ms-\[1ch\] tabular-nums">/u)
+  // 最新版本在版本号后展示「最新版本」标签。
+  assert.match(pageSource, /row\.version === latestVersion/u)
+  assert.match(pageSource, />\s*最新版本\s*</u)
   // 左栏只保留版本号与时间，不再重复分类计数和适用角色。
   assert.doesNotMatch(pageSource, /row\.summary|row\.roles/u)
   // 页面吃满视口剩余高度：FaPageMain 作为内滚容器，左右两栏各自滚动。
@@ -95,9 +100,15 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
     (pageSource.match(/overflow-y-auto/gu) ?? []).length >= 2,
     '左栏版本列表与右侧详情内容都必须独立滚动',
   )
-  // 左栏仍隐藏滚动条，且不再用视口百分比限制高度。
-  assert.match(pageSource, /\[scrollbar-width:none\]/u)
-  assert.match(pageSource, /\[&::-webkit-scrollbar\]:hidden/u)
+  // 左右两处滚动容器都隐藏滚动条，且不再用视口百分比限制高度。
+  assert.ok(
+    (pageSource.match(/\[scrollbar-width:none\]/gu) ?? []).length >= 2,
+    '左右两处滚动容器都必须隐藏滚动条',
+  )
+  assert.ok(
+    (pageSource.match(/\[&::-webkit-scrollbar\]:hidden/gu) ?? []).length >= 2,
+    '左右两处滚动容器都必须隐藏 WebKit 滚动条',
+  )
   assert.doesNotMatch(pageSource, /max-h-\[70vh\]/u)
 
   assert.match(logicSource, /RELEASE_NOTES_HISTORY_PATH = 'release-notes\.json'/u)
