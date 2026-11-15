@@ -133,49 +133,53 @@ onBeforeUnmount(() => {
           class="shrink-0 min-h-0 hidden lg:w-[188px] lg:block"
           aria-label="版本列表"
         >
-          <div class="p-1.5 pb-4 overscroll-contain border rounded-lg h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-            <div class="flex flex-col gap-0.5 relative">
-              <span class="bg-border w-px start-[16px] inset-y-3 absolute" aria-hidden="true" />
-              <button
-                v-for="row in versionRows"
-                :key="row.version"
-                type="button"
-                class="px-2 py-1.5 text-start border-0 rounded-md flex gap-2 transition-colors relative"
-                :class="row.version === selectedVersion
-                  ? 'bg-primary/10 text-primary hover-bg-primary/15'
-                  : 'text-foreground hover-bg-muted'"
-                :aria-current="row.version === selectedVersion ? 'true' : undefined"
-                @click="selectVersion(row.version)"
-              >
-                <span class="mt-[6px] flex shrink-0 w-4 justify-center" aria-hidden="true">
+          <div class="border rounded-lg h-full relative overflow-hidden">
+            <div class="p-1.5 pb-6 overscroll-contain h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+              <div class="flex flex-col gap-0.5 relative">
+                <span class="bg-border w-px start-[16px] inset-y-3 absolute" aria-hidden="true" />
+                <button
+                  v-for="row in versionRows"
+                  :key="row.version"
+                  type="button"
+                  class="group text-start border-0 bg-transparent flex gap-2 w-full transition-colors"
+                  :class="row.version === selectedVersion ? 'text-primary' : 'text-foreground'"
+                  :aria-current="row.version === selectedVersion ? 'true' : undefined"
+                  @click="selectVersion(row.version)"
+                >
+                  <span class="ms-2 mt-3 flex shrink-0 w-4 justify-center" aria-hidden="true">
+                    <span
+                      class="border rounded-full size-2 transition-colors"
+                      :class="row.version === selectedVersion
+                        ? 'bg-primary border-primary'
+                        : 'bg-background border-muted-foreground/40'"
+                    />
+                  </span>
                   <span
-                    class="border rounded-full size-2 transition-colors"
-                    :class="row.version === selectedVersion
-                      ? 'bg-primary border-primary'
-                      : 'bg-background border-border'"
-                  />
-                </span>
-                <span class="flex-1 min-w-0">
-                  <span class="flex gap-1.5 items-center">
-                    <span class="font-qs-data-mono text-sm font-medium">
-                      {{ row.label }}
+                    class="px-2 py-1.5 rounded-md flex-1 min-w-0 transition-colors"
+                    :class="row.version === selectedVersion ? 'bg-primary/10' : 'group-hover:bg-muted'"
+                  >
+                    <span class="flex gap-1.5 items-center">
+                      <span class="font-qs-data-mono text-sm font-medium">
+                        {{ row.label }}
+                      </span>
+                      <span
+                        v-if="row.version === latestVersion"
+                        class="text-primary-foreground leading-4 qs-type-tag px-1 rounded bg-primary"
+                      >
+                        最新版本
+                      </span>
                     </span>
                     <span
-                      v-if="row.version === latestVersion"
-                      class="text-primary leading-4 qs-type-tag px-1 rounded bg-primary/10"
+                      v-if="row.releasedAt !== null"
+                      class="qs-type-meta mt-0.5 block tabular-nums"
                     >
-                      最新版本
+                      {{ row.releasedAt }}
                     </span>
                   </span>
-                  <span
-                    v-if="row.releasedAt !== null"
-                    class="qs-type-meta mt-0.5 block tabular-nums"
-                  >
-                    {{ row.releasedAt }}
-                  </span>
-                </span>
-              </button>
+                </button>
+              </div>
             </div>
+            <span class="release-notes-fade h-6 pointer-events-none inset-b-0 absolute" aria-hidden="true" />
           </div>
         </nav>
 
@@ -245,5 +249,10 @@ onBeforeUnmount(() => {
  */
 .release-notes-page {
   height: calc(100dvh - var(--g-slots-layout-top-height, 0px) - var(--g-header-actual-height, 0px) - var(--g-topbar-actual-height, 0px) - var(--g-main-container-padding-top, 0px) - var(--g-slots-layout-bottom-height, 0px) - var(--g-main-container-padding-bottom, 0px));
+}
+
+/* 列表底部的柔和渐隐，避免滚动中的半截文字直接撞在圆角边框上。 */
+.release-notes-fade {
+  background: linear-gradient(to top, oklch(var(--card)), transparent);
 }
 </style>

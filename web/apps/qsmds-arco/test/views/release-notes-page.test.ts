@@ -83,17 +83,23 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.doesNotMatch(pageSource, /发布时间/u)
   assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
   assert.match(pageSource, /selectedMeta/u)
-  // 选中态是整行块状浅绿背景；静态样式不能再带 bg-transparent 覆盖它。
-  assert.match(pageSource, /bg-primary\/10 text-primary/u)
-  assert.doesNotMatch(pageSource, /bg-transparent/u)
+  // 选中态只包裹「版本号 + 日期」文字块，不覆盖左侧时间轴与圆点。
+  assert.match(pageSource, /row\.version === selectedVersion \? 'text-primary' : 'text-foreground'/u)
+  assert.match(pageSource, /row\.version === selectedVersion \? 'bg-primary\/10' : 'group-hover:bg-muted'/u)
   // 左侧列表带轻量时间轴：贯穿的细线加每行圆点，选中为实心绿点、未选中为空心灰点。
   assert.match(pageSource, /w-px/u)
   assert.match(pageSource, /bg-border/u)
   assert.match(pageSource, /rounded-full/u)
   assert.match(pageSource, /bg-primary border-primary/u)
-  assert.match(pageSource, /bg-background border-border/u)
-  // 滚动容器留出底部空隙，最后一项的日期不会被圆角切断；同时收紧左栏宽度。
-  assert.match(pageSource, /pb-4/u)
+  // 未选中的空心灰点用中灰描边，浅色边框在白底上看不见。
+  assert.match(pageSource, /bg-background border-muted-foreground\/40/u)
+  // 「最新版本」标签改为深绿实心胶囊，在浅绿选中块上仍有清晰边界。
+  assert.match(pageSource, /text-primary-foreground/u)
+  assert.match(pageSource, /bg-primary"/u)
+  // 底部留白加渐隐遮罩，滚动中的半截文字不会撞在圆角边框上；左栏同时收窄。
+  assert.match(pageSource, /pb-6/u)
+  assert.match(pageSource, /release-notes-fade/u)
+  assert.match(pageSource, /linear-gradient\(to top, oklch\(var\(--card\)\), transparent\)/u)
   assert.match(pageSource, /lg:w-\[188px\]/u)
   // 最新版本在版本号后展示「最新版本」标签。
   assert.match(pageSource, /row\.version === latestVersion/u)
