@@ -1,7 +1,14 @@
 import { Type } from 'class-transformer'
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
+
+/**
+ * 柜次列表的绑定状态筛选取值：由装柜明细行汇总派生。
+ * `ALL` 是「全部柜次」，不要与前端展示态 `ALL`（完全绑定）混用。
+ */
+export enum ContainerBindingFilterDto { ALL = 'ALL', FULL = 'FULL', PARTIAL = 'PARTIAL', NONE = 'NONE' }
+const CONTAINER_BINDING_FILTER_VALUES = [ContainerBindingFilterDto.ALL, ContainerBindingFilterDto.FULL, ContainerBindingFilterDto.PARTIAL, ContainerBindingFilterDto.NONE] as const
 
 export class ContainerBatchIdDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID('4') id!: string
@@ -14,6 +21,11 @@ export class ContainerBatchListQueryDto {
   @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 64) warehouseValue?: string
   @ApiPropertyOptional({ type: Number, default: 1, minimum: 1, maximum: 1_000_000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1_000_000) page = 1
   @ApiPropertyOptional({ type: Number, default: 20, minimum: 1, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20
+}
+/** 柜次列表额外支持按绑定状态筛选；单柜明细列表没有这一维度，因此不放进基础查询 DTO。 */
+export class ContainerBatchPageQueryDto extends ContainerBatchListQueryDto {
+  @ApiPropertyOptional({ enum: ContainerBindingFilterDto, default: ContainerBindingFilterDto.ALL, description: 'Binding state derived from loading lines. FULL requires at least one line and no unbound line; PARTIAL requires both; NONE covers every batch without a bound line, including empty batches.' })
+  @IsOptional() @IsIn(CONTAINER_BINDING_FILTER_VALUES) bindingState?: ContainerBindingFilterDto
 }
 class ContainerBatchFieldsDto {
   @ApiProperty({ maxLength: 32, example: '0917柜' }) @IsString() @IsUnicodeCodePointLength(1, 32) containerBatchName!: string
@@ -70,9 +82,14 @@ export class ContainerBatchDto {
   @ApiProperty({ type: String, format: 'date-time' }) createdAt!: string
   @ApiProperty({ type: String, format: 'date-time' }) updatedAt!: string
 }
+export class ContainerBindingCountDto {
+  @ApiProperty({ enum: ContainerBindingFilterDto }) value!: ContainerBindingFilterDto
+  @ApiProperty({ minimum: 0 }) count!: number
+}
 export class ContainerBatchPageDto {
   @ApiProperty({ type: [ContainerBatchDto] }) items!: ContainerBatchDto[]
   @ApiProperty() total!: number
+  @ApiProperty({ type: [ContainerBindingCountDto], description: 'Counts per binding tab under the current search and warehouse filters; the binding filter itself is ignored.' }) bindingCounts!: ContainerBindingCountDto[]
 }
 export class ContainerLoadingItemDto {
   @ApiProperty({ type: String, nullable: true }) shipmentNo!: string | null

@@ -1076,6 +1076,7 @@ onBeforeUnmount(() => {
     <FaPageHeader
       title="产品列表"
       description="集中查看产品基础资料、供应商、媒体、价格与审计信息。"
+      default-class="flex flex-wrap gap-2"
     >
       <FaButton
         v-if="canBatchSetImages"

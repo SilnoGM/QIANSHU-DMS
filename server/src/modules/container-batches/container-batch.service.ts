@@ -17,7 +17,9 @@ import { markShipmentsContainerLoaded } from './container-load-fact'
 import { clearShipmentsContainerLoaded } from './container-unload-fact'
 import { advanceSalesOrdersWhenAllShipmentsLoaded, lockSalesOrderChains, retreatSalesOrdersWhenShipmentsUnloaded, salesOrderIdsOfShipments } from '../purchase-orders/shipments/sales-order-container-load-progress'
 import { resolveLoadGroupExpansion, resolveLoadGroupMembership } from '../purchase-orders/shipments/shipment-load-group.resolver'
-import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
+import { buildContainerBatchListWhere, withContainerBindingFilter } from './container-binding-filter'
+import { ContainerBindingFilterDto } from './container-batch.dto'
+import type { ContainerBatchDto, ContainerBatchListQueryDto, ContainerBatchPageQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto } from './container-batch.dto'
 import { containerFailure, containerUuid, deriveContainerDate, normalizeContainerCreate, normalizeLoadingItemCreate, normalizeContainerUpdate, normalizeLoadingItemUpdate, requireContainerVersion, type ContainerCommandContext } from './container-batch.normalizer'
 import { containerShipmentEligibilitySelect, resolveContainerShipmentEligibility } from './container-shipment-eligibility'
 
@@ -112,23 +114,30 @@ export class ContainerBatchService {
     if (!row) return containerFailure('CONTAINER_BATCH_NOT_FOUND', '柜次不存在', 404)
     return serialize(row)
   }
-  async list(query: ContainerBatchListQueryDto) {
-    const search = query.search?.trim()
-    const match = search === undefined || search === '' ? null : { contains: search, mode: 'insensitive' as const }
-    // 收件人姓名存在装柜行上，未关联货件的行也能按收件人找回柜次。
-    const where: Prisma.ContainerBatchWhereInput = {
-      ...(query.warehouseValue ? { warehouseValue: query.warehouseValue } : {}),
-      ...(match === null ? {} : { OR: [
-        { containerBatchName: match },
-        { containerBatchNo: match },
-        { items: { some: { recipientName: match } } },
-      ] }),
-    }
-    const [rows, total] = await this.prisma.$transaction([
+  async list(query: ContainerBatchPageQueryDto) {
+    const selected = query.bindingState ?? ContainerBindingFilterDto.ALL
+    // 页签计数忽略绑定维度，但保留搜索与仓库筛选；列表、总数与计数共用同一份条件与快照。
+    const base = buildContainerBatchListWhere(query, { omitBindingState: true })
+    const where = withContainerBindingFilter(base, selected)
+    const [rows, all, full, partial, none] = await this.prisma.$transaction([
       this.prisma.containerBatch.findMany({ where, include: containerSummaryInclude, skip: (query.page - 1) * query.pageSize, take: query.pageSize, orderBy: { containerBatchNo: 'desc' } }),
-      this.prisma.containerBatch.count({ where }),
+      this.prisma.containerBatch.count({ where: base }),
+      this.prisma.containerBatch.count({ where: withContainerBindingFilter(base, ContainerBindingFilterDto.FULL) }),
+      this.prisma.containerBatch.count({ where: withContainerBindingFilter(base, ContainerBindingFilterDto.PARTIAL) }),
+      this.prisma.containerBatch.count({ where: withContainerBindingFilter(base, ContainerBindingFilterDto.NONE) }),
     ], { isolationLevel: 'RepeatableRead' })
-    return { items: rows.map(serialize), total }
+    const counts: Record<ContainerBindingFilterDto, number> = { ALL: all, FULL: full, PARTIAL: partial, NONE: none }
+    // 当前页签总数直接取同快照计数：三态互斥且并集为全部，不需要额外 count。
+    return {
+      items: rows.map(serialize),
+      total: counts[selected],
+      bindingCounts: [
+        { value: ContainerBindingFilterDto.ALL, count: all },
+        { value: ContainerBindingFilterDto.FULL, count: full },
+        { value: ContainerBindingFilterDto.PARTIAL, count: partial },
+        { value: ContainerBindingFilterDto.NONE, count: none },
+      ],
+    }
   }
   async items(id: string, query: ContainerBatchListQueryDto, actorUserId?: string) {
     await this.get(id)

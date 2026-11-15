@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')">
+    <FaPageHeader :title="t('workbench.purchasePayments')" :description="t('purchasePayment.intro')" default-class="flex flex-wrap gap-2">
       <FaButton v-if="canPay" variant="outline" :disabled="!enabled || loading" @click="openPaymentRecords">
         <FaIcon name="i-lucide:receipt-text" aria-hidden="true" />{{ t('purchasePayment.records.title') }}
       </FaButton>

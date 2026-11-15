@@ -86392,6 +86392,22 @@
               "default": 20,
               "type": "number"
             }
+          },
+          {
+            "name": "bindingState",
+            "required": false,
+            "in": "query",
+            "description": "Binding state derived from loading lines. FULL requires at least one line and no unbound line; PARTIAL requires both; NONE covers every batch without a bound line, including empty batches.",
+            "schema": {
+              "default": "ALL",
+              "type": "string",
+              "enum": [
+                "ALL",
+                "FULL",
+                "PARTIAL",
+                "NONE"
+              ]
+            }
           }
         ],
         "responses": {
@@ -109387,7 +109403,7 @@
   "info": {
     "title": "Qianshu DMS API",
     "description": "",
-    "version": "1.6.7",
+    "version": "1.6.8",
     "contact": {}
   },
   "tags": [
@@ -128734,6 +128750,28 @@
           "updatedAt"
         ]
       },
+      "ContainerBindingCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "FULL",
+              "PARTIAL",
+              "NONE"
+            ]
+          },
+          "count": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
       "ContainerBatchPageDto": {
         "type": "object",
         "properties": {
@@ -128745,11 +128783,19 @@
           },
           "total": {
             "type": "number"
+          },
+          "bindingCounts": {
+            "description": "Counts per binding tab under the current search and warehouse filters; the binding filter itself is ignored.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContainerBindingCountDto"
+            }
           }
         },
         "required": [
           "items",
-          "total"
+          "total",
+          "bindingCounts"
         ]
       },
       "ContainerBatchCreateDto": {

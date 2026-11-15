@@ -789,3 +789,23 @@ test('销售待入仓使用双更新权限打开货件入仓范围弹窗', async
   )
   assert.doesNotMatch(source, /功能正在建设中/u)
 })
+
+test('销售分步表单保留 FaForm 回写，但必须兜底恢复被清理的 lines 数组', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+  const formStart = source.indexOf('<FaForm')
+
+  assert.ok(formStart >= 0, '销售新增页应通过 FaForm 提供表单语义')
+  const formEnd = source.indexOf('>', formStart)
+  const formTagSource = source.slice(formStart, formEnd + 1)
+
+  assert.match(
+    formTagSource,
+    /:model="formModel"/u,
+    '客户姓名与金额等字段依赖 FaForm 回写，不能移除 :model',
+  )
+  assert.match(
+    source,
+    /watch\(\(\) => formModel\.value\.lines,[\s\S]*?if \(!Array\.isArray\(lines\)\)[\s\S]*?formModel\.value\.lines = \[\]/u,
+    '删除最后一个产品行时 vee-validate 的空容器清理会把 lines 键从回写结果中删除，导致产品编辑器因 undefined 崩溃；必须有同步兜底恢复',
+  )
+})

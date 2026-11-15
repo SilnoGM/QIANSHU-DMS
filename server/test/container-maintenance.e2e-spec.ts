@@ -212,6 +212,38 @@ describe('container maintenance with isolated PostgreSQL', () => {
     expect((await browser.get(path).query({ search: ' ' }).expect(200)).body as { total: number }).toMatchObject({ total: 3 })
   })
 
+  it('filters containers by derived binding state and keeps tab counts partitioned', async () => {
+    const empty = await batch()
+    const unbound = await batch(), unboundRow = await item(unbound)
+    const full = await batch(), fullShipment = await h.shipment({ salesLinked: false })
+    const fullRow = await item(full, { shipmentId: fullShipment.part.id })
+    const partial = await batch(), partialShipment = await h.shipment({ salesLinked: false })
+    const boundRow = await item(partial, { goodsName: '已绑定行', shipmentId: partialShipment.part.id })
+    const openRow = await item({ ...partial, version: partial.version + 1 }, { goodsName: '未绑定行' })
+    expect([unboundRow.shipmentId, fullRow.shipmentId, boundRow.shipmentId, openRow.shipmentId]).toEqual([null, fullShipment.part.id, partialShipment.part.id, null])
+
+    const list = async (containerBatchName: string, bindingState?: string) => (await browser.get('/api/container-batches')
+      .query(bindingState === undefined ? { search: containerBatchName } : { search: containerBatchName, bindingState })
+      .expect(200)).body as { items: ContainerBatchDto[], total: number, bindingCounts: { value: string, count: number }[] }
+
+    // 空柜并入未绑定，三态互斥；搜索与仓库条件对页签计数同样生效。
+    for (const [target, expectedState] of [[empty, 'NONE'], [unbound, 'NONE'], [full, 'FULL'], [partial, 'PARTIAL']] as const) {
+      for (const state of ['ALL', 'FULL', 'PARTIAL', 'NONE'] as const) {
+        const result = await list(target.containerBatchName, state)
+        const matched = state === 'ALL' || state === expectedState
+        expect(result.total).toBe(matched ? 1 : 0)
+        expect(result.items.map(row => row.id)).toEqual(matched ? [target.id] : [])
+      }
+      const counts = Object.fromEntries((await list(target.containerBatchName)).bindingCounts.map(item => [item.value, item.count]))
+      expect(counts.ALL).toBe(1)
+      expect(counts.ALL).toBe(counts.FULL + counts.PARTIAL + counts.NONE)
+    }
+
+    // 未传 bindingState 与 ALL 等价；非法取值在 HTTP 边界被拒绝。
+    expect((await list(empty.containerBatchName)).total).toBe(1)
+    await browser.get('/api/container-batches').query({ bindingState: 'EMPTY' }).expect(422)
+  })
+
   it('rolls back each edit and its versions on audit failure without financial side effects', async () => {
     const parent = await batch(), row = await item(parent), audit = h.app.get(AuditService), original = audit.record.bind(audit)
     const snapshot = async () => ({ batch: await h.prisma.containerBatch.findUnique({ where: { id: parent.id } }), item: await h.prisma.containerLoadingItem.findUnique({ where: { id: row.id } }) })
