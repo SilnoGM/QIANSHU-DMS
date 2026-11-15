@@ -130,39 +130,52 @@ onBeforeUnmount(() => {
 
         <nav
           v-if="versions.length > 0"
-          class="shrink-0 min-h-0 hidden lg:w-[212px] lg:block"
+          class="shrink-0 min-h-0 hidden lg:w-[188px] lg:block"
           aria-label="版本列表"
         >
-          <div class="p-1.5 overscroll-contain border rounded-lg flex flex-col gap-0.5 h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
-            <button
-              v-for="row in versionRows"
-              :key="row.version"
-              type="button"
-              class="px-2 py-1.5 text-start border-0 rounded-md bg-transparent transition-colors hover-bg-muted"
-              :class="row.version === selectedVersion
-                ? 'bg-primary/10 text-primary'
-                : 'text-foreground'"
-              :aria-current="row.version === selectedVersion ? 'true' : undefined"
-              @click="selectVersion(row.version)"
-            >
-              <span class="flex gap-1.5 items-center">
-                <span class="font-qs-data-mono text-sm font-medium">
-                  {{ row.label }}
-                </span>
-                <span
-                  v-if="row.version === latestVersion"
-                  class="text-primary leading-4 qs-type-tag px-1 rounded bg-primary/10"
-                >
-                  最新版本
-                </span>
-              </span>
-              <span
-                v-if="row.releasedAt !== null"
-                class="qs-type-meta mt-0.5 block"
+          <div class="p-1.5 pb-4 overscroll-contain border rounded-lg h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
+            <div class="flex flex-col gap-0.5 relative">
+              <span class="bg-border w-px start-[16px] inset-y-3 absolute" aria-hidden="true" />
+              <button
+                v-for="row in versionRows"
+                :key="row.version"
+                type="button"
+                class="px-2 py-1.5 text-start border-0 rounded-md flex gap-2 transition-colors relative"
+                :class="row.version === selectedVersion
+                  ? 'bg-primary/10 text-primary hover-bg-primary/15'
+                  : 'text-foreground hover-bg-muted'"
+                :aria-current="row.version === selectedVersion ? 'true' : undefined"
+                @click="selectVersion(row.version)"
               >
-                发布时间<span class="ms-[1ch] tabular-nums">{{ row.releasedAt }}</span>
-              </span>
-            </button>
+                <span class="mt-[6px] flex shrink-0 w-4 justify-center" aria-hidden="true">
+                  <span
+                    class="border rounded-full size-2 transition-colors"
+                    :class="row.version === selectedVersion
+                      ? 'bg-primary border-primary'
+                      : 'bg-background border-border'"
+                  />
+                </span>
+                <span class="flex-1 min-w-0">
+                  <span class="flex gap-1.5 items-center">
+                    <span class="font-qs-data-mono text-sm font-medium">
+                      {{ row.label }}
+                    </span>
+                    <span
+                      v-if="row.version === latestVersion"
+                      class="text-primary leading-4 qs-type-tag px-1 rounded bg-primary/10"
+                    >
+                      最新版本
+                    </span>
+                  </span>
+                  <span
+                    v-if="row.releasedAt !== null"
+                    class="qs-type-meta mt-0.5 block tabular-nums"
+                  >
+                    {{ row.releasedAt }}
+                  </span>
+                </span>
+              </button>
+            </div>
           </div>
         </nav>
 

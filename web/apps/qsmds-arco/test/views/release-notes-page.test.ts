@@ -78,12 +78,23 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /data-testid="release-notes-detail"/u)
   assert.match(pageSource, /data-testid="release-notes-error"/u)
   assert.match(pageSource, /<FaEmpty/u)
-  // 左栏版本行与详情摘要都展示 Tag 创建日期；没有日期时只省略日期。
+  // 左栏日期行只显示浅灰日期，不再重复「发布时间」四个字。
   assert.match(pageSource, /row\.releasedAt/u)
+  assert.doesNotMatch(pageSource, /发布时间/u)
   assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
   assert.match(pageSource, /selectedMeta/u)
-  // 左栏日期行写明「发布时间」，与日期之间保留一个字符宽度的空隙。
-  assert.match(pageSource, /发布时间<span class="ms-\[1ch\] tabular-nums">/u)
+  // 选中态是整行块状浅绿背景；静态样式不能再带 bg-transparent 覆盖它。
+  assert.match(pageSource, /bg-primary\/10 text-primary/u)
+  assert.doesNotMatch(pageSource, /bg-transparent/u)
+  // 左侧列表带轻量时间轴：贯穿的细线加每行圆点，选中为实心绿点、未选中为空心灰点。
+  assert.match(pageSource, /w-px/u)
+  assert.match(pageSource, /bg-border/u)
+  assert.match(pageSource, /rounded-full/u)
+  assert.match(pageSource, /bg-primary border-primary/u)
+  assert.match(pageSource, /bg-background border-border/u)
+  // 滚动容器留出底部空隙，最后一项的日期不会被圆角切断；同时收紧左栏宽度。
+  assert.match(pageSource, /pb-4/u)
+  assert.match(pageSource, /lg:w-\[188px\]/u)
   // 最新版本在版本号后展示「最新版本」标签。
   assert.match(pageSource, /row\.version === latestVersion/u)
   assert.match(pageSource, />\s*最新版本\s*</u)
