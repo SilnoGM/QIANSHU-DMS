@@ -82,7 +82,14 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /row\.releasedAt/u)
   assert.doesNotMatch(pageSource, /发布时间/u)
   assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
-  assert.match(pageSource, /selectedMeta/u)
+  // 详情头部与左栏使用同一套「最新版本」绿底标签，不再切换到灰色当前版本标签。
+  assert.match(pageSource, /selectedEntry\.version === latestVersion/u)
+  assert.match(pageSource, /text-primary-foreground/u)
+  assert.doesNotMatch(pageSource, /<FaTag/u)
+  // 右上角做成小胶囊，日期保留、条目数标绿加粗。
+  assert.match(pageSource, /\{\{ selectedEntry\.releasedAt \}\} ·/u)
+  assert.match(pageSource, /selectedItemCount/u)
+  assert.match(pageSource, /font-semibold tabular-nums/u)
   // 选中态只包裹「版本号 + 日期」文字块，不覆盖左侧时间轴与圆点。
   assert.match(pageSource, /row\.version === selectedVersion \? 'text-primary' : 'text-foreground'/u)
   assert.match(pageSource, /row\.version === selectedVersion \? 'bg-primary\/10' : 'group-hover:bg-muted'/u)

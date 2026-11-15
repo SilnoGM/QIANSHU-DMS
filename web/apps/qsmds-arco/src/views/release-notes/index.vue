@@ -35,14 +35,6 @@ const versionOptions = computed(() => versionRows.value.map(row => ({
   label: row.releasedAt === null ? row.label : `${row.label} · ${row.releasedAt}`,
   value: row.version,
 })))
-const selectedMeta = computed(() => {
-  const entry = selectedEntry.value
-  if (entry === null) {
-    return ''
-  }
-  const itemCount = `${selectedItemCount.value} 项更新`
-  return entry.releasedAt === undefined ? itemCount : `${entry.releasedAt} · ${itemCount}`
-})
 
 function selectVersion(value: unknown): void {
   if (typeof value !== 'string' || value === selectedVersion.value) {
@@ -220,17 +212,21 @@ onBeforeUnmount(() => {
               <h2 class="font-qs-data-mono text-lg font-semibold m-0">
                 {{ formatReleaseVersion(selectedEntry.version) }}
               </h2>
-              <FaTag v-if="selectedEntry.version === currentVersion" variant="secondary" class="qs-type-tag">
-                当前版本
-              </FaTag>
-              <FaTag
-                v-else-if="selectedEntry.version === latestVersion"
-                variant="outline"
-                class="qs-type-tag"
+              <span
+                v-if="selectedEntry.version === latestVersion"
+                class="text-[11px] text-primary-foreground leading-4 font-medium px-1.5 rounded bg-primary"
               >
                 最新版本
-              </FaTag>
-              <span class="qs-type-meta ms-auto">{{ selectedMeta }}</span>
+              </span>
+              <span class="text-xs text-muted-foreground ms-auto px-2 py-0.5 rounded-md bg-muted inline-flex gap-1 items-center">
+                <span v-if="selectedEntry.releasedAt !== undefined" class="tabular-nums">
+                  {{ selectedEntry.releasedAt }} ·
+                </span>
+                <span>
+                  <span class="text-primary font-semibold tabular-nums">{{ selectedItemCount }}</span>
+                  项更新
+                </span>
+              </span>
             </header>
             <div class="p-4 overscroll-contain flex-1 min-h-0 [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
               <QsReleaseNotesContent :sections="selectedEntry.sections" />
