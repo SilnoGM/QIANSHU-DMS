@@ -84,6 +84,11 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /selectedMeta/u)
   // 左栏只保留版本号与时间，不再重复分类计数和适用角色。
   assert.doesNotMatch(pageSource, /row\.summary|row\.roles/u)
+  // 版本多时左栏内部滚动，但不显示滚动条。
+  assert.match(pageSource, /max-h-\[70vh\]/u)
+  assert.match(pageSource, /overflow-y-auto/u)
+  assert.match(pageSource, /\[scrollbar-width:none\]/u)
+  assert.match(pageSource, /\[&::-webkit-scrollbar\]:hidden/u)
 
   assert.match(logicSource, /RELEASE_NOTES_HISTORY_PATH = 'release-notes\.json'/u)
   assert.match(logicSource, /cache: 'no-store'/u)

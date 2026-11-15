@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
           class="shrink-0 hidden lg:w-[212px] lg:block"
           aria-label="版本列表"
         >
-          <div class="p-1.5 border rounded-lg flex flex-col gap-0.5 max-h-[70vh] overflow-y-auto">
+          <div class="p-1.5 overscroll-contain border rounded-lg flex flex-col gap-0.5 max-h-[70vh] [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
             <button
               v-for="row in versionRows"
               :key="row.version"
