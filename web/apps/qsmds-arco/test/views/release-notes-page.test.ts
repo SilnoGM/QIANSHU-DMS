@@ -3,11 +3,9 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 版本更新日志页使用 Node.js 内置 runner 校验解析与源码契约。
 import test from 'node:test'
 import {
-  collectVersionRoles,
   countVersionItems,
   normalizeReleaseNotesHistory,
   resolveSelectedVersion,
-  summarizeVersionSections,
 } from '../../src/views/release-notes/logic'
 
 function readRelativeSource(relativePath: string): string {
@@ -49,14 +47,12 @@ test('深链版本缺失时退回最新版本并接受 v 前缀', () => {
   assert.equal(resolveSelectedVersion([], '1.0.0'), null)
 })
 
-test('版本摘要保留早期自定义分类并汇总角色与条目数', () => {
+test('版本条目数用于详情摘要', () => {
   const sections = [
     { title: '功能新增', items: ['【运营人员】A', '【采运人员】B'] },
     { title: '对账', items: ['【财务人员】C'] },
     { title: '功能优化', items: ['【运营人员、系统管理员】D'] },
   ]
-  assert.equal(summarizeVersionSections(sections), '新增 2 · 对账 1 · 优化 1')
-  assert.deepEqual(collectVersionRoles(sections), ['运营人员', '财务人员', '采运人员', '系统管理员'])
   assert.equal(countVersionItems(sections), 4)
 })
 
@@ -86,6 +82,8 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /row\.releasedAt/u)
   assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
   assert.match(pageSource, /selectedMeta/u)
+  // 左栏只保留版本号与时间，不再重复分类计数和适用角色。
+  assert.doesNotMatch(pageSource, /row\.summary|row\.roles/u)
 
   assert.match(logicSource, /RELEASE_NOTES_HISTORY_PATH = 'release-notes\.json'/u)
   assert.match(logicSource, /cache: 'no-store'/u)

@@ -2,13 +2,11 @@
 import type { ReleaseNotesVersion } from './logic'
 import QsReleaseNotesContent from '@/components/business/QsReleaseNotesContent/index.vue'
 import {
-  collectVersionRoles,
   countVersionItems,
   fetchReleaseNotesHistory,
   formatReleaseVersion,
   RELEASE_NOTES_REQUEST_TIMEOUT_MS,
   resolveSelectedVersion,
-  summarizeVersionSections,
 } from './logic'
 
 defineOptions({ name: 'ReleaseNotes' })
@@ -32,8 +30,6 @@ const versionRows = computed(() => versions.value.map(entry => ({
   version: entry.version,
   label: formatReleaseVersion(entry.version),
   releasedAt: entry.releasedAt ?? null,
-  summary: summarizeVersionSections(entry.sections),
-  roles: collectVersionRoles(entry.sections),
 })))
 const versionOptions = computed(() => versionRows.value.map(row => ({
   label: row.releasedAt === null ? row.label : `${row.label} · ${row.releasedAt}`,
@@ -149,25 +145,14 @@ onBeforeUnmount(() => {
               :aria-current="row.version === selectedVersion ? 'true' : undefined"
               @click="selectVersion(row.version)"
             >
-              <span class="flex gap-1.5 items-center">
-                <span class="font-qs-data-mono text-sm font-medium">
-                  {{ row.label }}
-                </span>
-                <span v-if="row.releasedAt !== null" class="qs-type-meta tabular-nums">
-                  {{ row.releasedAt }}
-                </span>
-                <span
-                  v-if="row.version === currentVersion"
-                  class="text-primary qs-type-tag px-1 rounded bg-primary/10"
-                >
-                  当前
-                </span>
+              <span class="font-qs-data-mono text-sm font-medium">
+                {{ row.label }}
               </span>
-              <span class="qs-type-meta mt-0.5 block truncate">
-                {{ row.summary }}
-              </span>
-              <span v-if="row.roles.length > 0" class="qs-type-meta mt-0.5 block truncate">
-                {{ row.roles.join('、') }}
+              <span
+                v-if="row.releasedAt !== null"
+                class="qs-type-meta mt-0.5 block tabular-nums"
+              >
+                {{ row.releasedAt }}
               </span>
             </button>
           </div>

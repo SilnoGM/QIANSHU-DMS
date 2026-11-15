@@ -1,5 +1,4 @@
 import type { ReleaseNoteSection } from '../../components/business/QsReleaseNotesContent/logic'
-import { parseReleaseNoteItem, RELEASE_AUDIENCES } from '../../components/business/QsReleaseNotesContent/logic'
 
 export interface ReleaseNotesVersion {
   version: string
@@ -16,12 +15,6 @@ const MAX_VERSION_COUNT = 500
 const MAX_SECTION_COUNT = 20
 const MAX_ITEM_COUNT = 500
 const MAX_ITEM_LENGTH = 2000
-const SECTION_SHORT_LABELS: Record<string, string> = {
-  功能新增: '新增',
-  功能优化: '优化',
-  缺陷修复: '修复',
-  已知问题: '已知问题',
-}
 
 /** 版本号逐段比较；字符串排序会把 1.10.0 排到 1.9.0 前面。 */
 export function compareReleaseVersions(left: string, right: string): number {
@@ -117,25 +110,6 @@ export function resolveSelectedVersion(
 
 export function formatReleaseVersion(version: string): string {
   return `v${version}`
-}
-
-/** 左栏摘要：已知分类用短名，早期自定义分类保留原名，避免「对账 / 账单管理」信息丢失。 */
-export function summarizeVersionSections(sections: readonly ReleaseNoteSection[]): string {
-  return sections
-    .map(section => `${SECTION_SHORT_LABELS[section.title] ?? section.title} ${section.items.length}`)
-    .join(' · ')
-}
-
-export function collectVersionRoles(sections: readonly ReleaseNoteSection[]): string[] {
-  const roles = new Set<string>()
-  for (const section of sections) {
-    for (const item of section.items) {
-      for (const role of parseReleaseNoteItem(item).roles) {
-        roles.add(role)
-      }
-    }
-  }
-  return RELEASE_AUDIENCES.filter(role => roles.has(role))
 }
 
 export function countVersionItems(sections: readonly ReleaseNoteSection[]): number {
