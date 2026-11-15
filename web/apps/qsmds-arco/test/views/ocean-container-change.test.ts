@@ -373,3 +373,25 @@ test('已为零的明细不能重复取消，空金额可明确确认为零', as
   assert.equal(s.state.intent.value?.kind, 'COD')
   s.stop()
 })
+
+test('装柜修改推送去掉地址开头的中国台湾前缀，diff 仍按原值展示', () => {
+  const line = { ...source(), recipientAddress: '中国台湾台湾高雄市苓雅区中正一路100号' }
+  const after = normalizeOceanChange('RECIPIENT', { ...line, recipientAddress: '中国台湾台湾高雄市苓雅区中正二路200号' }).value!
+  assert.equal(buildOceanChangeText('0917柜', line, after), '‼️【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n收件地址改为：台湾高雄市苓雅区中正二路200号')
+  assert.deepEqual(oceanChangeDiff(line, after), [{
+    key: 'recipientAddress',
+    before: '中国台湾台湾高雄市苓雅区中正一路100号',
+    after: '中国台湾台湾高雄市苓雅区中正二路200号',
+  }])
+})
+
+test('仅国家前缀不同的地址仍判为变化并推送，不被复制层裁剪吞掉', () => {
+  const line = { ...source(), recipientAddress: '中国台湾台湾高雄市苓雅区中正一路100号' }
+  const after = normalizeOceanChange('RECIPIENT', { ...line, recipientAddress: '台湾高雄市苓雅区中正一路100号' }).value!
+  assert.deepEqual(oceanChangeDiff(line, after), [{
+    key: 'recipientAddress',
+    before: '中国台湾台湾高雄市苓雅区中正一路100号',
+    after: '台湾高雄市苓雅区中正一路100号',
+  }])
+  assert.equal(buildOceanChangeText('0917柜', line, after), '‼️【收件人信息修改】\n柜次：0917柜\n唛头：L-091726-01\n\n收件地址改为：台湾高雄市苓雅区中正一路100号')
+})
