@@ -143,3 +143,25 @@ test('没有实际变化时不生成文案', () => {
     codChanged: false,
   })]), '')
 })
+
+test('复制文案去掉地址开头的中国台湾前缀，省名保留', () => {
+  const text = buildClaimContainerCopyText([change({
+    beforeRecipientName: '新收件人',
+    afterRecipientName: '新收件人',
+    beforeRecipientPhone: '0922000000',
+    afterRecipientPhone: '0922000000',
+    beforeRecipientAddress: '中国台湾台湾高雄市苓雅区中正一路100号',
+    afterRecipientAddress: '中国台湾台湾高雄市苓雅区中正二路200号',
+    beforeCodAmountTwd: null,
+    afterCodAmountTwd: null,
+    codChanged: false,
+  })])
+
+  assert.equal(text, [
+    '‼️【收件人信息修改】',
+    '柜次：测试柜',
+    '唛头：J-030549-01',
+    '',
+    '收件地址改为：台湾高雄市苓雅区中正二路200号',
+  ].join('\n'))
+})

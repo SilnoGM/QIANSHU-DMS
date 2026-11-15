@@ -1,5 +1,6 @@
 import type { OperationsOceanContainerLineDto } from '@/api/generated/types.gen'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
+import { stripAddressCountryPrefix } from '../../../utils/address-copy'
 
 export type OceanChangeKind = 'RECIPIENT' | 'COD' | 'CANCEL_COD'
 export type OceanChangeLine = OperationsOceanContainerLineDto
@@ -73,6 +74,11 @@ export function buildOceanChangeText(containerName: string, line: OceanChangeLin
   }
   const changes = RECIPIENT_FIELDS
     .filter(key => normalizeRecipientText(line[key]) !== normalizeRecipientText(next[key]))
-    .map(key => `${labels[key]}改为：${normalizeRecipientText(next[key]) ?? '清空'}`)
+    .map((key) => {
+      const after = normalizeRecipientText(next[key])
+      // 只裁剪复制文案里的地址前缀；filter 与 diff 仍用原值，避免仅前缀不同的修改被漏推。
+      const display = key === 'recipientAddress' ? stripAddressCountryPrefix(after) : after
+      return `${labels[key]}改为：${display || '清空'}`
+    })
   return [...heading, '', ...changes].join('\n')
 }

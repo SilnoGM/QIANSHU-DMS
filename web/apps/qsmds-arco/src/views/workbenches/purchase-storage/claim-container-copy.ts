@@ -1,4 +1,5 @@
 import type { ShipmentStorageClaimContainerChangeDto } from '@/api/generated/types.gen'
+import { stripAddressCountryPrefix } from '../../../utils/address-copy'
 
 interface RecipientGroup {
   readonly containerBatchId: string
@@ -31,7 +32,7 @@ function recipientChangeLines(change: ShipmentStorageClaimContainerChangeDto): s
       ? `客户电话改为：${change.afterRecipientPhone}`
       : null,
     change.beforeRecipientAddress !== change.afterRecipientAddress
-      ? `收件地址改为：${change.afterRecipientAddress}`
+      ? `收件地址改为：${stripAddressCountryPrefix(change.afterRecipientAddress)}`
       : null,
   ].filter((value): value is string => value !== null)
 }
