@@ -4,12 +4,14 @@ import { parseReleaseNoteItem, RELEASE_AUDIENCES } from '../../components/busine
 export interface ReleaseNotesVersion {
   version: string
   sections: ReleaseNoteSection[]
+  releasedAt?: string
 }
 
 export const RELEASE_NOTES_HISTORY_PATH = 'release-notes.json'
 export const RELEASE_NOTES_REQUEST_TIMEOUT_MS = 10_000
 
 const STABLE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u
+const RELEASE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 const MAX_VERSION_COUNT = 500
 const MAX_SECTION_COUNT = 20
 const MAX_ITEM_COUNT = 500
@@ -77,7 +79,7 @@ export function normalizeReleaseNotesHistory(value: unknown): ReleaseNotesVersio
     if (typeof item !== 'object' || item === null) {
       continue
     }
-    const record = item as { version?: unknown, sections?: unknown }
+    const record = item as { version?: unknown, sections?: unknown, releasedAt?: unknown }
     if (typeof record.version !== 'string' || !STABLE_VERSION_PATTERN.test(record.version) || seen.has(record.version)) {
       continue
     }
@@ -86,7 +88,9 @@ export function normalizeReleaseNotesHistory(value: unknown): ReleaseNotesVersio
       continue
     }
     seen.add(record.version)
-    normalized.push({ version: record.version, sections })
+    normalized.push(typeof record.releasedAt === 'string' && RELEASE_DATE_PATTERN.test(record.releasedAt)
+      ? { version: record.version, sections, releasedAt: record.releasedAt }
+      : { version: record.version, sections })
   }
   return normalized.sort((left, right) => compareReleaseVersions(right.version, left.version))
 }

@@ -9,6 +9,7 @@ import {
   compareReleaseVersions,
   loadReleaseManifest,
   loadReleaseNotesHistory,
+  parseReleaseDates,
   parseReleaseNotes,
   parseReleaseNotesHistory,
 } from '../../vite/release-manifest'
@@ -76,14 +77,37 @@ test('历史清单按版本号倒序并过滤非法文件名与空版本', () =>
     writeFileSync(join(directory, 'notes.md'), '功能新增\n- 干扰\n')
     writeFileSync(join(directory, 'v1.0.0.md'), '功能新增\n- 无\n')
 
-    const history = loadReleaseNotesHistory({ notesDirectory: directory })
+    const releasedAtByVersion = new Map([
+      ['1.10.0', '2026-11-10'],
+      ['1.9.0', '2026-09-09'],
+    ])
+    const history = loadReleaseNotesHistory({ notesDirectory: directory, releasedAtByVersion })
     assert.deepEqual(history.map(entry => entry.version), ['1.10.0', '1.9.0', '1.2.0'])
+    assert.equal(history[0].releasedAt, '2026-11-10')
+    assert.equal(history[1].releasedAt, '2026-09-09')
+    // 没有 Tag 日期的版本只省略日期，不影响清单本身。
+    assert.equal(history[2].releasedAt, undefined)
     assert.equal(compareReleaseVersions('1.10.0', '1.9.0'), 1)
     assert.equal(compareReleaseVersions('1.1.0', '1.1.0'), 0)
   }
   finally {
     rmSync(directory, { recursive: true, force: true })
   }
+})
+
+test('发布日期取 Tag 创建日期并忽略非法或预发布 Tag', () => {
+  const dates = parseReleaseDates([
+    'v1.6.5 2026-11-14',
+    'v1.5.0 2026-11-13',
+    'v2.0.0-rc.1 2026-01-01',
+    'notes 2026-01-01',
+    'v1.0.0 bad-date',
+    '',
+  ].join('\n'))
+  assert.deepEqual([...dates.entries()], [
+    ['1.6.5', '2026-11-14'],
+    ['1.5.0', '2026-11-13'],
+  ])
 })
 
 test('仓库内全部版本文案都能生成历史清单且覆盖早期版本', () => {

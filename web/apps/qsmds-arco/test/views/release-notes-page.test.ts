@@ -17,8 +17,8 @@ function readRelativeSource(relativePath: string): string {
 test('历史清单只接受稳定版本并按版本号倒序', () => {
   const history = normalizeReleaseNotesHistory({
     versions: [
-      { version: '1.2.0', sections: [{ title: '功能新增', items: [' 新功能 '] }] },
-      { version: '1.10.0', sections: [{ title: '功能优化', items: ['更快'] }] },
+      { version: '1.2.0', sections: [{ title: '功能新增', items: [' 新功能 '] }], releasedAt: '2026-11-10' },
+      { version: '1.10.0', sections: [{ title: '功能优化', items: ['更快'] }], releasedAt: 'bad-date' },
       { version: '1.10.0', sections: [{ title: '功能优化', items: ['重复'] }] },
       { version: '2.0.0-rc.1', sections: [{ title: '功能新增', items: ['预发布'] }] },
       { version: '1.3.0', sections: [] },
@@ -28,6 +28,9 @@ test('历史清单只接受稳定版本并按版本号倒序', () => {
 
   assert.deepEqual(history.map(entry => entry.version), ['1.10.0', '1.2.0'])
   assert.deepEqual(history[1].sections, [{ title: '功能新增', items: ['新功能'] }])
+  assert.equal(history[1].releasedAt, '2026-11-10')
+  // 非法日期只丢弃日期，不能连版本一起丢。
+  assert.equal(history[0].releasedAt, undefined)
   assert.deepEqual(normalizeReleaseNotesHistory(null), [])
   assert.deepEqual(normalizeReleaseNotesHistory({ versions: 'bad' }), [])
 })
@@ -79,6 +82,10 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   assert.match(pageSource, /data-testid="release-notes-detail"/u)
   assert.match(pageSource, /data-testid="release-notes-error"/u)
   assert.match(pageSource, /<FaEmpty/u)
+  // 左栏版本行与详情摘要都展示 Tag 创建日期；没有日期时只省略日期。
+  assert.match(pageSource, /row\.releasedAt/u)
+  assert.match(pageSource, /row\.releasedAt === null \? row\.label : `\$\{row\.label\} · \$\{row\.releasedAt\}`/u)
+  assert.match(pageSource, /selectedMeta/u)
 
   assert.match(logicSource, /RELEASE_NOTES_HISTORY_PATH = 'release-notes\.json'/u)
   assert.match(logicSource, /cache: 'no-store'/u)
@@ -92,6 +99,9 @@ test('构建产物与 nginx 都为历史清单提供 no-store 稳定路径', () 
   assert.match(pluginSource, /fileName: RELEASE_NOTES_HISTORY_FILE_NAME/u)
   assert.match(pluginSource, /configureServer/u)
   assert.match(pluginSource, /response\.setHeader\('Cache-Control', 'no-store'\)/u)
+  // 发布日期来自本仓库 Tag；构建环境没有 Git 元数据时只省略日期。
+  assert.match(pluginSource, /creatordate:short/u)
+  assert.match(pluginSource, /loadReleaseDates/u)
 
   assert.match(nginxSource, /location = \/release-notes\.json \{/u)
   const block = nginxSource.slice(

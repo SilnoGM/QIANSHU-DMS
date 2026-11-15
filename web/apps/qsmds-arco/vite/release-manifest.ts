@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -19,11 +20,13 @@ export interface ReleaseManifest {
 export interface ReleaseNotesVersion {
   version: string
   sections: ReleaseNoteSection[]
+  releasedAt?: string
 }
 
 const STABLE_VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u
 const RELEASE_NOTES_FILE_PATTERN = /^v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))\.md$/u
 const RELEASE_NOTES_AUDIENCE_PREFIX = '本版影响角色：'
+const RELEASE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 function isSectionTitle(value: string): value is typeof RELEASE_NOTE_SECTIONS[number] {
   return (RELEASE_NOTE_SECTIONS as readonly string[]).includes(value)
@@ -127,9 +130,47 @@ export function loadReleaseManifest(input: {
   }
 }
 
+/**
+ * 发布日期取 annotated Tag 的创建日期，轻量 Tag 退回提交日期。
+ * 构建环境缺少 Git 元数据（例如仅解包源码）时省略日期，页面仍可用；日期不参与排序。
+ */
+export function parseReleaseDates(output: string): Map<string, string> {
+  const dates = new Map<string, string>()
+  for (const rawLine of output.split('\n')) {
+    const line = rawLine.trim()
+    if (line === '') {
+      continue
+    }
+    const [tagName, releasedAt] = line.split(' ')
+    if (tagName === undefined || releasedAt === undefined || !tagName.startsWith('v')) {
+      continue
+    }
+    const version = tagName.slice(1)
+    if (STABLE_VERSION_PATTERN.test(version) && RELEASE_DATE_PATTERN.test(releasedAt)) {
+      dates.set(version, releasedAt)
+    }
+  }
+  return dates
+}
+
+export function loadReleaseDates(repositoryRoot: string): Map<string, string> {
+  try {
+    const output = execFileSync(
+      'git',
+      ['for-each-ref', '--format=%(refname:short) %(creatordate:short)', 'refs/tags'],
+      { cwd: repositoryRoot, encoding: 'utf8' },
+    )
+    return parseReleaseDates(output)
+  }
+  catch {
+    return new Map()
+  }
+}
+
 /** 读取 `release/notes/` 下全部稳定版本文案，按版本号倒序返回；非法文件名直接忽略。 */
 export function loadReleaseNotesHistory(input: {
   notesDirectory: string
+  releasedAtByVersion?: ReadonlyMap<string, string>
   warn?: (message: string) => void
 }): ReleaseNotesVersion[] {
   let fileNames: string[]
@@ -151,7 +192,10 @@ export function loadReleaseNotesHistory(input: {
       const source = readFileSync(path.join(input.notesDirectory, fileName), 'utf8')
       const sections = parseReleaseNotesHistory(source)
       if (sections.length > 0) {
-        versions.push({ version: matched[1], sections })
+        const releasedAt = input.releasedAtByVersion?.get(matched[1])
+        versions.push(releasedAt === undefined
+          ? { version: matched[1], sections }
+          : { version: matched[1], sections, releasedAt })
       }
     }
     catch {
@@ -175,6 +219,7 @@ export function loadReleaseNotesHistory(input: {
 export function createReleaseManifestPlugin(input: {
   version: string
   notesDirectory: string
+  repositoryRoot: string
 }): Plugin {
   return {
     name: 'qsmds-release-manifest',
@@ -187,6 +232,7 @@ export function createReleaseManifestPlugin(input: {
         // 开发服务器没有静态产物，按与构建时相同的规则即时生成历史清单。
         const history = loadReleaseNotesHistory({
           notesDirectory: input.notesDirectory,
+          releasedAtByVersion: loadReleaseDates(input.repositoryRoot),
           warn: message => server.config.logger.warn(message),
         })
         response.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -207,6 +253,7 @@ export function createReleaseManifestPlugin(input: {
       })
       const history = loadReleaseNotesHistory({
         notesDirectory: input.notesDirectory,
+        releasedAtByVersion: loadReleaseDates(input.repositoryRoot),
         warn: message => this.warn(message),
       })
       this.emitFile({
