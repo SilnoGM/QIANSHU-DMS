@@ -70,6 +70,13 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
 
   assert.match(pageSource, /<FaPageHeader/u)
   assert.match(pageSource, /title="版本更新日志"/u)
+  // 停留在老版本的用户可以从页头直接更新：仅当历史清单严格新于当前构建时才显示。
+  assert.match(pageSource, /compareReleaseVersions\(latestVersion\.value, currentVersion\) > 0/u)
+  assert.match(pageSource, /hasNewerVersion/u)
+  assert.match(pageSource, /data-testid="release-notes-update"/u)
+  assert.match(pageSource, /@click="reloadToLatest"/u)
+  assert.match(pageSource, /:loading="reloading"/u)
+  assert.match(pageSource, /window\.location\.reload\(\)/u)
   assert.match(pageSource, /<QsReleaseNotesContent :sections="selectedEntry\.sections" \/>/u)
   assert.match(pageSource, /aria-label="版本列表"/u)
   assert.match(pageSource, /<FaSelect/u)

@@ -1,6 +1,8 @@
 import { loadingFadeOut } from 'virtual:app-loading'
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import pinia from '@/store'
+import { isChunkLoadError } from '@/utils/chunk-load-error'
+import eventBus from '@/utils/eventBus'
 import setupExtensions from './extensions'
 import setupGuards from './guards'
 import {
@@ -19,6 +21,13 @@ const router = createRouter({
 
 setupGuards(router)
 setupExtensions(router)
+
+// 部署新版本后旧页面可能加载不到已替换的懒加载 chunk；统一交给全局刷新提示，避免白屏。
+router.onError((error) => {
+  if (isChunkLoadError(error)) {
+    eventBus.emit('global-asset-reload-required')
+  }
+})
 
 const initialLoadingElement = document.querySelector<HTMLElement>('.qianshu-loading')
 const requiredFontsReady = waitForRequiredAppFonts(document.fonts)

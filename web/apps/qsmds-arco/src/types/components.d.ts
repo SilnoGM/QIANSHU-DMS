@@ -13,6 +13,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppAccountButton: typeof import('./../components/AppAccountButton/index.vue')['default']
+    AppAssetReload: typeof import('./../components/AppAssetReload/index.vue')['default']
     AppAuth: typeof import('./../components/AppAuth/index.vue')['default']
     AppBackToTop: typeof import('./../components/AppBackToTop/index.vue')['default']
     AppCheckUpdates: typeof import('./../components/AppCheckUpdates/index.vue')['default']
@@ -126,6 +127,7 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const AppAccountButton: typeof import('./../components/AppAccountButton/index.vue')['default']
+  const AppAssetReload: typeof import('./../components/AppAssetReload/index.vue')['default']
   const AppAuth: typeof import('./../components/AppAuth/index.vue')['default']
   const AppBackToTop: typeof import('./../components/AppBackToTop/index.vue')['default']
   const AppCheckUpdates: typeof import('./../components/AppCheckUpdates/index.vue')['default']

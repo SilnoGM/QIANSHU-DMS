@@ -1,0 +1,12 @@
+{
+  "app": {
+    "components": {
+      "assetReload": {
+        "title": "頁面資源已更新",
+        "description": "系統已發佈新版本，目前頁面的部分資源已失效，需要重新整理後才能繼續存取。",
+        "later": "稍後",
+        "refreshNow": "立即重新整理"
+      }
+    }
+  }
+}

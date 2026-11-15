@@ -2,6 +2,7 @@
 import type { ReleaseNotesVersion } from './logic'
 import QsReleaseNotesContent from '@/components/business/QsReleaseNotesContent/index.vue'
 import {
+  compareReleaseVersions,
   countVersionItems,
   fetchReleaseNotesHistory,
   formatReleaseVersion,
@@ -25,6 +26,9 @@ const requestedVersion = computed(() => (typeof route.query.version === 'string'
 const selectedVersion = computed(() => resolveSelectedVersion(versions.value, requestedVersion.value))
 const selectedEntry = computed(() => versions.value.find(entry => entry.version === selectedVersion.value) ?? null)
 const latestVersion = computed(() => versions.value[0]?.version ?? null)
+const hasNewerVersion = computed(() => latestVersion.value !== null && compareReleaseVersions(latestVersion.value, currentVersion) > 0)
+const latestVersionLabel = computed(() => (latestVersion.value === null ? '' : formatReleaseVersion(latestVersion.value)))
+const reloading = ref(false)
 const selectedItemCount = computed(() => (selectedEntry.value === null ? 0 : countVersionItems(selectedEntry.value.sections)))
 const versionRows = computed(() => versions.value.map(entry => ({
   version: entry.version,
@@ -41,6 +45,14 @@ function selectVersion(value: unknown): void {
     return
   }
   void router.replace({ query: { ...route.query, version: value } })
+}
+
+function reloadToLatest(): void {
+  if (reloading.value) {
+    return
+  }
+  reloading.value = true
+  window.location.reload()
 }
 
 async function loadHistory(): Promise<void> {
@@ -97,14 +109,24 @@ onBeforeUnmount(() => {
           当前版本 {{ formatReleaseVersion(currentVersion) }}
         </span>
         <span
-          v-if="latestVersion !== null && latestVersion !== currentVersion"
+          v-if="hasNewerVersion"
           class="text-primary qs-type-tag px-2 py-0.5 border border-primary/35 rounded-md"
         >
-          最新版本 {{ formatReleaseVersion(latestVersion) }}
+          最新版本 {{ latestVersionLabel }}
         </span>
         <span v-if="versions.length > 0" class="qs-type-meta">
           共 {{ versions.length }} 个版本
         </span>
+        <FaButton
+          v-if="hasNewerVersion"
+          data-testid="release-notes-update"
+          size="sm"
+          :loading="reloading"
+          @click="reloadToLatest"
+        >
+          <FaIcon name="i-lucide:refresh-cw" class="size-4" aria-hidden="true" />
+          立即更新到 {{ latestVersionLabel }}
+        </FaButton>
       </div>
     </FaPageHeader>
 
