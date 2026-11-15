@@ -1,7 +1,8 @@
-import type { ComputedRef } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import type { ContainerBatchDto } from '../../src/api/generated/types.gen'
 import type { QsGenericTableColumn } from '../../src/components/business/QsGenericTable/logic'
 import type { DictionaryCatalog } from '../../src/dictionary-catalog/types'
+import type { ContainerBindingFilter } from '../../src/views/workbenches/containers/binding-stats.logic'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 与柜次领域测试保持一致，执行真实页面脚本验证字典异步回填。
@@ -10,9 +11,21 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, effectScope, ref, watch } from 'vue'
 import { parse } from 'vue/compiler-sfc'
+import { withStatusSwitchCounts } from '../../src/components/business/QsStatusSwitchToolbar/logic'
 import { resolveDictionaryCatalogValue } from '../../src/dictionary-catalog/options'
-import { resolveContainerBindingStats } from '../../src/views/workbenches/containers/binding-stats.logic'
+import { containerBindingFilterDefinitions, resolveContainerBindingStats } from '../../src/views/workbenches/containers/binding-stats.logic'
 import { formatContainerMeasurement, formatContainerWeight } from '../../src/views/workbenches/containers/display.logic'
+
+interface ContainerListState {
+  readonly bindingCounts: Ref<{ value: ContainerBindingFilter, count: number }[]>
+  readonly bindingState: Ref<ContainerBindingFilter>
+  readonly bindingTabs: ComputedRef<{ value: string, label: string, count?: number }[]>
+  readonly columns: ComputedRef<QsGenericTableColumn<ContainerBatchDto>[]>
+  readonly create: (payload: unknown) => Promise<void>
+  readonly page: Ref<number>
+  readonly query: ComputedRef<{ page: number, pageSize: number, search?: string, warehouseValue?: string, bindingState: ContainerBindingFilter }>
+  readonly selectBindingState: (value: string) => void
+}
 
 async function fixture(options: { permissions?: string[], created?: { id: string } | null } = {}) {
   const source = await readFile(new URL('../../src/views/workbenches/containers/index.vue', import.meta.url), 'utf8')
@@ -26,13 +39,15 @@ async function fixture(options: { permissions?: string[], created?: { id: string
   }
   const scope = effectScope()
   const navigations: { name: string, params: { id: string } }[] = []
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ columns, create })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}; ({ columns, create, bindingTabs, selectBindingState, bindingState, bindingCounts, page, query })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     computed,
     ref,
     watch,
     formatContainerMeasurement,
     formatContainerWeight,
     resolveContainerBindingStats,
+    containerBindingFilterDefinitions,
+    withStatusSwitchCounts,
     defineOptions: () => {},
     useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
     useAppAuth: () => ({ auth: (permission: string) => !options.permissions || options.permissions.includes(permission) }),
@@ -45,7 +60,7 @@ async function fixture(options: { permissions?: string[], created?: { id: string
     useContainerMutation: () => ({ submitting: ref(false), retryOnly: ref(false), error: ref(''), fieldErrors: ref({}), submit: async () => options.created ?? null }),
     onActivated: () => {},
     onDeactivated: () => {},
-  })) as { columns: ComputedRef<QsGenericTableColumn<ContainerBatchDto>[]>, create: (payload: unknown) => Promise<void> }
+  })) as unknown as ContainerListState
   return { state, warehouse, navigations, dispose: () => scope.stop() }
 }
 
@@ -103,4 +118,41 @@ test('柜次列表保留指定汇总数据，系统编号不提供复制', async
   assert.equal(columns.find(column => column.id === 'bindingStats')!.accessorFn!({ ...row, boundItemCount: 0, itemCount: 0 }, 0), '0/0 [containerPage.bindingEmpty]')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!(row, 0), '1173.4 kg 25.14 材')
   assert.equal(columns.find(column => column.id === 'totals')!.accessorFn!({ ...row, grossWeightKgTotal: null, volumeCaiTotal: null, chargeableVolumeCaiTotal: null }, 0), 'containerPage.unknown containerPage.unknown')
+})
+
+test('柜次绑定页签按全部/完全/部分/未绑定排序并直接使用列表返回的计数', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  assert.deepEqual(f.state.bindingTabs.value.map(item => [item.value, item.label, item.count]), [
+    ['ALL', 'containerPage.bindingFilterAll', 0],
+    ['FULL', 'containerPage.bindingAll', 0],
+    ['PARTIAL', 'containerPage.bindingPartial', 0],
+    ['NONE', 'containerPage.bindingNone', 0],
+  ])
+  // 计数忽略页签自身的维度，由服务端与列表同快照下发；切换页签不会改变数字。
+  f.state.bindingCounts.value = [
+    { value: 'ALL', count: 41 },
+    { value: 'FULL', count: 16 },
+    { value: 'PARTIAL', count: 23 },
+    { value: 'NONE', count: 2 },
+  ]
+  assert.deepEqual(f.state.bindingTabs.value.map(item => item.count), [41, 16, 23, 2])
+})
+
+test('切换绑定页签写入查询参数并重置到第一页，未知取值不改变状态', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  assert.equal(f.state.query.value.bindingState, 'ALL')
+  f.state.page.value = 3
+  f.state.selectBindingState('FULL')
+  assert.equal(f.state.bindingState.value, 'FULL')
+  assert.equal(f.state.page.value, 1)
+  assert.equal(f.state.query.value.page, 1)
+  assert.equal(f.state.query.value.bindingState, 'FULL')
+  f.state.page.value = 2
+  f.state.selectBindingState('EMPTY')
+  assert.equal(f.state.bindingState.value, 'FULL')
+  assert.equal(f.state.page.value, 2)
+  f.state.selectBindingState('FULL')
+  assert.equal(f.state.page.value, 2)
 })

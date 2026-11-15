@@ -4,6 +4,25 @@
  */
 export type ContainerBindingState = 'ALL' | 'PARTIAL' | 'NONE' | 'EMPTY'
 
+/**
+ * 列表页签的绑定筛选取值。与展示态同名但含义不同：`ALL` 是「全部柜次」，`FULL` 才是完全绑定；
+ * 服务端按装柜明细行派生，空柜并入 `NONE`，保证三态互斥且并集为全部。
+ */
+export type ContainerBindingFilter = 'ALL' | 'FULL' | 'PARTIAL' | 'NONE'
+
+export interface ContainerBindingFilterDefinition {
+  readonly value: ContainerBindingFilter
+  readonly labelKey: string
+}
+
+/** 页签顺序与文案；三个绑定状态复用列标签，避免同一状态出现两套叫法。 */
+export const containerBindingFilterDefinitions: readonly ContainerBindingFilterDefinition[] = [
+  { value: 'ALL', labelKey: 'containerPage.bindingFilterAll' },
+  { value: 'FULL', labelKey: 'containerPage.bindingAll' },
+  { value: 'PARTIAL', labelKey: 'containerPage.bindingPartial' },
+  { value: 'NONE', labelKey: 'containerPage.bindingNone' },
+]
+
 export interface ContainerBindingStats {
   readonly state: ContainerBindingState
   readonly bound: number

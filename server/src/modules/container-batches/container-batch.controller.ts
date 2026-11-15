@@ -6,7 +6,7 @@ import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
-import { ContainerBatchUpdateDto, ContainerLoadingItemUpdateDto, ContainerLoadingItemIdDto, ContainerBatchCreateDto, ContainerBatchDto, ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerBatchPageDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto, ContainerLoadingItemPageDto } from './container-batch.dto'
+import { ContainerBatchUpdateDto, ContainerLoadingItemUpdateDto, ContainerLoadingItemIdDto, ContainerBatchCreateDto, ContainerBatchDto, ContainerBatchIdDto, ContainerBatchListQueryDto, ContainerBatchPageDto, ContainerBatchPageQueryDto, ContainerLoadingItemCreateDto, ContainerLoadingItemDto, ContainerLoadingItemPageDto } from './container-batch.dto'
 import { ContainerSwapContextDto, ContainerSwapContextQueryDto, ContainerSwapRequestDto, ContainerSwapResultDto } from './container-swap.dto'
 import { ContainerBatchService } from './container-batch.service'
 import { ContainerSwapService } from './container-swap.service'
@@ -50,7 +50,7 @@ export class ContainerBatchController {
     private readonly swaps: ContainerSwapService,
   ) {}
   @Get() @RequirePermissions('container-batches:read') @contract('container_batches_list') @ApiContractResponse({ status: 200, type: ContainerBatchPageDto })
-  list(@Query() query: ContainerBatchListQueryDto) { return this.service.list(query) }
+  list(@Query() query: ContainerBatchPageQueryDto) { return this.service.list(query) }
   @Post() @HttpCode(201) @RequirePermissions('container-batches:create') @contract('container_batches_create', true) @keyHeader() @ApiContractResponse({ status: 201, type: ContainerBatchDto })
   create(@Body() input: ContainerBatchCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.service.create(context(request), input, key) }
   @Get('swap-context') @RequirePermissions('container-batches:update') @swapContract('container_swap_context') @ApiContractResponse({ status: 200, type: ContainerSwapContextDto })

@@ -1,14 +1,17 @@
 <script setup lang="ts">
+import type { ContainerBindingFilter } from './binding-stats.logic'
 import type { ContainerSubmission } from './form.logic'
-import type { ContainerBatchDto } from '@/api/generated/types.gen'
+import type { ContainerBatchDto, ContainerBatchPageDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import containerApi from '@/api/modules/container-batches'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
-import { resolveContainerBindingStats } from './binding-stats.logic'
+import { containerBindingFilterDefinitions, resolveContainerBindingStats } from './binding-stats.logic'
 import ContainerBindingStats from './container-binding-stats.vue'
 import ContainerFormModal from './container-form-modal.vue'
 import ContainerRemark from './container-remark.vue'
@@ -34,9 +37,16 @@ const canSwap = computed(() => enabled.value && auth('container-batches:update')
 const page = ref(1)
 const pageSize = ref(20)
 const search = ref('')
+const bindingState = ref<ContainerBindingFilter>('ALL')
 const filters = ref<QsGenericTableFilterValues>({})
-const query = computed(() => ({ page: page.value, pageSize: pageSize.value, search: search.value || undefined, warehouseValue: typeof filters.value.warehouseValue === 'string' ? filters.value.warehouseValue : undefined }))
-const resource = useContainerResource(enabled, epoch, query, async signal => (await containerApi.list(query.value, signal)).data)
+// 页签数字来自列表响应的同一次快照；单独缓存，切换页签重载列表时不闪成 0。
+const bindingCounts = ref<ContainerBatchPageDto['bindingCounts']>([])
+const query = computed(() => ({ page: page.value, pageSize: pageSize.value, search: search.value || undefined, warehouseValue: typeof filters.value.warehouseValue === 'string' ? filters.value.warehouseValue : undefined, bindingState: bindingState.value }))
+const resource = useContainerResource(enabled, epoch, query, async (signal) => {
+  const response = await containerApi.list(query.value, signal)
+  bindingCounts.value = response.data.bindingCounts
+  return response.data
+})
 const { data, loading, error } = resource
 const open = ref(false)
 const swapOpen = ref(false)
@@ -84,6 +94,19 @@ function bindingStats(row: ContainerBatchDto) {
 function bindingStatsText(row: ContainerBatchDto) {
   const stats = bindingStats(row)
   return `${stats.bound}/${stats.total} [${t(stats.labelKey)}]`
+}
+// 计数与列表由服务端同一快照返回，当前页签的 total 必然等于对应计数，不需要额外校准。
+const bindingTabs = computed(() => withStatusSwitchCounts(
+  containerBindingFilterDefinitions.map(item => ({ value: item.value, label: t(item.labelKey) })),
+  bindingCounts.value.map(item => ({ value: item.value, count: item.count })),
+))
+function selectBindingState(value: string) {
+  const next = containerBindingFilterDefinitions.find(item => item.value === value)?.value
+  if (next === undefined || next === bindingState.value) {
+    return
+  }
+  bindingState.value = next
+  page.value = 1
 }
 const columns = computed<QsGenericTableColumn<ContainerBatchDto>[]>(() => [
   { id: 'containerBatchNo', title: t('containerPage.number'), accessorKey: 'containerBatchNo', width: 126, minWidth: 126, maxWidth: 126, fixed: 'left', cellClass: 'qs-type-data-emphasis whitespace-nowrap' },
@@ -150,6 +173,7 @@ onDeactivated(() => {
             {{ t('containerPage.retry') }}
           </FaButton>
         </div>
+        <QsStatusSwitchToolbar :model-value="bindingState" :items="bindingTabs" :aria-label="t('containerPage.bindingFilterLabel')" class="mb-4" @update:model-value="selectBindingState" />
         <QsGenericTable
           v-model:page="page" v-model:page-size="pageSize" v-model:search="search" v-model:filters="filters"
           row-key="id" :data="data?.items ?? []" :total="data?.total ?? 0" :columns="columns"
