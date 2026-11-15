@@ -6,9 +6,7 @@ import {
   normalizeReleaseManifest,
 } from '../../src/components/AppCheckUpdates/logic'
 import {
-  isAllReleaseAudience,
   parseReleaseNoteItem,
-  resolveReleaseSectionAudience,
 } from '../../src/components/business/QsReleaseNotesContent/logic'
 
 test('只有严格更高的稳定版本才视为更新', () => {
@@ -49,21 +47,4 @@ test('发布条目解析角色前缀并保留纯文本正文', () => {
     roles: ['运营人员'],
     text: '重复角色',
   })
-  assert.equal(isAllReleaseAudience(['运营人员', '财务人员', '采运人员', '系统管理员']), true)
-  assert.equal(isAllReleaseAudience(['运营人员', '财务人员']), false)
-})
-
-test('同一分类的角色一致时只展示一次，混合角色时逐条展示', () => {
-  const allRoles = ['运营人员', '财务人员', '采运人员', '系统管理员']
-  assert.deepEqual(resolveReleaseSectionAudience([
-    parseReleaseNoteItem(`【${allRoles.join('、')}】统一更新`),
-  ]), { commonRoles: null, showItemRoles: false })
-  assert.deepEqual(resolveReleaseSectionAudience([
-    parseReleaseNoteItem('【运营人员、财务人员】A'),
-    parseReleaseNoteItem('【运营人员、财务人员】B'),
-  ]), { commonRoles: ['运营人员', '财务人员'], showItemRoles: false })
-  assert.deepEqual(resolveReleaseSectionAudience([
-    parseReleaseNoteItem('【运营人员】A'),
-    parseReleaseNoteItem('【财务人员】B'),
-  ]), { commonRoles: null, showItemRoles: true })
 })

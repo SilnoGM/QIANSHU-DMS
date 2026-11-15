@@ -156,22 +156,11 @@ test('发布文案条目的圆点与角色标签风格统一', () => {
   assert.match(contentSource, /bullet: 'bg-primary\/70'/u)
   assert.match(contentSource, /bullet: 'bg-amber-500\/80'/u)
   assert.match(contentSource, /bullet: 'bg-muted-foreground\/60'/u)
-  // 适用角色改为微型胶囊：分类级展示一次，条目级内联在正文末尾，不再单独占一行。
-  assert.match(contentSource, /app\.components\.releaseNotes\.audienceLabel/u)
+  // 角色标签一律内联在每条正文末尾：不再有分类级「适用：」提取，也不再按全角色特判隐藏。
   assert.match(contentSource, /v-for="role in item\.roles"/u)
+  assert.doesNotMatch(contentSource, /audienceLabel|适用：/u)
+  assert.doesNotMatch(contentSource, /isAllReleaseAudience|resolveReleaseSectionAudience/u)
   assert.doesNotMatch(contentSource, /roles\.join\('、'\)/u)
-})
-
-test('角色标签文案在三种语言下齐全', () => {
-  for (const locale of ['zh-cn', 'zh-tw', 'en']) {
-    const localeSource = readRelativeSource(
-      `../../../../packages/locales/lang/app/components/release-notes/${locale}.json`,
-    )
-    const messages = JSON.parse(localeSource) as {
-      app: { components: { releaseNotes: Record<string, string> } }
-    }
-    assert.equal(typeof messages.app.components.releaseNotes.audienceLabel, 'string', `${locale} 缺少 audienceLabel`)
-  }
 })
 
 test('构建产物与 nginx 都为历史清单提供 no-store 稳定路径', () => {

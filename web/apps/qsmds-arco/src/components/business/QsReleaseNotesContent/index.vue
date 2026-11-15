@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { ReleaseNoteSection } from './logic'
-import {
-  isAllReleaseAudience,
-  parseReleaseNoteItem,
-  resolveReleaseSectionAudience,
-} from './logic'
+import { parseReleaseNoteItem } from './logic'
 
 defineOptions({
   name: 'QsReleaseNotesContent',
@@ -13,8 +9,6 @@ defineOptions({
 const props = defineProps<{
   sections: readonly ReleaseNoteSection[]
 }>()
-
-const { t } = useI18n()
 
 const ROLE_TAG_CLASS = 'inline-flex items-center align-middle bg-muted text-muted-foreground px-1.5 rounded font-medium text-[11px] leading-4'
 
@@ -30,16 +24,15 @@ const DEFAULT_SECTION_PRESENTATION = {
   bullet: 'bg-muted-foreground/60',
 }
 
-/** 分类标题来自文案；早期版本允许自定义分类，未知标题按中性样式渲染。 */
-const renderedSections = computed(() => props.sections.map((section) => {
-  const items = section.items.map(parseReleaseNoteItem)
-  return {
-    title: section.title,
-    items,
-    audience: resolveReleaseSectionAudience(items),
-    presentation: SECTION_PRESENTATION[section.title] ?? DEFAULT_SECTION_PRESENTATION,
-  }
-}))
+/**
+ * 分类标题来自文案；早期版本允许自定义分类，未知标题按中性样式渲染。
+ * 角色标签一律内联在每条正文末尾，不再按分类提取到标题下，保证所有条目的阅读格式一致。
+ */
+const renderedSections = computed(() => props.sections.map(section => ({
+  title: section.title,
+  items: section.items.map(parseReleaseNoteItem),
+  presentation: SECTION_PRESENTATION[section.title] ?? DEFAULT_SECTION_PRESENTATION,
+})))
 </script>
 
 <template>
@@ -67,16 +60,6 @@ const renderedSections = computed(() => props.sections.map((section) => {
         </FaTag>
       </div>
 
-      <p
-        v-if="section.audience.commonRoles"
-        class="text-xs text-muted-foreground m-0 mb-2 flex flex-wrap gap-1 items-center"
-      >
-        <span>{{ t('app.components.releaseNotes.audienceLabel') }}</span>
-        <span v-for="role in section.audience.commonRoles" :key="role" :class="ROLE_TAG_CLASS">
-          {{ role }}
-        </span>
-      </p>
-
       <ul class="m-0 p-0 list-none space-y-2">
         <li v-for="(item, index) in section.items" :key="`${section.title}-${index}`" class="flex gap-2">
           <span class="mt-[9px] flex shrink-0 w-4 justify-center" aria-hidden="true">
@@ -85,7 +68,7 @@ const renderedSections = computed(() => props.sections.map((section) => {
           <div class="min-w-0">
             <p class="text-sm text-foreground leading-6 m-0 break-words">
               {{ item.text }}
-              <span v-if="section.audience.showItemRoles && item.roles.length > 0 && !isAllReleaseAudience(item.roles)">
+              <span v-if="item.roles.length > 0">
                 <span
                   v-for="role in item.roles"
                   :key="role"
