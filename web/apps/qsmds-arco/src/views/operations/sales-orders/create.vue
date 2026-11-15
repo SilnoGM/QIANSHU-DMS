@@ -590,6 +590,17 @@ function handleLinesUpdate(lines: typeof formModel.value.lines): void {
   clearFeedback('agreedTotalAmount')
 }
 
+/**
+ * FaForm 会与外部模型双向同步；删除最后一个产品行时，vee-validate 卸载行字段触发的
+ * 空容器清理会把整条 lines 键从回写结果中删除，产品编辑器与领域校验随后读到
+ * undefined 并抛错。这里在删除发生的同一拍同步恢复为空数组，保证表单始终持有数组。
+ */
+watch(() => formModel.value.lines, (lines) => {
+  if (!Array.isArray(lines)) {
+    formModel.value.lines = []
+  }
+}, { flush: 'sync' })
+
 const loadSalesOrderProducts: ProductPageLoader = async (query, signal) => {
   // 通用选择器同时服务固定 CNY 的采购订单；销售创建页的路由已把币种收窄为
   // TWD/MYR，这里继续保留运行时守卫，避免未来调用方绕过路由后把 CNY 发给销售 API。
@@ -1226,6 +1237,8 @@ onBeforeUnmount(() => {
         :inert="createSurface === 'review'"
         :aria-hidden="createSurface === 'review' ? 'true' : undefined"
       >
+        <!-- 客户姓名、金额等字段依赖 FaForm 的双向同步回写，因此保留 :model；
+             空数组的 lines 兜底恢复见脚本中的 watch。 -->
         <FaForm
           ref="formRef"
           :model="formModel"
