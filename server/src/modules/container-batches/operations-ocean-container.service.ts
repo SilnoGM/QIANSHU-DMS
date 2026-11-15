@@ -30,7 +30,7 @@ export function serializeOperationsOceanLine(row: PersonalLine): OperationsOcean
     ...fields, shipmentNo: shipment?.shipmentNo ?? null, shippingMark: shipment?.shippingMarkText ?? null,
     salesOrderId: shipment?.ownershipCurrent?.ownerSalesOrder?.id ?? null, salesOrderNo: shipment?.ownershipCurrent?.ownerSalesOrder?.orderNo ?? null,
     purchaseOrderId: shipment?.purchaseOrder.id ?? null, purchaseOrderNo: shipment?.purchaseOrder.orderNo ?? null,
-    codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(0) ?? null,
+    codAmountTwd: codAmountTwd?.toFixed(2) ?? null, grossWeightKg: grossWeightKg?.toFixed(2) ?? null,
     lengthCm: lengthCm?.toFixed(0) ?? null, widthCm: widthCm?.toFixed(0) ?? null, heightCm: heightCm?.toFixed(0) ?? null,
     volumeCai: volumeCai?.toFixed(2) ?? null,
   }
@@ -109,7 +109,7 @@ export class OperationsOceanContainerService {
           ...row, loadingDate: row.loadingDate.toISOString().slice(0, 10), warehouseName: warehouses.get(row.warehouseValue)!,
           itemCount: count, myItemCount,
           // 有任一缺失值时展示待完善，不能把部分合计伪装成完整合计；无明细为零。
-          grossWeightKgTotal: measureCount === 0 ? '0' : measure!._count.grossWeightKg < measureCount ? null : measure!._sum.grossWeightKg!.toFixed(0),
+          grossWeightKgTotal: measureCount === 0 ? '0.00' : measure!._count.grossWeightKg < measureCount ? null : measure!._sum.grossWeightKg!.toFixed(2),
           volumeCaiTotal: measureCount === 0 ? '0.00' : measure!._count.volumeCai < measureCount ? null : measure!._sum.volumeCai!.toFixed(2),
         }
       }) }

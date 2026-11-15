@@ -24,9 +24,9 @@ describe('海运计算的精确值与缺值边界', () => {
 
   it('尺寸向上取整到整数厘米后再计算材积与计费材数', () => {
     expect(calculateOceanVolume({ lengthCm: '28316.01', widthCm: '0.01', heightCm: '0.01', packageCount: 10000, reportedVolumeCai: null }))
-      .toEqual({ volumeCai: '10000.35', chargeableVolumeCai: 10001, volumeDifferenceCai: null })
+      .toEqual({ volumeCai: '10000.35', chargeableVolumeCai: 10000.5, volumeDifferenceCai: null })
     expect(calculateOceanVolume({ lengthCm: '28316000.01', widthCm: '0.01', heightCm: '0.01', packageCount: 10000, reportedVolumeCai: null }))
-      .toEqual({ volumeCai: '10000000.35', chargeableVolumeCai: 10000001, volumeDifferenceCai: null })
+      .toEqual({ volumeCai: '10000000.35', chargeableVolumeCai: 10000000.5, volumeDifferenceCai: null })
     const input = { lengthCm: '0', widthCm: '0.01', heightCm: '0.01', packageCount: 1, reportedVolumeCai: null }
     // 库表要求材积为正；零尺寸不能被向上取整后仍当作有效材积。
     expect(() => calculateOceanVolume(input)).toThrow(OceanCalculationError)
@@ -34,6 +34,15 @@ describe('海运计算的精确值与缺值边界', () => {
       expect(error).toMatchObject({ code: 'OCEAN_CALCULATION_INVALID' })
       expect((error as OceanCalculationError).getStatus()).toBe(422)
     }
+  })
+
+  it('计费材数向上取到 0.5 材的整数倍', () => {
+    // 10000 / 28316 = 0.3531：记录两位小数，计费向上取到 0.5。
+    expect(calculateOceanVolume({ lengthCm: '100', widthCm: '10', heightCm: '10', packageCount: 1, reportedVolumeCai: null }))
+      .toEqual({ volumeCai: '0.35', chargeableVolumeCai: 0.5, volumeDifferenceCai: null })
+    // 30000 / 28316 = 1.0594：小数部分超过 0.5 才进位到下一个 0.5。
+    expect(calculateOceanVolume({ lengthCm: '300', widthCm: '10', heightCm: '10', packageCount: 1, reportedVolumeCai: null }))
+      .toEqual({ volumeCai: '1.06', chargeableVolumeCai: 1.5, volumeDifferenceCai: null })
   })
 
   it('未知尺寸返回null，零尺寸和超量程不能冒充有效材积', () => {
@@ -47,6 +56,9 @@ describe('海运计算的精确值与缺值边界', () => {
   it('重量采用整行毛重，材积采用整数材数，不依据单价或货类猜测', () => {
     expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '0.000028' }, cargo).amount).toBe('0.01')
     expect(calculateOceanCharge({ pricingBasis: 'VOLUME', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, cargo).amount).toBe('260.00')
+    // 毛重按两位小数定点；标度换算错误会把金额放大 100 倍。
+    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { grossWeightKg: '180.50', chargeableVolumeCai: null }).amount).toBe('3610.00')
+    expect(calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { grossWeightKg: '180', chargeableVolumeCai: null }).amount).toBe('3600.00')
     expect(() => calculateOceanCharge({ pricingBasis: 'WEIGHT', currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, { ...cargo, grossWeightKg: null })).toThrow()
     expect(() => calculateOceanCharge({ pricingBasis: undefined as never, currencyCode: 'CNY', chargeNature: 'NORMAL', unitPriceAmount: '20' }, cargo)).toThrow()
   })

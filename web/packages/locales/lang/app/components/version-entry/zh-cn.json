@@ -1,0 +1,9 @@
+{
+  "app": {
+    "components": {
+      "versionEntry": {
+        "currentVersion": "当前版本"
+      }
+    }
+  }
+}

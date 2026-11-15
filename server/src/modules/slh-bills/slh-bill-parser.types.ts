@@ -14,6 +14,7 @@ export type SlhBillFindingKind =
   | 'SUBTOTAL_MISMATCH'
   | 'NET_AMOUNT_MISMATCH'
   | 'DIMENSION_PRECISION'
+  | 'WEIGHT_PRECISION'
   | 'RATE_MISSING'
   | 'REMARK_NOTE'
 

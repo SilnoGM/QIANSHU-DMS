@@ -15,6 +15,7 @@ import QsShipmentStorageCard from '@/components/business/QsShipmentStorageCard/i
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import { formatContainerWeight } from '@/views/workbenches/containers/display.logic'
 import ShipmentStorageClaimModal from '@/views/workbenches/purchase-storage/claim-modal.vue'
 import { buildStorageQuery, claimRequestDisabledReason, DEFAULT_STORAGE_STATUS, locationLabel, STORAGE_SCOPE_OPTIONS, STORAGE_STATUS_TABS, storageFailureMessage, storageStatusClass, storageStatusLabel } from '@/views/workbenches/shipment-storage/logic'
 
@@ -211,7 +212,8 @@ function containerDimensions(item: ShipmentStorageContainerItemDto): string {
 }
 
 function containerWeight(item: ShipmentStorageContainerItemDto): string {
-  return item.grossWeightKg === null ? '—' : `${item.grossWeightKg} kg`
+  const weight = formatContainerWeight(item.grossWeightKg)
+  return weight === null ? '—' : `${weight} kg`
 }
 
 async function openDetail(row: ShipmentStorageListItemDto): Promise<void> {

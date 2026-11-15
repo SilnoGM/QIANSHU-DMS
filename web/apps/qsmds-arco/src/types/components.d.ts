@@ -13,6 +13,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppAccountButton: typeof import('./../components/AppAccountButton/index.vue')['default']
+    AppAssetReload: typeof import('./../components/AppAssetReload/index.vue')['default']
     AppAuth: typeof import('./../components/AppAuth/index.vue')['default']
     AppBackToTop: typeof import('./../components/AppBackToTop/index.vue')['default']
     AppCheckUpdates: typeof import('./../components/AppCheckUpdates/index.vue')['default']
@@ -22,6 +23,7 @@ declare module 'vue' {
     AppNotSupportedMobile: typeof import('./../components/AppNotSupportedMobile/index.vue')['default']
     AppStartupSplash: typeof import('./../components/AppStartupSplash/index.vue')['default']
     AppSystemInfo: typeof import('./../components/AppSystemInfo/index.vue')['default']
+    AppVersionEntry: typeof import('./../components/AppVersionEntry/index.vue')['default']
     FaAlert: typeof import('@fantastic-admin/components')['FaAlert']
     FaAnimatedBeam: typeof import('@fantastic-admin/components')['FaAnimatedBeam']
     FaAnimatedCountTo: typeof import('@fantastic-admin/components')['FaAnimatedCountTo']
@@ -125,6 +127,7 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const AppAccountButton: typeof import('./../components/AppAccountButton/index.vue')['default']
+  const AppAssetReload: typeof import('./../components/AppAssetReload/index.vue')['default']
   const AppAuth: typeof import('./../components/AppAuth/index.vue')['default']
   const AppBackToTop: typeof import('./../components/AppBackToTop/index.vue')['default']
   const AppCheckUpdates: typeof import('./../components/AppCheckUpdates/index.vue')['default']
@@ -134,6 +137,7 @@ declare global {
   const AppNotSupportedMobile: typeof import('./../components/AppNotSupportedMobile/index.vue')['default']
   const AppStartupSplash: typeof import('./../components/AppStartupSplash/index.vue')['default']
   const AppSystemInfo: typeof import('./../components/AppSystemInfo/index.vue')['default']
+  const AppVersionEntry: typeof import('./../components/AppVersionEntry/index.vue')['default']
   const FaAlert: typeof import('@fantastic-admin/components')['FaAlert']
   const FaAnimatedBeam: typeof import('@fantastic-admin/components')['FaAnimatedBeam']
   const FaAnimatedCountTo: typeof import('@fantastic-admin/components')['FaAnimatedCountTo']

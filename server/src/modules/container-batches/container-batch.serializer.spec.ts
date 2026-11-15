@@ -1,4 +1,4 @@
-import type { ContainerBatch } from '../../generated/prisma/client'
+import { Prisma, type ContainerBatch } from '../../generated/prisma/client'
 import { serializeContainerBatch } from './container-batch.serializer'
 
 const actorId = '44444444-4444-4444-8444-444444444444'
@@ -42,5 +42,21 @@ describe('serializeContainerBatch 绑定统计', () => {
     const dto = serializeContainerBatch({ ...batch, items: [] })
     expect(dto.boundItemCount).toBe(0)
     expect(dto.itemCount).toBe(0)
+  })
+
+  it('计费材数按两位定点汇总，保留 0.5 材', () => {
+    const dto = serializeContainerBatch({ ...batch, items: [
+      { ...line('shipment-a'), chargeableVolumeCai: new Prisma.Decimal('0.50') },
+      { ...line('shipment-b'), chargeableVolumeCai: new Prisma.Decimal('2.50') },
+    ] })
+    expect(dto.chargeableVolumeCaiTotal).toBe(3)
+  })
+
+  it('毛重合计按两位小数汇总', () => {
+    const dto = serializeContainerBatch({ ...batch, items: [
+      { ...line(null), grossWeightKg: new Prisma.Decimal('180.50') },
+      { ...line(null), grossWeightKg: new Prisma.Decimal('0.50') },
+    ] })
+    expect(dto.grossWeightKgTotal).toBe('181.00')
   })
 })

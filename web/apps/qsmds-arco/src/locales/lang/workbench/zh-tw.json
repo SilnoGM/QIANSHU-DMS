@@ -157,6 +157,7 @@
       "SUBTOTAL_MISMATCH": "帳單小計與明細累加不一致",
       "NET_AMOUNT_MISMATCH": "台幣淨額與明細累加不一致",
       "DIMENSION_PRECISION": "尺寸精度告警",
+      "WEIGHT_PRECISION": "重量精度告警",
       "RATE_MISSING": "帳單未自帶匯率",
       "REMARK_NOTE": "備註片段未計入費用"
     },

@@ -61,6 +61,16 @@ describe('container workbook parser', () => {
     const result = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { Q: '9007199254740993.01', G: '1.25E3' }) }] }))
     expect(result.rows[0]).toMatchObject({ codAmountTwd: '9007199254740993.01', grossWeightKg: '1250', errors: [] })
   })
+  it('rounds gross weight up to the next 0.5 kg and warns about extra decimals', async () => {
+    const result = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { G: '180.456' }) }] }))
+    expect(result.rows[0].grossWeightKg).toBe('180.5')
+    expect(result.rows[0].warnings.join()).toContain('已向上取到 0.5 kg')
+  })
+  it('carries the exact value into 0.5 kg buckets without double rounding', async () => {
+    // 先按两位四舍五入再进位会得到 180.5；必须从精确有理数直接进位到 181。
+    const result = await parseContainerWorkbook(createContainerImportFixture({ sheets: [{ name: '装柜资料', rows: containerImportHeader() + containerImportRow(3, { G: '180.501' }) }] }))
+    expect(result.rows[0].grossWeightKg).toBe('181')
+  })
   it('rejects corrupted stored-entry checksums even when the XML remains readable', async () => {
     const buffer = createContainerImportFixture()
     const start = buffer.indexOf(Buffer.from('<workbook'))

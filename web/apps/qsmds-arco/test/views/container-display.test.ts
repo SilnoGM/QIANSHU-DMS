@@ -6,13 +6,21 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, effectScope, ref, shallowRef, watch } from 'vue'
 import { CONTAINER_ITEM_ACTION_COLUMN_WIDTH } from '../../src/views/workbenches/containers/action-column.logic'
-import { formatContainerMeasurement } from '../../src/views/workbenches/containers/display.logic'
+import { formatContainerMeasurement, formatContainerWeight } from '../../src/views/workbenches/containers/display.logic'
 
 test('装柜尺寸和重量以整数显示，按十进制四舍五入且不丢失大数精度', () => {
   assert.equal(formatContainerMeasurement('128.000', 0), '128')
   assert.equal(formatContainerMeasurement('403.500', 0), '404')
   assert.equal(formatContainerMeasurement('403.499', 0), '403')
   assert.equal(formatContainerMeasurement('999999999999999.999', 0), '1000000000000000')
+})
+
+test('毛重只读展示去掉尾随零，保留非零小数位', () => {
+  assert.equal(formatContainerWeight('180.00'), '180')
+  assert.equal(formatContainerWeight('180.50'), '180.5')
+  assert.equal(formatContainerWeight('1173.40'), '1173.4')
+  assert.equal(formatContainerWeight('180.05'), '180.05')
+  assert.equal(formatContainerWeight(null), null)
 })
 
 test('系统材积固定两位小数，未知值保持为空', () => {
@@ -32,6 +40,7 @@ test('装柜明细默认展示所有业务列，桌面数值采用指定精度',
   const columns = runInNewContext(ts.transpileModule(`${script}\n;columns.value`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     computed,
     formatContainerMeasurement,
+    formatContainerWeight,
     defineProps: () => ({}),
     defineEmits: () => () => {},
     defineModel: () => ref(),
@@ -82,6 +91,7 @@ test('柜次详情汇总按整数重量和两位材积展示，缺值不会被�
     shallowRef,
     watch,
     formatContainerMeasurement,
+    formatContainerWeight,
     defineOptions: () => {},
     useI18n: () => ({ t: (key: string) => key === 'containerManagement.volumeUnit' ? '材' : key }),
     useRouter: () => ({}),

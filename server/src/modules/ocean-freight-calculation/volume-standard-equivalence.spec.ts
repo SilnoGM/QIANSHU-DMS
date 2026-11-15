@@ -3,12 +3,12 @@ import { recordSlhVolume, slhVolumeRatio, SLH_VOLUME_SCALE } from '../slh-bills/
 
 /**
  * 两个来源表格共用同一材积标准：长 × 宽 × 高 ÷ 28316 × 箱数，
- * 非按材积计价保留两位小数，按材积计价向上取整。
+ * 非按材积计价保留两位小数，按材积计价按 0.5 材向上取整。
  * 样例取自真实表格：装柜明细 0226 柜与顺联航账单中带尺寸的明细行。
  */
 const samples = [
   { label: '装柜明细 0226柜 撕碎机', lengthCm: '158', widthCm: '102', heightCm: '165', packageCount: 1, recorded: '93.91', chargeable: 94 },
-  { label: '账单明细 150×120×87', lengthCm: '150', widthCm: '120', heightCm: '87', packageCount: 1, recorded: '55.30', chargeable: 56 },
+  { label: '账单明细 150×120×87', lengthCm: '150', widthCm: '120', heightCm: '87', packageCount: 1, recorded: '55.30', chargeable: 55.5 },
   { label: '账单明细 48×46×42 两箱', lengthCm: '48', widthCm: '46', heightCm: '42', packageCount: 2, recorded: '6.55', chargeable: 7 },
   { label: '账单明细 190×92×63 单价 30', lengthCm: '190', widthCm: '92', heightCm: '63', packageCount: 1, recorded: '38.89', chargeable: 39 },
 ] as const
@@ -27,7 +27,7 @@ describe('装柜明细与账单表的材积标准一致', () => {
       lengthCm: sample.lengthCm, widthCm: sample.widthCm, heightCm: sample.heightCm, packageCount: sample.packageCount,
     })
 
-    // 记录值：两侧都是两位小数；计费数量：两侧都是同一精确值的向上取整。
+    // 记录值：两侧都是两位小数；计费数量：两侧都是同一精确值按 0.5 材向上取整。
     expect(Number(container.volumeCai)).toBe(Number(sample.recorded))
     expect(container.chargeableVolumeCai).toBe(sample.chargeable)
     expect(recordSlhVolume(ratio!, 'WEIGHT')).toBe(sample.recorded)
@@ -35,5 +35,14 @@ describe('装柜明细与账单表的材积标准一致', () => {
     // 按材积计价取账单侧记录值，按重量计价取装柜侧记录值，两者必须相等。
     expect(Number(recordSlhVolume(ratio!, 'VOLUME'))).toBe(container.chargeableVolumeCai)
     expect(Number(recordSlhVolume(ratio!, 'WEIGHT'))).toBe(Number(container.volumeCai))
+  })
+
+  it('计费数量按 0.5 材步进时两侧仍然一致', () => {
+    const ratio = slhVolumeRatio({ lengthCm: '100', widthCm: '10', heightCm: '10', packageCount: 1 })!
+    const container = calculateOceanVolume({ lengthCm: '100', widthCm: '10', heightCm: '10', packageCount: 1, reportedVolumeCai: null })
+    // 10000 / 28316 = 0.3531：记录 0.35，计费向上取到 0.5。
+    expect(container.chargeableVolumeCai).toBe(0.5)
+    expect(recordSlhVolume(ratio, 'VOLUME')).toBe('0.50')
+    expect(Number(recordSlhVolume(ratio, 'VOLUME'))).toBe(container.chargeableVolumeCai)
   })
 })

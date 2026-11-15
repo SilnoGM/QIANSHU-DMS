@@ -192,6 +192,7 @@ watch(() => appSettingsStore.lang, () => {
   />
   <FaToast :theme="appSettingsStore.currentColorScheme" />
   <AppCheckUpdates />
+  <AppAssetReload />
   <AppSystemInfo />
   <AppStartupSplash v-if="startupVisible" :leaving="startupLeaving" />
 </template>

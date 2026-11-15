@@ -252,7 +252,7 @@ function createFieldFormatters(translate: SlhReconciliationTranslate) {
         ? { value: displayName }
         : { value: displayName, person: displayName, personAvatarUrl: avatarUrl ?? null }
     },
-    /** 收费材积在装柜行是整数材数，与其它材积字段一样带单位展示。 */
+    /** 收费材积在装柜行按 0.5 材步进，与其它材积字段一样带单位展示。 */
     chargeableVolume: (value: number | null | undefined) => (
       value === null || value === undefined ? missing : `${value} ${cai}`
     ),

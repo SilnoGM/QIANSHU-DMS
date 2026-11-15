@@ -38,6 +38,7 @@ export interface FreightEstimate {
 }
 
 const NON_NEGATIVE_INTEGER = /^\d+$/u
+const NON_NEGATIVE_DECIMAL = /^\d+(?:\.\d{1,2})?$/u
 
 function parseNonNegativeInteger(value: string | null): bigint | null {
   if (value === null || !NON_NEGATIVE_INTEGER.test(value)) {
@@ -49,6 +50,14 @@ function parseNonNegativeInteger(value: string | null): bigint | null {
   catch {
     return null
   }
+}
+
+/** 毛重按两位小数参与估算；服务端落库时再向上取到 0.5 kg。 */
+function parseNonNegativeDecimal(value: string | null): string | null {
+  if (value === null || !NON_NEGATIVE_DECIMAL.test(value)) {
+    return null
+  }
+  return value
 }
 
 function parsePositiveDecimal(value: string | null): Decimal | null {
@@ -64,7 +73,7 @@ function parsePositiveDecimal(value: string | null): Decimal | null {
   }
 }
 
-/** 计费材积：长 × 宽 × 高 × 箱数 ÷ 28316，向上取整。任一尺寸或箱数缺失时返回 null。 */
+/** 计费材积：长 × 宽 × 高 × 箱数 ÷ 28316，向上取到 0.5 材。任一尺寸或箱数缺失时返回 null。 */
 export function calculateChargeableVolume(input: Pick<FreightEstimateInput, 'lengthCm' | 'widthCm' | 'heightCm' | 'packageCount'>): number | null {
   if (!Number.isSafeInteger(input.packageCount) || input.packageCount <= 0) {
     return null
@@ -79,8 +88,8 @@ export function calculateChargeableVolume(input: Pick<FreightEstimateInput, 'len
   if (product <= 0n) {
     return null
   }
-  const chargeable = (product + OCEAN_FREIGHT_VOLUME_DIVISOR - 1n) / OCEAN_FREIGHT_VOLUME_DIVISOR
-  return chargeable > BigInt(Number.MAX_SAFE_INTEGER) ? null : Number(chargeable)
+  const halfUnits = (2n * product + OCEAN_FREIGHT_VOLUME_DIVISOR - 1n) / OCEAN_FREIGHT_VOLUME_DIVISOR
+  return halfUnits > BigInt(Number.MAX_SAFE_INTEGER) * 2n ? null : Number(halfUnits) / 2
 }
 
 /**
@@ -89,14 +98,14 @@ export function calculateChargeableVolume(input: Pick<FreightEstimateInput, 'len
  */
 export function calculateFreightEstimate(input: FreightEstimateInput): FreightEstimate {
   const volumeCai = calculateChargeableVolume(input)
-  const weight = parseNonNegativeInteger(input.grossWeightKg)
-  const weightKg = weight === null ? null : weight.toString()
+  const weightKg = parseNonNegativeDecimal(input.grossWeightKg)
+  const weight = weightKg === null ? null : new Decimal(weightKg)
   const byVolume = volumeCai === null
     ? null
     : new Decimal(volumeCai).times(OCEAN_FREIGHT_VOLUME_RATE_CNY).toFixed(2)
-  const byWeight = weightKg === null
+  const byWeight = weight === null
     ? null
-    : new Decimal(weightKg).times(OCEAN_FREIGHT_WEIGHT_RATE_CNY).toFixed(2)
+    : weight.times(OCEAN_FREIGHT_WEIGHT_RATE_CNY).toFixed(2)
 
   let freightBasis: FreightEstimateBasis | null = null
   let freight: string | null = null
@@ -117,7 +126,7 @@ export function calculateFreightEstimate(input: FreightEstimateInput): FreightEs
     return { volumeCai, weightKg, byVolume, byWeight, freight: null, freightBasis: null, surcharge: null, codHandling: null, total: null }
   }
 
-  const surcharge = weight !== null && weight >= BigInt(HEAVY_CARGO_THRESHOLD_KG)
+  const surcharge = weight !== null && weight.gte(HEAVY_CARGO_THRESHOLD_KG)
     ? HEAVY_CARGO_SURCHARGE_CNY
     : null
   const codHandling = parsePositiveDecimal(input.codAmountTwd) === null ? null : COD_HANDLING_FEE_CNY

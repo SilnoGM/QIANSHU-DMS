@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import type { ReleaseManifest } from './logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsReleaseNotesContent from '@/components/business/QsReleaseNotesContent/index.vue'
 import {
-  isAllReleaseAudience,
   isNewerVersion,
   normalizeReleaseManifest,
-  parseReleaseNoteItem,
-  resolveReleaseSectionAudience,
 } from './logic'
 
 defineOptions({
@@ -15,6 +13,7 @@ defineOptions({
 
 const { t } = useI18n()
 const appSettingsStore = useAppSettingsStore()
+const releaseUpdateStore = useAppReleaseUpdateStore()
 
 const currentVersion = __SYSTEM_INFO__.pkg.version
 const releaseInfo = ref<ReleaseManifest | null>(null)
@@ -24,30 +23,10 @@ const checking = ref(false)
 const checkUpdatesInterval = ref(Number.NaN)
 let releaseRequest: AbortController | null = null
 
-const SECTION_PRESENTATION: Record<string, { icon: string, tone: string }> = {
-  功能新增: { icon: 'i-lucide:sparkles', tone: 'text-primary' },
-  功能优化: { icon: 'i-lucide:trending-up', tone: 'text-primary' },
-  缺陷修复: { icon: 'i-lucide:wrench', tone: 'text-amber-600 dark:text-amber-300' },
-  已知问题: { icon: 'i-lucide:triangle-alert', tone: 'text-amber-600 dark:text-amber-300' },
-}
-const DEFAULT_SECTION_PRESENTATION = { icon: 'i-lucide:info', tone: 'text-muted-foreground' }
-
 const updateTitle = computed(() => releaseInfo.value === null
   ? t('app.components.checkUpdates.message')
   : t('app.components.checkUpdates.messageWithVersion', { version: releaseInfo.value.version }))
-const releaseSections = computed(() => (releaseInfo.value?.sections ?? []).map((section) => {
-  const items = section.items.map(parseReleaseNoteItem)
-  return {
-    title: section.title,
-    items,
-    audience: resolveReleaseSectionAudience(items),
-    presentation: SECTION_PRESENTATION[section.title] ?? DEFAULT_SECTION_PRESENTATION,
-  }
-}))
-
-function releaseRolesLabel(roles: readonly string[]): string {
-  return roles.join('、')
-}
+const hasReleaseSections = computed(() => (releaseInfo.value?.sections.length ?? 0) > 0)
 
 /**
  * 发布清单是唯一的新版本真相源。它跟随 Web 镜像发布，旧页面也能读取到新版本；
@@ -88,9 +67,16 @@ async function checkUpdates() {
   checking.value = true
   try {
     const release = await fetchReleaseManifest()
-    if (release === null || !isNewerVersion(release.version, currentVersion)) {
+    if (release === null) {
       return
     }
+    if (!isNewerVersion(release.version, currentVersion)) {
+      // 清单回滚或仍是同一版本时撤销标记，避免侧边栏残留过期的 New。
+      releaseUpdateStore.setLatestVersion(null)
+      return
+    }
+    // 先标记再弹窗：用户点“稍后提醒”后弹窗关闭，侧边栏版本入口仍需保留新版本提示。
+    releaseUpdateStore.setLatestVersion(release.version)
     releaseInfo.value = release
     // handled 是一次性提示锁，用户取消或按 Escape 后也不能在本次会话反复打扰。
     updateNoticeHandled.value = true
@@ -176,62 +162,12 @@ onUnmounted(() => {
     </template>
 
     <div
-      v-if="releaseSections.length > 0"
-      class="pe-2 max-h-[min(52vh,30rem)] [scrollbar-gutter:stable] overflow-y-auto space-y-3"
+      v-if="hasReleaseSections"
+      class="pe-2 max-h-[min(52vh,30rem)] [scrollbar-gutter:stable] overflow-y-auto"
       tabindex="0"
       :aria-label="t('app.components.checkUpdates.contentLabel')"
     >
-      <section
-        v-for="section in releaseSections"
-        :key="section.title"
-        class="p-3 border rounded-lg sm:p-4"
-        :class="section.title === '已知问题'
-          ? 'border-amber-500/30 bg-amber-500/5'
-          : 'border-border/70 bg-muted/20'"
-      >
-        <div class="mb-2 flex gap-2 items-center">
-          <FaIcon
-            :name="section.presentation.icon"
-            class="shrink-0 size-4"
-            :class="section.presentation.tone"
-            aria-hidden="true"
-          />
-          <h3 class="text-sm font-semibold m-0">
-            {{ section.title }}
-          </h3>
-          <FaTag variant="secondary" class="text-xs ms-auto tabular-nums" aria-hidden="true">
-            {{ section.items.length }}
-          </FaTag>
-        </div>
-
-        <p
-          v-if="section.audience.commonRoles"
-          class="text-xs text-muted-foreground m-0 mb-2"
-        >
-          {{ t('app.components.checkUpdates.audience', { roles: releaseRolesLabel(section.audience.commonRoles) }) }}
-        </p>
-
-        <ul class="m-0 p-0 list-none space-y-2">
-          <li
-            v-for="(item, index) in section.items"
-            :key="`${section.title}-${index}`"
-            class="flex gap-2"
-          >
-            <span class="mt-2 rounded-full bg-primary/70 shrink-0 size-1.5" aria-hidden="true" />
-            <div class="min-w-0">
-              <p class="text-sm text-foreground leading-6 m-0 break-words">
-                {{ item.text }}
-              </p>
-              <p
-                v-if="section.audience.showItemRoles && item.roles.length > 0 && !isAllReleaseAudience(item.roles)"
-                class="text-xs text-muted-foreground m-0 mt-0.5"
-              >
-                {{ t('app.components.checkUpdates.audience', { roles: releaseRolesLabel(item.roles) }) }}
-              </p>
-            </div>
-          </li>
-        </ul>
-      </section>
+      <QsReleaseNotesContent :sections="releaseInfo?.sections ?? []" />
     </div>
 
     <p v-else class="text-sm text-muted-foreground m-0">

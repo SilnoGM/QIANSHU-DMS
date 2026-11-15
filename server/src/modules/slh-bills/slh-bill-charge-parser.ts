@@ -34,8 +34,8 @@ const CHARGE_KEYWORDS: ReadonlyArray<readonly [SlhChargeTypeValue, readonly stri
   ['REMOTE_AREA', ['偏远费', '偏遠費']],
   ['UNLOADING', ['卸货费', '卸貨費']],
   ['STORAGE', ['寄仓费', '寄倉費', '仓储费', '倉儲費']],
-  ['WAITING', ['等待费', '等待費']],
-  ['OVERSIZE', ['超尺寸费', '超尺寸費', '超尺费', '超尺費']],
+  ['WAITING', ['等待费', '等待費', '待时费', '待時費']],
+  ['OVERSIZE', ['超尺寸费', '超尺寸費', '超尺费', '超尺費', '超长费', '超長費', '超宽费', '超寬費', '超高费', '超高費']],
   ['INSPECTION', ['验机费', '驗機費']],
   ['FORKLIFT', ['堆高机费', '堆高機費', '堆高机', '堆高機']],
   ['MINIMUM_CHARGE', ['最低消费', '最低消費', '低消']],
@@ -101,8 +101,8 @@ export function parseSlhRemarks(remark: string | null): SlhParsedRemarks {
       amount: slhNormalizeAmount(amount[0]),
       sourceRemarkText: remark.slice(boundary, end + length).trim(),
     })
-    // 关键词之前的文字（如「补」）是性质说明而不是费别，保留为说明。
-    const prefix = segment.slice(0, keyword?.index ?? segment.length).trim()
+    // 关键词未识别时，整段原文已作为「其他」费用行保留，不再重复报成没有金额的说明。
+    const prefix = keyword === null ? '' : segment.slice(0, keyword.index).trim()
     if (prefix && !NATURE_MARKERS.has(prefix)) notes.push(prefix)
     boundary = end + length
   }

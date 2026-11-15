@@ -17,6 +17,7 @@ export interface OceanChargeInput {
 
 export interface OceanChargeCargo {
   grossWeightKg: string | null
+  /** 计费材数：精确材积向上取到 0.5 材的整数倍，因此可能是 0.5 而非整数。 */
   chargeableVolumeCai: number | null
 }
 

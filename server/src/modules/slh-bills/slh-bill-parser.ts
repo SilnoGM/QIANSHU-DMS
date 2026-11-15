@@ -1,4 +1,4 @@
-import { importCellNumber, importCellNumberCeil, importPackageCount } from '../container-batches/import-parser.numbers'
+import { importCellNumber, importCellNumberCeil, importCellNumberHalfUnit, importPackageCount } from '../container-batches/import-parser.numbers'
 import type { WorkbookCell, WorkbookSheet } from '../container-batches/import-parser.types'
 import { readContainerWorkbook } from '../container-batches/import-parser.workbook'
 import { formatDecimal, parseDecimal } from '../ocean-freight-calculation/ocean-decimal'
@@ -127,6 +127,12 @@ function dimension(cell: WorkbookCell | undefined, sheet: WorkbookSheet, label: 
   catch { errors.push(`${label}必须为有效数值`); return null }
 }
 
+/** 毛重按 0.5 kg 向上取整；来源多余小数由取数层用精确有理数一次进位。 */
+function weight(cell: WorkbookCell | undefined, sheet: WorkbookSheet, label: string, errors: string[]): string | null {
+  try { return importCellNumberHalfUnit(cell, sheet, 18, true) }
+  catch { errors.push(`${label}必须为有效数值`); return null }
+}
+
 /** 尾部合计单元格可能是负数，因而直接读缓存值而不用只接受非负数的导入取数器。 */
 function footerValue(cells: Map<number, WorkbookCell>, column: number | undefined, label: string, findings: SlhBillFinding[]): string | null {
   const raw = column === undefined ? null : cells.get(column)?.value ?? null
@@ -161,7 +167,9 @@ function parseLine(sheet: WorkbookSheet, rowNumber: number, cells: Map<number, W
     if (places > 0) findings.push(finding('DIMENSION_PRECISION', 'warning', lineNumber, `${label}在来源里保留 ${places} 位小数，已向上取整到整数厘米，材积复算可能有偏差`, rowNumber))
   }
 
-  const grossWeightKg = numeric(cell('grossWeightKg'), sheet, '出货重量', 0, 18, errors)
+  const grossWeightKg = weight(cell('grossWeightKg'), sheet, '出货重量', errors)
+  const weightPlaces = sourceDecimalPlaces(cell('grossWeightKg')?.value ?? null)
+  if (weightPlaces > 2) findings.push(finding('WEIGHT_PRECISION', 'warning', lineNumber, `出货重量在来源里保留 ${weightPlaces} 位小数，已向上取到 0.5 kg`, rowNumber))
   const lengthCm = dimension(cell('lengthCm'), sheet, '长', errors)
   const widthCm = dimension(cell('widthCm'), sheet, '宽', errors)
   const heightCm = dimension(cell('heightCm'), sheet, '高', errors)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppVersionEntry from '@/components/AppVersionEntry/index.vue'
 import { useSlots } from '@/slots'
 import Logo from '../Logo/index.vue'
 import Menu from '../Menu/index.vue'
@@ -77,6 +78,7 @@ watch(() => appMenuStore.actived, (val, oldVal) => {
           </template>
         </TransitionGroup>
       </FaScrollArea>
+      <AppVersionEntry :collapsed="isCollapse" />
       <div
         v-if="appSettingsStore.mode === 'pc' && appSettingsStore.settings.menu.subMenuCollapseButton" class="px-4 py-3 flex items-center relative" :class="{
           'justify-center': isCollapse,

@@ -126,6 +126,7 @@ export default function createVitePlugins(mode: string, isBuild: boolean, appLoa
     createReleaseManifestPlugin({
       version: appLoadingData.version,
       notesDirectory: path.resolve(appRoot, '../../..', 'release/notes'),
+      repositoryRoot: path.resolve(appRoot, '../../..'),
     }),
 
     AppLoading('loading.html'),

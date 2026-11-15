@@ -6,7 +6,6 @@
         "messageWithVersion": "New version v{version} is available",
         "currentVersion": "Current",
         "latestVersion": "Latest",
-        "audience": "For: {roles}",
         "contentLabel": "Release update details",
         "description": "Click the refresh button to get the latest version",
         "refreshNow": "Refresh now",

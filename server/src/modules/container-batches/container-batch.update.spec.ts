@@ -17,7 +17,7 @@ function harness() {
     containerLoadingItem: {
       findFirst: jest.fn().mockResolvedValue(item),
       count: jest.fn().mockResolvedValue(0),
-      update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])) })),
+      update: jest.fn(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ ...item, ...data, version: 3, ...Object.fromEntries(['grossWeightKg', 'lengthCm', 'widthCm', 'heightCm', 'volumeCai', 'reportedVolumeCai', 'codAmountTwd'].map(field => [field, typeof data[field] === 'string' ? new Prisma.Decimal(data[field]) : null])), chargeableVolumeCai: typeof data.chargeableVolumeCai === 'number' ? new Prisma.Decimal(data.chargeableVolumeCai) : null })),
     },
     purchaseOrderPart: {
       findMany: jest.fn().mockResolvedValue([]),

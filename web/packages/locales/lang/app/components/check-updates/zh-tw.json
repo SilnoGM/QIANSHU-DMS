@@ -6,7 +6,6 @@
         "messageWithVersion": "發現新版本 v{version}",
         "currentVersion": "目前版本",
         "latestVersion": "最新版本",
-        "audience": "適用：{roles}",
         "contentLabel": "版本更新內容",
         "description": "點擊刷新按鈕取得最新版本",
         "refreshNow": "立即重新整理",

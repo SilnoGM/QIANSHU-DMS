@@ -63,7 +63,7 @@ export function serializeSlhBillLine(row: Prisma.SlhBillLineGetPayload<{ include
     goodsName: row.goodsName,
     packageCount: row.packageCount,
     packageUnit: row.packageUnit,
-    grossWeightKg: row.grossWeightKg?.toFixed(0) ?? null,
+    grossWeightKg: row.grossWeightKg?.toFixed(2) ?? null,
     weightUnit: row.weightUnit,
     lengthCm: row.lengthCm?.toFixed(0) ?? null,
     widthCm: row.widthCm?.toFixed(0) ?? null,

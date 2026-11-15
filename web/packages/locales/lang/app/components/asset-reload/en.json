@@ -1,0 +1,12 @@
+{
+  "app": {
+    "components": {
+      "assetReload": {
+        "title": "Page resources updated",
+        "description": "A new version has been deployed and some resources on this page are out of date. Refresh to continue.",
+        "later": "Later",
+        "refreshNow": "Refresh now"
+      }
+    }
+  }
+}

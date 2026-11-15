@@ -97,10 +97,10 @@ export function validateLoadingItemDraft(draft: LoadingItemDraft): FormErrors {
   if (!/^\d+$/u.test(draft.packageCount) || Number(draft.packageCount) < 1 || Number(draft.packageCount) > 1_000_000) {
     errors.packageCount = 'countInvalid'
   }
-  if (!validDecimal(draft.grossWeightKg, 18, 0, true)) {
-    errors.grossWeightKg = 'measurementInvalid'
+  if (!validDecimal(draft.grossWeightKg, 18, 2, true)) {
+    errors.grossWeightKg = 'weightInvalid'
   }
-  // 重量与每件尺寸均按整数存储；尺寸向上取整由服务端归一化。
+  // 毛重最多两位小数并在服务端向上取到 0.5 kg；每件尺寸仍按整数存储、由服务端向上取整。
   for (const key of ['lengthCm', 'widthCm', 'heightCm'] as const) {
     if (!validDecimal(draft[key], 18, 0, true)) {
       errors[key] = 'measurementInvalid'

@@ -1,0 +1,9 @@
+{
+  "app": {
+    "components": {
+      "releaseNotes": {
+        "audienceLabel": "Applies to:"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import {
-  formatDecimal, money, normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError,
+  ceilRatioToHalfUnits, formatDecimal, money, normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError,
   parseDecimal, parseMoney, positiveInteger, power, roundRatio,
 } from './ocean-decimal'
 import type {
@@ -7,7 +7,7 @@ import type {
   OceanLineInput, OceanLineResult, OceanVolumeInput,
 } from './ocean-freight-calculation.types'
 
-export { normalizeOceanDecimal, normalizeOceanDecimalCeil, OceanCalculationError } from './ocean-decimal'
+export { normalizeOceanDecimal, normalizeOceanDecimalCeil, normalizeOceanWeightHalfUnit, OceanCalculationError } from './ocean-decimal'
 export type * from './ocean-freight-calculation.types'
 
 /**
@@ -41,15 +41,15 @@ export function calculateOceanVolume(input: OceanVolumeInput) {
   const product = values.reduce<bigint>((result, value) => result * parseDecimal(value!, 18, VOLUME_DIMENSION_SCALE, 'dimensions'), BigInt(input.packageCount))
   // 三个尺寸各放大 10^2，立方后为 10^6；分母保持同一 scale 才能直接比较。
   const denominator = VOLUME_CAI_DIVISOR * power(VOLUME_DIMENSION_SCALE * 3)
-  // 按材积计价时材积就是计费数量，必须向上取整；不按材积计价时按记录精度保留两位小数。
-  const chargeable = (product + denominator - 1n) / denominator
-  if (chargeable > 2147483647n) throw new OceanCalculationError('chargeableVolumeCai', true)
+  // 按材积计价时材积就是计费数量，必须向上取到 0.5 材的整数倍；不按材积计价时按记录精度保留两位小数。
+  const chargeableHalfUnits = ceilRatioToHalfUnits(product, denominator)
+  if (chargeableHalfUnits > 2147483647n * 2n) throw new OceanCalculationError('chargeableVolumeCai', true)
   const volume = roundRatio(product * power(VOLUME_CAI_SCALE), denominator)
   // 落库列要求材积为正；过小尺寸不能以零材积通过后再触发数据库约束。
   if (volume === 0n) throw new OceanCalculationError('volumeCai')
   return {
     volumeCai: formatDecimal(volume, 24, VOLUME_CAI_SCALE, 'volumeCai'),
-    chargeableVolumeCai: Number(chargeable),
+    chargeableVolumeCai: Number(chargeableHalfUnits) / 2,
     volumeDifferenceCai: reported === null ? null : formatDecimal(
       volumeDifferenceAtRecordScale(volume, parseDecimal(reported, 24, VOLUME_CAI_SCALE, 'reportedVolumeCai')),
       24, VOLUME_CAI_SCALE, 'volumeDifferenceCai'),
@@ -71,12 +71,16 @@ export function calculateOceanCharge(input: OceanChargeInput, cargo: OceanCharge
     unitPrice = parseDecimal(input.unitPriceAmount, 30, 6, 'unitPriceAmount')
     if (input.pricingBasis === 'WEIGHT') {
       if (cargo.grossWeightKg === null) throw new OceanCalculationError('grossWeightKg')
-      const weight = parseDecimal(cargo.grossWeightKg, 18, 0, 'grossWeightKg')
+      const weight = parseDecimal(cargo.grossWeightKg, 18, 2, 'grossWeightKg')
       if (weight <= 0n) throw new OceanCalculationError('grossWeightKg')
-      quantity = weight * power(8)
+      // 毛重是两位小数定点；保持 quantity 的 10^8 标度，金额除数不变。
+      quantity = weight * power(6)
     } else {
       if (cargo.chargeableVolumeCai === null) throw new OceanCalculationError('chargeableVolumeCai')
-      quantity = BigInt(positiveInteger(cargo.chargeableVolumeCai, 'chargeableVolumeCai')) * power(8)
+      // 计费材数按 0.5 材步进、不再是整数；按两位定点解析后保持 quantity 的 10^8 标度。
+      const chargeable = parseDecimal(String(cargo.chargeableVolumeCai), 24, 2, 'chargeableVolumeCai')
+      if (chargeable <= 0n) throw new OceanCalculationError('chargeableVolumeCai')
+      quantity = chargeable * power(6)
     }
     amount = roundRatio(quantity * unitPrice, power(12))
   }
