@@ -89,13 +89,19 @@ test('页面采用主从阅读布局并支持深链切换版本', () => {
   // 左侧列表带轻量时间轴：贯穿的细线加每行圆点，选中为实心绿点、未选中为空心灰点。
   assert.match(pageSource, /w-px/u)
   assert.match(pageSource, /bg-border/u)
+  // 线条只从第一个圆点中心画到最后一个圆点中心，避免两端「天线」。
+  assert.match(pageSource, /top-\[16px\]/u)
+  assert.match(pageSource, /bottom-\[34px\]/u)
   assert.match(pageSource, /rounded-full/u)
+  // 圆点用不透明底色加 2px 卡片色描边压在线条之上，线条不会穿透圆点。
+  assert.match(pageSource, /relative z-1/u)
+  assert.match(pageSource, /ring-2 ring-card/u)
   assert.match(pageSource, /bg-primary border-primary/u)
-  // 未选中的空心灰点用中灰描边，浅色边框在白底上看不见。
-  assert.match(pageSource, /bg-background border-muted-foreground\/40/u)
-  // 「最新版本」标签改为深绿实心胶囊，在浅绿选中块上仍有清晰边界。
+  assert.match(pageSource, /bg-card border-muted-foreground\/40/u)
+  // 「最新版本」标签改为深绿实心胶囊，字号 11px、左右留 6px 内边距。
   assert.match(pageSource, /text-primary-foreground/u)
-  assert.match(pageSource, /bg-primary"/u)
+  assert.match(pageSource, /text-\[11px\]/u)
+  assert.match(pageSource, /px-1\.5/u)
   // 底部留白加渐隐遮罩，滚动中的半截文字不会撞在圆角边框上；左栏同时收窄。
   assert.match(pageSource, /pb-6/u)
   assert.match(pageSource, /release-notes-fade/u)

@@ -136,7 +136,7 @@ onBeforeUnmount(() => {
           <div class="border rounded-lg h-full relative overflow-hidden">
             <div class="p-1.5 pb-6 overscroll-contain h-full [scrollbar-width:none] overflow-y-auto [&::-webkit-scrollbar]:hidden">
               <div class="flex flex-col gap-0.5 relative">
-                <span class="bg-border w-px start-[16px] inset-y-3 absolute" aria-hidden="true" />
+                <span class="bg-border w-px start-[16px] bottom-[34px] top-[16px] absolute z-0" aria-hidden="true" />
                 <button
                   v-for="row in versionRows"
                   :key="row.version"
@@ -148,10 +148,10 @@ onBeforeUnmount(() => {
                 >
                   <span class="ms-2 mt-3 flex shrink-0 w-4 justify-center" aria-hidden="true">
                     <span
-                      class="border rounded-full size-2 transition-colors"
+                      class="border rounded-full size-2 ring-2 ring-card transition-colors relative z-1"
                       :class="row.version === selectedVersion
                         ? 'bg-primary border-primary'
-                        : 'bg-background border-muted-foreground/40'"
+                        : 'bg-card border-muted-foreground/40'"
                     />
                   </span>
                   <span
@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
                       </span>
                       <span
                         v-if="row.version === latestVersion"
-                        class="text-primary-foreground leading-4 qs-type-tag px-1 rounded bg-primary"
+                        class="text-[11px] text-primary-foreground leading-4 font-medium px-1.5 rounded bg-primary"
                       >
                         最新版本
                       </span>
