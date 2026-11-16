@@ -79,7 +79,7 @@
 | `bodyTemplate` | text | 否 | — | 正文 |
 | `linkUrlTemplate` | text | 是 | `null` | 可选跳转链接模板；站内通知详情页使用，占位符受变量白名单约束 |
 | `variables` | jsonb | 否 | `[]` | 变量白名单：`[{name, required, maxLength, sensitive}]` |
-| `mediaPolicy` | jsonb | 否 | `{}` | 附件策略：`{enabled, maxCount, kinds}`；空对象表示不发送附件，一期 `kinds` 只允许 `IMAGE`、`maxCount` 1–3 |
+| `mediaPolicy` | jsonb | 否 | `{}` | 附件策略：`{enabled, maxCount, kinds, sources}`；空对象表示不发送附件，一期 `kinds` 只允许 `IMAGE`、`maxCount` 1–3，`sources` 为空表示不区分来源 |
 | `maxLength` | int | 否 | `2000` | 渲染后上限 |
 | `enabled` | boolean | 否 | `true` | — |
 | `version` | int | 否 | `1` | 每次修改递增 |
@@ -162,10 +162,12 @@ CHECK：两个保留期都在 `7..3650`。
 | `notificationId` | uuid | 否 | — | FK `notifications(id)`，`onDelete: Cascade` |
 | `mediaAssetId` | uuid | 否 | — | FK `media_assets(id)`，`onDelete: Restrict` |
 | `sortOrder` | int | 否 | — | 与业务传入顺序一致 |
+| `sourceKey` | varchar(64) | 是 | `null` | 业务语义来源键（如 `advertising.proof`）；历史附件为空 |
 | `blockedReason` | varchar(64) | 是 | `null` | 非空表示被策略或校验拦截（`POLICY_DISABLED` / `LIMIT_EXCEEDED` / `ASSET_NOT_READY` 等），未进入投递 |
 | `createdAt` | timestamptz(6) | 否 | `now()` | — |
 
 - 唯一 `(notificationId, sortOrder)`；索引 `(mediaAssetId)`。
+- `sourceKey` 必须在事件契约 `NOTIFICATION_EVENT_MEDIA.sources` 中声明；模板 `mediaPolicy.sources` 非空时只发送选中的来源。
 - 已登记进 `MEDIA_ASSET_REFERENCE_TABLES` 与数据库 `enforce_ready_media_asset_reference`：通知保留期内的附件不能被业务侧回收流程提前清理。
 - 该表的引用触发器只覆盖 `INSERT/UPDATE`：通知保留期清理会级联删除附件行，`DELETE` 若也校验，会因「删掉最后一条引用」失败。
 

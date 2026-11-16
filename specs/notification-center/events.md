@@ -17,7 +17,25 @@
 - 每个事件必须有唯一 `dedupeKey`；重复触发返回原通知，不重复发送。
 - 已实现事件允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
 - 文案中的 `{{变量}}` 对应模板白名单；金额与客户名称标记 `sensitive`。
-- 附件能力一期只接入 `SALES_RECEIPT_REVIEW_PENDING`：表外收款提交时把已激活的 `voucherMediaAssetId` 作为 `media: [{ assetId }]` 传入；是否真正发送由模板 `media_policy` 裁决，单条通知最多 3 张图片，站内渠道不携带附件。
+- 附件来源必须使用事件契约声明的业务语义键；模板 `mediaPolicy.sources` 为空时发送该事件全部来源，非空时只发送选中的来源。单条通知最多 3 张图片，站内渠道不携带附件。
+- 未标注来源的历史调用在模板选择来源后会被 `SOURCE_NOT_SELECTED` 拦截；因此接入新事件时必须同时传 `sourceKey`。
+
+### 1.1 已接入的附件来源
+
+| 事件 | 来源键 | 发布时可用性 |
+| --- | --- | --- |
+| `SALES_RECEIPT_REVIEW_PENDING` / `APPROVED` / `REJECTED` | `salesReceipt.voucher` | 凭证在同一事务内先激活 |
+| `PURCHASE_REVIEW_APPROVED` | `purchase.orderImage` | 审核图片先归档为采购单凭证 |
+| `FUND_WITHDRAWAL_APPROVED` | `fundWithdrawal.paymentProof` | 审批时上传付款截图后再发布 |
+| `INVOICE_REQUEST_ISSUED` / `SETTLED` | `invoice.document` | 上传发票照片即发布；结算沿用同一张 |
+| `PACKAGING_COST_PAID` | `packaging.paymentVoucher` / `packaging.packagingImage` / `packaging.quotationImage` | 付款凭证、包装图片、报价图片 |
+| `ADVERTISING_RECHARGE_PAYMENT_PENDING` | `advertising.qr` | 申请时上传的收款二维码 |
+| `ADVERTISING_RECHARGE_PAID` | `advertising.qr` / `advertising.proof` | 二维码与付款截图（可只发付款截图） |
+| `ADVERTISING_RECHARGE_REJECTED` / `VOIDED` | `advertising.qr` / `advertising.proof` | 取当前存在的来源，空值不传 |
+| `SHIPMENT_SIGNED` | `salesOrder.deliveryReceipt` | 签收前置要求签收单存在 |
+| `PURCHASE_ORDER_COMPLETED` | `purchase.paymentVoucher` / `purchase.deliveryReceipt` | 取当前有效的付款凭证与签收单 |
+
+明确不接入附件：`PURCHASE_REVIEW_PENDING`（审核图片尚未生成）、`PURCHASE_REVIEW_REJECTED`（驳回不归档图片）、`SALES_ORDER_COMPLETED`（避免与签收通知重复带同一张签收单）、销售单终止/采购取消（终态，低价值）、`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING`（跨多单汇总摘要，没有单一来源）、`SLH_RECONCILIATION_COMPLETED`（账单原件是 XLSX，不属于图片）、运输/寄仓/看机/代理/资金调整/小助理离线等无媒体事件。
 - 实际首批事件为采购审核、开票审核、货件到仓；`SLH_RECONCILIATION_COMPLETED` 章节保留为后续候选，当前没有业务发布点。
 - 站内模板通过 `20261108110000_notification_inbox_business_links` 接收业务标识变量：采购/到仓使用 `orderId`，开票使用 `invoiceRequestId`；详情链接分别打开采购、开票记录和到仓货件页面。
 

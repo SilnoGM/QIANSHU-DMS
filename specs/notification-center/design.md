@@ -230,8 +230,10 @@ PENDING ──► SENDING ──► ACCEPTED
 
 附件策略（`notification_templates.media_policy`）：
 
-- 结构 `{ enabled, maxCount, kinds }`：一期 `kinds` 只允许 `["IMAGE"]`、`maxCount` 为 1–3；空对象表示不发送附件。站内渠道一期固定不支持附件。
-- 是否真的发送由模板策略裁决，而不是业务调用方：业务只传 `media: [{ assetId }]`；模板关闭、超过上限、资产未 `READY`、类型不允许、`allow_sensitive = false` 时全部拦下并写 `notification_media.blocked_reason`，正文照发。
+- 结构 `{ enabled, maxCount, kinds, sources }`：一期 `kinds` 只允许 `["IMAGE"]`、`maxCount` 为 1–3；`sources` 是允许的业务语义来源键，空数组表示不区分来源（发送业务传入的全部来源）。空对象表示不发送附件。站内渠道一期固定不支持附件。
+- 来源键由事件契约 `NOTIFICATION_EVENT_MEDIA.sources` 声明（如 `advertising.qr`、`advertising.proof`），禁止直接使用数据库字段名；业务发布时通过 `media: [{ assetId, sourceKey? }]` 标注。
+- 是否真的发送由模板策略裁决，而不是业务调用方：模板关闭、来源未声明（`SOURCE_NOT_DECLARED`）、来源未被模板选中（`SOURCE_NOT_SELECTED`，含未标注的旧调用）、超过上限、资产未 `READY`、类型不允许、`allow_sensitive = false` 时全部拦下并写 `notification_media.blocked_reason`，正文照发。
+- 来源校验先于张数上限：未选中的来源不消耗 `maxCount`，否则模板只选一个来源时会被其他来源挤占名额。
 - 附件按敏感内容处理：`allow_sensitive = false` 时整张不发（图片无法像变量一样脱敏）。
 - 被拦下的附件同样入库（带 `blocked_reason`），记录页可以区分「业务没传」与「被配置挡住」。
 - 群目标的附件继承策略的 `allow_sensitive` 与 `internal_only` 规则，与正文一致。

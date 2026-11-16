@@ -263,9 +263,9 @@ export interface SystemNotificationPublishResult {
 
 - 公开取流路由不参与 Session、权限与数据范围校验，失败统一 404 `NOTIFICATION_MEDIA_NOT_FOUND`；限流返回 429 `RATE_LIMITED`，存储不可用返回 503 `MEDIA_STORAGE_UNAVAILABLE`。
 - token 只能由派发器在发送时签发，绑定具体 `assistant_delivery_media` 行；不提供任何对外签发接口。
-- 模板创建/更新请求与响应新增 `mediaPolicy`：`{ enabled, maxCount, kinds }`。`enabled=true` 时 `maxCount` 必须 1–3、`kinds` 只允许 `IMAGE`，否则 422 `NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID`；站内渠道开启附件返回 422 `NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED`。
-- `GET /api/notifications/events` 每个事件新增 `media: { maxCount, kinds } | null`，只用于管理端提示哪些事件已验收过附件能力。
-- 记录列表新增 `mediaCount`；详情新增 `media: [{ id, sortOrder, mediaType, mimeType, originalFilename, sizeBytes, blockedReason }]`，交付项新增 `renderedContent`、`mediaTotal`、`mediaAccepted`、`mediaFailed`，交付状态新增 `PARTIAL`。
+- 模板创建/更新请求与响应新增 `mediaPolicy`：`{ enabled, maxCount, kinds, sources }`。`enabled=true` 时 `maxCount` 必须 1–3、`kinds` 只允许 `IMAGE`，`sources` 为事件声明的来源键（最多 20 个、单个 ≤64 字符，空数组表示全部来源），否则 422 `NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID`；站内渠道开启附件返回 422 `NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED`。
+- `GET /api/notifications/events` 每个事件新增 `media: { maxCount, kinds, sources: [{ key, label }] } | null`；`sources` 是模板来源选择的唯一选项来源。
+- 记录列表新增 `mediaCount`；详情新增 `media: [{ id, sortOrder, mediaType, mimeType, originalFilename, sizeBytes, sourceKey, sourceLabel, blockedReason }]`，交付项新增 `renderedContent`、`mediaTotal`、`mediaAccepted`、`mediaFailed`，交付状态新增 `PARTIAL`。
 
 记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `notificationNo`、`eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`notificationNo` 由 `NOTIFICATION_NO` 规则按 `NTF/YYYYMMDD-######` 发号，历史通知允许为空；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
 
