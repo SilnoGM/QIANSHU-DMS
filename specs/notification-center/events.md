@@ -25,6 +25,7 @@
 | 事件 | 来源键 | 发布时可用性 |
 | --- | --- | --- |
 | `SALES_RECEIPT_REVIEW_PENDING` / `APPROVED` / `REJECTED` | `salesReceipt.voucher` | 凭证在同一事务内先激活 |
+| `SALES_ORDER_SUBMITTED` | `salesOrder.issuanceVoucher` | 出单凭证在创建事务内先激活并关联 |
 | `PURCHASE_REVIEW_APPROVED` | `purchase.orderImage` | 审核图片先归档为采购单凭证 |
 | `FUND_WITHDRAWAL_APPROVED` | `fundWithdrawal.paymentProof` | 审批时上传付款截图后再发布 |
 | `INVOICE_REQUEST_ISSUED` / `SETTLED` | `invoice.document` | 上传发票照片即发布；结算沿用同一张 |
@@ -278,3 +279,24 @@
 - 事件中文名、模板业务域、默认模板键与是否已接入由服务端常量统一维护，管理端通过 `GET /api/notifications/events` 读取；新增事件时同步补 `NOTIFICATION_EVENT_LABELS`、`NOTIFICATION_EVENT_TEMPLATE_DOMAIN`、`NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY` 并确认 `IMPLEMENTED_NOTIFICATION_EVENT_TYPES`。
 - 文案修改走模板版本，不改 `eventType` 语义。
 - 新增事件前先确认收件人、变量、敏感标记、TTL 与文案；不要先写代码再补口径。
+
+## 8. `SALES_ORDER_SUBMITTED`
+
+新增页「确认提交订单」即触发，用于把订单信息与出单凭证推送到内部群。
+
+| 项目 | 内容 |
+| --- | --- |
+| 发布位置 | `SalesOrderCommandService.create()` 的 Serializable 事务内，凭证关联与审计写入之后 |
+| 事件类型 | `SALES_ORDER_SUBMITTED` |
+| 默认模板键 | `sales.order.submitted` |
+| 命令兜底目标 | `{ kind: 'USERS', userIds: [操作人] }`；实际发群由策略 `GROUP` 决定 |
+| 幂等键 | `sales-order-submitted:${salesOrderId}` |
+| 附件来源 | `salesOrder.issuanceVoucher`（出单凭证），发布时先 `activate` 后入队 |
+
+变量：`orderNo`、`orderId`、`customerName`（敏感）、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`issuerName`。
+
+注意：
+
+- 订单在创建事务内直接是 `CONFIRMED`，没有草稿到提交的二次状态；重复请求走创建幂等早返回，不会重复发布。
+- 群目标必须 `internalOnly`，策略必须 `allowSensitive = true`，否则客户名/金额被脱敏、图片被 `SENSITIVE_BLOCKED` 拦下。
+- 该事件对每张新销售单都会发布；量大时需要评估群消息噪声与微信风控，后续如要「金额阈值/指定业务员才发」需要另加业务条件。

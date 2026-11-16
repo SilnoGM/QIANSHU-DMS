@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言调用参数。 */
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { AuditService } from '../audit/audit.service'
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import type { SystemNotificationService } from '../notifications/system-notification.service'
 import { normalizeSalesOrderCreateCommand } from './sales-order-command.normalizer'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { calculateSalesOrderCreateFingerprint } from './sales-order-create-fingerprint'
@@ -109,6 +111,10 @@ function setup() {
       create: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'document-id' }),
     },
+    user: {
+      findUnique: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue({ displayName: '张三' }),
+    },
   }
   const prisma = {
     salesOrder: {
@@ -136,6 +142,9 @@ function setup() {
   const query = {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
+  const notifications = {
+    publish: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
+  }
   const service = new SalesOrderCommandService(
     prisma as unknown as PrismaService,
     numbering as unknown as NumberingGeneratorService,
@@ -146,8 +155,9 @@ function setup() {
       businessToday: () => '2026-08-20',
       now: () => new Date('2026-08-20T01:02:03.004Z'),
     },
+    notifications as unknown as SystemNotificationService,
   )
-  return { audit, detail, media, numbering, prisma, query, service, transaction }
+  return { audit, detail, media, notifications, numbering, prisma, query, service, transaction }
 }
 
 describe('SalesOrderCommandService', () => {
@@ -173,6 +183,24 @@ describe('SalesOrderCommandService', () => {
       /"requestFingerprint":"[0-9a-f]{64}"/u,
     )
     expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(2)
+    expect(fixture.notifications.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'SALES_ORDER_SUBMITTED',
+        templateKey: 'sales.order.submitted',
+        dedupeKey: `sales-order-submitted:${ORDER_ID}`,
+        media: [{
+          assetId: '55555555-5555-4555-8555-555555555555',
+          sourceKey: 'salesOrder.issuanceVoucher',
+        }],
+        variables: expect.objectContaining({
+          orderNo: 'SO-20260820-0001',
+          customerName: '王小明',
+          lineCount: '1',
+          issuerName: '张三',
+        }),
+      }),
+      { transaction: expect.anything() },
+    )
     const createOrderCall = fixture.transaction.salesOrder.create
       .mock.calls[0]?.[0]
     expect(createOrderCall).toMatchObject({
