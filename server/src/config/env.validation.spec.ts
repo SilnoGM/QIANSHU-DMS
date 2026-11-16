@@ -7,6 +7,7 @@ describe('validateEnvironment', () => {
     AUTH_USERNAME_HMAC_KEY: Buffer.alloc(32, 1).toString('base64url'),
     AUTH_USER_ID_HMAC_KEY: Buffer.alloc(32, 2).toString('base64url'),
     AUTH_IP_HMAC_KEY: Buffer.alloc(32, 3).toString('base64url'),
+    NOTIFICATION_MEDIA_URL_SECRET: Buffer.alloc(32, 4).toString('base64url'),
   }
 
   it('uses development and port 3000 when optional values are missing', () => {
@@ -401,6 +402,36 @@ describe('validateEnvironment', () => {
         }),
       ).toThrow(
         'Environment validation failed: AUTH_IP_HMAC_KEY must be base64url encoding exactly 32 bytes',
+      )
+    })
+
+    it('requires the notification media signing secret in production', () => {
+      const input: Record<string, unknown> = {
+        NODE_ENV: 'production',
+        DATABASE_URL: validDatabaseUrl,
+        APP_ORIGIN: 'https://dms.example.com',
+        TRUST_PROXY_HOPS: '1',
+        ...productionKeys,
+      }
+      delete input.NOTIFICATION_MEDIA_URL_SECRET
+
+      expect(() => validateEnvironment(input)).toThrow(
+        'Environment validation failed: NOTIFICATION_MEDIA_URL_SECRET is required in production',
+      )
+    })
+
+    it('keeps the media signing secret separate from auth keys', () => {
+      expect(() =>
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: 'https://dms.example.com',
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+          NOTIFICATION_MEDIA_URL_SECRET: productionKeys.AUTH_IP_HMAC_KEY,
+        }),
+      ).toThrow(
+        'Environment validation failed: NOTIFICATION_MEDIA_URL_SECRET must differ from auth hmac keys',
       )
     })
 

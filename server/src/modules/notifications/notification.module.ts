@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common'
 
 import { AuthModule } from '../auth/auth.module'
+import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { AssistantAdminController } from './assistant-admin.controller'
 import { AssistantAdminService } from './assistant-admin.service'
@@ -8,7 +9,13 @@ import { NotificationAdminController } from './notification-admin.controller'
 import { NotificationAdminService } from './notification-admin.service'
 import { NotificationInboxController } from './notification-inbox.controller'
 import { NotificationInboxService } from './notification-inbox.service'
+import { NotificationMediaController } from './notification-media.controller'
 import { AssistantDispatchService } from './assistant-dispatch.service'
+import {
+  AssistantMediaDeliveryService,
+  AssistantMediaRateLimiter,
+} from './assistant-media-delivery.service'
+import { AssistantMediaUrlService } from './assistant-media-url'
 import { AssistantSendGateService } from './assistant-send-gate.service'
 import { GatedAssistantTransport } from './gated-assistant.transport'
 import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
@@ -25,14 +32,17 @@ import { SystemNotificationService } from './system-notification.service'
  */
 @Global()
 @Module({
-  imports: [AuthModule, NumberingModule],
-  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController],
+  imports: [AuthModule, MediaModule, NumberingModule],
+  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController],
   providers: [
     SystemNotificationService,
     AssistantAdminService,
     NotificationAdminService,
     NotificationInboxService,
     AssistantSendGateService,
+    AssistantMediaUrlService,
+    AssistantMediaRateLimiter,
+    AssistantMediaDeliveryService,
     GeweAssistantTransport,
     GatedAssistantTransport,
     GeweAssistantAdminTransport,

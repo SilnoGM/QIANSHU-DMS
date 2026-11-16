@@ -189,8 +189,9 @@ function normalizeAppOrigin(
   return parsed.origin
 }
 
-function normalizeAuthHmacKey(
-  key: AuthHmacKeyName,
+/** 32 字节 base64url 密钥的共同形状：认证 HMAC key 与媒体链接签名密钥共用。 */
+function normalizeUrlSigningKey(
+  key: string,
   value: unknown,
   nodeEnvironment: NodeEnvironment,
 ): string | undefined {
@@ -228,6 +229,16 @@ function normalizeAuthHmacKey(
 
   return candidate
 }
+
+function normalizeAuthHmacKey(
+  key: AuthHmacKeyName,
+  value: unknown,
+  nodeEnvironment: NodeEnvironment,
+): string | undefined {
+  return normalizeUrlSigningKey(key, value, nodeEnvironment)
+}
+
+const NOTIFICATION_MEDIA_URL_SECRET_NAME = 'NOTIFICATION_MEDIA_URL_SECRET'
 
 function normalizeAuthHmacKeys(
   input: Record<string, unknown>,
@@ -351,9 +362,22 @@ export function validateEnvironment(
   AUTH_USERNAME_HMAC_KEY?: string
   AUTH_USER_ID_HMAC_KEY?: string
   AUTH_IP_HMAC_KEY?: string
+  NOTIFICATION_MEDIA_URL_SECRET?: string
 } {
   const nodeEnvironment = normalizeNodeEnvironment(input.NODE_ENV)
   const hmacKeys = normalizeAuthHmacKeys(input, nodeEnvironment)
+  const notificationMediaUrlSecret = normalizeUrlSigningKey(
+    NOTIFICATION_MEDIA_URL_SECRET_NAME,
+    input.NOTIFICATION_MEDIA_URL_SECRET,
+    nodeEnvironment,
+  )
+  if (
+    notificationMediaUrlSecret !== undefined
+    && Object.values(hmacKeys).includes(notificationMediaUrlSecret)
+  ) {
+    // 用途分离：媒体链接签名密钥泄露不能等价于认证身份密钥泄露。
+    throw validationError(NOTIFICATION_MEDIA_URL_SECRET_NAME, 'must differ from auth hmac keys')
+  }
   const mediaEnvironment = normalizeMediaEnvironment(input)
   const ipfoxyEnvironment = normalizeIpfoxyEnvironment(input)
   const normalized: Record<string, unknown> & {
@@ -407,6 +431,9 @@ export function validateEnvironment(
     ...mediaEnvironment,
     ...ipfoxyEnvironment,
     ...hmacKeys,
+    ...(notificationMediaUrlSecret === undefined
+      ? {}
+      : { NOTIFICATION_MEDIA_URL_SECRET: notificationMediaUrlSecret }),
   }
 
   // 非 production 的空占位符代表启动时生成随机进程级 key，不能把空字符串留给 ConfigService。

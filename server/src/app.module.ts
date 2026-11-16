@@ -8,6 +8,7 @@ import assistantConfig from './config/assistant.config'
 import authConfig from './config/auth.config'
 import ipfoxyConfig from './config/ipfoxy.config'
 import mediaConfig from './config/media.config'
+import notificationMediaConfig from './config/notification-media.config'
 import { HTTP_MODULES } from './http.modules'
 import { PrismaModule } from './infrastructure/database/prisma.module'
 import { PrivateNoStoreInterceptor } from './infrastructure/http/private-no-store.interceptor'
@@ -21,7 +22,7 @@ import { PermissionGuard } from './modules/auth/guards/permission.guard'
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,
-      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, assistantConfig],
+      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, assistantConfig, notificationMediaConfig],
       validate: validateEnvironment,
     }),
     PrismaModule,
