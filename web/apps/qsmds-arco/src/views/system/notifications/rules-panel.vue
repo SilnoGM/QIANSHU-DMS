@@ -17,6 +17,11 @@ import { useAppAuth } from '@/composables/app/auth'
 import EventConfigPanel from './components/EventConfigPanel.vue'
 import TemplateLibraryPanel from './components/TemplateLibraryPanel.vue'
 import { buildTemplateUsageCounts, templateUsageCount } from './event-config.logic'
+import {
+  templateEventFromSelection,
+  templateEventSelection,
+  templateEventSelectOptions,
+} from './template-event-selection.logic'
 import { TEMPLATE_DOMAIN_OPTIONS, templateDomainLabel } from './template-key-grouping.logic'
 import { extractTemplatePlaceholders, insertTextAtSelection } from './template-variable.logic'
 
@@ -137,13 +142,15 @@ const templateDraftUsage = computed(() => templateUsageCount(usage.value, templa
 const templateEvent = computed(() => templateEventType.value === ''
   ? null
   : events.value.find(event => event.eventType === templateEventType.value) ?? null)
-const templateEventOptions = computed(() => [
-  { label: '不指定事件', value: '' },
-  ...events.value.map(event => ({
-    label: `${event.label}（${event.eventType}）`,
-    value: event.eventType,
-  })),
-])
+const templateEventOptions = computed(() => templateEventSelectOptions(events.value))
+
+// reka-ui 的 SelectItem 不接受空字符串 value；空事件通过哨兵值参与下拉绑定。
+const templateEventSelectValue = computed({
+  get: () => templateEventSelection(templateEventType.value),
+  set: (value: unknown) => {
+    templateEventType.value = templateEventFromSelection(value)
+  },
+})
 const templateVariableDefinitions = computed(() => templateEvent.value?.variableDefinitions ?? [])
 const filteredTemplateVariableDefinitions = computed(() => {
   const normalized = templateVariableSearch.value.trim().toLowerCase()
@@ -939,7 +946,7 @@ onMounted(() => {
               </div>
             </template>
             <template v-else>
-              <FaSelect v-model="templateEventType" class="w-full" :options="templateEventOptions" />
+              <FaSelect v-model="templateEventSelectValue" class="w-full" :options="templateEventOptions" />
               <span class="qs-type-meta text-muted-foreground">用于展示可用变量；模板仍可按 Key 被多个事件绑定。</span>
             </template>
           </label>
