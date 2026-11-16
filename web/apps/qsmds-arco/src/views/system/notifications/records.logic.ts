@@ -13,6 +13,7 @@ const DELIVERY_STATUS_ORDER: readonly NotificationDeliveryDto['status'][] = [
   'EXPIRED',
   'PENDING',
   'SENDING',
+  'PARTIAL',
   'CANCELLED',
   'SKIPPED',
   'ACCEPTED',

@@ -93,6 +93,10 @@ const templateDraft = ref({
   bodyTemplate: '',
   linkUrlTemplate: '',
   variables: [] as TemplateVariableDraft[],
+  mediaPolicy: {
+    enabled: false,
+    maxCount: 1,
+  },
   maxLength: 2000,
   enabled: true,
   expectedVersion: 1,
@@ -495,6 +499,10 @@ function openCreateTemplate(): void {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -522,6 +530,10 @@ function openCreateTemplateForChannel(payload: {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -550,6 +562,10 @@ function openCreateTemplateFromEvent(payload: {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -578,6 +594,11 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
       maxLength: variable.maxLength ?? 200,
       sensitive: variable.sensitive ?? false,
     })),
+    // 一期只支持图片；站内渠道即使有历史配置也按关闭展示，保存时会再次被服务端拒绝。
+    mediaPolicy: {
+      enabled: template.mediaPolicy.enabled && template.channel === 'ASSISTANT',
+      maxCount: Math.min(3, Math.max(1, template.mediaPolicy.maxCount || 1)),
+    },
     maxLength: template.maxLength,
     enabled: template.enabled,
     expectedVersion: template.version,
@@ -633,8 +654,21 @@ const canSaveTemplate = computed(() => {
     && Number.isInteger(templateDraft.value.maxLength)
     && templateDraft.value.maxLength >= 1
     && templateDraft.value.maxLength <= 5000
-    && templateVariableError.value === null
+    && (!templateDraft.value.mediaPolicy.enabled
+      || (Number.isInteger(templateDraft.value.mediaPolicy.maxCount)
+        && templateDraft.value.mediaPolicy.maxCount >= 1
+        && templateDraft.value.mediaPolicy.maxCount <= 3))
+      && templateVariableError.value === null
 })
+
+function templateMediaPolicyPayload(): { enabled: boolean, maxCount: number, kinds: ('IMAGE')[] } {
+  const enabled = templateDraft.value.channel === 'ASSISTANT' && templateDraft.value.mediaPolicy.enabled
+  return {
+    enabled,
+    maxCount: enabled ? templateDraft.value.mediaPolicy.maxCount : 0,
+    kinds: enabled ? ['IMAGE'] : [],
+  }
+}
 
 async function saveTemplate(): Promise<void> {
   busy.value = true
@@ -650,6 +684,7 @@ async function saveTemplate(): Promise<void> {
         titleTemplate: templateDraft.value.titleTemplate || null,
         linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
+        mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
       })
@@ -662,6 +697,7 @@ async function saveTemplate(): Promise<void> {
         titleTemplate: templateDraft.value.titleTemplate || null,
         linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
+        mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
         expectedVersion: templateDraft.value.expectedVersion,
@@ -949,6 +985,24 @@ onMounted(() => {
             <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
             <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
           </label>
+
+          <div v-if="templateDraft.channel === 'ASSISTANT'" class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2">
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+              <span class="qs-type-compact-label">业务附件（图片）</span>
+              <label class="flex gap-2 items-center">
+                <FaSwitch v-model="templateDraft.mediaPolicy.enabled" />
+                随通知发送
+              </label>
+            </div>
+            <div v-if="templateDraft.mediaPolicy.enabled" class="flex flex-wrap gap-2 items-center">
+              <span class="qs-type-meta text-muted-foreground">最多张数</span>
+              <FaInput v-model.number="templateDraft.mediaPolicy.maxCount" class="w-24" type="number" min="1" max="3" />
+              <span class="qs-type-meta text-muted-foreground">张（1–3）</span>
+            </div>
+            <span class="qs-type-meta text-muted-foreground">
+              业务发布时携带的收款凭证等图片：正文先发，图片按顺序逐张发送。图片按敏感内容处理，策略未允许敏感内容时整张不发。
+            </span>
+          </div>
         </section>
 
         <section class="flex flex-col gap-3 min-h-0">

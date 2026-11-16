@@ -191,14 +191,16 @@ test('详情交付把失败和待处理排在前面', () => {
     delivery('accepted', 'ACCEPTED'),
     delivery('pending', 'PENDING'),
     delivery('failed', 'FAILED'),
+    delivery('partial', 'PARTIAL'),
     delivery('skipped', 'SKIPPED'),
   ])
 
-  assert.deepEqual(result.map(item => item.id), ['failed', 'pending', 'skipped', 'accepted'])
+  assert.deepEqual(result.map(item => item.id), ['failed', 'pending', 'partial', 'skipped', 'accepted'])
 })
 
-test('通知与交付状态覆盖 SENDING 和 ACCEPTED', () => {
+test('通知与交付状态覆盖 SENDING、PARTIAL 和 ACCEPTED', () => {
   assert.equal(notificationStatusLabel('PARTIAL'), '部分')
   assert.equal(deliveryStatusLabel('SENDING'), '发送中')
+  assert.equal(deliveryStatusLabel('PARTIAL'), '部分成功')
   assert.equal(deliveryStatusLabel('ACCEPTED'), '已接受')
 })
