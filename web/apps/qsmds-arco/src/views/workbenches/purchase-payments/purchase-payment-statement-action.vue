@@ -81,7 +81,7 @@ onBeforeUnmount(() => emit('busyChange', false))
     <FaIcon name="i-lucide:file-image" aria-hidden="true" />
     {{ t('purchasePayment.statement.generate', { count: orders.length }) }}
   </FaButton>
-  <QsGenericModal v-model="statement.visible.value" :title="t('purchasePayment.statement.title')" :description="t('purchasePayment.statement.description')" size="xl" :submitting="statement.copying.value">
+  <QsGenericModal v-model="statement.visible.value" :title="t('purchasePayment.statement.title')" :description="t('purchasePayment.statement.description')" size="3xl" :submitting="statement.copying.value">
     <template #header-leading>
       <FaIcon name="i-lucide:file-image" class="size-5" aria-hidden="true" />
     </template>
