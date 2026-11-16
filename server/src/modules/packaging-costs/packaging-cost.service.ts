@@ -239,6 +239,11 @@ export class PackagingCostService {
             currencyCode: 'CNY',
             shipmentNo: row.shipmentNo,
           },
+          media: [
+            { assetId: voucher.id, sourceKey: 'packaging.paymentVoucher' },
+            { assetId: row.packagingImageMediaAssetId, sourceKey: 'packaging.packagingImage' },
+            { assetId: row.quotationImageMediaAssetId, sourceKey: 'packaging.quotationImage' },
+          ],
           dedupeKey: `packaging-cost-paid:${id}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,

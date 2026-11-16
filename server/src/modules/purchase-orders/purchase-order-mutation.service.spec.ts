@@ -118,6 +118,10 @@ function setup() {
     purchaseOrderDocument: {
       create: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'document-id' }),
+      findFirst: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue({ mediaAssetId: 'review-media' }),
+      findMany: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue([]),
     },
   }
   const prisma = {

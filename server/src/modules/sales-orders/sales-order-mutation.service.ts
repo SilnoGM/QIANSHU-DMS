@@ -464,6 +464,11 @@ export class SalesOrderMutationService {
         'FULFILLMENT',
       )
       if (toStatus === 'SIGNED') {
+        const deliveryReceipts = await transaction.salesOrderDocument.findMany({
+          where: { salesOrderId, documentType: 'DELIVERY_RECEIPT', detachedAt: null },
+          orderBy: { createdAt: 'asc' },
+          select: { mediaAssetId: true },
+        })
         await this.notifications.publish({
           eventType: 'SHIPMENT_SIGNED',
           source: { type: 'SALES_ORDER', id: salesOrderId },
@@ -480,6 +485,10 @@ export class SalesOrderMutationService {
             orderStatus: salesOrderStatusLabel(order.orderStatus),
             paymentStatus: salesOrderPaymentStatusLabel(order.paymentStatus),
           },
+          media: deliveryReceipts.map(document => ({
+            assetId: document.mediaAssetId,
+            sourceKey: 'salesOrder.deliveryReceipt',
+          })),
           dedupeKey: `shipment-signed:${salesOrderId}:v${order.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: trusted.actorUserId,

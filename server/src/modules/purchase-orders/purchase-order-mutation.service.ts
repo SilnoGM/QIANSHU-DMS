@@ -393,6 +393,10 @@ export class PurchaseOrderMutationService {
           salesOrderId: order.salesOrderId,
         })
       }
+      const reviewVoucher = await transaction.purchaseOrderDocument.findFirst({
+        where: { purchaseOrderId, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null },
+        select: { mediaAssetId: true },
+      })
       await this.notifications.publish({
         eventType: 'PURCHASE_REVIEW_APPROVED',
         source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
@@ -408,6 +412,7 @@ export class PurchaseOrderMutationService {
           totalAmount: order.purchaseTotalAmount.toFixed(2),
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
+        media: reviewVoucher === null ? [] : [{ assetId: reviewVoucher.mediaAssetId, sourceKey: 'purchase.orderImage' }],
         dedupeKey: `purchase-review-approved:${purchaseOrderId}:v${order.version + 1}`,
         priority: 'NORMAL',
         requestedByUserId: trusted.actorUserId,
@@ -1681,6 +1686,15 @@ export class PurchaseOrderMutationService {
       },
     })
     if (newStatus === 'COMPLETED') {
+      const completedDocuments = await transaction.purchaseOrderDocument.findMany({
+        where: {
+          purchaseOrderId: order.id,
+          detachedAt: null,
+          documentType: { in: ['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { mediaAssetId: true, documentType: true },
+      })
       await this.notifications.publish({
         eventType: 'PURCHASE_ORDER_COMPLETED',
         source: { type: 'PURCHASE_ORDER', id: order.id },
@@ -1695,6 +1709,12 @@ export class PurchaseOrderMutationService {
           shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
+        media: completedDocuments.map(document => ({
+          assetId: document.mediaAssetId,
+          sourceKey: document.documentType === 'PAYMENT_VOUCHER'
+            ? 'purchase.paymentVoucher'
+            : 'purchase.deliveryReceipt',
+        })),
         dedupeKey: `purchase-order-completed:${order.id}`,
         priority: 'NORMAL',
         requestedByUserId: context.actorUserId,
