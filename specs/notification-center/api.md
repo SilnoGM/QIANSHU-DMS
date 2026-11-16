@@ -201,7 +201,7 @@ export interface SystemNotificationPublishResult {
 
 业务域用于站内通知的单列表筛选，统一为销售、采购、货件运输、财务、发票、对账、运营、系统八个域；没有事件的域保留筛选入口但返回空列表。`PURCHASE_PAYABLE_PENDING` 与包装、提现统一归财务域。`PURCHASE_PAYABLE_PENDING` 是待付款提醒（定金/尾款未付清），不依赖到期日，具体触发方式见 [事件规格](./events.md)。
 
-当前已扩展为 39 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
+当前已扩展为 40 个已接入事件，上表只保留首批目录。运营域新增 `MACHINE_VIEWING_APPOINTMENT_CREATED`、`PROXY_NODE_EXPIRING`、`ADVERTISING_RECHARGE_PAYMENT_PENDING`、`ADVERTISING_RECHARGE_PAID`、`ADVERTISING_RECHARGE_REJECTED`、`ADVERTISING_RECHARGE_VOIDED`；其余新增事件见 `GET /api/notifications/events` 返回值。
 
 表中「默认渠道」是阶段 3 的目标状态；阶段 1 只启用 `ASSISTANT` 与表中阶段为 1 的 3 个事件，`IN_APP` 渠道在阶段 1 没有配置行，发布时返回 `CHANNEL_NOT_CONFIGURED` 警告且不创建收件箱条目。
 
@@ -253,6 +253,19 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/notifications/records/options` | `notification-record:read` | `notifications_records_options` | 记录筛选用事件选项，只返回事件、中文名和业务域 |
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
+
+附件相关（一期）：
+
+| 方法 | 路径 | 鉴权 | operationId | 说明 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/public/notification-media/:token` | 无（HMAC token） | `notification_media_public_get` | 千树小助理图片取流；token 15 分钟有效 |
+| HEAD | `/api/public/notification-media/:token` | 无（HMAC token） | `notification_media_public_head` | 只返回图片头信息 |
+
+- 公开取流路由不参与 Session、权限与数据范围校验，失败统一 404 `NOTIFICATION_MEDIA_NOT_FOUND`；限流返回 429 `RATE_LIMITED`，存储不可用返回 503 `MEDIA_STORAGE_UNAVAILABLE`。
+- token 只能由派发器在发送时签发，绑定具体 `assistant_delivery_media` 行；不提供任何对外签发接口。
+- 模板创建/更新请求与响应新增 `mediaPolicy`：`{ enabled, maxCount, kinds, sources }`。`enabled=true` 时 `maxCount` 必须 1–3、`kinds` 只允许 `IMAGE`，`sources` 为事件声明的来源键（最多 20 个、单个 ≤64 字符，空数组表示全部来源），否则 422 `NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID`；站内渠道开启附件返回 422 `NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED`。
+- `GET /api/notifications/events` 每个事件新增 `media: { maxCount, kinds, sources: [{ key, label }] } | null`；`sources` 是模板来源选择的唯一选项来源。
+- 记录列表新增 `mediaCount`；详情新增 `media: [{ id, sortOrder, mediaType, mimeType, originalFilename, sizeBytes, sourceKey, sourceLabel, blockedReason }]`，交付项新增 `renderedContent`、`mediaTotal`、`mediaAccepted`、`mediaFailed`，交付状态新增 `PARTIAL`。
 
 记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `notificationNo`、`eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`notificationNo` 由 `NOTIFICATION_NO` 规则按 `NTF/YYYYMMDD-######` 发号，历史通知允许为空；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
 

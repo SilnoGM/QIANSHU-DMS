@@ -28,6 +28,9 @@ export interface NormalizedSalesOrderCustomerInput {
   readonly provinceStateId: string
   readonly cityId: string
   readonly addressDetail: string
+  /** 选填社交账号名称；空白输入统一归一为 null。 */
+  readonly fbName: string | null
+  readonly lineName: string | null
 }
 
 interface NormalizedSalesOrderLineBase {
@@ -124,6 +127,22 @@ function normalizeNullableText(
   return normalizeText(value, field, maximumCodePoints)
 }
 
+/** 选填字段：缺省、null、纯空白都视为未填写。 */
+function normalizeOptionalText(
+  value: unknown,
+  field: string,
+  maximumCodePoints: number,
+): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') return salesOrderValidationFailure(field)
+  const normalized = value.trim().normalize('NFKC')
+  if (normalized.length === 0) return null
+  if ([...normalized].length > maximumCodePoints) {
+    return salesOrderValidationFailure(field)
+  }
+  return normalized
+}
+
 function normalizeUuid(value: unknown, field: string): string {
   if (typeof value !== 'string' || !CANONICAL_UUID_V4_PATTERN.test(value)) {
     return salesOrderValidationFailure(field, '必须是规范的小写 UUID v4')
@@ -198,6 +217,8 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
     'provinceStateId',
     'cityId',
     'addressDetail',
+    'fbName',
+    'lineName',
   ], 'customer')
   if (typeof customer.addressDetail !== 'string') {
     return salesOrderValidationFailure('customer.addressDetail')
@@ -221,6 +242,8 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
     ),
     cityId: normalizeRegionUuid(customer.cityId, 'customer.cityId'),
     addressDetail,
+    fbName: normalizeOptionalText(customer.fbName, 'customer.fbName', 128),
+    lineName: normalizeOptionalText(customer.lineName, 'customer.lineName', 128),
   })
 }
 

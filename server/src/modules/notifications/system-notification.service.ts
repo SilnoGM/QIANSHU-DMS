@@ -1,10 +1,14 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import {
+  DISABLED_NOTIFICATION_MEDIA_POLICY,
+  parseNotificationMediaPolicy,
+} from './notification-media'
 import { renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
   hashNotificationNumberIdempotencyKey,
@@ -19,6 +23,7 @@ import {
   MAX_NOTIFICATION_VARIABLES,
   MAX_NOTIFICATION_VARIABLE_LENGTH,
   NOTIFICATION_EVENT_TYPES,
+  notificationEventMediaCapability,
   type NotificationChannel,
   type NotificationPublishWarningCode,
   type NotificationSkipReason,
@@ -37,6 +42,14 @@ interface ResolvedChannelResult {
   readonly skippedCount: number
   readonly skipReason?: NotificationSkipReason
 }
+
+interface NotificationMediaAttachment {
+  readonly mediaAssetId: string
+  readonly sortOrder: number
+}
+
+/** 非 UUID 输入不能进 SQL：PostgreSQL 会以 22P02 中止整个业务事务。 */
+const USER_SUPPLIED_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -227,6 +240,14 @@ export class SystemNotificationService {
       return { notificationId: notification.id, duplicated: false, channels: [], warnings }
     }
 
+    // 附件归属整条通知，与渠道循环分离：被策略拦下的附件也要留痕，供记录页排障。
+    const media = await this.prepareNotificationMedia(transaction, {
+      notificationId: notification.id,
+      command,
+      policies: selectedPolicies,
+      warnings,
+    })
+
     const channelResults: ResolvedChannelResult[] = []
     for (const policy of selectedPolicies) {
       const templateKey = this.resolveTemplateKey(policy.templateKey, command.templateKey)
@@ -296,6 +317,7 @@ export class SystemNotificationService {
         templateKey,
         templateVersion: template.version,
         content: render.content,
+        media,
         command,
         now,
         warnings,
@@ -438,6 +460,174 @@ export class SystemNotificationService {
     return { channel: 'IN_APP', status: 'CREATED', recipientCount: userIds.length, skippedCount: 0 }
   }
 
+  /**
+   * 裁决业务附件：模板策略、数量上限、资产状态与敏感开关都在这里统一处理。
+   *
+   * 被拦下的附件同样写入 `notification_media` 并记录原因；发布本身不抛异常，
+   * 保证通知配置问题不会回滚业务事务。
+   */
+  private async prepareNotificationMedia(
+    transaction: Transaction,
+    input: {
+      readonly notificationId: string
+      readonly command: SystemNotificationPublishCommand
+      readonly policies: readonly {
+        readonly channel: NotificationChannel
+        readonly templateKey: string | null
+        readonly allowSensitive: boolean
+      }[]
+      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
+    },
+  ): Promise<readonly NotificationMediaAttachment[]> {
+    const requested = this.uniqueMediaItems(input.command.media)
+    if (requested.length === 0) {
+      return []
+    }
+
+    const policy = input.policies.find(candidate => candidate.channel === 'ASSISTANT')
+    const templateKey = policy === undefined
+      ? null
+      : this.resolveTemplateKey(policy.templateKey, input.command.templateKey)
+    const template = templateKey === null
+      ? null
+      : await transaction.notificationTemplate.findUnique({
+        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
+        select: { enabled: true, mediaPolicy: true },
+      })
+    const mediaPolicy = template !== null && template.enabled
+      ? parseNotificationMediaPolicy(template.mediaPolicy)
+      : DISABLED_NOTIFICATION_MEDIA_POLICY
+    // 来源键必须由事件契约声明；模板再从中挑选真正要发的来源。
+    const declaredSources = new Set(
+      (notificationEventMediaCapability(input.command.eventType)?.sources ?? []).map(source => source.key),
+    )
+    const selectedSources = new Set(mediaPolicy.sources)
+
+    const queryable = requested
+      .map(item => item.assetId)
+      .filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
+    const assets = queryable.length === 0
+      ? []
+      : await transaction.mediaAsset.findMany({
+        where: { id: { in: queryable } },
+        select: { id: true, mediaType: true, status: true, deletedAt: true, objectKey: true },
+      })
+    const assetById = new Map(assets.map(asset => [asset.id, asset]))
+
+    const rows: Array<NotificationMediaAttachment & {
+      readonly sourceKey: string | null
+      readonly blockedReason: string | null
+    }> = []
+    let allowedCount = 0
+    requested.forEach((item, sortOrder) => {
+      const asset = assetById.get(item.assetId)
+      const sourceKey = item.sourceKey
+      let blockedReason: string | null = null
+      if (policy === undefined || templateKey === null) {
+        blockedReason = 'CHANNEL_DISABLED'
+      }
+      else if (template === null) {
+        blockedReason = 'TEMPLATE_NOT_FOUND'
+      }
+      else if (!template.enabled) {
+        blockedReason = 'TEMPLATE_DISABLED'
+      }
+      else if (!mediaPolicy.enabled) {
+        blockedReason = 'POLICY_DISABLED'
+      }
+      else if (!policy.allowSensitive) {
+        // 图片无法像文本变量一样脱敏，敏感内容策略不通过时只能整张不发。
+        blockedReason = 'SENSITIVE_BLOCKED'
+      }
+      else if (sourceKey !== null && (sourceKey.length > 64 || !declaredSources.has(sourceKey))) {
+        blockedReason = 'SOURCE_NOT_DECLARED'
+      }
+      else if (selectedSources.size > 0 && (sourceKey === null || !selectedSources.has(sourceKey))) {
+        blockedReason = 'SOURCE_NOT_SELECTED'
+      }
+      else if (allowedCount >= mediaPolicy.maxCount) {
+        blockedReason = 'LIMIT_EXCEEDED'
+      }
+      else if (asset === undefined) {
+        blockedReason = 'ASSET_NOT_FOUND'
+      }
+      else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+        blockedReason = 'ASSET_NOT_READY'
+      }
+      else if (!(mediaPolicy.kinds as readonly string[]).includes(asset.mediaType)) {
+        blockedReason = 'KIND_NOT_ALLOWED'
+      }
+      if (blockedReason === null) {
+        allowedCount += 1
+      }
+      rows.push({ mediaAssetId: item.assetId, sortOrder, sourceKey, blockedReason })
+    })
+
+    await transaction.notificationMedia.createMany({
+      data: rows.map(row => ({
+        notificationId: input.notificationId,
+        mediaAssetId: row.mediaAssetId,
+        sortOrder: row.sortOrder,
+        sourceKey: row.sourceKey,
+        blockedReason: row.blockedReason,
+      })),
+    })
+    const blocked = rows.filter(row => row.blockedReason !== null).length
+    if (blocked > 0) {
+      input.warnings.push({ code: 'MEDIA_ATTACHMENT_BLOCKED', message: `${blocked} 个附件未发送` })
+    }
+    return rows
+      .filter(row => row.blockedReason === null)
+      .map(row => ({ mediaAssetId: row.mediaAssetId, sortOrder: row.sortOrder }))
+  }
+
+  private uniqueMediaItems(
+    media: readonly { readonly assetId: string, readonly sourceKey?: string }[] | undefined,
+  ): Array<{ assetId: string, sourceKey: string | null }> {
+    if (media === undefined) {
+      return []
+    }
+    const seen = new Set<string>()
+    const result: Array<{ assetId: string, sourceKey: string | null }> = []
+    for (const item of media) {
+      const assetId = typeof item.assetId === 'string' ? item.assetId.trim() : ''
+      if (assetId.length === 0) {
+        continue
+      }
+      const rawSourceKey = typeof item.sourceKey === 'string' ? item.sourceKey.trim() : ''
+      const sourceKey = rawSourceKey.length === 0 ? null : rawSourceKey
+      const dedupeKey = JSON.stringify([assetId, sourceKey])
+      if (seen.has(dedupeKey)) {
+        continue
+      }
+      seen.add(dedupeKey)
+      result.push({ assetId, sourceKey })
+    }
+    return result
+  }
+
+  /** 只为真正会发送的投递创建附件项；已跳过或未绑定的投递不产生无意义的重试行。 */
+  private async createDeliveryMedia(
+    transaction: Transaction,
+    deliveries: readonly { readonly id: string, readonly status: 'PENDING' | 'SKIPPED' }[],
+    media: readonly NotificationMediaAttachment[],
+  ): Promise<void> {
+    if (media.length === 0) {
+      return
+    }
+    const sendable = deliveries.filter(delivery => delivery.status === 'PENDING')
+    if (sendable.length === 0) {
+      return
+    }
+    await transaction.assistantDeliveryMedia.createMany({
+      data: sendable.flatMap(delivery => media.map(item => ({
+        deliveryId: delivery.id,
+        mediaAssetId: item.mediaAssetId,
+        sortOrder: item.sortOrder,
+      }))),
+    })
+  }
+
   private async createAssistantDeliveries(
     transaction: Transaction,
     input: {
@@ -450,6 +640,7 @@ export class SystemNotificationService {
       readonly templateKey: string
       readonly templateVersion: number
       readonly content: string
+      readonly media: readonly NotificationMediaAttachment[]
       readonly command: SystemNotificationPublishCommand
       readonly now: Date
       readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
@@ -480,21 +671,25 @@ export class SystemNotificationService {
       }
 
       const skipped = targets.filter(target => input.policy.allowSensitive && !target.internalOnly).length
-      await tx.assistantDelivery.createMany({
-        data: targets.map(target => ({
+      const deliveries = targets.map(target => {
+        const sendable = !(input.policy.allowSensitive && !target.internalOnly)
+        return {
+          id: randomUUID(),
           notificationId: input.notificationId,
           recipientUserId: null,
           targetId: target.id,
           accountId: account.id,
-          status: input.policy.allowSensitive && !target.internalOnly ? 'SKIPPED' as const : 'PENDING' as const,
-          failureCode: input.policy.allowSensitive && !target.internalOnly ? 'TARGET_DISABLED' : null,
-          failureMessage: input.policy.allowSensitive && !target.internalOnly ? '群未标记为仅内部成员，敏感内容不发送' : null,
+          status: sendable ? 'PENDING' as const : 'SKIPPED' as const,
+          failureCode: sendable ? null : 'TARGET_DISABLED',
+          failureMessage: sendable ? null : '群未标记为仅内部成员，敏感内容不发送',
           templateKey: input.templateKey,
           templateVersion: input.templateVersion,
           renderedContent: input.content,
           nextAttemptAt: input.now,
-        })),
+        }
       })
+      await tx.assistantDelivery.createMany({ data: deliveries })
+      await this.createDeliveryMedia(tx, deliveries, input.media)
       if (skipped === targets.length) {
         input.warnings.push({ code: 'NO_RECIPIENT', message: '所有群目标都不允许接收敏感内容' })
         return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: targets.length, skippedCount: skipped, skipReason: 'TARGET_DISABLED' }
@@ -528,24 +723,25 @@ export class SystemNotificationService {
       }
     }
     const skipped = userIds.filter(userId => !bindingByUser.has(userId)).length
-    await tx.assistantDelivery.createMany({
-      data: userIds.map(userId => {
-        const accountId = bindingByUser.get(userId) ?? null
-        return {
-          notificationId: input.notificationId,
-          recipientUserId: userId,
-          targetId: null,
-          accountId,
-          status: accountId === null ? 'SKIPPED' as const : 'PENDING' as const,
-          failureCode: accountId === null ? 'NOT_BOUND' : null,
-          failureMessage: accountId === null ? '员工未完成已验证绑定' : null,
-          templateKey: input.templateKey,
-          templateVersion: input.templateVersion,
-          renderedContent: input.content,
-          nextAttemptAt: input.now,
-        }
-      }),
+    const deliveries = userIds.map(userId => {
+      const accountId = bindingByUser.get(userId) ?? null
+      return {
+        id: randomUUID(),
+        notificationId: input.notificationId,
+        recipientUserId: userId,
+        targetId: null,
+        accountId,
+        status: accountId === null ? 'SKIPPED' as const : 'PENDING' as const,
+        failureCode: accountId === null ? 'NOT_BOUND' : null,
+        failureMessage: accountId === null ? '员工未完成已验证绑定' : null,
+        templateKey: input.templateKey,
+        templateVersion: input.templateVersion,
+        renderedContent: input.content,
+        nextAttemptAt: input.now,
+      }
     })
+    await tx.assistantDelivery.createMany({ data: deliveries })
+    await this.createDeliveryMedia(tx, deliveries, input.media)
     if (skipped === userIds.length) {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都未完成绑定' })
       return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: skipped, skipReason: 'NOT_BOUND' }

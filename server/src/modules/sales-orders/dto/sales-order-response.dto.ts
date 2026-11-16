@@ -41,6 +41,12 @@ export class SalesOrderCustomerDto {
   @ApiProperty({ type: 'string' })
   readonly phone!: string
 
+  @ApiProperty({ type: 'string', nullable: true })
+  readonly fbName!: string | null
+
+  @ApiProperty({ type: 'string', nullable: true })
+  readonly lineName!: string | null
+
   @ApiProperty({ type: () => SalesOrderRegionSnapshotDto })
   readonly countryRegion!: SalesOrderRegionSnapshotDto
 

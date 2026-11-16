@@ -872,11 +872,15 @@ export async function runProductionBrowserRegionsE2e() {
       adminPassword: `Br-${randomBytes(9).toString('base64url')}!7`,
       hmacKeys: [0, 1, 2]
         .map(() => randomBytes(32).toString('base64url')),
+      notificationMediaSecret: randomBytes(32).toString('base64url'),
     }
     const sensitiveValues = [
       databaseUrl,
       new URL(databaseUrl).password,
       secrets.adminPassword,
+      ...(secrets.notificationMediaSecret === undefined
+        ? []
+        : [secrets.notificationMediaSecret]),
       ...secrets.hmacKeys,
     ]
     const plan = createBrowserRegionsPlan({

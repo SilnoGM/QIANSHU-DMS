@@ -7,10 +7,32 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
-  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest']
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+  })
+  it('retains a notification attachment until the notification retention window ends', async () => {
+    const notificationMedia = jest.fn().mockResolvedValue({ id: 'notification-media' })
+    const reader = {
+      productMedia: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) },
+      packagingCostRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      paymentRecipientAccount: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderPayment: { findFirst: jest.fn().mockResolvedValue(null) },
+      containerBatch: { findFirst: jest.fn().mockResolvedValue(null) },
+      slhBill: { findFirst: jest.fn().mockResolvedValue(null) },
+      invoiceRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      fundWithdrawalRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      userProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+      advertisingRechargeRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      notificationMedia: { findFirst: notificationMedia },
+    } as unknown as Prisma.TransactionClient
+    await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+    expect(notificationMedia).toHaveBeenCalledWith({ where: { mediaAssetId: ASSET_ID }, select: { id: true } })
   })
   it('protects a current purchase image draft after the review modal is closed', async () => {
     const draft = jest.fn().mockResolvedValue({ id: 'draft' })
@@ -83,6 +105,7 @@ describe('MediaAssetReferenceRepository', () => {
       'fund_withdrawal_requests',
       'user_profiles',
       'advertising_recharge_requests',
+      'notification_media',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -133,6 +156,7 @@ describe('MediaAssetReferenceRepository', () => {
       fundWithdrawalRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       userProfile: { findFirst: jest.fn().mockResolvedValue(null) },
       advertisingRechargeRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      notificationMedia: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

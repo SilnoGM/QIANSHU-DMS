@@ -189,6 +189,8 @@ export interface SalesOrderDetail {
   readonly customer: {
     readonly name: string
     readonly phone: string
+    readonly fbName: string | null
+    readonly lineName: string | null
     readonly countryRegion: { readonly id: string; readonly code: string; readonly name: string }
     readonly provinceState: { readonly id: string; readonly code: string; readonly name: string }
     readonly city: { readonly id: string; readonly code: string; readonly name: string }
@@ -623,6 +625,8 @@ function mapSalesOrderDetail(
     customer: {
       name: row.customerName,
       phone: row.customerPhone,
+      fbName: row.customerFbName,
+      lineName: row.customerLineName,
       countryRegion: {
         id: row.customerCountryRegionId,
         code: row.customerCountryRegionCodeSnapshot,

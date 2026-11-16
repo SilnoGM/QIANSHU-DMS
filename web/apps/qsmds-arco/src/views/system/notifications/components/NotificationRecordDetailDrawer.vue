@@ -53,6 +53,21 @@ const deliveries = computed(() => detail.value === null ? [] : sortRecordDeliver
 const deliveryStatuses = computed(() => detail.value === null ? [] : deliveryStatusEntries(detail.value))
 const assistantTotal = computed(() => detail.value === null ? 0 : deliveryTotal(detail.value.deliveryCounts))
 const inAppRead = computed(() => detail.value === null ? 0 : inAppReadCount(detail.value))
+
+/** 附件大小以字符串下发，避免 BigInt 序列化问题；这里只在展示层换算。 */
+function formatAttachmentSize(value: string): string {
+  const bytes = Number(value)
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '—'
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 const description = computed(() => detail.value === null
   ? '正在读取通知投递明细…'
   : `${detail.value.notificationNo ?? '历史通知'} · ${detail.value.eventLabel}`)
@@ -358,6 +373,7 @@ defineExpose({ reload })
             </div>
             <div class="qs-type-meta text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1">
               <span>尝试 {{ delivery.attemptCount }} 次</span>
+              <span v-if="delivery.mediaTotal > 0">附件 {{ delivery.mediaAccepted }}/{{ delivery.mediaTotal }} 已发送</span>
               <span v-if="delivery.acceptedAt !== null">
                 接受于 <DateTimeDisplay :value="delivery.acceptedAt" />
               </span>
@@ -365,6 +381,9 @@ defineExpose({ reload })
                 {{ delivery.failureCode }}
               </span>
             </div>
+            <p class="qs-type-meta m-0 mt-2 p-2 rounded bg-muted/30 whitespace-pre-wrap break-words">
+              {{ delivery.renderedContent }}
+            </p>
             <p v-if="delivery.templateKey !== detail.templateKey" class="qs-type-meta text-muted-foreground m-0 mt-1 break-all">
               实际模板：{{ delivery.templateKey }}
             </p>
@@ -380,6 +399,36 @@ defineExpose({ reload })
           description="这条通知没有生成小助理交付记录。"
           class="min-h-28"
         />
+      </section>
+
+      <section v-if="detail.media.length > 0" class="flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-baseline justify-between">
+          <h3 class="qs-type-body-medium m-0">
+            业务附件
+          </h3>
+          <span class="qs-type-meta text-muted-foreground">{{ detail.media.length }} 个</span>
+        </div>
+        <div class="flex flex-col gap-2">
+          <div
+            v-for="media in detail.media"
+            :key="media.id"
+            class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+          >
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <span class="qs-type-body-medium break-all">{{ media.originalFilename }}</span>
+              <span class="qs-type-meta text-muted-foreground">
+                {{ media.sourceLabel !== null ? `${media.sourceLabel} · ` : '' }}{{ media.mediaType }} · {{ media.mimeType ?? '未知类型' }} · {{ formatAttachmentSize(media.sizeBytes) }}
+              </span>
+            </div>
+            <FaTag
+              v-if="media.blockedReason !== null"
+              variant="outline"
+              class="text-amber-700 qs-type-status-tag border-amber-500/30 bg-amber-500/10 dark:text-amber-300"
+            >
+              未发送：{{ media.blockedReason }}
+            </FaTag>
+          </div>
+        </div>
       </section>
 
       <p class="qs-type-meta text-muted-foreground m-0 pt-3 border-t border-border">

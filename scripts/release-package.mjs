@@ -1176,7 +1176,8 @@ function sanitizedDatabaseEnv(sourceEnv, databaseUrl, extra = {}) {
 
 function createServerSmokeEnvironment(sourceEnv, databaseUrl) {
   const generatedKeys = new Set()
-  while (generatedKeys.size < serverSmokeHmacKeyNames.length) {
+  // 认证域三把 key 与通知媒体签名密钥必须两两不同，第四把同样由本次 smoke 独占生成。
+  while (generatedKeys.size < serverSmokeHmacKeyNames.length + 1) {
     generatedKeys.add(randomBytes(serverSmokeHmacKeyBytes).toString('base64url'))
   }
   const keys = [...generatedKeys]
@@ -1185,13 +1186,14 @@ function createServerSmokeEnvironment(sourceEnv, databaseUrl) {
   )
   /*
    * Release smoke 必须经过真实 production 配置校验，但绝不能依赖或继承部署
-   * 环境中的长期密钥。这里为一次 smoke 调用生成三把独立临时 key，并覆盖调用方
-   * 同名变量；migration 与随后所有端口重试复用同一份环境，既保持测试封闭，也
-   * 避免真实 Secret 被无意传播到 smoke 子进程。
+   * 环境中的长期密钥。这里为一次 smoke 调用生成四把独立临时 key（三把认证 key
+   * 与通知媒体签名密钥），并覆盖调用方同名变量；migration 与随后所有端口重试
+   * 复用同一份环境，既保持测试封闭，也避免真实 Secret 被无意传播到 smoke 子进程。
    */
   return Object.freeze(sanitizedDatabaseEnv(sourceEnv, databaseUrl, {
     NODE_ENV: 'production',
     APP_ORIGIN: serverSmokeAppOrigin,
+    NOTIFICATION_MEDIA_URL_SECRET: keys[serverSmokeHmacKeyNames.length],
     ...authenticationEnv,
   }))
 }

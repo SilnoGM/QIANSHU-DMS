@@ -101,6 +101,44 @@ describe('GeweAssistantTransport', () => {
     }
   })
 
+  it('sends postImage with the signed image URL', async () => {
+    const calls: Array<{ readonly input: RequestInfo | URL, readonly init?: RequestInit }> = []
+    const fetchImpl: typeof fetch = (input, init) => {
+      calls.push({ input, init })
+      return Promise.resolve(new Response(JSON.stringify({
+        ret: 200,
+        msg: '操作成功',
+        data: { msgId: 21, newMsgId: '9154432040' },
+      }), { status: 200 }))
+    }
+    const transport = new GeweAssistantTransport(configService(configuration()), {
+      fetchImpl,
+      lookup: publicLookup,
+    })
+
+    const result = await transport.sendImage({
+      appId: 'wx-app',
+      toWxid: 'wxid-user',
+      imageUrl: 'https://dms.example.com/api/public/notification-media/token-value',
+    })
+
+    expect(result).toEqual({ ok: true, msgId: '21', newMsgId: '9154432040' })
+    const input = calls[0]?.input
+    expect(input).toBeInstanceOf(URL)
+    if (input instanceof URL) {
+      expect(input.toString()).toBe('https://api.geweapi.com/gewe/v2/api/message/postImage')
+    }
+    const body = calls[0]?.init?.body
+    expect(typeof body).toBe('string')
+    if (typeof body === 'string') {
+      expect(JSON.parse(body)).toEqual({
+        appId: 'wx-app',
+        toWxid: 'wxid-user',
+        imgUrl: 'https://dms.example.com/api/public/notification-media/token-value',
+      })
+    }
+  })
+
   it('classifies an offline response', async () => {
     const transport = new GeweAssistantTransport(configService(configuration()), {
       fetchImpl: jsonFetch({ ret: 503, msg: '节点离线' }, 503),

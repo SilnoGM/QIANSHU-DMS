@@ -5,6 +5,7 @@ import { AssistantSendGateService } from './assistant-send-gate.service'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
 
 type SendTextInput = Parameters<AssistantTransport['sendText']>[0]
+type SendImageInput = Parameters<AssistantTransport['sendImage']>[0]
 
 /**
  * 所有生产 sendText 的统一出口。
@@ -21,5 +22,9 @@ export class GatedAssistantTransport implements AssistantTransport {
 
   sendText(input: SendTextInput): Promise<AssistantTransportResult> {
     return this.gate.run(() => this.delegate.sendText(input))
+  }
+
+  sendImage(input: SendImageInput): Promise<AssistantTransportResult> {
+    return this.gate.run(() => this.delegate.sendImage(input))
   }
 }

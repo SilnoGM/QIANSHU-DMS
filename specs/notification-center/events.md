@@ -17,6 +17,26 @@
 - 每个事件必须有唯一 `dedupeKey`；重复触发返回原通知，不重复发送。
 - 已实现事件允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
 - 文案中的 `{{变量}}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 附件来源必须使用事件契约声明的业务语义键；模板 `mediaPolicy.sources` 为空时发送该事件全部来源，非空时只发送选中的来源。单条通知最多 3 张图片，站内渠道不携带附件。
+- 未标注来源的历史调用在模板选择来源后会被 `SOURCE_NOT_SELECTED` 拦截；因此接入新事件时必须同时传 `sourceKey`。
+
+### 1.1 已接入的附件来源
+
+| 事件 | 来源键 | 发布时可用性 |
+| --- | --- | --- |
+| `SALES_RECEIPT_REVIEW_PENDING` / `APPROVED` / `REJECTED` | `salesReceipt.voucher` | 凭证在同一事务内先激活 |
+| `SALES_ORDER_SUBMITTED` | `salesOrder.issuanceVoucher` | 出单凭证在创建事务内先激活并关联 |
+| `PURCHASE_REVIEW_APPROVED` | `purchase.orderImage` | 审核图片先归档为采购单凭证 |
+| `FUND_WITHDRAWAL_APPROVED` | `fundWithdrawal.paymentProof` | 审批时上传付款截图后再发布 |
+| `INVOICE_REQUEST_ISSUED` / `SETTLED` | `invoice.document` | 上传发票照片即发布；结算沿用同一张 |
+| `PACKAGING_COST_PAID` | `packaging.paymentVoucher` / `packaging.packagingImage` / `packaging.quotationImage` | 付款凭证、包装图片、报价图片 |
+| `ADVERTISING_RECHARGE_PAYMENT_PENDING` | `advertising.qr` | 申请时上传的收款二维码 |
+| `ADVERTISING_RECHARGE_PAID` | `advertising.qr` / `advertising.proof` | 二维码与付款截图（可只发付款截图） |
+| `ADVERTISING_RECHARGE_REJECTED` / `VOIDED` | `advertising.qr` / `advertising.proof` | 取当前存在的来源，空值不传 |
+| `SHIPMENT_SIGNED` | `salesOrder.deliveryReceipt` | 签收前置要求签收单存在 |
+| `PURCHASE_ORDER_COMPLETED` | `purchase.paymentVoucher` / `purchase.deliveryReceipt` | 取当前有效的付款凭证与签收单 |
+
+明确不接入附件：`PURCHASE_REVIEW_PENDING`（审核图片尚未生成）、`PURCHASE_REVIEW_REJECTED`（驳回不归档图片）、`SALES_ORDER_COMPLETED`（避免与签收通知重复带同一张签收单）、销售单终止/采购取消（终态，低价值）、`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING`（跨多单汇总摘要，没有单一来源）、`SLH_RECONCILIATION_COMPLETED`（账单原件是 XLSX，不属于图片）、运输/寄仓/看机/代理/资金调整/小助理离线等无媒体事件。
 - 实际首批事件为采购审核、开票审核、货件到仓；`SLH_RECONCILIATION_COMPLETED` 章节保留为后续候选，当前没有业务发布点。
 - 站内模板通过 `20261108110000_notification_inbox_business_links` 接收业务标识变量：采购/到仓使用 `orderId`，开票使用 `invoiceRequestId`；详情链接分别打开采购、开票记录和到仓货件页面。
 
@@ -259,3 +279,24 @@
 - 事件中文名、模板业务域、默认模板键与是否已接入由服务端常量统一维护，管理端通过 `GET /api/notifications/events` 读取；新增事件时同步补 `NOTIFICATION_EVENT_LABELS`、`NOTIFICATION_EVENT_TEMPLATE_DOMAIN`、`NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY` 并确认 `IMPLEMENTED_NOTIFICATION_EVENT_TYPES`。
 - 文案修改走模板版本，不改 `eventType` 语义。
 - 新增事件前先确认收件人、变量、敏感标记、TTL 与文案；不要先写代码再补口径。
+
+## 8. `SALES_ORDER_SUBMITTED`
+
+新增页「确认提交订单」即触发，用于把订单信息与出单凭证推送到内部群。
+
+| 项目 | 内容 |
+| --- | --- |
+| 发布位置 | `SalesOrderCommandService.create()` 的 Serializable 事务内，凭证关联与审计写入之后 |
+| 事件类型 | `SALES_ORDER_SUBMITTED` |
+| 默认模板键 | `sales.order.submitted` |
+| 命令兜底目标 | `{ kind: 'USERS', userIds: [操作人] }`；实际发群由策略 `GROUP` 决定 |
+| 幂等键 | `sales-order-submitted:${salesOrderId}` |
+| 附件来源 | `salesOrder.issuanceVoucher`（出单凭证），发布时先 `activate` 后入队 |
+
+变量：`orderNo`、`orderId`、`customerName`（敏感）、`customerFbName`、`customerLineName`、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`issuerName`。客户 FB/LINE 名称均为选填，未填写时发布为空字符串。
+
+注意：
+
+- 订单在创建事务内直接是 `CONFIRMED`，没有草稿到提交的二次状态；重复请求走创建幂等早返回，不会重复发布。
+- 群目标必须 `internalOnly`，策略必须 `allowSensitive = true`，否则客户名/金额被脱敏、图片被 `SENSITIVE_BLOCKED` 拦下。
+- 该事件对每张新销售单都会发布；量大时需要评估群消息噪声与微信风控，后续如要「金额阈值/指定业务员才发」需要另加业务条件。

@@ -384,4 +384,203 @@ describe('SystemNotificationService.publish', () => {
       data: { status: 'COMPLETED', completedAt: expect.any(Date) },
     })
   })
+
+  describe('media attachments', () => {
+    const FIRST_ASSET = '11111111-1111-4111-8111-111111111111'
+    const SECOND_ASSET = '22222222-2222-4222-8222-222222222222'
+    const readyImage = (id: string) => ({
+      id,
+      mediaType: 'IMAGE',
+      status: 'READY',
+      deletedAt: null,
+      objectKey: `assets/sales/${id}.jpg`,
+    })
+
+    const mediaCommand: SystemNotificationPublishCommand = {
+      ...command,
+      eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+      templateKey: 'sales.receipt.pending',
+      target: { kind: 'USERS', userIds: ['user-1'] },
+      media: [{ assetId: FIRST_ASSET }, { assetId: SECOND_ASSET }],
+    }
+
+    function mediaTransaction(options: {
+      readonly mediaPolicy?: Record<string, unknown>
+      readonly allowSensitive?: boolean
+      readonly assets?: readonly Record<string, unknown>[]
+    } = {}) {
+      return {
+        notification: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'n-media' }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy({
+          allowSensitive: options.allowSensitive ?? true,
+          targetMode: 'COMMAND_TARGET',
+          targetConfig: {},
+        })]) },
+        notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+        notificationTemplate: {
+          findUnique: jest.fn().mockResolvedValue(template({
+            key: 'sales.receipt.pending',
+            bodyTemplate: '收款 {{collectionNo}} 待审核',
+            variables: [{ name: 'collectionNo', required: true }],
+            mediaPolicy: options.mediaPolicy ?? { enabled: true, maxCount: 2, kinds: ['IMAGE'] },
+          })),
+        },
+        mediaAsset: { findMany: jest.fn().mockResolvedValue(options.assets ?? [readyImage(FIRST_ASSET), readyImage(SECOND_ASSET)]) },
+        notificationMedia: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
+        $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+        assistantBinding: { findMany: jest.fn().mockResolvedValue([{ userId: 'user-1', accountId: 'account-1' }]) },
+        assistantDelivery: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+        },
+        assistantDeliveryMedia: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
+        notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+      }
+    }
+
+    const publishCommand: SystemNotificationPublishCommand = {
+      ...mediaCommand,
+      variables: { collectionNo: 'SK-1' },
+    }
+
+    it('persists allowed attachments and per-delivery items in publish order', async () => {
+      const transaction = mediaTransaction()
+      const service = createService({} as PrismaService)
+
+      const result = await service.publish(publishCommand, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: null },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: null },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { deliveryId: expect.any(String), mediaAssetId: FIRST_ASSET, sortOrder: 0 },
+          { deliveryId: expect.any(String), mediaAssetId: SECOND_ASSET, sortOrder: 1 },
+        ],
+      })
+      expect(result.warnings).toEqual([])
+    })
+
+    it('records blocked attachments instead of failing the notification', async () => {
+      const transaction = mediaTransaction({ mediaPolicy: {} })
+      const service = createService({} as PrismaService)
+
+      const result = await service.publish(publishCommand, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'POLICY_DISABLED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'POLICY_DISABLED' },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
+      expect(result.warnings).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'MEDIA_ATTACHMENT_BLOCKED' }),
+      ]))
+    })
+
+    it('blocks attachments when the policy does not allow sensitive content', async () => {
+      const transaction = mediaTransaction({ allowSensitive: false })
+      const service = createService({} as PrismaService)
+
+      await service.publish(publishCommand, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'SENSITIVE_BLOCKED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'SENSITIVE_BLOCKED' },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
+    })
+
+    it('never sends malformed asset ids to PostgreSQL', async () => {
+      const transaction = mediaTransaction({ assets: [] })
+      const service = createService({} as PrismaService)
+
+      await service.publish({
+        ...publishCommand,
+        media: [{ assetId: 'not-a-uuid' }],
+      }, { transaction: transaction as never })
+
+      expect(transaction.mediaAsset.findMany).not.toHaveBeenCalled()
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [{ notificationId: 'n-media', mediaAssetId: 'not-a-uuid', sortOrder: 0, sourceKey: null, blockedReason: 'ASSET_NOT_FOUND' }],
+      })
+    })
+
+    it('filters attachments by declared and selected sources', async () => {
+      const transaction = mediaTransaction({
+        mediaPolicy: {
+          enabled: true,
+          maxCount: 3,
+          kinds: ['IMAGE'],
+          sources: ['advertising.qr'],
+        },
+      })
+      const service = createService({} as PrismaService)
+
+      await service.publish({
+        ...publishCommand,
+        eventType: 'ADVERTISING_RECHARGE_PAID',
+        media: [
+          { assetId: FIRST_ASSET, sourceKey: 'advertising.qr' },
+          { assetId: SECOND_ASSET, sourceKey: 'advertising.proof' },
+          { assetId: FIRST_ASSET, sourceKey: 'unknown.source' },
+          { assetId: SECOND_ASSET },
+        ],
+      }, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: 'advertising.qr', blockedReason: null },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: 'advertising.proof', blockedReason: 'SOURCE_NOT_SELECTED' },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 2, sourceKey: 'unknown.source', blockedReason: 'SOURCE_NOT_DECLARED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 3, sourceKey: null, blockedReason: 'SOURCE_NOT_SELECTED' },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).toHaveBeenCalledWith({
+        data: [{ deliveryId: expect.any(String), mediaAssetId: FIRST_ASSET, sortOrder: 0 }],
+      })
+    })
+
+    it('keeps unlabelled attachments working when the template does not select sources', async () => {
+      const transaction = mediaTransaction()
+      const service = createService({} as PrismaService)
+
+      await service.publish({
+        ...publishCommand,
+        media: [{ assetId: FIRST_ASSET }],
+      }, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [{ notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: null }],
+      })
+    })
+
+    it('blocks attachments beyond the configured count and skips assets that are not ready', async () => {
+      const transaction = mediaTransaction({
+        mediaPolicy: { enabled: true, maxCount: 1, kinds: ['IMAGE'] },
+        assets: [{ ...readyImage(FIRST_ASSET), status: 'UPLOADING', objectKey: null }],
+      })
+      const service = createService({} as PrismaService)
+
+      await service.publish(publishCommand, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'ASSET_NOT_READY' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'ASSET_NOT_FOUND' },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
+    })
+  })
 })

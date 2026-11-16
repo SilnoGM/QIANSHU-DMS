@@ -17,6 +17,11 @@ import { useAppAuth } from '@/composables/app/auth'
 import EventConfigPanel from './components/EventConfigPanel.vue'
 import TemplateLibraryPanel from './components/TemplateLibraryPanel.vue'
 import { buildTemplateUsageCounts, templateUsageCount } from './event-config.logic'
+import {
+  templateEventFromSelection,
+  templateEventSelection,
+  templateEventSelectOptions,
+} from './template-event-selection.logic'
 import { TEMPLATE_DOMAIN_OPTIONS, templateDomainLabel } from './template-key-grouping.logic'
 import { extractTemplatePlaceholders, insertTextAtSelection } from './template-variable.logic'
 
@@ -93,6 +98,11 @@ const templateDraft = ref({
   bodyTemplate: '',
   linkUrlTemplate: '',
   variables: [] as TemplateVariableDraft[],
+  mediaPolicy: {
+    enabled: false,
+    maxCount: 1,
+    sources: [] as string[],
+  },
   maxLength: 2000,
   enabled: true,
   expectedVersion: 1,
@@ -133,13 +143,28 @@ const templateDraftUsage = computed(() => templateUsageCount(usage.value, templa
 const templateEvent = computed(() => templateEventType.value === ''
   ? null
   : events.value.find(event => event.eventType === templateEventType.value) ?? null)
-const templateEventOptions = computed(() => [
-  { label: '不指定事件', value: '' },
-  ...events.value.map(event => ({
-    label: `${event.label}（${event.eventType}）`,
-    value: event.eventType,
-  })),
-])
+const templateEventOptions = computed(() => templateEventSelectOptions(events.value))
+
+const templateEventSources = computed(() => templateEvent.value?.media?.sources ?? [])
+
+// reka-ui 的 SelectItem 不接受空字符串 value；空事件通过哨兵值参与下拉绑定。
+const templateEventSelectValue = computed({
+  get: () => templateEventSelection(templateEventType.value),
+  set: (value: unknown) => {
+    templateEventType.value = templateEventFromSelection(value)
+    // 换事件后只保留新事件声明的来源，避免保存下无法命中的旧键。
+    const declared = new Set(templateEventSources.value.map(source => source.key))
+    templateDraft.value.mediaPolicy.sources = templateDraft.value.mediaPolicy.sources
+      .filter(key => declared.has(key))
+  },
+})
+
+function toggleMediaSource(key: string): void {
+  const sources = templateDraft.value.mediaPolicy.sources
+  templateDraft.value.mediaPolicy.sources = sources.includes(key)
+    ? sources.filter(item => item !== key)
+    : [...sources, key]
+}
 const templateVariableDefinitions = computed(() => templateEvent.value?.variableDefinitions ?? [])
 const filteredTemplateVariableDefinitions = computed(() => {
   const normalized = templateVariableSearch.value.trim().toLowerCase()
@@ -495,6 +520,11 @@ function openCreateTemplate(): void {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+      sources: [] as string[],
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -522,6 +552,11 @@ function openCreateTemplateForChannel(payload: {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+      sources: [] as string[],
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -550,6 +585,11 @@ function openCreateTemplateFromEvent(payload: {
     bodyTemplate: '',
     linkUrlTemplate: '',
     variables: [],
+    mediaPolicy: {
+      enabled: false,
+      maxCount: 1,
+      sources: [] as string[],
+    },
     maxLength: 2000,
     enabled: true,
     expectedVersion: 1,
@@ -578,6 +618,12 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
       maxLength: variable.maxLength ?? 200,
       sensitive: variable.sensitive ?? false,
     })),
+    // 一期只支持图片；站内渠道即使有历史配置也按关闭展示，保存时会再次被服务端拒绝。
+    mediaPolicy: {
+      enabled: template.mediaPolicy.enabled && template.channel === 'ASSISTANT',
+      maxCount: Math.min(3, Math.max(1, template.mediaPolicy.maxCount || 1)),
+      sources: [...template.mediaPolicy.sources],
+    },
     maxLength: template.maxLength,
     enabled: template.enabled,
     expectedVersion: template.version,
@@ -633,8 +679,22 @@ const canSaveTemplate = computed(() => {
     && Number.isInteger(templateDraft.value.maxLength)
     && templateDraft.value.maxLength >= 1
     && templateDraft.value.maxLength <= 5000
-    && templateVariableError.value === null
+    && (!templateDraft.value.mediaPolicy.enabled
+      || (Number.isInteger(templateDraft.value.mediaPolicy.maxCount)
+        && templateDraft.value.mediaPolicy.maxCount >= 1
+        && templateDraft.value.mediaPolicy.maxCount <= 3))
+      && templateVariableError.value === null
 })
+
+function templateMediaPolicyPayload(): { enabled: boolean, maxCount: number, kinds: ('IMAGE')[], sources: string[] } {
+  const enabled = templateDraft.value.channel === 'ASSISTANT' && templateDraft.value.mediaPolicy.enabled
+  return {
+    enabled,
+    maxCount: enabled ? templateDraft.value.mediaPolicy.maxCount : 0,
+    kinds: enabled ? ['IMAGE'] : [],
+    sources: enabled ? [...templateDraft.value.mediaPolicy.sources] : [],
+  }
+}
 
 async function saveTemplate(): Promise<void> {
   busy.value = true
@@ -650,6 +710,7 @@ async function saveTemplate(): Promise<void> {
         titleTemplate: templateDraft.value.titleTemplate || null,
         linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
+        mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
       })
@@ -662,6 +723,7 @@ async function saveTemplate(): Promise<void> {
         titleTemplate: templateDraft.value.titleTemplate || null,
         linkUrlTemplate: templateDraft.value.linkUrlTemplate || null,
         variables,
+        mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
         enabled: templateDraft.value.enabled,
         expectedVersion: templateDraft.value.expectedVersion,
@@ -903,7 +965,7 @@ onMounted(() => {
               </div>
             </template>
             <template v-else>
-              <FaSelect v-model="templateEventType" class="w-full" :options="templateEventOptions" />
+              <FaSelect v-model="templateEventSelectValue" class="w-full" :options="templateEventOptions" />
               <span class="qs-type-meta text-muted-foreground">用于展示可用变量；模板仍可按 Key 被多个事件绑定。</span>
             </template>
           </label>
@@ -949,6 +1011,47 @@ onMounted(() => {
             <FaInput v-model="templateDraft.linkUrlTemplate" class="w-full" placeholder="/operations/purchase-orders/{{ orderId }}" />
             <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
           </label>
+
+          <div v-if="templateDraft.channel === 'ASSISTANT'" class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2">
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+              <span class="qs-type-compact-label">业务附件（图片）</span>
+              <label class="flex gap-2 items-center">
+                <FaSwitch v-model="templateDraft.mediaPolicy.enabled" />
+                随通知发送
+              </label>
+            </div>
+            <div v-if="templateDraft.mediaPolicy.enabled" class="flex flex-wrap gap-2 items-center">
+              <span class="qs-type-meta text-muted-foreground">最多张数</span>
+              <FaInput v-model.number="templateDraft.mediaPolicy.maxCount" class="w-24" type="number" min="1" max="3" />
+              <span class="qs-type-meta text-muted-foreground">张（1–3）</span>
+            </div>
+            <div v-if="templateDraft.mediaPolicy.enabled" class="flex flex-col gap-1.5">
+              <span class="qs-type-meta text-muted-foreground">附件来源（不选＝该事件的全部来源）</span>
+              <div v-if="templateEventSources.length > 0" class="flex flex-wrap gap-2">
+                <FaButton
+                  v-for="source in templateEventSources"
+                  :key="source.key"
+                  variant="outline"
+                  size="sm"
+                  :class="templateDraft.mediaPolicy.sources.includes(source.key)
+                    ? 'text-primary border-primary/30 bg-primary/10 hover:bg-primary/20'
+                    : ''"
+                  @click="toggleMediaSource(source.key)"
+                >
+                  {{ source.label }}
+                </FaButton>
+              </div>
+              <span v-else class="qs-type-meta text-muted-foreground">
+                当前事件还没有声明附件来源：请先在上方选择「适用事件」。
+              </span>
+              <span v-if="templateDraft.mediaPolicy.sources.length > 0" class="qs-type-meta text-muted-foreground">
+                只发送选中的来源；其他来源仍会入库并在记录中标记「来源未选择」。
+              </span>
+            </div>
+            <span class="qs-type-meta text-muted-foreground">
+              业务发布时随事件携带的图片：正文先发，图片按顺序逐张发送。图片按敏感内容处理，策略未允许敏感内容时整张不发。
+            </span>
+          </div>
         </section>
 
         <section class="flex flex-col gap-3 min-h-0">

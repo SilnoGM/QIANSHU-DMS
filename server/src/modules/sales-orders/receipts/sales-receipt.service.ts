@@ -245,6 +245,8 @@ export class SalesReceiptService {
             receivedAt: formatNotificationDateTime(row.receivedAt),
             remark: row.remark ?? '',
           },
+          // 凭证已在本次事务内激活为 READY；这里只传资产 ID，是否真正发送由模板附件策略裁决。
+          media: [{ assetId: row.voucherMediaAssetId, sourceKey: 'salesReceipt.voucher' }],
           dedupeKey: `sales-receipt-review:${row.id}:v${row.version}`,
           requestedByUserId: context.actorUserId,
         }, { transaction: tx })
@@ -322,6 +324,7 @@ export class SalesReceiptService {
             receivedAt: formatNotificationDateTime(row.receivedAt),
             remark: row.remark ?? '',
           },
+          media: [{ assetId: row.voucherMediaAssetId, sourceKey: 'salesReceipt.voucher' }],
           dedupeKey: `sales-receipt-approved:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,
@@ -359,6 +362,7 @@ export class SalesReceiptService {
           reason: reviewRemark,
           remark: row.remark ?? '',
         },
+        media: [{ assetId: row.voucherMediaAssetId, sourceKey: 'salesReceipt.voucher' }],
         dedupeKey: `sales-receipt-rejected:${id}:v${row.version + 1}`,
         requestedByUserId: context.actorUserId,
       }, { transaction: tx })

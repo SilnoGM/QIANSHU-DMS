@@ -513,6 +513,7 @@ export class InvoiceRequestService {
             invoiceRequestId: id,
             occurredAt: notificationTime(uploadedAt),
           },
+          media: [{ assetId: mediaAssetId, sourceKey: 'invoice.document' }],
           dedupeKey: `invoice-issued:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,
@@ -591,6 +592,9 @@ export class InvoiceRequestService {
             occurredAt: notificationTime(settledAt),
             settleAmountCny: amount,
           },
+          media: row.documentMediaAssetId === null
+            ? []
+            : [{ assetId: row.documentMediaAssetId, sourceKey: 'invoice.document' }],
           dedupeKey: `invoice-settled:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,

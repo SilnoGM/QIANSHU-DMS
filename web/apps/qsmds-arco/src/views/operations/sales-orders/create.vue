@@ -444,6 +444,12 @@ function formFieldForError(path: string): string {
   if (path === 'customer.phone') {
     return 'customerPhone'
   }
+  if (path === 'customer.fbName') {
+    return 'customerFbName'
+  }
+  if (path === 'customer.lineName') {
+    return 'customerLineName'
+  }
   if (
     path === 'customer.countryRegionId'
     || path === 'customer.provinceStateId'
@@ -1327,6 +1333,24 @@ onBeforeUnmount(() => {
                     autocomplete="tel"
                     class="w-full"
                     @update:model-value="clearFeedback('customer.phone')"
+                  />
+                </FaFormItem>
+                <FaFormItem name="customerFbName" label="客户FB名称">
+                  <FaInput
+                    v-model="formModel.customerFbName"
+                    maxlength="128"
+                    class="w-full"
+                    placeholder="选填"
+                    @update:model-value="clearFeedback('customer.fbName')"
+                  />
+                </FaFormItem>
+                <FaFormItem name="customerLineName" label="客户LINE名称">
+                  <FaInput
+                    v-model="formModel.customerLineName"
+                    maxlength="128"
+                    class="w-full"
+                    placeholder="选填"
+                    @update:model-value="clearFeedback('customer.lineName')"
                   />
                 </FaFormItem>
                 <FaFormItem

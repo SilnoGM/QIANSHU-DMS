@@ -1,4 +1,10 @@
 import type { Prisma } from '../../generated/prisma/client'
+import {
+  MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+  NOTIFICATION_MEDIA_ALLOWED_KINDS,
+  type NotificationMediaInput,
+  type NotificationMediaKind,
+} from './notification-media'
 
 export const NOTIFICATION_EVENT_TYPES = [
   'PURCHASE_REVIEW_PENDING',
@@ -32,6 +38,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'ADVERTISING_RECHARGE_PAID',
   'ADVERTISING_RECHARGE_REJECTED',
   'ADVERTISING_RECHARGE_VOIDED',
+  'SALES_ORDER_SUBMITTED',
   'SALES_ORDER_COMPLETED',
   'PURCHASE_ORDER_COMPLETED',
   'SHIPMENT_SIGNED',
@@ -105,6 +112,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   ADVERTISING_RECHARGE_PAID: 'operations',
   ADVERTISING_RECHARGE_REJECTED: 'operations',
   ADVERTISING_RECHARGE_VOIDED: 'operations',
+  SALES_ORDER_SUBMITTED: 'sales',
   SALES_ORDER_COMPLETED: 'sales',
   PURCHASE_ORDER_COMPLETED: 'purchase',
   SHIPMENT_SIGNED: 'shipment',
@@ -147,6 +155,7 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   ADVERTISING_RECHARGE_PAID: '广告充值已付款',
   ADVERTISING_RECHARGE_REJECTED: '广告充值驳回',
   ADVERTISING_RECHARGE_VOIDED: '广告充值作废',
+  SALES_ORDER_SUBMITTED: '销售订单提交',
   SALES_ORDER_COMPLETED: '销售订单完成',
   PURCHASE_ORDER_COMPLETED: '采购订单完成',
   SHIPMENT_SIGNED: '货件签收',
@@ -190,6 +199,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   ADVERTISING_RECHARGE_PAID: 'OPERATIONS',
   ADVERTISING_RECHARGE_REJECTED: 'OPERATIONS',
   ADVERTISING_RECHARGE_VOIDED: 'OPERATIONS',
+  SALES_ORDER_SUBMITTED: 'SALES',
   SALES_ORDER_COMPLETED: 'SALES',
   PURCHASE_ORDER_COMPLETED: 'PURCHASE',
   SHIPMENT_SIGNED: 'SHIPMENT',
@@ -236,6 +246,7 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'SALES_ORDER_COMPLETED',
   'PURCHASE_ORDER_COMPLETED',
   'SHIPMENT_SIGNED',
+  'SALES_ORDER_SUBMITTED',
   'SALES_ORDER_TERMINATED',
   'FUND_ACCOUNT_ADJUSTED',
   'PROXY_NODE_EXPIRED',
@@ -276,6 +287,7 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   ADVERTISING_RECHARGE_PAID: 'operations.advertising-recharge.paid',
   ADVERTISING_RECHARGE_REJECTED: 'operations.advertising-recharge.rejected',
   ADVERTISING_RECHARGE_VOIDED: 'operations.advertising-recharge.voided',
+  SALES_ORDER_SUBMITTED: 'sales.order.submitted',
   SALES_ORDER_COMPLETED: 'sales.order.completed',
   PURCHASE_ORDER_COMPLETED: 'purchase.order.completed',
   SHIPMENT_SIGNED: 'shipment.signed',
@@ -356,6 +368,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   ADVERTISING_RECHARGE_PAID: ['rechargeNo', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_REJECTED: ['rechargeNo', 'reason', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_VOIDED: ['rechargeNo', 'reason', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
+  SALES_ORDER_SUBMITTED: ['orderNo', 'orderId', 'customerName', 'customerFbName', 'customerLineName', 'orderDate', 'agreedTotalAmount', 'currencyCode', 'lineCount', 'issuerName'],
   SALES_ORDER_COMPLETED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
   PURCHASE_ORDER_COMPLETED: ['orderNo', 'vendorName', 'occurredAt', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
   SHIPMENT_SIGNED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
@@ -366,11 +379,142 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
 })
 
+/**
+ * 已验收过附件能力的事件清单，服务管理端提示、模板来源选择与来源键校验。
+ *
+ * 是否真的发送附件仍由模板的 `mediaPolicy` 决定；来源键必须在这里声明，
+ * 业务乱传的键会在发布时被拦下并留痕。
+ */
+export interface NotificationEventMediaSource {
+  /** 稳定的业务语义键，禁止直接使用数据库字段名。 */
+  readonly key: string
+  readonly label: string
+}
+
+export interface NotificationEventMediaCapability {
+  readonly maxCount: number
+  readonly kinds: readonly NotificationMediaKind[]
+  readonly sources: readonly NotificationEventMediaSource[]
+}
+
+const SALES_RECEIPT_VOUCHER_SOURCE: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'salesReceipt.voucher', label: '收款凭证' }),
+])
+const INVOICE_DOCUMENT_SOURCE: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'invoice.document', label: '发票照片' }),
+])
+const ADVERTISING_SOURCES: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'advertising.qr', label: '收款二维码' }),
+  Object.freeze({ key: 'advertising.proof', label: '付款截图' }),
+])
+
+export const NOTIFICATION_EVENT_MEDIA: Readonly<Partial<Record<NotificationEventType, NotificationEventMediaCapability>>> = Object.freeze({
+  SALES_RECEIPT_REVIEW_PENDING: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  SALES_RECEIPT_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  SALES_RECEIPT_REJECTED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  PURCHASE_REVIEW_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'purchase.orderImage', label: '采购单图片' }),
+    ]),
+  }),
+  FUND_WITHDRAWAL_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'fundWithdrawal.paymentProof', label: '付款截图' }),
+    ]),
+  }),
+  INVOICE_REQUEST_ISSUED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: INVOICE_DOCUMENT_SOURCE,
+  }),
+  INVOICE_REQUEST_SETTLED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: INVOICE_DOCUMENT_SOURCE,
+  }),
+  PACKAGING_COST_PAID: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'packaging.paymentVoucher', label: '付款截图' }),
+      Object.freeze({ key: 'packaging.packagingImage', label: '包装图片' }),
+      Object.freeze({ key: 'packaging.quotationImage', label: '报价图片' }),
+    ]),
+  }),
+  ADVERTISING_RECHARGE_PAYMENT_PENDING: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'advertising.qr', label: '收款二维码' }),
+    ]),
+  }),
+  ADVERTISING_RECHARGE_PAID: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  ADVERTISING_RECHARGE_REJECTED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  ADVERTISING_RECHARGE_VOIDED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  SALES_ORDER_SUBMITTED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'salesOrder.issuanceVoucher', label: '出单凭证' }),
+    ]),
+  }),
+  SHIPMENT_SIGNED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'salesOrder.deliveryReceipt', label: '签收单' }),
+    ]),
+  }),
+  PURCHASE_ORDER_COMPLETED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'purchase.paymentVoucher', label: '付款凭证' }),
+      Object.freeze({ key: 'purchase.deliveryReceipt', label: '签收单' }),
+    ]),
+  }),
+})
+
 export function notificationEventVariables(eventType: string): readonly string[] | null {
   if (!Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_VARIABLES, eventType)) {
     return null
   }
   return NOTIFICATION_EVENT_VARIABLES[eventType as NotificationEventType] ?? null
+}
+
+export function notificationEventMediaCapability(eventType: string): NotificationEventMediaCapability | null {
+  if (!Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_MEDIA, eventType)) {
+    return null
+  }
+  return NOTIFICATION_EVENT_MEDIA[eventType as NotificationEventType] ?? null
 }
 
 export interface NotificationVariableDefinition {
@@ -436,7 +580,7 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
   lineCount: {
     name: 'lineCount',
     label: '明细行数',
-    description: '采购单或开票申请的明细行数。',
+    description: '单据的明细行数（采购单、开票申请或销售单）。',
     example: '3',
     sensitive: false,
     maxLength: 16,
@@ -621,6 +765,33 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     sensitive: true,
     maxLength: 128,
     required: true,
+  },
+  issuerName: {
+    name: 'issuerName',
+    label: '业务员',
+    description: '销售单出单员工的展示名。',
+    example: '李四',
+    sensitive: false,
+    maxLength: 128,
+    required: false,
+  },
+  customerFbName: {
+    name: 'customerFbName',
+    label: '客户FB名称',
+    description: '销售单客户 Facebook 名称；未填写时为空字符串。',
+    example: 'Wang Xiao Ming',
+    sensitive: false,
+    maxLength: 128,
+    required: false,
+  },
+  customerLineName: {
+    name: 'customerLineName',
+    label: '客户LINE名称',
+    description: '销售单客户 LINE 名称；未填写时为空字符串。',
+    example: 'wangxm',
+    sensitive: false,
+    maxLength: 128,
+    required: false,
   },
   requestCount: {
     name: 'requestCount',
@@ -985,7 +1156,7 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
   orderDate: {
     name: 'orderDate',
     label: '下单日期',
-    description: '采购单的下单日期，按 Asia/Shanghai 格式化。',
+    description: '单据的下单日期（采购单/销售单），按 Asia/Shanghai 格式化。',
     example: '2026-11-12',
     sensitive: false,
     maxLength: 32,
@@ -1108,6 +1279,11 @@ export interface SystemNotificationPublishCommand {
   readonly target: NotificationTarget
   readonly templateKey: string
   readonly variables: Readonly<Record<string, string | number | null>>
+  /**
+   * 业务附件（一期仅图片）。这里只接收资产 ID：媒体是否可用、模板是否允许、
+   * 数量上限都在发布事务内统一裁决，业务模块不感知渠道与投递细节。
+   */
+  readonly media?: readonly NotificationMediaInput[]
   readonly dedupeKey?: string
   /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准。 */
   readonly priority?: NotificationPriority
@@ -1138,6 +1314,7 @@ export type NotificationPublishWarningCode =
   | 'SENSITIVE_VARIABLE_MASKED'
   | 'NO_RECIPIENT'
   | 'DUPLICATE_IGNORED'
+  | 'MEDIA_ATTACHMENT_BLOCKED'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel
@@ -1182,6 +1359,15 @@ export interface AssistantTransport {
     readonly toWxid: string
     readonly content: string
     readonly ats?: string
+  }): Promise<AssistantTransportResult>
+  /**
+   * 图片消息由上游按 URL 拉取，调用方必须在发送时现签一个短时效地址。
+   * 与 `sendText` 共用同一把返回结构与失败分类，便于派发器复用重试策略。
+   */
+  sendImage(input: {
+    readonly appId: string
+    readonly toWxid: string
+    readonly imageUrl: string
   }): Promise<AssistantTransportResult>
 }
 

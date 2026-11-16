@@ -30,6 +30,7 @@ function setup() {
     },
     shipmentClaimLine: { findMany: jest.fn() },
     purchaseOrderStatusHistory: { create: jest.fn().mockResolvedValue({}) },
+    purchaseOrderDocument: { findMany: jest.fn().mockResolvedValue([]) },
     auditEvent: { findFirst: jest.fn().mockResolvedValue(null) },
   }
   const prisma = { $transaction: jest.fn().mockImplementation((run: (transaction: typeof tx) => Promise<unknown>) => run(tx)) }

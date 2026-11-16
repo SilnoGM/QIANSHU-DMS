@@ -229,7 +229,8 @@ const enableAppSetting = import.meta.env.VITE_APP_SETTING
           </div>
           <RouterView v-slot="{ Component, route }">
             <!-- 默认不缓存页面；直接渲染可避免离场过渡卡住或新旧页面重叠。 -->
-            <Component :is="Component" v-show="!(isIframe || isLink)" :key="route.fullPath" />
+            <!-- 页面组件多为「页头 + 内容」的多根结构，v-show 对 fragment 无效，因此用 v-if 让 iframe/外链路由真正替换页面。 -->
+            <Component :is="Component" v-if="!(isIframe || isLink)" :key="route.fullPath" />
           </RouterView>
           <IframeView v-show="isIframe && !isLink" />
           <LinkView v-if="isLink" />

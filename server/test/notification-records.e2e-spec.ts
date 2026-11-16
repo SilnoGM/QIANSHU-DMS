@@ -159,7 +159,7 @@ describe('Notification records API with PostgreSQL', () => {
     const options = await browser
       .get('/api/notifications/records/options')
       .expect(200)
-    expect(options.body.events).toHaveLength(39)
+    expect(options.body.events).toHaveLength(40)
 
     const now = Date.now()
     const list = await browser

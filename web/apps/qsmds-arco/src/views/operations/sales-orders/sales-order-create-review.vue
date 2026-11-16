@@ -32,6 +32,8 @@ const basicItems = computed<DescriptionItem[]>(() => [
 const customerItems = computed<DescriptionItem[]>(() => [
   { label: '客户姓名', value: displayText(props.model.customerName) },
   { label: '客户电话', value: displayText(props.model.customerPhone) },
+  { label: '客户FB名称', value: displayText(props.model.customerFbName) },
+  { label: '客户LINE名称', value: displayText(props.model.customerLineName) },
   {
     label: '三级地区',
     value: props.model.regionNames.length === 0

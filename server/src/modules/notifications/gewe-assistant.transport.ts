@@ -14,6 +14,7 @@ import type { AssistantTransport, AssistantTransportResult } from './notificatio
 import { ASSISTANT_TRANSPORT_OPTIONS } from './notification.types'
 
 const POST_TEXT_PATH = '/gewe/v2/api/message/postText'
+const POST_IMAGE_PATH = '/gewe/v2/api/message/postImage'
 
 interface AssistantTransportOptions {
   readonly fetchImpl?: typeof fetch
@@ -21,11 +22,14 @@ interface AssistantTransportOptions {
 }
 
 /**
- * GeWe 文字消息适配器。
+ * GeWe 消息适配器（文本与图片）。
  *
  * 只负责一次 HTTP 调用与响应分类，不做重试、限速或状态更新；生产注入的是
  * GatedAssistantTransport，由它在调用本适配器前串行化并执行全局最小间隔。
  * Token 只从配置读取，不进入日志、异常消息或返回值。
+ *
+ * 图片是「按 URL 由上游拉取」的能力：调用方必须在发送时现签短时效地址，
+ * 不允许把长期可访问链接写进模板或投递内容。
  */
 @Injectable()
 export class GeweAssistantTransport implements AssistantTransport {
@@ -46,17 +50,33 @@ export class GeweAssistantTransport implements AssistantTransport {
     readonly content: string
     readonly ats?: string
   }): Promise<AssistantTransportResult> {
+    return this.post(POST_TEXT_PATH, {
+      appId: input.appId,
+      toWxid: input.toWxid,
+      content: input.content,
+      ...(input.ats !== undefined ? { ats: input.ats } : {}),
+    })
+  }
+
+  async sendImage(input: {
+    readonly appId: string
+    readonly toWxid: string
+    readonly imageUrl: string
+  }): Promise<AssistantTransportResult> {
+    return this.post(POST_IMAGE_PATH, {
+      appId: input.appId,
+      toWxid: input.toWxid,
+      imgUrl: input.imageUrl,
+    })
+  }
+
+  private async post(path: string, body: Record<string, unknown>): Promise<AssistantTransportResult> {
     const config = this.configService.get<AssistantConfiguration>('assistant')
     if (config === undefined) {
       return { ok: false, kind: 'REJECTED', code: 'ASSISTANT_TOKEN_MISSING', message: '未配置 ASSISTANT_GEWE_TOKEN' }
     }
 
-    const result = await postAssistantJson(config, POST_TEXT_PATH, {
-      appId: input.appId,
-      toWxid: input.toWxid,
-      content: input.content,
-      ...(input.ats !== undefined ? { ats: input.ats } : {}),
-    }, {
+    const result = await postAssistantJson(config, path, body, {
       fetchImpl: this.fetchImpl,
       lookup: this.lookup,
     })

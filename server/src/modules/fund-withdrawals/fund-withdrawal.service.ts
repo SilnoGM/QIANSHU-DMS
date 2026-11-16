@@ -364,6 +364,7 @@ export class FundWithdrawalService {
             occurredAt: formatNotificationDateTime(new Date()),
             withdrawalNo: row.withdrawalNo,
           },
+          media: [{ assetId: input.paymentProofMediaAssetId, sourceKey: 'fundWithdrawal.paymentProof' }],
           dedupeKey: `fund-withdrawal-approved:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,

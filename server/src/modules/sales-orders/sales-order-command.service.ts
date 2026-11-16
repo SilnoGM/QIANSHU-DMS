@@ -20,6 +20,8 @@ import {
   NUMBERING_ERROR_CODES,
   NumberingGenerationError,
 } from '../numbering/numbering.errors'
+import { noopSystemNotifications } from '../notifications/noop-system-notification'
+import { SystemNotificationService } from '../notifications/system-notification.service'
 import { normalizeSalesOrderAddress } from './domain/sales-order-address'
 import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
 import {
@@ -227,6 +229,7 @@ export class SalesOrderCommandService {
     @Optional()
     @Inject(SALES_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderCommandServiceDependencies> = {},
+    private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -318,6 +321,8 @@ export class SalesOrderCommandService {
             currencyCode: command.currencyCode,
             customerName: command.customer.name,
             customerPhone: command.customer.phone,
+            customerFbName: command.customer.fbName,
+            customerLineName: command.customer.lineName,
             customerCountryRegionId: effective.countryRegion.id,
             customerProvinceStateId: effective.provinceState.id,
             customerCityId: effective.city.id,
@@ -395,6 +400,36 @@ export class SalesOrderCommandService {
             documentCount: 1,
           },
         })
+        const issuer = await transaction.user.findUnique({
+          where: { id: trusted.actorUserId },
+          select: { displayName: true },
+        })
+        await this.notifications.publish({
+          eventType: 'SALES_ORDER_SUBMITTED',
+          source: { type: 'SALES_ORDER', id: created.id },
+          // 兜底目标：策略配置为 GROUP 时由渠道策略决定实际群目标。
+          target: { kind: 'USERS', userIds: [trusted.actorUserId] },
+          templateKey: 'sales.order.submitted',
+          variables: {
+            orderNo: issuance.number,
+            orderId: created.id,
+            customerName: command.customer.name,
+            orderDate: command.orderDate,
+            agreedTotalAmount: command.agreedTotalAmount,
+            currencyCode: command.currencyCode,
+            lineCount: String(command.lines.length),
+            issuerName: issuer?.displayName ?? '—',
+            customerFbName: command.customer.fbName ?? '',
+            customerLineName: command.customer.lineName ?? '',
+          },
+          // 出单凭证在同一事务内先激活为 READY，这里只传资产与来源键。
+          media: [{
+            assetId: command.issuanceVoucher.mediaAssetId,
+            sourceKey: 'salesOrder.issuanceVoucher',
+          }],
+          dedupeKey: `sales-order-submitted:${created.id}`,
+          requestedByUserId: trusted.actorUserId,
+        }, { transaction })
         return created.id
       }, { isolationLevel: 'Serializable' })
       return this.query.getById(salesOrderId, trusted.actorUserId)

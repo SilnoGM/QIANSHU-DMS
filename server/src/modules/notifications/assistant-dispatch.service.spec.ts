@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config'
 import type { AssistantConfiguration } from '../../config/assistant.config'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AssistantDispatchService } from './assistant-dispatch.service'
+import type { AssistantMediaUrlService } from './assistant-media-url'
 import { FakeAssistantTransport } from './fake-assistant.transport'
 
 const configuration: AssistantConfiguration = {
@@ -16,12 +17,98 @@ const configuration: AssistantConfiguration = {
   minSendIntervalMs: 3_000,
 }
 
-function service(prisma: Record<string, unknown>): AssistantDispatchService {
+function service(
+  prisma: Record<string, unknown>,
+  transport: FakeAssistantTransport = new FakeAssistantTransport(),
+): AssistantDispatchService {
   return new AssistantDispatchService(
     prisma as unknown as PrismaService,
     { get: () => configuration } as unknown as ConfigService,
-    new FakeAssistantTransport(),
+    transport,
+    { sign: (id: string) => `https://dms.example.com/api/public/notification-media/${id}` } as unknown as AssistantMediaUrlService,
   )
+}
+
+function claimedDelivery(overrides: Record<string, unknown> = {}) {
+  return {
+    account_id: 'account-1',
+    attempt_count: 0,
+    content_sent_at: null,
+    id: 'delivery-1',
+    notification_id: 'notification-1',
+    recipient_user_id: 'user-1',
+    rendered_content: '正文',
+    target_id: null,
+    ...overrides,
+  }
+}
+
+function mediaItem(overrides: Record<string, unknown> = {}) {
+  return {
+    attemptCount: 0,
+    id: 'delivery-media-1',
+    mediaAssetId: '11111111-1111-4111-8111-111111111111',
+    nextAttemptAt: new Date(Date.now() - 1_000),
+    sortOrder: 0,
+    status: 'PENDING',
+    ...overrides,
+  }
+}
+
+/** dispatchDelivery 的私有依赖：只覆盖它实际读写的表。 */
+function deliveryPrisma(options: {
+  readonly contentSentAt?: Date | null
+  readonly mediaFirst?: readonly Record<string, unknown>[]
+  readonly mediaFinal?: readonly Record<string, unknown>[]
+}) {
+  const deliveryMediaFindMany = jest.fn()
+    .mockResolvedValueOnce(options.mediaFirst ?? [])
+    .mockResolvedValueOnce(options.mediaFinal ?? [])
+  return {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'assistant-dispatch' }]),
+    notification: {
+      findUnique: jest.fn().mockResolvedValue({
+        eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+        expiresAt: new Date(Date.now() + 3_600_000),
+        id: 'notification-1',
+        priority: 'NORMAL',
+      }),
+      update: jest.fn(),
+    },
+    notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(null) },
+    assistantAccount: {
+      findUnique: jest.fn().mockResolvedValue({
+        appId: 'wx-app',
+        enabled: true,
+        id: 'account-1',
+        name: '公司号',
+        status: 'ONLINE',
+      }),
+      update: jest.fn(),
+    },
+    assistantBinding: { findFirst: jest.fn().mockResolvedValue({ wxid: 'wxid-user' }) },
+    assistantDelivery: {
+      update: jest.fn().mockResolvedValue({}),
+      groupBy: jest.fn().mockResolvedValue([{ _count: { _all: 1 }, status: 'ACCEPTED' }]),
+    },
+    assistantDeliveryMedia: {
+      findMany: deliveryMediaFindMany,
+      update: jest.fn().mockResolvedValue({}),
+    },
+    notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+  }
+}
+
+async function runDelivery(
+  prisma: Record<string, unknown>,
+  transport: FakeAssistantTransport,
+  delivery: Record<string, unknown>,
+): Promise<void> {
+  const instance = service(prisma, transport)
+  const dispatch = (instance as unknown as {
+    dispatchDelivery: (row: Record<string, unknown>, quietHours: null) => Promise<void>
+  }).dispatchDelivery
+  await dispatch.call(instance, delivery, null)
 }
 
 describe('AssistantDispatchService', () => {
@@ -239,5 +326,96 @@ describe('AssistantDispatchService', () => {
         status: 'FAILED',
       }),
     }))
+  })
+
+  describe('media attachments', () => {
+    it('sends the text once and then every attachment in order', async () => {
+      const first = mediaItem({ id: 'media-1', sortOrder: 0 })
+      const second = mediaItem({
+        id: 'media-2',
+        mediaAssetId: '22222222-2222-4222-8222-222222222222',
+        sortOrder: 1,
+      })
+      const prisma = deliveryPrisma({
+        mediaFirst: [first, second],
+        mediaFinal: [
+          { status: 'ACCEPTED', nextAttemptAt: new Date() },
+          { status: 'ACCEPTED', nextAttemptAt: new Date() },
+        ],
+      })
+      const transport = new FakeAssistantTransport()
+
+      await runDelivery(prisma, transport, claimedDelivery())
+
+      expect(transport.calls).toEqual([{ appId: 'wx-app', content: '正文', toWxid: 'wxid-user' }])
+      expect(transport.imageCalls).toEqual([
+        { appId: 'wx-app', imageUrl: 'https://dms.example.com/api/public/notification-media/media-1', toWxid: 'wxid-user' },
+        { appId: 'wx-app', imageUrl: 'https://dms.example.com/api/public/notification-media/media-2', toWxid: 'wxid-user' },
+      ])
+      expect(prisma.assistantDelivery.update).toHaveBeenCalledWith({
+        where: { id: 'delivery-1' },
+        data: {
+          contentSentAt: expect.any(Date),
+          attemptCount: { increment: 1 },
+          providerMsgId: 'fake-msg-id',
+          providerNewMsgId: 'fake-new-msg-id',
+          failureCode: null,
+          failureMessage: null,
+        },
+      })
+      expect(prisma.assistantDelivery.update).toHaveBeenLastCalledWith({
+        where: { id: 'delivery-1' },
+        data: { status: 'ACCEPTED', acceptedAt: expect.any(Date), failureCode: null, failureMessage: null },
+      })
+      expect(prisma.assistantDeliveryMedia.update).toHaveBeenCalledTimes(2)
+    })
+
+    it('retries only the failed attachment after the text was already sent', async () => {
+      const prisma = deliveryPrisma({
+        mediaFirst: [mediaItem({ id: 'media-2', sortOrder: 1 })],
+        mediaFinal: [
+          { status: 'ACCEPTED', nextAttemptAt: new Date() },
+          { status: 'FAILED', nextAttemptAt: new Date() },
+        ],
+      })
+      const transport = new FakeAssistantTransport([], [{
+        ok: false,
+        kind: 'REJECTED',
+        code: 'ASSISTANT_REJECTED_400',
+        message: '图片不可下载',
+      }])
+
+      await runDelivery(prisma, transport, claimedDelivery({ content_sent_at: new Date() }))
+
+      expect(transport.calls).toEqual([])
+      expect(transport.imageCalls).toHaveLength(1)
+      expect(prisma.assistantDelivery.update).toHaveBeenLastCalledWith({
+        where: { id: 'delivery-1' },
+        data: {
+          status: 'PARTIAL',
+          acceptedAt: null,
+          failureCode: 'MEDIA_ATTACHMENT_FAILED',
+          failureMessage: '1 个附件未发送',
+        },
+      })
+    })
+
+    it('does not touch attachments when the text itself fails', async () => {
+      const prisma = deliveryPrisma({ mediaFirst: [mediaItem()] })
+      const transport = new FakeAssistantTransport([{
+        ok: false,
+        kind: 'NETWORK',
+        code: 'ASSISTANT_NETWORK_ERROR',
+        message: '网络错误',
+      }])
+
+      await runDelivery(prisma, transport, claimedDelivery())
+
+      expect(transport.imageCalls).toEqual([])
+      expect(prisma.assistantDeliveryMedia.findMany).not.toHaveBeenCalled()
+      expect(prisma.assistantDelivery.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ status: 'PENDING' }),
+      }))
+    })
   })
 })

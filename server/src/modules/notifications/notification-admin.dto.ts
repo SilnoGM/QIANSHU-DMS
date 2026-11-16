@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsISO8601,
@@ -30,6 +31,17 @@ export class NotificationEventVariableDto {
   @ApiProperty() required!: boolean
 }
 
+export class NotificationEventMediaSourceDto {
+  @ApiProperty() key!: string
+  @ApiProperty() label!: string
+}
+
+export class NotificationEventMediaDto {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 3 }) maxCount!: number
+  @ApiProperty({ enum: ['IMAGE'], isArray: true }) kinds!: string[]
+  @ApiProperty({ type: () => [NotificationEventMediaSourceDto] }) sources!: NotificationEventMediaSourceDto[]
+}
+
 export class NotificationEventDto {
   @ApiProperty() eventType!: string
   @ApiProperty() label!: string
@@ -39,6 +51,22 @@ export class NotificationEventDto {
   @ApiProperty() variablesKnown!: boolean
   @ApiProperty({ type: 'string', nullable: true }) defaultTemplateKey!: string | null
   @ApiProperty() implemented!: boolean
+  /** 已验收过附件能力的事件返回上限与类型；空表示该事件未接入附件。 */
+  @ApiProperty({ type: () => NotificationEventMediaDto, nullable: true }) media!: NotificationEventMediaDto | null
+}
+
+export class NotificationTemplateMediaPolicyDto {
+  @ApiProperty() enabled!: boolean
+  @ApiProperty({ type: 'integer', minimum: 0, maximum: 3 }) maxCount!: number
+  @ApiProperty({ enum: ['IMAGE'], isArray: true }) kinds!: string[]
+  @ApiProperty({ type: [String], description: '允许的附件来源键；空表示不区分来源' }) sources!: string[]
+}
+
+export class NotificationTemplateMediaPolicyInputDto {
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 3 }) @IsOptional() @IsInt() @Min(1) @Max(3) maxCount?: number
+  @ApiPropertyOptional({ enum: ['IMAGE'], isArray: true }) @IsOptional() @IsArray() @IsIn(['IMAGE'], { each: true }) kinds?: ('IMAGE')[]
+  @ApiPropertyOptional({ type: [String], maxItems: 20 }) @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @Matches(/^[A-Za-z0-9._-]+$/u, { each: true }) @MaxLength(64, { each: true }) sources?: string[]
 }
 
 export class NotificationTemplateVariableDto {
@@ -58,6 +86,7 @@ export class NotificationTemplateDto {
   @ApiProperty() bodyTemplate!: string
   @ApiProperty({ type: 'string', nullable: true }) linkUrlTemplate!: string | null
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) variables!: NotificationTemplateVariableDto[]
+  @ApiProperty({ type: () => NotificationTemplateMediaPolicyDto }) mediaPolicy!: NotificationTemplateMediaPolicyDto
   @ApiProperty({ type: 'integer' }) maxLength!: number
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer' }) version!: number
@@ -74,6 +103,7 @@ export class NotificationTemplateCreateDto {
   @ApiProperty() @IsString() @Matches(/\S/u) bodyTemplate!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables!: NotificationTemplateVariableDto[]
+  @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000, default: 2000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() enabled?: boolean
 }
@@ -85,6 +115,7 @@ export class NotificationTemplateUpdateDto {
   @ApiPropertyOptional() @IsOptional() @IsString() bodyTemplate?: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
   @ApiPropertyOptional({ type: () => [NotificationTemplateVariableDto] }) @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables?: NotificationTemplateVariableDto[]
+  @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
   @ApiProperty({ type: 'integer', minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
@@ -163,12 +194,33 @@ export class NotificationDeliveryDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ type: 'string', nullable: true }) recipientName!: string | null
   @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
-  @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
+  @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
   @ApiProperty({ type: 'integer' }) attemptCount!: number
   @ApiProperty() templateKey!: string
+  @ApiProperty({ description: '实际发送的正文快照' }) renderedContent!: string
+  @ApiProperty({ type: 'integer', description: '该投递的附件项总数' }) mediaTotal!: number
+  @ApiProperty({ type: 'integer', description: '已接受的附件项数' }) mediaAccepted!: number
+  @ApiProperty({ type: 'integer', description: '永久失败或过期的附件项数' }) mediaFailed!: number
   @ApiProperty({ type: 'string', nullable: true }) failureCode!: string | null
   @ApiProperty({ type: 'string', nullable: true }) failureMessage!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) acceptedAt!: string | null
+}
+
+export class NotificationRecordMediaDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'integer' }) sortOrder!: number
+  @ApiProperty() mediaType!: string
+  @ApiProperty({ type: 'string', nullable: true }) mimeType!: string | null
+  @ApiProperty() originalFilename!: string
+  @ApiProperty({ type: 'string', description: '字节数，避免 BigInt 序列化问题' }) sizeBytes!: string
+  @ApiProperty({ type: 'string', nullable: true, description: '业务语义来源键；历史附件为空' }) sourceKey!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: '来源中文名；历史附件为空' }) sourceLabel!: string | null
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    description: '非空表示附件被模板策略或校验拦截，未进入投递',
+  })
+  blockedReason!: string | null
 }
 
 export class NotificationRecordDto {
@@ -190,6 +242,7 @@ export class NotificationRecordDto {
   @ApiProperty({ type: 'integer', description: '站内收件箱条目数' }) inAppItemCount!: number
   @ApiProperty({ type: 'integer', description: '站内未读条目数' }) inAppUnreadCount!: number
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '小助理 AssistantDelivery 按状态计数' }) deliveryCounts!: Record<string, number>
+  @ApiProperty({ type: 'integer', description: '业务附件数量（含被策略拦截的）' }) mediaCount!: number
 }
 
 export class NotificationRecordPageDto {
@@ -201,6 +254,7 @@ export class NotificationRecordPageDto {
 
 export class NotificationRecordDetailDto extends NotificationRecordDto {
   @ApiProperty({ type: () => [NotificationDeliveryDto] }) deliveries!: NotificationDeliveryDto[]
+  @ApiProperty({ type: () => [NotificationRecordMediaDto] }) media!: NotificationRecordMediaDto[]
 }
 
 export class NotificationCancelResultDto {

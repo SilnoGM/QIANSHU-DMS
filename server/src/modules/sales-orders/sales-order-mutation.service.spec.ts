@@ -73,6 +73,8 @@ function setup() {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       create: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'document-id' }),
+      findMany: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue([]),
     },
     mediaAsset: {
       findFirst: jest.fn<Promise<unknown>, [unknown]>()

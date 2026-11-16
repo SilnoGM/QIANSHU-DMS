@@ -79,6 +79,8 @@ interface LockedRow {
   readonly paymentAmountCny: Prisma.Decimal | null
   readonly fundPostingBatchId: string | null
   readonly applicantName: string
+  readonly paymentQrMediaAssetId: string | null
+  readonly paymentProofMediaAssetId: string | null
 }
 
 @Injectable()
@@ -267,6 +269,7 @@ export class AdvertisingRechargeService {
             rechargeNo: created.rechargeNo,
             status: advertisingRechargeStatusLabel('PENDING'),
           },
+          media: qrMediaAssetId === null ? [] : [{ assetId: qrMediaAssetId, sourceKey: 'advertising.qr' }],
           dedupeKey: `advertising-recharge-pending:${created.id}:v${created.version}`,
           requestedByUserId: context.actorUserId,
         }, { transaction })
@@ -364,6 +367,10 @@ export class AdvertisingRechargeService {
             rechargeNo: row.rechargeNo,
             status: advertisingRechargeStatusLabel('REJECTED'),
           },
+          media: [
+            ...(row.paymentQrMediaAssetId === null ? [] : [{ assetId: row.paymentQrMediaAssetId, sourceKey: 'advertising.qr' }]),
+            ...(row.paymentProofMediaAssetId === null ? [] : [{ assetId: row.paymentProofMediaAssetId, sourceKey: 'advertising.proof' }]),
+          ],
           dedupeKey: `advertising-recharge-rejected:${id}:v${row.version + 1}`,
           requestedByUserId: context.actorUserId,
         }, { transaction })
@@ -487,6 +494,10 @@ export class AdvertisingRechargeService {
             rechargeNo: row.rechargeNo,
             status: advertisingRechargeStatusLabel('PAID'),
           },
+          media: [
+            ...(row.paymentQrMediaAssetId === null ? [] : [{ assetId: row.paymentQrMediaAssetId, sourceKey: 'advertising.qr' }]),
+            { assetId: proofMediaAssetId, sourceKey: 'advertising.proof' },
+          ],
           dedupeKey: `advertising-recharge-paid:${id}:v${row.version + 1}`,
           priority: 'NORMAL',
           requestedByUserId: context.actorUserId,
@@ -592,6 +603,10 @@ export class AdvertisingRechargeService {
             rechargeNo: row.rechargeNo,
             status: advertisingRechargeStatusLabel('VOIDED'),
           },
+          media: [
+            ...(row.paymentQrMediaAssetId === null ? [] : [{ assetId: row.paymentQrMediaAssetId, sourceKey: 'advertising.qr' }]),
+            ...(row.paymentProofMediaAssetId === null ? [] : [{ assetId: row.paymentProofMediaAssetId, sourceKey: 'advertising.proof' }]),
+          ],
           dedupeKey: `advertising-recharge-voided:${id}:v${row.version + 1}`,
           requestedByUserId: context.actorUserId,
         }, { transaction })
@@ -624,6 +639,8 @@ export class AdvertisingRechargeService {
         rechargeCurrency: true,
         paymentAmountCny: true,
         fundPostingBatchId: true,
+        paymentQrMediaAssetId: true,
+        paymentProofMediaAssetId: true,
         applicant: { select: { displayName: true } },
       },
     })
@@ -643,6 +660,8 @@ export class AdvertisingRechargeService {
       paymentAmountCny: row.paymentAmountCny,
       fundPostingBatchId: row.fundPostingBatchId,
       applicantName: row.applicant.displayName,
+      paymentQrMediaAssetId: row.paymentQrMediaAssetId,
+      paymentProofMediaAssetId: row.paymentProofMediaAssetId,
     }
   }
 

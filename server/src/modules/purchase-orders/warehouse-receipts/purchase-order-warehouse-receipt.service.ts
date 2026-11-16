@@ -206,6 +206,15 @@ export class PurchaseOrderWarehouseReceiptService {
       requestedByUserId: context.actorUserId,
     }, { transaction })
     if (order.orderStatus !== 'COMPLETED' && orderStatus === 'COMPLETED') {
+      const completedDocuments = await transaction.purchaseOrderDocument.findMany({
+        where: {
+          purchaseOrderId: order.id,
+          detachedAt: null,
+          documentType: { in: ['PAYMENT_VOUCHER', 'DELIVERY_RECEIPT'] },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { mediaAssetId: true, documentType: true },
+      })
       await this.notifications.publish({
         eventType: 'PURCHASE_ORDER_COMPLETED',
         source: { type: 'PURCHASE_ORDER', id: order.id },
@@ -220,6 +229,12 @@ export class PurchaseOrderWarehouseReceiptService {
           shippingMark: order.shippingMarkText ?? '—',
           vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
         },
+        media: completedDocuments.map(document => ({
+          assetId: document.mediaAssetId,
+          sourceKey: document.documentType === 'PAYMENT_VOUCHER'
+            ? 'purchase.paymentVoucher'
+            : 'purchase.deliveryReceipt',
+        })),
         dedupeKey: `purchase-order-completed:${order.id}`,
         priority: 'NORMAL',
         requestedByUserId: context.actorUserId,

@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config'
 import type { AssistantConfiguration } from '../../config/assistant.config'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { AssistantMediaUrlService } from './assistant-media-url'
+import { MAX_NOTIFICATION_MEDIA_ATTACHMENTS } from './notification-media'
 import {
   isWithinQuietHours,
   nextQuietHoursEnd,
@@ -44,6 +46,16 @@ interface ClaimedDelivery {
   readonly account_id: string | null
   readonly attempt_count: number
   readonly rendered_content: string
+  readonly content_sent_at: Date | null
+}
+
+interface DeliveryMediaItem {
+  readonly id: string
+  readonly mediaAssetId: string
+  readonly sortOrder: number
+  readonly status: 'PENDING' | 'SENDING' | 'ACCEPTED' | 'PARTIAL' | 'FAILED' | 'SKIPPED' | 'EXPIRED' | 'CANCELLED'
+  readonly attemptCount: number
+  readonly nextAttemptAt: Date
 }
 
 function sleep(ms: number): Promise<void> {
@@ -69,6 +81,7 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport,
+    private readonly mediaUrl: AssistantMediaUrlService,
     private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
 
@@ -215,7 +228,8 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
                 d."target_id",
                 d."account_id",
                 d."attempt_count",
-                d."rendered_content"
+                d."rendered_content",
+                d."content_sent_at"
     `)
   }
 
@@ -282,18 +296,23 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       return
     }
 
-    const result = await this.transport.sendText({
-      appId: account.appId,
-      toWxid,
-      content: delivery.rendered_content,
-    })
-    if (result.ok) {
+    // 正文只在第一次成功时发送；此后的重试只补未完成的附件项，避免重复发文本。
+    if (delivery.content_sent_at === null) {
+      const result = await this.transport.sendText({
+        appId: account.appId,
+        toWxid,
+        content: delivery.rendered_content,
+      })
+      if (!result.ok) {
+        await this.handleFailure(delivery, result, notification.expiresAt, account.name)
+        await this.refreshNotificationStatus(notification.id)
+        return
+      }
       await this.prisma.assistantDelivery.update({
         where: { id: delivery.id },
         data: {
-          status: 'ACCEPTED',
+          contentSentAt: new Date(),
           attemptCount: { increment: 1 },
-          acceptedAt: new Date(),
           providerMsgId: result.msgId,
           providerNewMsgId: result.newMsgId,
           failureCode: null,
@@ -304,12 +323,162 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         where: { id: account.id },
         data: { status: 'ONLINE', lastOnlineAt: new Date(), lastErrorCode: null, lastErrorMessage: null },
       })
-      await this.refreshNotificationStatus(notification.id)
+    }
+
+    const mediaItems = await this.prisma.assistantDeliveryMedia.findMany({
+      where: { deliveryId: delivery.id },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        mediaAssetId: true,
+        sortOrder: true,
+        status: true,
+        attemptCount: true,
+        nextAttemptAt: true,
+      },
+    })
+    await this.dispatchDeliveryMedia(delivery, notification, mediaItems, account.appId, toWxid, account.name)
+    await this.finalizeDelivery(delivery.id)
+    await this.refreshNotificationStatus(notification.id)
+  }
+
+  /**
+   * 逐项发送附件；每项独立重试预算。
+   *
+   * 发送前重新取一次派发租约：一张图的最坏耗时是「请求超时 + 全局最小间隔」，
+   * 多张时累计可能超过单次租约，不能靠最初那次租约覆盖整条投递。
+   */
+  private async dispatchDeliveryMedia(
+    delivery: ClaimedDelivery,
+    notification: { readonly id: string, readonly expiresAt: Date | null },
+    items: readonly DeliveryMediaItem[],
+    appId: string,
+    toWxid: string,
+    accountName: string | null,
+  ): Promise<void> {
+    for (const item of items) {
+      if (item.status !== 'PENDING' || item.nextAttemptAt.getTime() > Date.now()) {
+        continue
+      }
+      if (notification.expiresAt !== null && notification.expiresAt.getTime() <= Date.now()) {
+        await this.prisma.assistantDeliveryMedia.update({
+          where: { id: item.id },
+          data: { status: 'EXPIRED', failureCode: 'EXPIRED', failureMessage: '通知已过期' },
+        })
+        continue
+      }
+      if (!await this.acquireLease(this.resolveLeaseTtlMs())) {
+        this.logger.warn('assistant dispatch lease lost during media batch')
+        break
+      }
+
+      // 每次发送都现签，绝不复用上一轮的链接。
+      const imageUrl = this.mediaUrl.sign(item.id)
+      const result = await this.transport.sendImage({ appId, toWxid, imageUrl })
+      if (result.ok) {
+        await this.prisma.assistantDeliveryMedia.update({
+          where: { id: item.id },
+          data: {
+            status: 'ACCEPTED',
+            attemptCount: { increment: 1 },
+            acceptedAt: new Date(),
+            providerMsgId: result.msgId,
+            providerNewMsgId: result.newMsgId,
+            failureCode: null,
+            failureMessage: null,
+          },
+        })
+        continue
+      }
+
+      await this.handleMediaFailure(delivery, item, result, notification.expiresAt, accountName)
+    }
+  }
+
+  private async handleMediaFailure(
+    delivery: ClaimedDelivery,
+    item: DeliveryMediaItem,
+    result: Extract<AssistantTransportResult, { ok: false }>,
+    expiresAt: Date | null,
+    accountName: string | null,
+  ): Promise<void> {
+    const retryable = result.kind === 'TIMEOUT'
+      || result.kind === 'NETWORK'
+      || result.kind === 'RATE_LIMITED'
+      || result.kind === 'OFFLINE'
+    const delays = result.kind === 'OFFLINE' ? OFFLINE_RETRY_DELAYS_MS : RETRY_DELAYS_MS
+    const attempt = item.attemptCount + 1
+    const delay = result.kind === 'RATE_LIMITED'
+      ? RATE_LIMIT_RETRY_MS
+      : delays[Math.min(attempt - 1, delays.length - 1)] ?? 120_000
+    const nextAttemptAt = new Date(Date.now() + delay)
+    const expired = expiresAt !== null && nextAttemptAt.getTime() >= expiresAt.getTime()
+    const finalFailure = !retryable || attempt >= MAX_ATTEMPTS || expired
+
+    if (result.kind === 'OFFLINE') {
+      await this.recordAccountOffline(delivery, result, accountName)
+    }
+
+    await this.prisma.assistantDeliveryMedia.update({
+      where: { id: item.id },
+      data: {
+        status: finalFailure ? (expired ? 'EXPIRED' : 'FAILED') : 'PENDING',
+        attemptCount: { increment: 1 },
+        nextAttemptAt: finalFailure ? undefined : nextAttemptAt,
+        failureCode: result.code,
+        failureMessage: result.message.slice(0, 255),
+      },
+    })
+  }
+
+  /**
+   * 汇总投递状态：附件仍有待发项就回到 PENDING，全部成功才 ACCEPTED，
+   * 正文已发但附件永久失败落 PARTIAL——不能让「图没发出去」显示成完全成功。
+   */
+  private async finalizeDelivery(deliveryId: string): Promise<void> {
+    const items = await this.prisma.assistantDeliveryMedia.findMany({
+      where: { deliveryId },
+      select: { status: true, nextAttemptAt: true },
+    })
+    if (items.length === 0) {
+      await this.prisma.assistantDelivery.update({
+        where: { id: deliveryId },
+        data: { status: 'ACCEPTED', acceptedAt: new Date(), failureCode: null, failureMessage: null },
+      })
       return
     }
 
-    await this.handleFailure(delivery, result, notification.expiresAt, account.name)
-    await this.refreshNotificationStatus(notification.id)
+    const pending = items.filter(item => item.status === 'PENDING' || item.status === 'SENDING')
+    if (pending.length > 0) {
+      const nextAttemptAt = pending.reduce(
+        (earliest, item) => (item.nextAttemptAt.getTime() < earliest.getTime() ? item.nextAttemptAt : earliest),
+        pending[0]?.nextAttemptAt ?? new Date(),
+      )
+      await this.prisma.assistantDelivery.update({
+        where: { id: deliveryId },
+        data: { status: 'PENDING', nextAttemptAt, acceptedAt: null },
+      })
+      return
+    }
+
+    const failed = items.filter(item => item.status === 'FAILED' || item.status === 'EXPIRED')
+    if (failed.length > 0) {
+      await this.prisma.assistantDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: 'PARTIAL',
+          acceptedAt: null,
+          failureCode: 'MEDIA_ATTACHMENT_FAILED',
+          failureMessage: `${failed.length} 个附件未发送`,
+        },
+      })
+      return
+    }
+
+    await this.prisma.assistantDelivery.update({
+      where: { id: deliveryId },
+      data: { status: 'ACCEPTED', acceptedAt: new Date(), failureCode: null, failureMessage: null },
+    })
   }
 
   private async handleFailure(
@@ -329,28 +498,8 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     const expired = expiresAt !== null && nextAttemptAt.getTime() >= expiresAt.getTime()
     const finalFailure = !retryable || attempt >= MAX_ATTEMPTS || expired
 
-    if (delivery.account_id !== null && result.kind === 'OFFLINE') {
-      await this.prisma.assistantAccount.update({
-        where: { id: delivery.account_id },
-        data: {
-          status: 'OFFLINE',
-          lastErrorCode: result.code,
-          lastErrorMessage: result.message.slice(0, 255),
-        },
-      }).catch(() => undefined)
-      const occurredAt = new Date()
-      await this.notifications.publish({
-        eventType: 'ASSISTANT_ACCOUNT_OFFLINE',
-        source: { type: 'ASSISTANT_ACCOUNT', id: delivery.account_id },
-        target: { kind: 'PERMISSION', permissionCode: 'assistant-channel:update' },
-        templateKey: 'system.assistant-account.offline',
-        variables: {
-          accountName: accountName ?? '—',
-          occurredAt: notificationTime(occurredAt),
-          reason: result.message,
-        },
-        dedupeKey: `assistant-account-offline:${delivery.account_id}:${occurredAt.toISOString().slice(0, 10)}`,
-      })
+    if (result.kind === 'OFFLINE') {
+      await this.recordAccountOffline(delivery, result, accountName)
     }
 
     await this.prisma.assistantDelivery.update({
@@ -363,6 +512,41 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
         failureMessage: result.message.slice(0, 255),
         ...(finalFailure ? { acceptedAt: null } : {}),
       },
+    })
+  }
+
+  /**
+   * 离线是账号级事实，正文与附件失败都要落同一状态并只发一条离线通知；
+   * 附件项逐张失败时不能各自触发一遍告警。
+   */
+  private async recordAccountOffline(
+    delivery: ClaimedDelivery,
+    result: Extract<AssistantTransportResult, { ok: false }>,
+    accountName: string | null,
+  ): Promise<void> {
+    if (delivery.account_id === null) {
+      return
+    }
+    await this.prisma.assistantAccount.update({
+      where: { id: delivery.account_id },
+      data: {
+        status: 'OFFLINE',
+        lastErrorCode: result.code,
+        lastErrorMessage: result.message.slice(0, 255),
+      },
+    }).catch(() => undefined)
+    const occurredAt = new Date()
+    await this.notifications.publish({
+      eventType: 'ASSISTANT_ACCOUNT_OFFLINE',
+      source: { type: 'ASSISTANT_ACCOUNT', id: delivery.account_id },
+      target: { kind: 'PERMISSION', permissionCode: 'assistant-channel:update' },
+      templateKey: 'system.assistant-account.offline',
+      variables: {
+        accountName: accountName ?? '—',
+        occurredAt: notificationTime(occurredAt),
+        reason: result.message,
+      },
+      dedupeKey: `assistant-account-offline:${delivery.account_id}:${occurredAt.toISOString().slice(0, 10)}`,
     })
   }
 
@@ -449,9 +633,10 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     const counts = new Map(rows.map(row => [row.status, row._count._all]))
     const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)
     const accepted = counts.get('ACCEPTED') ?? 0
+    const partial = counts.get('PARTIAL') ?? 0
     const expired = counts.get('EXPIRED') ?? 0
     const skipped = counts.get('SKIPPED') ?? 0
-    const total = accepted + expired + skipped + (counts.get('FAILED') ?? 0) + (counts.get('CANCELLED') ?? 0) + pending
+    const total = accepted + partial + expired + skipped + (counts.get('FAILED') ?? 0) + (counts.get('CANCELLED') ?? 0) + pending
     const inboxTotal = await this.prisma.notificationInboxItem.count({ where: { notificationId } })
     if (total === 0) {
       if (inboxTotal === 0) {
@@ -471,7 +656,8 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     else if (accepted === total) {
       status = 'COMPLETED'
     }
-    else if (accepted > 0) {
+    else if (accepted + partial > 0) {
+      // PARTIAL 表示正文已送达、附件未全部成功；通知级同样按部分成功汇总。
       status = 'PARTIAL'
     }
     else if (expired > 0) {
@@ -496,21 +682,25 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     })
   }
 
-  private resolveLeaseTtlMs(config?: AssistantConfiguration): number {
+  /** 一次发送的最坏预算：请求超时 + 全局最小间隔。 */
+  private resolveSendBudgetMs(config: AssistantConfiguration | undefined, sends: number): number {
     const requestTimeoutMs = config?.requestTimeoutMs ?? 10_000
-    const minSendIntervalMs = config?.minSendIntervalMs ?? 0
+    const minSendIntervalMs = config?.minSendIntervalMs ?? 3_000
+    return sends * (requestTimeoutMs + minSendIntervalMs)
+  }
+
+  private resolveLeaseTtlMs(config?: AssistantConfiguration): number {
     return Math.max(
       LEASE_TTL_MS,
-      requestTimeoutMs + minSendIntervalMs + LEASE_TTL_MARGIN_MS,
+      this.resolveSendBudgetMs(config, 1) + LEASE_TTL_MARGIN_MS,
     )
   }
 
   private resolveStaleSendingMs(config?: AssistantConfiguration): number {
-    const requestTimeoutMs = config?.requestTimeoutMs ?? 10_000
-    const minSendIntervalMs = config?.minSendIntervalMs ?? 0
+    // 一条投递最多 1 条正文 + N 张附件；预算不足会让健康的长投递被误判为崩溃并重复发送。
     return Math.max(
       STALE_SENDING_FLOOR_MS,
-      requestTimeoutMs + minSendIntervalMs + STALE_SENDING_MARGIN_MS,
+      this.resolveSendBudgetMs(config, 1 + MAX_NOTIFICATION_MEDIA_ATTACHMENTS) + STALE_SENDING_MARGIN_MS,
     )
   }
 
@@ -583,8 +773,14 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     if (rows.length === 0) {
       return
     }
+    const deliveryIds = rows.map(row => row.id)
+    // 附件项与投递同时过期，避免遗留永远到点的 PENDING 附件行。
+    await this.prisma.assistantDeliveryMedia.updateMany({
+      where: { deliveryId: { in: deliveryIds }, status: 'PENDING' },
+      data: { status: 'EXPIRED', failureCode: 'EXPIRED', failureMessage: '通知已过期' },
+    })
     await this.prisma.assistantDelivery.updateMany({
-      where: { id: { in: rows.map(row => row.id) } },
+      where: { id: { in: deliveryIds } },
       data: { status: 'EXPIRED', failureCode: 'EXPIRED', failureMessage: '通知已过期' },
     })
     for (const notificationId of new Set(rows.map(row => row.notificationId))) {

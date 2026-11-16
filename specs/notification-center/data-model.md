@@ -79,6 +79,7 @@
 | `bodyTemplate` | text | 否 | — | 正文 |
 | `linkUrlTemplate` | text | 是 | `null` | 可选跳转链接模板；站内通知详情页使用，占位符受变量白名单约束 |
 | `variables` | jsonb | 否 | `[]` | 变量白名单：`[{name, required, maxLength, sensitive}]` |
+| `mediaPolicy` | jsonb | 否 | `{}` | 附件策略：`{enabled, maxCount, kinds, sources}`；空对象表示不发送附件，一期 `kinds` 只允许 `IMAGE`、`maxCount` 1–3，`sources` 为空表示不区分来源 |
 | `maxLength` | int | 否 | `2000` | 渲染后上限 |
 | `enabled` | boolean | 否 | `true` | — |
 | `version` | int | 否 | `1` | 每次修改递增 |
@@ -150,6 +151,25 @@ CHECK：两个保留期都在 `7..3650`。
 | `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
 `ASSISTANT` 行由阶段 1 插入，默认静默 `20:00–08:00 Asia/Shanghai`；`IN_APP` 行已随站内通知迁移插入并启用，默认静默与 TTL 为空。
+
+### 3.6 `notification_media`
+
+通知级附件清单：发布时按模板策略裁决后的快照。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `id` | uuid | 否 | `gen_random_uuid()` | 主键 |
+| `notificationId` | uuid | 否 | — | FK `notifications(id)`，`onDelete: Cascade` |
+| `mediaAssetId` | uuid | 否 | — | FK `media_assets(id)`，`onDelete: Restrict` |
+| `sortOrder` | int | 否 | — | 与业务传入顺序一致 |
+| `sourceKey` | varchar(64) | 是 | `null` | 业务语义来源键（如 `advertising.proof`）；历史附件为空 |
+| `blockedReason` | varchar(64) | 是 | `null` | 非空表示被策略或校验拦截（`POLICY_DISABLED` / `LIMIT_EXCEEDED` / `ASSET_NOT_READY` 等），未进入投递 |
+| `createdAt` | timestamptz(6) | 否 | `now()` | — |
+
+- 唯一 `(notificationId, sortOrder)`；索引 `(mediaAssetId)`。
+- `sourceKey` 必须在事件契约 `NOTIFICATION_EVENT_MEDIA.sources` 中声明；模板 `mediaPolicy.sources` 非空时只发送选中的来源。
+- 已登记进 `MEDIA_ASSET_REFERENCE_TABLES` 与数据库 `enforce_ready_media_asset_reference`：通知保留期内的附件不能被业务侧回收流程提前清理。
+- 该表的引用触发器只覆盖 `INSERT/UPDATE`：通知保留期清理会级联删除附件行，`DELETE` 若也校验，会因「删掉最后一条引用」失败。
 
 ## 4. 千树小助理表
 
@@ -239,6 +259,7 @@ CHECK：两个保留期都在 `7..3650`。
 | `templateKey` | varchar(64) | 否 | — | 实际渲染使用的模板键；渠道策略覆盖时与通知主键不同 |
 | `templateVersion` | int | 否 | — | 发布时模板版本 |
 | `renderedContent` | text | 否 | — | 渲染快照，可能含金额/客户名称 |
+| `contentSentAt` | timestamptz(6) | 是 | `null` | 正文发送成功时间；非空后重试只补发附件 |
 | `providerMsgId` | varchar(64) | 是 | `null` | GeWe `msgId` |
 | `providerNewMsgId` | varchar(64) | 是 | `null` | GeWe `newMsgId` |
 | `failureCode` | varchar(64) | 是 | `null` | — |
@@ -279,7 +300,30 @@ CHECK：两个保留期都在 `7..3650`。
 | `lockExpiresAt` | timestamptz(6) | 是 | `null` | 发送租约到期；崩溃后由过期回收接管 |
 | `updatedAt` | timestamptz(6) | 否 | `now()` | — |
 
-迁移时插入一行：`INSERT INTO assistant_send_gates (id) VALUES ('assistant-send') ON CONFLICT DO NOTHING`。所有 `sendText` 入口共用该行串行发送并在结束后更新 `next_allowed_at`。
+迁移时插入一行：`INSERT INTO assistant_send_gates (id) VALUES ('assistant-send') ON CONFLICT DO NOTHING`。所有 `sendText` 与 `sendImage` 入口共用该行串行发送并在结束后更新 `next_allowed_at`。
+
+### 4.7 `assistant_delivery_media`
+
+单条投递内的单个附件发送事实；正文继续记在 `assistant_deliveries`。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| `id` | uuid | 否 | `gen_random_uuid()` | 主键 |
+| `deliveryId` | uuid | 否 | — | FK `assistant_deliveries(id)`，`onDelete: Cascade` |
+| `mediaAssetId` | uuid | 否 | — | FK `media_assets(id)`，`onDelete: Restrict` |
+| `sortOrder` | int | 否 | — | 与 `notification_media.sortOrder` 一致 |
+| `status` | `AssistantDeliveryStatus` | 否 | `PENDING` | 复用投递状态枚举 |
+| `attemptCount` | int | 否 | `0` | 该项独立重试计数 |
+| `nextAttemptAt` | timestamptz(6) | 否 | `now()` | 下次尝试 |
+| `providerMsgId` / `providerNewMsgId` | varchar(64) | 是 | `null` | 上游消息标识 |
+| `failureCode` / `failureMessage` | varchar(64) / varchar(255) | 是 | `null` | — |
+| `fetchedAt` | timestamptz(6) | 是 | `null` | 公开取流路由首次读到该对象的时间 |
+| `acceptedAt` | timestamptz(6) | 是 | `null` | 上游接受时间 |
+| `createdAt` / `updatedAt` | timestamptz(6) | 否 | `now()` | — |
+
+- 唯一 `(deliveryId, sortOrder)`；派发索引 `(status, nextAttemptAt)`；查询索引 `(mediaAssetId)`。
+- 不登记进媒体引用保护表：资产存活由 `notification_media` 负责，避免重复计数。
+- 投递状态：正文与全部附件成功 → `ACCEPTED`；正文成功但至少一项永久失败 → `PARTIAL`；仍有待发项 → `PENDING`，`nextAttemptAt` 取最早待发项。
 
 ## 5. 站内通知与回调预留表
 
