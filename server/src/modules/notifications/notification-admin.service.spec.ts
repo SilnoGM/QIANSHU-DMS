@@ -88,7 +88,11 @@ describe('NotificationAdminService', () => {
     })
     expect(salesOrderNo?.description).toContain('销售订单编号')
     // 附件能力只对已验收的事件公布，其余事件返回 null。
-    expect(salesReceipt?.media).toEqual({ maxCount: 3, kinds: ['IMAGE'] })
+    expect(salesReceipt?.media).toEqual({
+      maxCount: 3,
+      kinds: ['IMAGE'],
+      sources: [{ key: 'salesReceipt.voucher', label: '收款凭证' }],
+    })
 
     const withdrawal = result.find(event => event.eventType === 'FUND_WITHDRAWAL_REVIEW_PENDING')
     expect(withdrawal).toMatchObject({
@@ -210,10 +214,10 @@ describe('NotificationAdminService', () => {
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        mediaPolicy: { enabled: true, maxCount: 2, kinds: ['IMAGE'] },
+        mediaPolicy: { enabled: true, maxCount: 2, kinds: ['IMAGE'], sources: [] },
       }),
     }))
-    expect(result.mediaPolicy).toEqual({ enabled: true, maxCount: 2, kinds: ['IMAGE'] })
+    expect(result.mediaPolicy).toEqual({ enabled: true, maxCount: 2, kinds: ['IMAGE'], sources: [] })
   })
 
   it('rejects a template that uses single-brace placeholders', async () => {
@@ -558,6 +562,7 @@ describe('NotificationAdminService', () => {
         findMany: jest.fn().mockResolvedValue([{
           id: '00000000-0000-4000-8000-000000000201',
           sortOrder: 0,
+          sourceKey: null,
           blockedReason: null,
           mediaAsset: {
             mediaType: 'IMAGE',
@@ -605,6 +610,8 @@ describe('NotificationAdminService', () => {
         mimeType: 'image/jpeg',
         originalFilename: '凭证.jpg',
         sizeBytes: '2048',
+        sourceKey: null,
+        sourceLabel: null,
         blockedReason: null,
       }],
     })

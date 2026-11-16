@@ -23,6 +23,7 @@ import {
   MAX_NOTIFICATION_VARIABLES,
   MAX_NOTIFICATION_VARIABLE_LENGTH,
   NOTIFICATION_EVENT_TYPES,
+  notificationEventMediaCapability,
   type NotificationChannel,
   type NotificationPublishWarningCode,
   type NotificationSkipReason,
@@ -478,7 +479,7 @@ export class SystemNotificationService {
       readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
     },
   ): Promise<readonly NotificationMediaAttachment[]> {
-    const requested = this.uniqueMediaAssetIds(input.command.media)
+    const requested = this.uniqueMediaItems(input.command.media)
     if (requested.length === 0) {
       return []
     }
@@ -496,8 +497,15 @@ export class SystemNotificationService {
     const mediaPolicy = template !== null && template.enabled
       ? parseNotificationMediaPolicy(template.mediaPolicy)
       : DISABLED_NOTIFICATION_MEDIA_POLICY
+    // 来源键必须由事件契约声明；模板再从中挑选真正要发的来源。
+    const declaredSources = new Set(
+      (notificationEventMediaCapability(input.command.eventType)?.sources ?? []).map(source => source.key),
+    )
+    const selectedSources = new Set(mediaPolicy.sources)
 
-    const queryable = requested.filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
+    const queryable = requested
+      .map(item => item.assetId)
+      .filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
     const assets = queryable.length === 0
       ? []
       : await transaction.mediaAsset.findMany({
@@ -506,10 +514,14 @@ export class SystemNotificationService {
       })
     const assetById = new Map(assets.map(asset => [asset.id, asset]))
 
-    const rows: Array<NotificationMediaAttachment & { readonly blockedReason: string | null }> = []
+    const rows: Array<NotificationMediaAttachment & {
+      readonly sourceKey: string | null
+      readonly blockedReason: string | null
+    }> = []
     let allowedCount = 0
-    requested.forEach((mediaAssetId, sortOrder) => {
-      const asset = assetById.get(mediaAssetId)
+    requested.forEach((item, sortOrder) => {
+      const asset = assetById.get(item.assetId)
+      const sourceKey = item.sourceKey
       let blockedReason: string | null = null
       if (policy === undefined || templateKey === null) {
         blockedReason = 'CHANNEL_DISABLED'
@@ -527,6 +539,12 @@ export class SystemNotificationService {
         // 图片无法像文本变量一样脱敏，敏感内容策略不通过时只能整张不发。
         blockedReason = 'SENSITIVE_BLOCKED'
       }
+      else if (sourceKey !== null && (sourceKey.length > 64 || !declaredSources.has(sourceKey))) {
+        blockedReason = 'SOURCE_NOT_DECLARED'
+      }
+      else if (selectedSources.size > 0 && (sourceKey === null || !selectedSources.has(sourceKey))) {
+        blockedReason = 'SOURCE_NOT_SELECTED'
+      }
       else if (allowedCount >= mediaPolicy.maxCount) {
         blockedReason = 'LIMIT_EXCEEDED'
       }
@@ -542,7 +560,7 @@ export class SystemNotificationService {
       if (blockedReason === null) {
         allowedCount += 1
       }
-      rows.push({ mediaAssetId, sortOrder, blockedReason })
+      rows.push({ mediaAssetId: item.assetId, sortOrder, sourceKey, blockedReason })
     })
 
     await transaction.notificationMedia.createMany({
@@ -550,6 +568,7 @@ export class SystemNotificationService {
         notificationId: input.notificationId,
         mediaAssetId: row.mediaAssetId,
         sortOrder: row.sortOrder,
+        sourceKey: row.sourceKey,
         blockedReason: row.blockedReason,
       })),
     })
@@ -562,19 +581,27 @@ export class SystemNotificationService {
       .map(row => ({ mediaAssetId: row.mediaAssetId, sortOrder: row.sortOrder }))
   }
 
-  private uniqueMediaAssetIds(media: readonly { readonly assetId: string }[] | undefined): string[] {
+  private uniqueMediaItems(
+    media: readonly { readonly assetId: string, readonly sourceKey?: string }[] | undefined,
+  ): Array<{ assetId: string, sourceKey: string | null }> {
     if (media === undefined) {
       return []
     }
     const seen = new Set<string>()
-    const result: string[] = []
+    const result: Array<{ assetId: string, sourceKey: string | null }> = []
     for (const item of media) {
       const assetId = typeof item.assetId === 'string' ? item.assetId.trim() : ''
-      if (assetId.length === 0 || seen.has(assetId)) {
+      if (assetId.length === 0) {
         continue
       }
-      seen.add(assetId)
-      result.push(assetId)
+      const rawSourceKey = typeof item.sourceKey === 'string' ? item.sourceKey.trim() : ''
+      const sourceKey = rawSourceKey.length === 0 ? null : rawSourceKey
+      const dedupeKey = JSON.stringify([assetId, sourceKey])
+      if (seen.has(dedupeKey)) {
+        continue
+      }
+      seen.add(dedupeKey)
+      result.push({ assetId, sourceKey })
     }
     return result
   }

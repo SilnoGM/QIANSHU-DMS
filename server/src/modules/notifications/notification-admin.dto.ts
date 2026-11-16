@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsISO8601,
@@ -30,9 +31,15 @@ export class NotificationEventVariableDto {
   @ApiProperty() required!: boolean
 }
 
+export class NotificationEventMediaSourceDto {
+  @ApiProperty() key!: string
+  @ApiProperty() label!: string
+}
+
 export class NotificationEventMediaDto {
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 3 }) maxCount!: number
   @ApiProperty({ enum: ['IMAGE'], isArray: true }) kinds!: string[]
+  @ApiProperty({ type: () => [NotificationEventMediaSourceDto] }) sources!: NotificationEventMediaSourceDto[]
 }
 
 export class NotificationEventDto {
@@ -52,12 +59,14 @@ export class NotificationTemplateMediaPolicyDto {
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer', minimum: 0, maximum: 3 }) maxCount!: number
   @ApiProperty({ enum: ['IMAGE'], isArray: true }) kinds!: string[]
+  @ApiProperty({ type: [String], description: '允许的附件来源键；空表示不区分来源' }) sources!: string[]
 }
 
 export class NotificationTemplateMediaPolicyInputDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 3 }) @IsOptional() @IsInt() @Min(1) @Max(3) maxCount?: number
   @ApiPropertyOptional({ enum: ['IMAGE'], isArray: true }) @IsOptional() @IsArray() @IsIn(['IMAGE'], { each: true }) kinds?: ('IMAGE')[]
+  @ApiPropertyOptional({ type: [String], maxItems: 20 }) @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @Matches(/^[A-Za-z0-9._-]+$/u, { each: true }) @MaxLength(64, { each: true }) sources?: string[]
 }
 
 export class NotificationTemplateVariableDto {
@@ -204,6 +213,8 @@ export class NotificationRecordMediaDto {
   @ApiProperty({ type: 'string', nullable: true }) mimeType!: string | null
   @ApiProperty() originalFilename!: string
   @ApiProperty({ type: 'string', description: '字节数，避免 BigInt 序列化问题' }) sizeBytes!: string
+  @ApiProperty({ type: 'string', nullable: true, description: '业务语义来源键；历史附件为空' }) sourceKey!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: '来源中文名；历史附件为空' }) sourceLabel!: string | null
   @ApiProperty({
     type: 'string',
     nullable: true,

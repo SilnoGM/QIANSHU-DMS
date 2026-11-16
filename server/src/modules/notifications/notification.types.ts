@@ -373,21 +373,120 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
 })
 
 /**
- * 已验收过附件能力的事件清单，只服务管理端提示与文档。
+ * 已验收过附件能力的事件清单，服务管理端提示、模板来源选择与来源键校验。
  *
- * 是否真的发送附件由模板的 `mediaPolicy` 决定；这里不做运行时强校验，
- * 避免事件清单与模板策略形成两套互相打架的开关。
+ * 是否真的发送附件仍由模板的 `mediaPolicy` 决定；来源键必须在这里声明，
+ * 业务乱传的键会在发布时被拦下并留痕。
  */
+export interface NotificationEventMediaSource {
+  /** 稳定的业务语义键，禁止直接使用数据库字段名。 */
+  readonly key: string
+  readonly label: string
+}
+
 export interface NotificationEventMediaCapability {
   readonly maxCount: number
   readonly kinds: readonly NotificationMediaKind[]
+  readonly sources: readonly NotificationEventMediaSource[]
 }
 
+const SALES_RECEIPT_VOUCHER_SOURCE: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'salesReceipt.voucher', label: '收款凭证' }),
+])
+const INVOICE_DOCUMENT_SOURCE: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'invoice.document', label: '发票照片' }),
+])
+const ADVERTISING_SOURCES: readonly NotificationEventMediaSource[] = Object.freeze([
+  Object.freeze({ key: 'advertising.qr', label: '收款二维码' }),
+  Object.freeze({ key: 'advertising.proof', label: '付款截图' }),
+])
+
 export const NOTIFICATION_EVENT_MEDIA: Readonly<Partial<Record<NotificationEventType, NotificationEventMediaCapability>>> = Object.freeze({
-  SALES_RECEIPT_REVIEW_PENDING: {
+  SALES_RECEIPT_REVIEW_PENDING: Object.freeze({
     maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
     kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
-  },
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  SALES_RECEIPT_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  SALES_RECEIPT_REJECTED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  PURCHASE_REVIEW_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'purchase.orderImage', label: '采购单图片' }),
+    ]),
+  }),
+  FUND_WITHDRAWAL_APPROVED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'fundWithdrawal.paymentProof', label: '付款截图' }),
+    ]),
+  }),
+  INVOICE_REQUEST_ISSUED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: INVOICE_DOCUMENT_SOURCE,
+  }),
+  INVOICE_REQUEST_SETTLED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: INVOICE_DOCUMENT_SOURCE,
+  }),
+  PACKAGING_COST_PAID: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'packaging.paymentVoucher', label: '付款截图' }),
+      Object.freeze({ key: 'packaging.packagingImage', label: '包装图片' }),
+      Object.freeze({ key: 'packaging.quotationImage', label: '报价图片' }),
+    ]),
+  }),
+  ADVERTISING_RECHARGE_PAYMENT_PENDING: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'advertising.qr', label: '收款二维码' }),
+    ]),
+  }),
+  ADVERTISING_RECHARGE_PAID: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  ADVERTISING_RECHARGE_REJECTED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  ADVERTISING_RECHARGE_VOIDED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: ADVERTISING_SOURCES,
+  }),
+  SHIPMENT_SIGNED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'salesOrder.deliveryReceipt', label: '签收单' }),
+    ]),
+  }),
+  PURCHASE_ORDER_COMPLETED: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: Object.freeze([
+      Object.freeze({ key: 'purchase.paymentVoucher', label: '付款凭证' }),
+      Object.freeze({ key: 'purchase.deliveryReceipt', label: '签收单' }),
+    ]),
+  }),
 })
 
 export function notificationEventVariables(eventType: string): readonly string[] | null {

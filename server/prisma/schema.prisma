@@ -3432,6 +3432,8 @@ model NotificationMedia {
   notificationId String   @map("notification_id") @db.Uuid
   mediaAssetId   String   @map("media_asset_id") @db.Uuid
   sortOrder      Int      @map("sort_order")
+  /// 事件契约中声明的业务语义来源键（如 `advertising.proof`）；历史行为空。
+  sourceKey      String?  @map("source_key") @db.VarChar(64)
   blockedReason  String?  @map("blocked_reason") @db.VarChar(64)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 

@@ -455,8 +455,8 @@ describe('SystemNotificationService.publish', () => {
 
       expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
         data: [
-          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, blockedReason: null },
-          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, blockedReason: null },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: null },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: null },
         ],
       })
       expect(transaction.assistantDeliveryMedia.createMany).toHaveBeenCalledWith({
@@ -476,8 +476,8 @@ describe('SystemNotificationService.publish', () => {
 
       expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
         data: [
-          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, blockedReason: 'POLICY_DISABLED' },
-          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, blockedReason: 'POLICY_DISABLED' },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'POLICY_DISABLED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'POLICY_DISABLED' },
         ],
       })
       expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
@@ -494,8 +494,8 @@ describe('SystemNotificationService.publish', () => {
 
       expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
         data: [
-          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, blockedReason: 'SENSITIVE_BLOCKED' },
-          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, blockedReason: 'SENSITIVE_BLOCKED' },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'SENSITIVE_BLOCKED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'SENSITIVE_BLOCKED' },
         ],
       })
       expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
@@ -512,7 +512,56 @@ describe('SystemNotificationService.publish', () => {
 
       expect(transaction.mediaAsset.findMany).not.toHaveBeenCalled()
       expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
-        data: [{ notificationId: 'n-media', mediaAssetId: 'not-a-uuid', sortOrder: 0, blockedReason: 'ASSET_NOT_FOUND' }],
+        data: [{ notificationId: 'n-media', mediaAssetId: 'not-a-uuid', sortOrder: 0, sourceKey: null, blockedReason: 'ASSET_NOT_FOUND' }],
+      })
+    })
+
+    it('filters attachments by declared and selected sources', async () => {
+      const transaction = mediaTransaction({
+        mediaPolicy: {
+          enabled: true,
+          maxCount: 3,
+          kinds: ['IMAGE'],
+          sources: ['advertising.qr'],
+        },
+      })
+      const service = createService({} as PrismaService)
+
+      await service.publish({
+        ...publishCommand,
+        eventType: 'ADVERTISING_RECHARGE_PAID',
+        media: [
+          { assetId: FIRST_ASSET, sourceKey: 'advertising.qr' },
+          { assetId: SECOND_ASSET, sourceKey: 'advertising.proof' },
+          { assetId: FIRST_ASSET, sourceKey: 'unknown.source' },
+          { assetId: SECOND_ASSET },
+        ],
+      }, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: 'advertising.qr', blockedReason: null },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: 'advertising.proof', blockedReason: 'SOURCE_NOT_SELECTED' },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 2, sourceKey: 'unknown.source', blockedReason: 'SOURCE_NOT_DECLARED' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 3, sourceKey: null, blockedReason: 'SOURCE_NOT_SELECTED' },
+        ],
+      })
+      expect(transaction.assistantDeliveryMedia.createMany).toHaveBeenCalledWith({
+        data: [{ deliveryId: expect.any(String), mediaAssetId: FIRST_ASSET, sortOrder: 0 }],
+      })
+    })
+
+    it('keeps unlabelled attachments working when the template does not select sources', async () => {
+      const transaction = mediaTransaction()
+      const service = createService({} as PrismaService)
+
+      await service.publish({
+        ...publishCommand,
+        media: [{ assetId: FIRST_ASSET }],
+      }, { transaction: transaction as never })
+
+      expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
+        data: [{ notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: null }],
       })
     })
 
@@ -527,8 +576,8 @@ describe('SystemNotificationService.publish', () => {
 
       expect(transaction.notificationMedia.createMany).toHaveBeenCalledWith({
         data: [
-          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, blockedReason: 'ASSET_NOT_READY' },
-          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, blockedReason: 'ASSET_NOT_FOUND' },
+          { notificationId: 'n-media', mediaAssetId: FIRST_ASSET, sortOrder: 0, sourceKey: null, blockedReason: 'ASSET_NOT_READY' },
+          { notificationId: 'n-media', mediaAssetId: SECOND_ASSET, sortOrder: 1, sourceKey: null, blockedReason: 'ASSET_NOT_FOUND' },
         ],
       })
       expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()

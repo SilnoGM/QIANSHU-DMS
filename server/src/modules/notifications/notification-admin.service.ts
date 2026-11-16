@@ -131,6 +131,14 @@ function toRecordDto(
   }
 }
 
+/** 来源中文名只从事件契约反查；历史附件或已下线的来源返回 null。 */
+function resolveMediaSourceLabel(eventType: string, sourceKey: string | null): string | null {
+  if (sourceKey === null) {
+    return null
+  }
+  return notificationEventMediaCapability(eventType)?.sources.find(source => source.key === sourceKey)?.label ?? null
+}
+
 function templateVariables(value: Prisma.JsonValue): NotificationTemplateVariable[] {
   if (!Array.isArray(value)) {
     return []
@@ -184,6 +192,7 @@ function toTemplateDto(template: {
       enabled: mediaPolicy.enabled,
       maxCount: mediaPolicy.maxCount,
       kinds: [...mediaPolicy.kinds],
+      sources: [...mediaPolicy.sources],
     },
     maxLength: template.maxLength,
     enabled: template.enabled,
@@ -285,10 +294,15 @@ export class NotificationAdminService {
    */
   private resolveTemplateMediaPolicy(
     channel: 'IN_APP' | 'ASSISTANT',
-    input: { readonly enabled?: boolean, readonly maxCount?: number, readonly kinds?: readonly string[] } | undefined,
-  ): { readonly enabled: boolean, readonly maxCount: number, readonly kinds: readonly string[] } {
+    input: {
+      readonly enabled?: boolean
+      readonly maxCount?: number
+      readonly kinds?: readonly string[]
+      readonly sources?: readonly string[]
+    } | undefined,
+  ): { readonly enabled: boolean, readonly maxCount: number, readonly kinds: readonly string[], readonly sources: readonly string[] } {
     if (input === undefined) {
-      return { enabled: false, maxCount: 0, kinds: [] }
+      return { enabled: false, maxCount: 0, kinds: [], sources: [] }
     }
     const normalized = normalizeNotificationMediaPolicy(input)
     if (!normalized.ok) {
@@ -297,7 +311,9 @@ export class NotificationAdminService {
         'NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID',
         normalized.code === 'MEDIA_COUNT_INVALID'
           ? '附件数量上限必须在 1 到 3 之间'
-          : '一期仅支持图片附件',
+          : normalized.code === 'MEDIA_SOURCE_INVALID'
+            ? '附件来源配置不合法'
+            : '一期仅支持图片附件',
       )
     }
     if (channel === 'IN_APP' && normalized.policy.enabled) {
@@ -307,6 +323,7 @@ export class NotificationAdminService {
       enabled: normalized.policy.enabled,
       maxCount: normalized.policy.maxCount,
       kinds: normalized.policy.kinds,
+      sources: normalized.policy.sources,
     }
   }
 
@@ -509,7 +526,13 @@ export class NotificationAdminService {
       implemented: IMPLEMENTED_NOTIFICATION_EVENT_TYPES.includes(eventType),
       media: (() => {
         const capability = notificationEventMediaCapability(eventType)
-        return capability === null ? null : { maxCount: capability.maxCount, kinds: [...capability.kinds] }
+        return capability === null
+          ? null
+          : {
+              maxCount: capability.maxCount,
+              kinds: [...capability.kinds],
+              sources: capability.sources.map(source => ({ key: source.key, label: source.label })),
+            }
       })(),
     }))
   }
@@ -847,6 +870,7 @@ export class NotificationAdminService {
         select: {
           id: true,
           sortOrder: true,
+          sourceKey: true,
           blockedReason: true,
           mediaAsset: {
             select: { mediaType: true, mimeType: true, originalFilename: true, sizeBytes: true },
@@ -892,6 +916,8 @@ export class NotificationAdminService {
         mimeType: row.mediaAsset.mimeType,
         originalFilename: row.mediaAsset.originalFilename,
         sizeBytes: row.mediaAsset.sizeBytes?.toString() ?? '0',
+        sourceKey: row.sourceKey,
+        sourceLabel: resolveMediaSourceLabel(notification.eventType, row.sourceKey),
         blockedReason: row.blockedReason,
       })),
     }

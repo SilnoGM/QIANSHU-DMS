@@ -263,6 +263,45 @@ describe('Notification media public route with PostgreSQL', () => {
     }])
   })
 
+  it('filters attachments by the source selected on the template', async () => {
+    await prisma.notificationTemplate.updateMany({
+      where: { key: 'sales.receipt.pending', channel: 'ASSISTANT' },
+      data: {
+        mediaPolicy: {
+          enabled: true,
+          maxCount: 2,
+          kinds: ['IMAGE'],
+          sources: ['salesReceipt.voucher'],
+        },
+      },
+    })
+    const sourceId = randomUUID()
+    const result = await notifications.publish({
+      eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+      source: { type: 'SALES_RECEIPT_REQUEST', id: sourceId },
+      target: { kind: 'USERS', userIds: [userId] },
+      templateKey: 'sales.receipt.pending',
+      variables: { collectionNo: 'SK-E2E-3' },
+      media: [
+        { assetId, sourceKey: 'salesReceipt.voucher' },
+        { assetId, sourceKey: 'advertising.proof' },
+        { assetId: uploadingAssetId },
+      ],
+      dedupeKey: `notification-media-e2e:${sourceId}`,
+    })
+
+    const media = await prisma.notificationMedia.findMany({
+      where: { notificationId: result.notificationId },
+      orderBy: { sortOrder: 'asc' },
+      select: { sourceKey: true, blockedReason: true },
+    })
+    expect(media).toEqual([
+      { sourceKey: 'salesReceipt.voucher', blockedReason: null },
+      { sourceKey: 'advertising.proof', blockedReason: 'SOURCE_NOT_DECLARED' },
+      { sourceKey: null, blockedReason: 'SOURCE_NOT_SELECTED' },
+    ])
+  })
+
   it('blocks every attachment when the template policy is off', async () => {
     await prisma.notificationTemplate.updateMany({
       where: { key: 'sales.receipt.pending', channel: 'ASSISTANT' },

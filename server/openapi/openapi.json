@@ -127085,6 +127085,21 @@
           "required"
         ]
       },
+      "NotificationEventMediaSourceDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ]
+      },
       "NotificationEventMediaDto": {
         "type": "object",
         "properties": {
@@ -127101,11 +127116,18 @@
                 "IMAGE"
               ]
             }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationEventMediaSourceDto"
+            }
           }
         },
         "required": [
           "maxCount",
-          "kinds"
+          "kinds",
+          "sources"
         ]
       },
       "NotificationEventDto": {
@@ -127216,12 +127238,20 @@
                 "IMAGE"
               ]
             }
+          },
+          "sources": {
+            "description": "允许的附件来源键；空表示不区分来源",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "enabled",
           "maxCount",
-          "kinds"
+          "kinds",
+          "sources"
         ]
       },
       "NotificationTemplateDto": {
@@ -127331,6 +127361,13 @@
               "enum": [
                 "IMAGE"
               ]
+            }
+          },
+          "sources": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -127950,6 +127987,16 @@
             "type": "string",
             "description": "字节数，避免 BigInt 序列化问题"
           },
+          "sourceKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "业务语义来源键；历史附件为空"
+          },
+          "sourceLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "来源中文名；历史附件为空"
+          },
           "blockedReason": {
             "type": "string",
             "nullable": true,
@@ -127963,6 +128010,8 @@
           "mimeType",
           "originalFilename",
           "sizeBytes",
+          "sourceKey",
+          "sourceLabel",
           "blockedReason"
         ]
       },
