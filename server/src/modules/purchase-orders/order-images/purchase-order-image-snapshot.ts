@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { normalizePurchaseOrderSnapshotAmount } from '../domain/purchase-order-decimal'
+import { normalizeShippingMarkLabel } from '../shipping-mark-label'
 import type { PurchaseOrderDetail } from '../purchase-order-query.service'
 
 export const PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION = '5'
@@ -69,7 +70,7 @@ function amount(value: unknown): string {
 }
 /** 贴标后缀与前端复制文案保持同一规则：去首尾空白、折叠内部空白，缺项不留分隔符。 */
 function labelPart(value: unknown): string {
-  return (optionalText(value) ?? '').trim().replace(/\s+/gu, ' ')
+  return normalizeShippingMarkLabel(optionalText(value) ?? '')
 }
 function attributes(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return invalid()
