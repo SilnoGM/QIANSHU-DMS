@@ -45,6 +45,8 @@ const MIN_HEIGHT = Math.ceil(WIDTH * 297 / 210)
 const MARGIN = 48
 const MAX_HEIGHT = 12000
 const MAX_ORDERS = 100
+// 白底业务文档固定使用亮色文档配色，不随界面主题和明暗模式变化，与采购单图片渲染器保持同一组色值。
+const DOCUMENT_COLORS = { primary: '#008236', destructive: '#e7000b' }
 
 function requireText(value: unknown, maximum = 1000): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum) {
@@ -137,8 +139,7 @@ async function prepareFonts(statement: PurchasePaymentStatement, labels: Stateme
   const style = getComputedStyle(document.documentElement)
   const sans = style.getPropertyValue('--qs-font-text-sans').trim()
   const mono = style.getPropertyValue('--qs-font-text-mono').trim()
-  const primary = style.getPropertyValue('--primary').trim()
-  if (!sans || !mono || !primary || !document.fonts) {
+  if (!sans || !mono || !document.fonts) {
     throw new PurchasePaymentStatementError('STATEMENT_RENDER_FAILED')
   }
   const sample = [...new Set(Array.from(JSON.stringify({ statement, labels })))].join('')
@@ -160,7 +161,7 @@ async function prepareFonts(statement: PurchasePaymentStatement, labels: Stateme
   finally {
     clearTimeout(timeout)
   }
-  return { sans, mono, primary: `oklch(${primary})` }
+  return { sans, mono }
 }
 
 /**
@@ -213,7 +214,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     const contentWidth = WIDTH - 2 * MARGIN
     const supplier = cell(`${labels.supplier}  ${statement.supplierName}`, contentWidth, sans(600, 24))
     const time = cell(`${labels.generatedAt}  ${statement.generatedAt}`, contentWidth, sans(400, 18), 'left', muted)
-    const totalAmount = cell(`${formattedAmount(statement.totals.remainingAmount)} ${labels.currency}`, contentWidth - 48, mono(600, 36), 'right', fonts.primary)
+    const totalAmount = cell(`${formattedAmount(statement.totals.remainingAmount)} ${labels.currency}`, contentWidth - 48, mono(600, 36), 'right', DOCUMENT_COLORS.primary)
     const headingY = 126
     const summaryY = headingY + supplier.lines.length * 34 + time.lines.length * 28 + 38
     const summaryHeight = 72 + totalAmount.lines.length * 48
@@ -226,8 +227,8 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
       const stages = order.items.map((item) => {
         const values = [
           cell(labels.paymentTypes[item.paymentType], widths[1] - 24, sans(400, 20)),
-          ...[item.dueAmount, item.paidAmount, item.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(index === 2 ? 600 : 400, 20), 'right', index === 2 && amount !== '0.00' ? fonts.primary : ink)),
-          cell(labels.statuses[item.status], widths[5] - 24, sans(600, 19), 'left', item.status === 'PENDING_PAYMENT' ? '#a3610c' : item.status === 'PAID' ? fonts.primary : muted),
+          ...[item.dueAmount, item.paidAmount, item.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(index === 2 ? 600 : 400, 20), 'right', index === 2 && amount !== '0.00' ? DOCUMENT_COLORS.primary : ink)),
+          cell(labels.statuses[item.status], widths[5] - 24, sans(600, 19), 'left', item.status === 'PENDING_PAYMENT' ? '#a3610c' : item.status === 'PAID' ? DOCUMENT_COLORS.primary : muted),
         ]
         return { values, height: Math.max(60, ...values.map(value => value.lines.length * 30 + 28)) }
       })
@@ -235,7 +236,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
       stages[0].height += extra
       return { orderCell, stages, height: stages.reduce((sum, stage) => sum + stage.height, 0) }
     })
-    const totalCells = [cell(labels.total, widths[0] - 24, sans(600)), cell('', widths[1] - 24), ...[statement.totals.dueAmount, statement.totals.paidAmount, statement.totals.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(600, 20), 'right', fonts.primary)), cell(labels.currency, widths[5] - 24, sans(400, 18), 'left', muted)]
+    const totalCells = [cell(labels.total, widths[0] - 24, sans(600)), cell('', widths[1] - 24), ...[statement.totals.dueAmount, statement.totals.paidAmount, statement.totals.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(600, 20), 'right', DOCUMENT_COLORS.primary)), cell(labels.currency, widths[5] - 24, sans(400, 18), 'left', muted)]
     const totalHeight = Math.max(...totalCells.map(value => value.lines.length * 30)) + 36
     const note = cell(labels.note, contentWidth, sans(400, 18), 'left', muted)
     const footerY = tableY + headerHeight + groups.reduce((sum, group) => sum + group.height, 0) + totalHeight + 30
@@ -247,7 +248,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     canvas.height = height
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, WIDTH, height)
-    context.fillStyle = fonts.primary
+    context.fillStyle = DOCUMENT_COLORS.primary
     context.fillRect(MARGIN, 48, 6, 42)
     draw(cell(labels.title, contentWidth - 24, sans(600, 36)), MARGIN + 24, 46, contentWidth - 24, 46)
     draw(supplier, MARGIN, headingY, contentWidth, 34)
