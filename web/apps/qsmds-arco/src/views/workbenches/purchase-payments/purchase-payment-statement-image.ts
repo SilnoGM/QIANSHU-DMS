@@ -9,7 +9,16 @@ export interface PurchasePaymentStatement {
   supplierName: string
   generatedAt: string
   orderCount: number
-  orders: { orderNo: string, orderDate: string, items: StatementItem[], totals: StatementTotals }[]
+  orders: {
+    orderNo: string
+    orderDate: string
+    /** 后端已按「【货件唛头】后缀」拼好；这里只裁剪条数，不再自行拼接。 */
+    shippingMarks: string[]
+    /** 有效货件总数，用于在裁剪后补「等 N 件」。 */
+    shippingMarkCount: number
+    items: StatementItem[]
+    totals: StatementTotals
+  }[]
   totals: StatementTotals
 }
 
@@ -28,6 +37,8 @@ export interface StatementImageLabels {
   total: string
   currency: string
   note: string
+  /** 「等 {count} 件」模板，count 为有效货件总数。 */
+  shippingMarkMore: string
   paymentTypes: Record<PurchasePayableDto['paymentType'], string>
   statuses: Record<PurchasePayableDto['status'], string>
 }
@@ -45,6 +56,11 @@ const MIN_HEIGHT = Math.ceil(WIDTH * 297 / 210)
 const MARGIN = 48
 const MAX_HEIGHT = 12000
 const MAX_ORDERS = 100
+/** 对账单每单最多展示六条唛头；后端已限量，这里再防一次脏数据把画布撑爆。 */
+const MAX_SHIPPING_MARKS = 6
+const MAX_SHIPPING_MARK_LENGTH = 300
+// 白底业务文档固定使用亮色文档配色，不随界面主题和明暗模式变化，与采购单图片渲染器保持同一组色值。
+const DOCUMENT_COLORS = { primary: '#008236', destructive: '#e7000b' }
 
 function requireText(value: unknown, maximum = 1000): string {
   if (typeof value !== 'string' || !value.trim() || value.length > maximum) {
@@ -70,6 +86,23 @@ function totals(items: StatementTotals[]): StatementTotals {
     paidAmount: sumMoneyValues(items.map(item => item.paidAmount), { precision: 2 }),
     remainingAmount: sumMoneyValues(items.map(item => item.remainingAmount), { precision: 2 }),
   }
+}
+
+/** 唛头是金额凭证的辅助信息：缺省或空列表合法，但类型、长度或条数异常必须拒绝，避免脏数据撑爆画布。 */
+function shippingMarksOf(order: PurchasePayableOrderDto): { shippingMarks: string[], shippingMarkCount: number } {
+  const source: unknown = order.shippingMarks
+  if (!Array.isArray(source) || !source.every(mark => typeof mark === 'string' && mark.length <= MAX_SHIPPING_MARK_LENGTH)) {
+    throw new PurchasePaymentStatementError('INVALID_STATEMENT')
+  }
+  const count: unknown = order.shippingMarkCount
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+    throw new PurchasePaymentStatementError('INVALID_STATEMENT')
+  }
+  const shippingMarks = source.filter(mark => mark.trim().length > 0).slice(0, MAX_SHIPPING_MARKS)
+  if (count < shippingMarks.length) {
+    throw new PurchasePaymentStatementError('INVALID_STATEMENT')
+  }
+  return { shippingMarks, shippingMarkCount: count }
 }
 
 /** 保存已核对的纯数据快照；任何不平或不完整的应付款都不能被渲染成可对外使用的账单。 */
@@ -116,7 +149,7 @@ export function buildPurchasePaymentStatement(
     if (summary.dueAmount !== money(order.purchaseTotalAmount) || summary.remainingAmount === '0.00') {
       throw new PurchasePaymentStatementError('INVALID_STATEMENT')
     }
-    return { orderNo: requireText(order.orderNo), orderDate: requireText(order.orderDate, 64), items, totals: summary }
+    return { orderNo: requireText(order.orderNo), orderDate: requireText(order.orderDate, 64), ...shippingMarksOf(order), items, totals: summary }
   })
   return { supplierName, generatedAt, orderCount: rows.length, orders: rows, totals: totals(rows.map(row => row.totals)) }
 }
@@ -137,8 +170,7 @@ async function prepareFonts(statement: PurchasePaymentStatement, labels: Stateme
   const style = getComputedStyle(document.documentElement)
   const sans = style.getPropertyValue('--qs-font-text-sans').trim()
   const mono = style.getPropertyValue('--qs-font-text-mono').trim()
-  const primary = style.getPropertyValue('--primary').trim()
-  if (!sans || !mono || !primary || !document.fonts) {
+  if (!sans || !mono || !document.fonts) {
     throw new PurchasePaymentStatementError('STATEMENT_RENDER_FAILED')
   }
   const sample = [...new Set(Array.from(JSON.stringify({ statement, labels })))].join('')
@@ -160,7 +192,7 @@ async function prepareFonts(statement: PurchasePaymentStatement, labels: Stateme
   finally {
     clearTimeout(timeout)
   }
-  return { sans, mono, primary: `oklch(${primary})` }
+  return { sans, mono }
 }
 
 /**
@@ -213,7 +245,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     const contentWidth = WIDTH - 2 * MARGIN
     const supplier = cell(`${labels.supplier}  ${statement.supplierName}`, contentWidth, sans(600, 24))
     const time = cell(`${labels.generatedAt}  ${statement.generatedAt}`, contentWidth, sans(400, 18), 'left', muted)
-    const totalAmount = cell(`${formattedAmount(statement.totals.remainingAmount)} ${labels.currency}`, contentWidth - 48, mono(600, 36), 'right', fonts.primary)
+    const totalAmount = cell(`${formattedAmount(statement.totals.remainingAmount)} ${labels.currency}`, contentWidth - 48, mono(600, 36), 'right', DOCUMENT_COLORS.primary)
     const headingY = 126
     const summaryY = headingY + supplier.lines.length * 34 + time.lines.length * 28 + 38
     const summaryHeight = 72 + totalAmount.lines.length * 48
@@ -223,19 +255,28 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     const headerHeight = Math.max(...headers.map(item => item.lines.length * 30)) + 30
     const groups = statement.orders.map((order) => {
       const orderCell = cell(`${order.orderNo}\n${order.orderDate}`, widths[0] - 28, mono(400, 20))
+      // 唛头属于订单/货件维度，金额属于定金/尾款阶段；因此挂在跨两行的订单列里，不新增列。
+      const markCells = order.shippingMarks.map(mark => cell(mark, widths[0] - 28, sans(600, 18), 'left', DOCUMENT_COLORS.destructive))
+      const moreCell = order.shippingMarkCount > order.shippingMarks.length
+        ? cell(labels.shippingMarkMore.replace('{count}', String(order.shippingMarkCount)), widths[0] - 28, sans(400, 16), 'left', muted)
+        : null
       const stages = order.items.map((item) => {
         const values = [
           cell(labels.paymentTypes[item.paymentType], widths[1] - 24, sans(400, 20)),
-          ...[item.dueAmount, item.paidAmount, item.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(index === 2 ? 600 : 400, 20), 'right', index === 2 && amount !== '0.00' ? fonts.primary : ink)),
-          cell(labels.statuses[item.status], widths[5] - 24, sans(600, 19), 'left', item.status === 'PENDING_PAYMENT' ? '#a3610c' : item.status === 'PAID' ? fonts.primary : muted),
+          ...[item.dueAmount, item.paidAmount, item.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(index === 2 ? 600 : 400, 20), 'right', index === 2 && amount !== '0.00' ? DOCUMENT_COLORS.primary : ink)),
+          cell(labels.statuses[item.status], widths[5] - 24, sans(600, 19), 'left', item.status === 'PENDING_PAYMENT' ? '#a3610c' : item.status === 'PAID' ? DOCUMENT_COLORS.primary : muted),
         ]
         return { values, height: Math.max(60, ...values.map(value => value.lines.length * 30 + 28)) }
       })
-      const extra = Math.max(0, orderCell.lines.length * 30 + 32 - stages.reduce((sum, stage) => sum + stage.height, 0))
+      const headHeight = orderCell.lines.length * 30
+      const marksHeight = markCells.length === 0
+        ? 0
+        : 8 + markCells.reduce((sum, value) => sum + value.lines.length * 24, 0) + (moreCell ? moreCell.lines.length * 22 : 0)
+      const extra = Math.max(0, headHeight + marksHeight + 32 - stages.reduce((sum, stage) => sum + stage.height, 0))
       stages[0].height += extra
-      return { orderCell, stages, height: stages.reduce((sum, stage) => sum + stage.height, 0) }
+      return { orderCell, markCells, moreCell, headHeight, stages, height: stages.reduce((sum, stage) => sum + stage.height, 0) }
     })
-    const totalCells = [cell(labels.total, widths[0] - 24, sans(600)), cell('', widths[1] - 24), ...[statement.totals.dueAmount, statement.totals.paidAmount, statement.totals.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(600, 20), 'right', fonts.primary)), cell(labels.currency, widths[5] - 24, sans(400, 18), 'left', muted)]
+    const totalCells = [cell(labels.total, widths[0] - 24, sans(600)), cell('', widths[1] - 24), ...[statement.totals.dueAmount, statement.totals.paidAmount, statement.totals.remainingAmount].map((amount, index) => cell(formattedAmount(amount), widths[index + 2] - 24, mono(600, 20), 'right', DOCUMENT_COLORS.primary)), cell(labels.currency, widths[5] - 24, sans(400, 18), 'left', muted)]
     const totalHeight = Math.max(...totalCells.map(value => value.lines.length * 30)) + 36
     const note = cell(labels.note, contentWidth, sans(400, 18), 'left', muted)
     const footerY = tableY + headerHeight + groups.reduce((sum, group) => sum + group.height, 0) + totalHeight + 30
@@ -247,7 +288,7 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
     canvas.height = height
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, WIDTH, height)
-    context.fillStyle = fonts.primary
+    context.fillStyle = DOCUMENT_COLORS.primary
     context.fillRect(MARGIN, 48, 6, 42)
     draw(cell(labels.title, contentWidth - 24, sans(600, 36)), MARGIN + 24, 46, contentWidth - 24, 46)
     draw(supplier, MARGIN, headingY, contentWidth, 34)
@@ -272,6 +313,16 @@ export async function renderPurchasePaymentStatement(statement: PurchasePaymentS
         context.fillRect(MARGIN, y, contentWidth, group.height)
       }
       draw(group.orderCell, MARGIN + 12, y + 16, widths[0] - 28, 30)
+      if (group.markCells.length > 0) {
+        let markY = y + 16 + group.headHeight + 8
+        for (const mark of group.markCells) {
+          draw(mark, MARGIN + 12, markY, widths[0] - 28, 24)
+          markY += mark.lines.length * 24
+        }
+        if (group.moreCell) {
+          draw(group.moreCell, MARGIN + 12, markY, widths[0] - 28, 22)
+        }
+      }
       group.stages.forEach((stage, stageIndex) => {
         let stageX = MARGIN + widths[0]
         stage.values.forEach((value, index) => {

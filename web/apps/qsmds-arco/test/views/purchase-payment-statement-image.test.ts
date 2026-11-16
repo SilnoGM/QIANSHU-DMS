@@ -17,6 +17,9 @@ function order(id = 'a'): PurchasePayableOrderDto {
     owner: null,
     purchaseTotalAmount: '10.30',
     paymentRecipientProfile: null,
+    shippingMarks: [],
+    shippingMarkSuffix: '',
+    shippingMarkCount: 0,
     items: [
       { id: `${id}-balance`, paymentType: 'BALANCE', dueAmount: '7.20', paidAmount: '0.10', remainingAmount: '7.10', status: 'PENDING_PAYMENT', version: 1, paidAt: null, paidBy: null, paymentReceipt: null },
       { id: `${id}-deposit`, paymentType: 'DEPOSIT', dueAmount: '3.10', paidAmount: '3.10', remainingAmount: '0.00', status: 'PAID', version: 2, paidAt: null, paidBy: null, paymentReceipt: null },
@@ -99,4 +102,37 @@ test('完整保留长供应商和单号，过大选单显式报错而不截断',
   assert.equal(statement.supplierName, supplier)
   assert.equal(statement.orders[0].orderNo, source.orderNo)
   invalid(Array.from({ length: 101 }, (_, index) => order(`${index}`)), 'STATEMENT_TOO_LARGE')
+})
+
+test('唛头保留后端成品格式，超出六条裁剪但保留真实件数', () => {
+  const source = order()
+  source.shippingMarks = Array.from({ length: 8 }, (_, index) => `【QSM-0001/货件-0${index + 1}】李华-赖文寿`)
+  source.shippingMarkCount = 8
+  const statement = buildPurchasePaymentStatement([source], '供应商', '2026-09-17')
+  assert.equal(statement.orders[0].shippingMarks.length, 6)
+  assert.equal(statement.orders[0].shippingMarkCount, 8)
+  assert.equal(statement.orders[0].shippingMarks[0], '【QSM-0001/货件-01】李华-赖文寿')
+  assert.equal(statement.orders[0].shippingMarks[5], '【QSM-0001/货件-06】李华-赖文寿')
+})
+
+test('空白唛头直接忽略，但类型、长度和件数异常必须显式失败', () => {
+  const source = order()
+  source.shippingMarks = ['  ', '【QSM-0001】公司囤货采购']
+  source.shippingMarkCount = 1
+  assert.deepEqual(buildPurchasePaymentStatement([source], '供应商', '2026-09-17').orders[0].shippingMarks, ['【QSM-0001】公司囤货采购'])
+  for (const mutate of [
+    (input: PurchasePayableOrderDto) => { input.shippingMarks = 'x' as unknown as string[] },
+    (input: PurchasePayableOrderDto) => { input.shippingMarks = [1 as unknown as string] },
+    (input: PurchasePayableOrderDto) => { input.shippingMarks = ['x'.repeat(301)] },
+    (input: PurchasePayableOrderDto) => { input.shippingMarkCount = -1 },
+    (input: PurchasePayableOrderDto) => { input.shippingMarkCount = 1.5 },
+    (input: PurchasePayableOrderDto) => {
+      input.shippingMarks = ['【QSM-0001】公司囤货采购']
+      input.shippingMarkCount = 0
+    },
+  ]) {
+    const changed = order()
+    mutate(changed)
+    invalid([changed])
+  }
 })

@@ -108,6 +108,7 @@
     "voucherArchiveHint": "确认成功后，截图归档到本张采购订单的凭证中。",
     "uploading": "正在上传，请稍候…",
     "imageOnly": "请选择 JPG、PNG 或 WebP 图片",
+    "shippingMarkMore": "等 {count} 件",
     "statement": {
       "generate": "生成对账单（已选{count}单）",
       "title": "采购对账单",

@@ -109829,7 +109829,7 @@
   "info": {
     "title": "Qianshu DMS API",
     "description": "",
-    "version": "1.6.9",
+    "version": "1.6.10",
     "contact": {}
   },
   "tags": [
@@ -120519,6 +120519,21 @@
               }
             ]
           },
+          "shippingMarks": {
+            "description": "Formatted shipment marks, capped at six; cancelled shipments and blank marks are excluded.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "shippingMarkSuffix": {
+            "type": "string",
+            "description": "Sales suffix for the marks; stock purchases use a fixed label because they carry no sales order."
+          },
+          "shippingMarkCount": {
+            "type": "number",
+            "description": "Active shipment count, used to collapse the remaining marks."
+          },
           "items": {
             "type": "array",
             "items": {
@@ -120538,6 +120553,9 @@
           "currencyCode",
           "accountOwnerType",
           "owner",
+          "shippingMarks",
+          "shippingMarkSuffix",
+          "shippingMarkCount",
           "items"
         ]
       },

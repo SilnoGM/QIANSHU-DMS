@@ -66,6 +66,10 @@ watch(() => props.orders, () => {
             <span class="flex flex-1 flex-basis-40 flex-col gap-1 min-w-0">
               <span class="qs-type-data-emphasis break-all">{{ row.order.orderNo }}</span>
               <span class="qs-type-meta text-muted-foreground font-normal">{{ row.order.orderDate }}</span>
+              <span v-for="mark in row.order.shippingMarks" :key="mark" class="qs-type-meta text-destructive break-all">{{ mark }}</span>
+              <span v-if="row.order.shippingMarkCount > row.order.shippingMarks.length" class="qs-type-meta text-muted-foreground">
+                {{ t('purchasePayment.shippingMarkMore', { count: row.order.shippingMarkCount }) }}
+              </span>
             </span>
             <span class="ml-auto flex gap-3 max-w-full min-w-0 items-center">
               <span class="text-right flex flex-col gap-1 min-w-0">

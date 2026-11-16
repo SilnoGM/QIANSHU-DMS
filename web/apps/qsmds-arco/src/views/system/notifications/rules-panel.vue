@@ -4,6 +4,7 @@ import type {
   NotificationChannelPolicyDto,
   NotificationEventDto,
   NotificationTemplateDto,
+  NotificationTemplateMediaPolicyInputDto,
 } from '@/api/generated/types.gen'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -23,6 +24,7 @@ import {
   templateEventSelectOptions,
 } from './template-event-selection.logic'
 import { TEMPLATE_DOMAIN_OPTIONS, templateDomainLabel } from './template-key-grouping.logic'
+import { buildTemplateMediaPolicyPayload } from './template-media-policy.logic'
 import { extractTemplatePlaceholders, insertTextAtSelection } from './template-variable.logic'
 
 const toast = useQsToast()
@@ -686,14 +688,13 @@ const canSaveTemplate = computed(() => {
       && templateVariableError.value === null
 })
 
-function templateMediaPolicyPayload(): { enabled: boolean, maxCount: number, kinds: ('IMAGE')[], sources: string[] } {
-  const enabled = templateDraft.value.channel === 'ASSISTANT' && templateDraft.value.mediaPolicy.enabled
-  return {
-    enabled,
-    maxCount: enabled ? templateDraft.value.mediaPolicy.maxCount : 0,
-    kinds: enabled ? ['IMAGE'] : [],
-    sources: enabled ? [...templateDraft.value.mediaPolicy.sources] : [],
-  }
+function templateMediaPolicyPayload(): NotificationTemplateMediaPolicyInputDto {
+  return buildTemplateMediaPolicyPayload({
+    channel: templateDraft.value.channel,
+    enabled: templateDraft.value.mediaPolicy.enabled,
+    maxCount: templateDraft.value.mediaPolicy.maxCount,
+    sources: templateDraft.value.mediaPolicy.sources,
+  })
 }
 
 async function saveTemplate(): Promise<void> {
