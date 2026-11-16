@@ -126,7 +126,10 @@ test('空白唛头直接忽略，但类型、长度和件数异常必须显式�
     (input: PurchasePayableOrderDto) => { input.shippingMarks = ['x'.repeat(301)] },
     (input: PurchasePayableOrderDto) => { input.shippingMarkCount = -1 },
     (input: PurchasePayableOrderDto) => { input.shippingMarkCount = 1.5 },
-    (input: PurchasePayableOrderDto) => { input.shippingMarks = ['【QSM-0001】公司囤货采购']; input.shippingMarkCount = 0 },
+    (input: PurchasePayableOrderDto) => {
+      input.shippingMarks = ['【QSM-0001】公司囤货采购']
+      input.shippingMarkCount = 0
+    },
   ]) {
     const changed = order()
     mutate(changed)
