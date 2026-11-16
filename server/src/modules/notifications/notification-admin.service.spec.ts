@@ -87,6 +87,8 @@ describe('NotificationAdminService', () => {
       maxLength: 64,
     })
     expect(salesOrderNo?.description).toContain('销售订单编号')
+    // 附件能力只对已验收的事件公布，其余事件返回 null。
+    expect(salesReceipt?.media).toEqual({ maxCount: 3, kinds: ['IMAGE'] })
 
     const withdrawal = result.find(event => event.eventType === 'FUND_WITHDRAWAL_REVIEW_PENDING')
     expect(withdrawal).toMatchObject({
@@ -100,6 +102,7 @@ describe('NotificationAdminService', () => {
     expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
       sensitive: true,
     })
+    expect(withdrawal?.media).toBeNull()
     expect(result).toHaveLength(39)
     for (const event of result) {
       expect(event.variablesKnown).toBe(true)
@@ -150,6 +153,67 @@ describe('NotificationAdminService', () => {
       truncated: false,
       warnings: [],
     })
+  })
+
+  it('rejects media attachments on the in-app channel and out-of-range counts', async () => {
+    await expect(service({}).createTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      {
+        key: 'test.template',
+        channel: 'IN_APP',
+        name: '测试模板',
+        bodyTemplate: '通知',
+        variables: [],
+        mediaPolicy: { enabled: true, maxCount: 1, kinds: ['IMAGE'] },
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED' })
+
+    await expect(service({}).createTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      {
+        key: 'test.template',
+        channel: 'ASSISTANT',
+        name: '测试模板',
+        bodyTemplate: '通知',
+        variables: [],
+        mediaPolicy: { enabled: true, maxCount: 4 },
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID' })
+  })
+
+  it('persists a normalized media policy on template create', async () => {
+    const create = jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({
+      ...data,
+      id: 'template-media',
+      version: 1,
+      updatedAt: new Date('2026-11-16T00:00:00.000Z'),
+      updatedBy: { displayName: '超级管理员' },
+    }))
+    const transaction = {
+      notificationTemplate: { create },
+    }
+    const prisma = {
+      notificationTemplate: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(async (run: (tx: unknown) => Promise<unknown>) => run(transaction)),
+    }
+    const result = await service(prisma).createTemplate(
+      { actorUserId: 'user-1', requestId: 'req-1' },
+      {
+        key: 'sales.receipt.pending',
+        channel: 'ASSISTANT',
+        name: '收款审核',
+        bodyTemplate: '收款待审核',
+        variables: [],
+        mediaPolicy: { enabled: true, maxCount: 2 },
+      },
+    )
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        mediaPolicy: { enabled: true, maxCount: 2, kinds: ['IMAGE'] },
+      }),
+    }))
+    expect(result.mediaPolicy).toEqual({ enabled: true, maxCount: 2, kinds: ['IMAGE'] })
   })
 
   it('rejects a template that uses single-brace placeholders', async () => {
@@ -394,6 +458,9 @@ describe('NotificationAdminService', () => {
       notification: { count, findMany },
       assistantDelivery: { groupBy: deliveryGroupBy },
       notificationInboxItem: { groupBy: inboxGroupBy },
+      notificationMedia: {
+        groupBy: jest.fn().mockResolvedValue([{ notificationId: row.id, _count: { _all: 2 } }]),
+      },
       $transaction: jest.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
     }
 
@@ -436,6 +503,7 @@ describe('NotificationAdminService', () => {
       inAppItemCount: 3,
       inAppUnreadCount: 2,
       deliveryCounts: { FAILED: 1 },
+      mediaCount: 2,
     })
   })
 
@@ -468,6 +536,7 @@ describe('NotificationAdminService', () => {
       status: 'ACCEPTED',
       attemptCount: 1,
       templateKey: 'purchase.review.pending',
+      renderedContent: '采购单 CG-1 待审核',
       failureCode: null,
       failureMessage: null,
       acceptedAt: new Date('2026-11-09T02:00:03.000Z'),
@@ -478,6 +547,25 @@ describe('NotificationAdminService', () => {
       },
       assistantDelivery: {
         findMany: jest.fn().mockResolvedValue([delivery]),
+      },
+      assistantDeliveryMedia: {
+        groupBy: jest.fn().mockResolvedValue([
+          { deliveryId: delivery.id, status: 'ACCEPTED', _count: { _all: 1 } },
+          { deliveryId: delivery.id, status: 'FAILED', _count: { _all: 1 } },
+        ]),
+      },
+      notificationMedia: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: '00000000-0000-4000-8000-000000000201',
+          sortOrder: 0,
+          blockedReason: null,
+          mediaAsset: {
+            mediaType: 'IMAGE',
+            mimeType: 'image/jpeg',
+            originalFilename: '凭证.jpg',
+            sizeBytes: 2048n,
+          },
+        }]),
       },
       notificationInboxItem: {
         groupBy: jest.fn()
@@ -501,11 +589,24 @@ describe('NotificationAdminService', () => {
       inAppItemCount: 3,
       inAppUnreadCount: 1,
       deliveryCounts: { ACCEPTED: 1 },
+      mediaCount: 1,
       deliveries: [expect.objectContaining({
         recipientName: '李华',
         status: 'ACCEPTED',
+        renderedContent: '采购单 CG-1 待审核',
+        mediaTotal: 2,
+        mediaAccepted: 1,
+        mediaFailed: 1,
         acceptedAt: '2026-11-09T02:00:03.000Z',
       })],
+      media: [{
+        sortOrder: 0,
+        mediaType: 'IMAGE',
+        mimeType: 'image/jpeg',
+        originalFilename: '凭证.jpg',
+        sizeBytes: '2048',
+        blockedReason: null,
+      }],
     })
   })
 

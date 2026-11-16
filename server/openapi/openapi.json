@@ -78494,6 +78494,8 @@
               "codes": [
                 "NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT",
                 "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
+                "NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID",
+                "NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED",
                 "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
                 "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",
                 "VALIDATION_FAILED"
@@ -78793,6 +78795,8 @@
               "codes": [
                 "NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT",
                 "NOTIFICATION_TEMPLATE_LINK_REQUIRED",
+                "NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID",
+                "NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED",
                 "NOTIFICATION_TEMPLATE_SINGLE_BRACE",
                 "NOTIFICATION_TEMPLATE_UNDECLARED_VARIABLE",
                 "VALIDATION_FAILED"
@@ -83029,6 +83033,428 @@
               "status": 422,
               "codes": [
                 "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/public/notification-media/{token}": {
+      "get": {
+        "operationId": "notification_media_public_get",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification attachment image bytes.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Token invalid, expired or attachment unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this address.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media storage is temporarily unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "",
+        "tags": [
+          "public-media"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": false,
+          "authorization": false,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": false,
+          "session": "none",
+          "privateNoStore": true,
+          "retry": true,
+          "errors": [
+            {
+              "status": 404,
+              "codes": [
+                "NOTIFICATION_MEDIA_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "RATE_LIMITED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      },
+      "head": {
+        "operationId": "notification_media_public_head",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification attachment image headers.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Token invalid, expired or attachment unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this address.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media storage is temporarily unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "",
+        "tags": [
+          "public-media"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": false,
+          "authorization": false,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": false,
+          "session": "none",
+          "privateNoStore": true,
+          "retry": true,
+          "errors": [
+            {
+              "status": 404,
+              "codes": [
+                "NOTIFICATION_MEDIA_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 429,
+              "codes": [
+                "RATE_LIMITED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
               ]
             }
           ]
@@ -126659,6 +127085,29 @@
           "required"
         ]
       },
+      "NotificationEventMediaDto": {
+        "type": "object",
+        "properties": {
+          "maxCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IMAGE"
+              ]
+            }
+          }
+        },
+        "required": [
+          "maxCount",
+          "kinds"
+        ]
+      },
       "NotificationEventDto": {
         "type": "object",
         "properties": {
@@ -126702,6 +127151,15 @@
           },
           "implemented": {
             "type": "boolean"
+          },
+          "media": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationEventMediaDto"
+              }
+            ]
           }
         },
         "required": [
@@ -126712,7 +127170,8 @@
           "variableDefinitions",
           "variablesKnown",
           "defaultTemplateKey",
-          "implemented"
+          "implemented",
+          "media"
         ]
       },
       "NotificationTemplateVariableDto": {
@@ -126736,6 +127195,33 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "NotificationTemplateMediaPolicyDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "maxCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IMAGE"
+              ]
+            }
+          }
+        },
+        "required": [
+          "enabled",
+          "maxCount",
+          "kinds"
         ]
       },
       "NotificationTemplateDto": {
@@ -126788,6 +127274,9 @@
               "$ref": "#/components/schemas/NotificationTemplateVariableDto"
             }
           },
+          "mediaPolicy": {
+            "$ref": "#/components/schemas/NotificationTemplateMediaPolicyDto"
+          },
           "maxLength": {
             "type": "integer"
           },
@@ -126816,12 +127305,35 @@
           "bodyTemplate",
           "linkUrlTemplate",
           "variables",
+          "mediaPolicy",
           "maxLength",
           "enabled",
           "version",
           "updatedAt",
           "updatedByName"
         ]
+      },
+      "NotificationTemplateMediaPolicyInputDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "maxCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "IMAGE"
+              ]
+            }
+          }
+        }
       },
       "NotificationTemplateCreateDto": {
         "type": "object",
@@ -126871,6 +127383,9 @@
             "items": {
               "$ref": "#/components/schemas/NotificationTemplateVariableDto"
             }
+          },
+          "mediaPolicy": {
+            "$ref": "#/components/schemas/NotificationTemplateMediaPolicyInputDto"
           },
           "maxLength": {
             "type": "integer",
@@ -126927,6 +127442,9 @@
             "items": {
               "$ref": "#/components/schemas/NotificationTemplateVariableDto"
             }
+          },
+          "mediaPolicy": {
+            "$ref": "#/components/schemas/NotificationTemplateMediaPolicyInputDto"
           },
           "maxLength": {
             "type": "integer",
@@ -127231,6 +127749,10 @@
               "type": "integer"
             },
             "description": "小助理 AssistantDelivery 按状态计数"
+          },
+          "mediaCount": {
+            "type": "integer",
+            "description": "业务附件数量（含被策略拦截的）"
           }
         },
         "required": [
@@ -127251,7 +127773,8 @@
           "channels",
           "inAppItemCount",
           "inAppUnreadCount",
-          "deliveryCounts"
+          "deliveryCounts",
+          "mediaCount"
         ]
       },
       "NotificationRecordPageDto": {
@@ -127344,6 +127867,7 @@
               "PENDING",
               "SENDING",
               "ACCEPTED",
+              "PARTIAL",
               "FAILED",
               "SKIPPED",
               "EXPIRED",
@@ -127355,6 +127879,22 @@
           },
           "templateKey": {
             "type": "string"
+          },
+          "renderedContent": {
+            "type": "string",
+            "description": "实际发送的正文快照"
+          },
+          "mediaTotal": {
+            "type": "integer",
+            "description": "该投递的附件项总数"
+          },
+          "mediaAccepted": {
+            "type": "integer",
+            "description": "已接受的附件项数"
+          },
+          "mediaFailed": {
+            "type": "integer",
+            "description": "永久失败或过期的附件项数"
           },
           "failureCode": {
             "type": "string",
@@ -127377,9 +127917,53 @@
           "status",
           "attemptCount",
           "templateKey",
+          "renderedContent",
+          "mediaTotal",
+          "mediaAccepted",
+          "mediaFailed",
           "failureCode",
           "failureMessage",
           "acceptedAt"
+        ]
+      },
+      "NotificationRecordMediaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "originalFilename": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "string",
+            "description": "字节数，避免 BigInt 序列化问题"
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "非空表示附件被模板策略或校验拦截，未进入投递"
+          }
+        },
+        "required": [
+          "id",
+          "sortOrder",
+          "mediaType",
+          "mimeType",
+          "originalFilename",
+          "sizeBytes",
+          "blockedReason"
         ]
       },
       "NotificationRecordDetailDto": {
@@ -127484,10 +128068,20 @@
             },
             "description": "小助理 AssistantDelivery 按状态计数"
           },
+          "mediaCount": {
+            "type": "integer",
+            "description": "业务附件数量（含被策略拦截的）"
+          },
           "deliveries": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/NotificationDeliveryDto"
+            }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationRecordMediaDto"
             }
           }
         },
@@ -127510,7 +128104,9 @@
           "inAppItemCount",
           "inAppUnreadCount",
           "deliveryCounts",
-          "deliveries"
+          "mediaCount",
+          "deliveries",
+          "media"
         ]
       },
       "NotificationCancelResultDto": {

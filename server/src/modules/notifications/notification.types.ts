@@ -1,4 +1,10 @@
 import type { Prisma } from '../../generated/prisma/client'
+import {
+  MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+  NOTIFICATION_MEDIA_ALLOWED_KINDS,
+  type NotificationMediaInput,
+  type NotificationMediaKind,
+} from './notification-media'
 
 export const NOTIFICATION_EVENT_TYPES = [
   'PURCHASE_REVIEW_PENDING',
@@ -366,11 +372,36 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
 })
 
+/**
+ * 已验收过附件能力的事件清单，只服务管理端提示与文档。
+ *
+ * 是否真的发送附件由模板的 `mediaPolicy` 决定；这里不做运行时强校验，
+ * 避免事件清单与模板策略形成两套互相打架的开关。
+ */
+export interface NotificationEventMediaCapability {
+  readonly maxCount: number
+  readonly kinds: readonly NotificationMediaKind[]
+}
+
+export const NOTIFICATION_EVENT_MEDIA: Readonly<Partial<Record<NotificationEventType, NotificationEventMediaCapability>>> = Object.freeze({
+  SALES_RECEIPT_REVIEW_PENDING: {
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+  },
+})
+
 export function notificationEventVariables(eventType: string): readonly string[] | null {
   if (!Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_VARIABLES, eventType)) {
     return null
   }
   return NOTIFICATION_EVENT_VARIABLES[eventType as NotificationEventType] ?? null
+}
+
+export function notificationEventMediaCapability(eventType: string): NotificationEventMediaCapability | null {
+  if (!Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_MEDIA, eventType)) {
+    return null
+  }
+  return NOTIFICATION_EVENT_MEDIA[eventType as NotificationEventType] ?? null
 }
 
 export interface NotificationVariableDefinition {
@@ -1108,6 +1139,11 @@ export interface SystemNotificationPublishCommand {
   readonly target: NotificationTarget
   readonly templateKey: string
   readonly variables: Readonly<Record<string, string | number | null>>
+  /**
+   * 业务附件（一期仅图片）。这里只接收资产 ID：媒体是否可用、模板是否允许、
+   * 数量上限都在发布事务内统一裁决，业务模块不感知渠道与投递细节。
+   */
+  readonly media?: readonly NotificationMediaInput[]
   readonly dedupeKey?: string
   /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准。 */
   readonly priority?: NotificationPriority
@@ -1138,6 +1174,7 @@ export type NotificationPublishWarningCode =
   | 'SENSITIVE_VARIABLE_MASKED'
   | 'NO_RECIPIENT'
   | 'DUPLICATE_IGNORED'
+  | 'MEDIA_ATTACHMENT_BLOCKED'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel
@@ -1182,6 +1219,15 @@ export interface AssistantTransport {
     readonly toWxid: string
     readonly content: string
     readonly ats?: string
+  }): Promise<AssistantTransportResult>
+  /**
+   * 图片消息由上游按 URL 拉取，调用方必须在发送时现签一个短时效地址。
+   * 与 `sendText` 共用同一把返回结构与失败分类，便于派发器复用重试策略。
+   */
+  sendImage(input: {
+    readonly appId: string
+    readonly toWxid: string
+    readonly imageUrl: string
   }): Promise<AssistantTransportResult>
 }
 

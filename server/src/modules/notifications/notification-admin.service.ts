@@ -7,6 +7,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { assistantAdminErrorToApiException } from './assistant-admin.errors'
+import { normalizeNotificationMediaPolicy, parseNotificationMediaPolicy } from './notification-media'
 import { parseNotificationQuietHours } from './notification-quiet-hours'
 import { inspectNotificationTemplate, renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
@@ -18,6 +19,7 @@ import {
   NOTIFICATION_EVENT_TEMPLATE_DOMAIN,
   NOTIFICATION_EVENT_TYPES,
   NOTIFICATION_EVENT_VARIABLES,
+  notificationEventMediaCapability,
   notificationEventVariableDefinitions,
   notificationEventVariables,
   type AssistantTransport,
@@ -104,6 +106,7 @@ function toRecordDto(
   row: NotificationRecordRow,
   deliveryCounts: Record<string, number>,
   inApp: InAppRecordCounts,
+  mediaCount: number,
 ): NotificationRecordDto {
   return {
     id: row.id,
@@ -124,6 +127,7 @@ function toRecordDto(
     inAppItemCount: inApp.total,
     inAppUnreadCount: inApp.unread,
     deliveryCounts,
+    mediaCount,
   }
 }
 
@@ -158,12 +162,14 @@ function toTemplateDto(template: {
   readonly bodyTemplate: string
   readonly linkUrlTemplate: string | null
   readonly variables: Prisma.JsonValue
+  readonly mediaPolicy: Prisma.JsonValue
   readonly maxLength: number
   readonly enabled: boolean
   readonly version: number
   readonly updatedAt: Date
   readonly updatedBy?: { readonly displayName: string } | null
 }): NotificationTemplateDto {
+  const mediaPolicy = parseNotificationMediaPolicy(template.mediaPolicy)
   return {
     id: template.id,
     key: template.key,
@@ -174,6 +180,11 @@ function toTemplateDto(template: {
     bodyTemplate: template.bodyTemplate,
     linkUrlTemplate: template.linkUrlTemplate,
     variables: templateVariables(template.variables),
+    mediaPolicy: {
+      enabled: mediaPolicy.enabled,
+      maxCount: mediaPolicy.maxCount,
+      kinds: [...mediaPolicy.kinds],
+    },
     maxLength: template.maxLength,
     enabled: template.enabled,
     version: template.version,
@@ -268,6 +279,37 @@ export class NotificationAdminService {
     }
   }
 
+  /**
+   * 附件策略是模板级配置：站内渠道一期不支持附件，其余渠道只允许图片。
+   * 保存时的严格校验与运行时的宽容解析分开——历史配置异常不能让模板永久不可编辑。
+   */
+  private resolveTemplateMediaPolicy(
+    channel: 'IN_APP' | 'ASSISTANT',
+    input: { readonly enabled?: boolean, readonly maxCount?: number, readonly kinds?: readonly string[] } | undefined,
+  ): { readonly enabled: boolean, readonly maxCount: number, readonly kinds: readonly string[] } {
+    if (input === undefined) {
+      return { enabled: false, maxCount: 0, kinds: [] }
+    }
+    const normalized = normalizeNotificationMediaPolicy(input)
+    if (!normalized.ok) {
+      throw new ApiException(
+        422,
+        'NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID',
+        normalized.code === 'MEDIA_COUNT_INVALID'
+          ? '附件数量上限必须在 1 到 3 之间'
+          : '一期仅支持图片附件',
+      )
+    }
+    if (channel === 'IN_APP' && normalized.policy.enabled) {
+      throw new ApiException(422, 'NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED', '站内通知暂不支持附件')
+    }
+    return {
+      enabled: normalized.policy.enabled,
+      maxCount: normalized.policy.maxCount,
+      kinds: normalized.policy.kinds,
+    }
+  }
+
   private async assertTemplateDomainConsistent(
     key: string,
     channel: 'IN_APP' | 'ASSISTANT',
@@ -284,6 +326,7 @@ export class NotificationAdminService {
 
   async createTemplate(context: NotificationAdminContext, input: NotificationTemplateCreateDto): Promise<NotificationTemplateDto> {
     this.validateTemplate(input)
+    const mediaPolicy = this.resolveTemplateMediaPolicy(input.channel, input.mediaPolicy)
     const domain = input.domain ?? 'SYSTEM'
     await this.assertTemplateDomainConsistent(input.key, input.channel, domain)
     try {
@@ -298,6 +341,7 @@ export class NotificationAdminService {
             bodyTemplate: input.bodyTemplate,
             linkUrlTemplate: input.linkUrlTemplate ?? null,
             variables: input.variables as unknown as Prisma.InputJsonValue,
+            mediaPolicy,
             maxLength: input.maxLength ?? 2000,
             enabled: input.enabled ?? true,
             createdByUserId: context.actorUserId,
@@ -352,6 +396,9 @@ export class NotificationAdminService {
       linkUrlTemplate,
       variables,
     })
+    const mediaPolicy = input.mediaPolicy === undefined
+      ? undefined
+      : this.resolveTemplateMediaPolicy(existing.channel, input.mediaPolicy)
     const updated = await this.prisma.$transaction(async transaction => {
       const row = await transaction.notificationTemplate.update({
         where: { id },
@@ -364,6 +411,7 @@ export class NotificationAdminService {
           ...(input.bodyTemplate !== undefined ? { bodyTemplate: input.bodyTemplate } : {}),
           ...(input.linkUrlTemplate !== undefined ? { linkUrlTemplate: input.linkUrlTemplate } : {}),
           ...(input.variables !== undefined ? { variables: input.variables as unknown as Prisma.InputJsonValue } : {}),
+          ...(mediaPolicy !== undefined ? { mediaPolicy } : {}),
           ...(input.maxLength !== undefined ? { maxLength: input.maxLength } : {}),
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
           version: { increment: 1 },
@@ -459,6 +507,10 @@ export class NotificationAdminService {
       variablesKnown: notificationEventVariables(eventType) !== null,
       defaultTemplateKey: NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY[eventType] ?? null,
       implemented: IMPLEMENTED_NOTIFICATION_EVENT_TYPES.includes(eventType),
+      media: (() => {
+        const capability = notificationEventMediaCapability(eventType)
+        return capability === null ? null : { maxCount: capability.maxCount, kinds: [...capability.kinds] }
+      })(),
     }))
   }
 
@@ -753,15 +805,17 @@ export class NotificationAdminService {
       }),
     ])
     const ids = rows.map(row => row.id)
-    const [deliveryCounts, inAppCounts] = await Promise.all([
+    const [deliveryCounts, inAppCounts, mediaCounts] = await Promise.all([
       this.deliveryCounts(ids),
       this.inAppCounts(ids),
+      this.mediaCounts(ids),
     ])
     return {
       items: rows.map(row => toRecordDto(
         row,
         deliveryCounts.get(row.id) ?? {},
         inAppCounts.get(row.id) ?? { total: 0, unread: 0 },
+        mediaCounts.get(row.id) ?? 0,
       )),
       page: input.page,
       pageSize: input.pageSize,
@@ -777,7 +831,7 @@ export class NotificationAdminService {
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
-    const [deliveries, inAppCounts] = await Promise.all([
+    const [deliveries, inAppCounts, media] = await Promise.all([
       this.prisma.assistantDelivery.findMany({
         where: { notificationId: id },
         include: {
@@ -787,7 +841,20 @@ export class NotificationAdminService {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       }),
       this.inAppCounts([id]),
+      this.prisma.notificationMedia.findMany({
+        where: { notificationId: id },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          sortOrder: true,
+          blockedReason: true,
+          mediaAsset: {
+            select: { mediaType: true, mimeType: true, originalFilename: true, sizeBytes: true },
+          },
+        },
+      }),
     ])
+    const mediaByDelivery = await this.deliveryMediaCounts(deliveries.map(delivery => delivery.id))
     const counts: Record<string, number> = {}
     for (const delivery of deliveries) {
       counts[delivery.status] = (counts[delivery.status] ?? 0) + 1
@@ -796,21 +863,76 @@ export class NotificationAdminService {
       notification,
       counts,
       inAppCounts.get(id) ?? { total: 0, unread: 0 },
+      media.length,
     )
     return {
       ...record,
-      deliveries: deliveries.map(delivery => ({
-        id: delivery.id,
-        recipientName: delivery.recipientUser?.displayName ?? null,
-        targetName: delivery.target?.name ?? null,
-        status: delivery.status,
-        attemptCount: delivery.attemptCount,
-        templateKey: delivery.templateKey,
-        failureCode: delivery.failureCode,
-        failureMessage: delivery.failureMessage,
-        acceptedAt: iso(delivery.acceptedAt),
+      deliveries: deliveries.map(delivery => {
+        const mediaCounts = mediaByDelivery.get(delivery.id) ?? { accepted: 0, failed: 0, total: 0 }
+        return {
+          id: delivery.id,
+          recipientName: delivery.recipientUser?.displayName ?? null,
+          targetName: delivery.target?.name ?? null,
+          status: delivery.status,
+          attemptCount: delivery.attemptCount,
+          templateKey: delivery.templateKey,
+          renderedContent: delivery.renderedContent,
+          mediaTotal: mediaCounts.total,
+          mediaAccepted: mediaCounts.accepted,
+          mediaFailed: mediaCounts.failed,
+          failureCode: delivery.failureCode,
+          failureMessage: delivery.failureMessage,
+          acceptedAt: iso(delivery.acceptedAt),
+        }
+      }),
+      media: media.map(row => ({
+        id: row.id,
+        sortOrder: row.sortOrder,
+        mediaType: row.mediaAsset.mediaType,
+        mimeType: row.mediaAsset.mimeType,
+        originalFilename: row.mediaAsset.originalFilename,
+        sizeBytes: row.mediaAsset.sizeBytes?.toString() ?? '0',
+        blockedReason: row.blockedReason,
       })),
     }
+  }
+
+  private async mediaCounts(notificationIds: readonly string[]): Promise<Map<string, number>> {
+    if (notificationIds.length === 0) {
+      return new Map()
+    }
+    const rows = await this.prisma.notificationMedia.groupBy({
+      by: ['notificationId'],
+      where: { notificationId: { in: [...notificationIds] } },
+      _count: { _all: true },
+    })
+    return new Map(rows.map(row => [row.notificationId, row._count._all]))
+  }
+
+  private async deliveryMediaCounts(
+    deliveryIds: readonly string[],
+  ): Promise<Map<string, { readonly total: number, readonly accepted: number, readonly failed: number }>> {
+    if (deliveryIds.length === 0) {
+      return new Map()
+    }
+    const rows = await this.prisma.assistantDeliveryMedia.groupBy({
+      by: ['deliveryId', 'status'],
+      where: { deliveryId: { in: [...deliveryIds] } },
+      _count: { _all: true },
+    })
+    const result = new Map<string, { total: number, accepted: number, failed: number }>()
+    for (const row of rows) {
+      const entry = result.get(row.deliveryId) ?? { accepted: 0, failed: 0, total: 0 }
+      entry.total += row._count._all
+      if (row.status === 'ACCEPTED') {
+        entry.accepted += row._count._all
+      }
+      if (row.status === 'FAILED' || row.status === 'EXPIRED') {
+        entry.failed += row._count._all
+      }
+      result.set(row.deliveryId, entry)
+    }
+    return result
   }
 
   async cancelRecord(context: NotificationAdminContext, id: string): Promise<NotificationCancelResultDto> {
