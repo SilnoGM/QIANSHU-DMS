@@ -37,7 +37,7 @@
 - 阶段 1 不实现站内通知中心页面与已读体系；只落表结构，渠道默认关闭。
 - 不做员工自助绑定、绑定码或员工侧绑定入口；绑定全部由管理员完成。
 - 不做多公司号选号与故障转移；首期只有一个公司号，模型保留 `accountId`。
-- 不做图片、文件、语音、视频、群内 `@`、微信内回复指令。
+- 附件一期只做**图片**（1–3 张，随通知正文发送）；文件、语音、视频、群内 `@`、微信内回复指令仍不做。视频需要 `postVideo` 的封面与时长，留到二期。
 - 不提供送达回执或已读状态；GeWe 没有该能力。
 - 不把 GeWe 原始接口暴露给业务模块或浏览器。
 - 不改变现有业务状态机；通知是旁路，不参与审批、对账、收付款的判定。
@@ -228,6 +228,14 @@ PENDING ──► SENDING ──► ACCEPTED
 - 阶段 1 的 3 个事件在 `ASSISTANT` 渠道开启 `allow_sensitive`：金额与客户名称可以出现在 1:1 和内部群。1:1 只发给 `verified_at` 非空的绑定；群必须 `internal_only = true`。
 - 本次放行范围只有金额与客户名称；手机号、地址、证件号等其他敏感字段仍然脱敏，除非后续单独批准。
 
+附件策略（`notification_templates.media_policy`）：
+
+- 结构 `{ enabled, maxCount, kinds }`：一期 `kinds` 只允许 `["IMAGE"]`、`maxCount` 为 1–3；空对象表示不发送附件。站内渠道一期固定不支持附件。
+- 是否真的发送由模板策略裁决，而不是业务调用方：业务只传 `media: [{ assetId }]`；模板关闭、超过上限、资产未 `READY`、类型不允许、`allow_sensitive = false` 时全部拦下并写 `notification_media.blocked_reason`，正文照发。
+- 附件按敏感内容处理：`allow_sensitive = false` 时整张不发（图片无法像变量一样脱敏）。
+- 被拦下的附件同样入库（带 `blocked_reason`），记录页可以区分「业务没传」与「被配置挡住」。
+- 群目标的附件继承策略的 `allow_sensitive` 与 `internal_only` 规则，与正文一致。
+
 ### 4.5 数据保留与清理
 
 | 数据 | 默认保留 | 说明 |
@@ -249,9 +257,10 @@ PENDING ──► SENDING ──► ACCEPTED
 2. 对每个渠道解析目标：`COMMAND_TARGET` 用命令目标，其他模式用策略配置；`GROUP` 只用于千树小助理。
 3. 解析收件人为具体用户或群目标。
 4. 计算幂等键；已存在则直接返回原通知。
-5. 站内：为每个用户创建 `notification_inbox_items`，写入渲染快照与实际模板键。
-6. 站外：为每个用户或群创建 `assistant_deliveries`，写入实际模板键；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。
-7. 汇总通知状态。
+5. 附件：按模板策略裁决业务传入的资产，写入 `notification_media`（含被拦下的与 `blocked_reason`）。
+6. 站内：为每个用户创建 `notification_inbox_items`，写入渲染快照与实际模板键；一期不携带附件。
+7. 站外：为每个用户或群创建 `assistant_deliveries`，写入实际模板键；未绑定、停用、渠道关闭的收件人直接落 `SKIPPED`。可发送的交付同时创建 `assistant_delivery_media`（每条投递 × 每张附件一行）。
+8. 汇总通知状态。
 
 阶段 1 先插入并启用 `ASSISTANT`；站内通知迁移已插入并启用 `IN_APP`，并为采购审核、开票审核、货件到仓创建站内模板。事件策略仍由管理员按环境配置；`PURCHASE_REVIEW_PENDING` 的 1:1 依赖管理员手动绑定。
 
@@ -301,6 +310,13 @@ PENDING ──► SENDING ──► ACCEPTED
 
 文档没有正式错误码表，上表是保守起点，必须在试用期用真实返回校准。重试无幂等键，可能产生重复消息；内容中带单号，便于人工识别。
 
+附件发送与正文分开记账：
+
+- 正文成功写 `assistant_deliveries.content_sent_at`；之后的重试只补发未完成的附件项，不会重复发正文。
+- 每个 `assistant_delivery_media` 独立持有重试计数与退避；某一项永久失败不阻塞其余项。
+- 正文成功、附件全部成功 → `ACCEPTED`；正文成功但至少一项永久失败 → `PARTIAL`（通知级按部分成功汇总）；正文失败走原有投递级重试。
+- 每张图发送前重新获取一次派发租约并现签取流地址；`resolve_stale_sending` 的预算按「1 条正文 + 最大附件数」计算，避免健康的长投递被误判为崩溃。
+
 ### 5.6 静默时段
 
 只作用于千树小助理：
@@ -340,9 +356,21 @@ PENDING ──► SENDING ──► ACCEPTED
 | `ASSISTANT_WORKER_POLL_MS` | 否 | 默认 5000 |
 | `ASSISTANT_WORKER_BATCH` | 否 | 默认 20 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | 默认 10000 |
-| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | 默认 3000；所有 sendText 的全局最小间隔，0 仅用于本地关闭节流 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | 默认 3000；所有 sendText 与 sendImage 的全局最小间隔，0 仅用于本地关闭节流 |
+| `NOTIFICATION_MEDIA_URL_SECRET` | 是（生产） | 32 字节 base64url；图片取流地址的 HMAC 密钥，必须与认证域三个 key 不同。dev/test 缺省时使用进程级随机值 |
 
-渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。
+渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。`NOTIFICATION_MEDIA_URL_SECRET` 是例外：生产缺失直接拒绝启动（fail-closed），发版前必须先配置。
+
+### 5.10 附件取流
+
+GeWe 的 `postImage` 由上游服务器按 URL 拉取，无法携带 Session Cookie，因此通知图片走一条独立的匿名取流路由：
+
+- `GET|HEAD /api/public/notification-media/:token`，`@Public()`，不参与 Session、权限与数据范围校验。
+- token 载荷绑定**投递附件项 ID** 与过期时间（15 分钟），HMAC-SHA256 签名；派发器每次发送前现签，绝不复用。
+- 校验通过后只允许 `IMAGE`、`READY`、未删除的资产；其余一律 404，不区分原因。
+- 首次成功读取写回 `assistant_delivery_media.fetched_at`，用于判断上游是否真的来拉取过图片。
+- 响应继续使用全局 `private, no-store`，并在应用内按来源地址做 60 次/分钟限流；nginx `limit_req` 作为可选加固。
+- 该路由只作为传输通道，不改变「通知不阻断业务」：图片拉取失败表现为附件项 `FAILED`，正文仍按原状态处理。
 
 ## 6. GeWe 适配层
 
@@ -355,6 +383,11 @@ export interface AssistantTransport {
     toWxid: string
     content: string
   }): Promise<AssistantTransportResult>
+  sendImage(input: {
+    appId: string
+    toWxid: string
+    imageUrl: string
+  }): Promise<AssistantTransportResult>
 }
 
 export type AssistantTransportResult =
@@ -362,11 +395,12 @@ export type AssistantTransportResult =
   | { ok: false; kind: 'TIMEOUT' | 'NETWORK' | 'REJECTED' | 'OFFLINE' | 'RATE_LIMITED' | 'UNKNOWN'; code: string; message: string }
 ```
 
-首期只实现 `sendText`。链接消息在第三阶段加入 `sendLink`，不改变业务调用方。
+一期实现 `sendText` 与 `sendImage`；两者共用同一把返回结构与失败分类，也都必须经过全局发送闸门。链接消息仍在后续阶段加入 `sendLink`，不改变业务调用方。
 
 ### 6.2 请求映射
 
 - 文字：`POST /gewe/v2/api/message/postText`，body `{ appId, toWxid, content }`。
+- 图片：`POST /gewe/v2/api/message/postImage`，body `{ appId, toWxid, imgUrl }`；`imgUrl` 是派发时现签的短时效公开地址。
 - 群消息：`toWxid` 为 `xxx@chatroom`；群内 `@` 暂不支持。
 - 请求头 `X-GEWE-TOKEN` 从环境注入；日志与错误对象只保留 `ret` 与 `msg`，不保留请求体。
 - 响应 `ret=200` 时保存 `data.msgId` 与 `data.newMsgId`；其余字段忽略。

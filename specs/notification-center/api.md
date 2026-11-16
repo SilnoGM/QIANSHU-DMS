@@ -254,6 +254,19 @@ export interface SystemNotificationPublishResult {
 | GET | `/api/notifications/records/:id` | `notification-record:read` | `notifications_records_get` | 详情；站内看阅读计数，站外看逐人交付 |
 | POST | `/api/notifications/records/:id/cancel` | `notification-record:manage` | `notifications_records_cancel` | 取消未发送的站外交付；站内条目不受影响 |
 
+附件相关（一期）：
+
+| 方法 | 路径 | 鉴权 | operationId | 说明 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/public/notification-media/:token` | 无（HMAC token） | `notification_media_public_get` | 千树小助理图片取流；token 15 分钟有效 |
+| HEAD | `/api/public/notification-media/:token` | 无（HMAC token） | `notification_media_public_head` | 只返回图片头信息 |
+
+- 公开取流路由不参与 Session、权限与数据范围校验，失败统一 404 `NOTIFICATION_MEDIA_NOT_FOUND`；限流返回 429 `RATE_LIMITED`，存储不可用返回 503 `MEDIA_STORAGE_UNAVAILABLE`。
+- token 只能由派发器在发送时签发，绑定具体 `assistant_delivery_media` 行；不提供任何对外签发接口。
+- 模板创建/更新请求与响应新增 `mediaPolicy`：`{ enabled, maxCount, kinds }`。`enabled=true` 时 `maxCount` 必须 1–3、`kinds` 只允许 `IMAGE`，否则 422 `NOTIFICATION_TEMPLATE_MEDIA_POLICY_INVALID`；站内渠道开启附件返回 422 `NOTIFICATION_TEMPLATE_MEDIA_UNSUPPORTED`。
+- `GET /api/notifications/events` 每个事件新增 `media: { maxCount, kinds } | null`，只用于管理端提示哪些事件已验收过附件能力。
+- 记录列表新增 `mediaCount`；详情新增 `media: [{ id, sortOrder, mediaType, mimeType, originalFilename, sizeBytes, blockedReason }]`，交付项新增 `renderedContent`、`mediaTotal`、`mediaAccepted`、`mediaFailed`，交付状态新增 `PARTIAL`。
+
 记录列表查询参数：`eventType`、`domain`、`channel`、`status`、`priority`、`publishedFrom`、`publishedTo`、`keyword`、`page`、`pageSize`。`domain` 通过事件常量映射，`channel` 判断发布时记录的 `requestedChannels`，`publishedFrom/To` 接收带时区的 ISO 时间，`keyword` 匹配记录 ID、来源单号、模板键、请求人、收件人/群目标及失败信息。列表和详情响应返回 `notificationNo`、`eventLabel`、`domain`、`requestedByName`、`channels`、`inAppItemCount`、`inAppUnreadCount`；`notificationNo` 由 `NOTIFICATION_NO` 规则按 `NTF/YYYYMMDD-######` 发号，历史通知允许为空；`deliveryCounts` 仅统计小助理 `AssistantDelivery`。
 
 模板响应和创建/更新请求新增 `domain`，只能取 `SALES`、`PURCHASE`、`SHIPMENT`、`FINANCE`、`INVOICE`、`RECONCILIATION`、`OPERATIONS`、`SYSTEM` 之一，模板只属于一个业务域。同一 `key` 在两个渠道必须使用同一业务域，冲突返回 422 `NOTIFICATION_TEMPLATE_DOMAIN_CONFLICT`。`PURCHASE_PAYABLE_PENDING` 与 `PACKAGING_COST_PAYMENT_PENDING` 统一归 `FINANCE`；未识别的历史模板回填 `SYSTEM`。策略绑定模板时，管理端在模板域与事件域不一致时提示但允许保存。

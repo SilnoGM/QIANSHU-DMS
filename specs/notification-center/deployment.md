@@ -29,6 +29,7 @@
 | `ASSISTANT_WORKER_BATCH` | 否 | `20` | 单轮领取上限 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | `10000` | GeWe 请求超时 |
 | `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔；`0` 仅用于本地关闭节流 |
+| `NOTIFICATION_MEDIA_URL_SECRET` | 是（生产） | — | 32 字节 base64url；图片取流地址签名密钥，必须与认证域三个 key 不同。缺失时生产拒绝启动 |
 | `NOTIFICATION_INTERNAL_API_ENABLED` | 否 | `false` | 内部 HTTP 发布入口，阶段 1 关闭 |
 | `NOTIFICATION_INTERNAL_TOKEN` | 否 | — | 内部入口令牌；关闭时不使用 |
 | `ASSISTANT_CALLBACK_SECRET` | 否 | — | 阶段 1 不配置，回调引入后再加 |

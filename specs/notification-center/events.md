@@ -17,6 +17,7 @@
 - 每个事件必须有唯一 `dedupeKey`；重复触发返回原通知，不重复发送。
 - 已实现事件允许金额与客户名称；1:1 只发给 `verifiedAt` 非空的绑定，群只发给 `internalOnly = true` 的目标。
 - 文案中的 `{{变量}}` 对应模板白名单；金额与客户名称标记 `sensitive`。
+- 附件能力一期只接入 `SALES_RECEIPT_REVIEW_PENDING`：表外收款提交时把已激活的 `voucherMediaAssetId` 作为 `media: [{ assetId }]` 传入；是否真正发送由模板 `media_policy` 裁决，单条通知最多 3 张图片，站内渠道不携带附件。
 - 实际首批事件为采购审核、开票审核、货件到仓；`SLH_RECONCILIATION_COMPLETED` 章节保留为后续候选，当前没有业务发布点。
 - 站内模板通过 `20261108110000_notification_inbox_business_links` 接收业务标识变量：采购/到仓使用 `orderId`，开票使用 `invoiceRequestId`；详情链接分别打开采购、开票记录和到仓货件页面。
 
