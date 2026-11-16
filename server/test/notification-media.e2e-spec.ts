@@ -26,7 +26,17 @@ describe('Notification media public route with PostgreSQL', () => {
   let userId: string
   let assetId: string
   let uploadingAssetId: string
+  let accountId: string
   let notifications: SystemNotificationService
+  const createdNotificationIds: string[] = []
+  let previousAssistantEnabled = false
+  let previousPolicy: {
+    readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
+    readonly targetConfig: Record<string, unknown>
+    readonly allowSensitive: boolean
+    readonly ttlSeconds: number | null
+    readonly enabled: boolean
+  } | null = null
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -121,6 +131,7 @@ describe('Notification media public route with PostgreSQL', () => {
         status: 'ONLINE',
       },
     })
+    accountId = account.id
     await prisma.assistantBinding.create({
       data: {
         userId,
@@ -132,6 +143,11 @@ describe('Notification media public route with PostgreSQL', () => {
         verifiedByUserId: userId,
       },
     })
+    const previousSetting = await prisma.notificationChannelSettings.findUnique({
+      where: { channel: 'ASSISTANT' },
+      select: { enabled: true },
+    })
+    previousAssistantEnabled = previousSetting?.enabled ?? false
     await prisma.notificationChannelSettings.upsert({
       where: { channel: 'ASSISTANT' },
       create: { channel: 'ASSISTANT', enabled: true },
@@ -148,6 +164,30 @@ describe('Notification media public route with PostgreSQL', () => {
         mediaPolicy: { enabled: true, maxCount: 2, kinds: ['IMAGE'] },
       },
     })
+    const existingPolicy = await prisma.notificationChannelPolicy.findUnique({
+      where: {
+        eventType_channel: {
+          eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+          channel: 'ASSISTANT',
+        },
+      },
+      select: {
+        targetMode: true,
+        targetConfig: true,
+        allowSensitive: true,
+        ttlSeconds: true,
+        enabled: true,
+      },
+    })
+    previousPolicy = existingPolicy === null
+      ? null
+      : {
+          targetMode: existingPolicy.targetMode,
+          targetConfig: existingPolicy.targetConfig as Record<string, unknown>,
+          allowSensitive: existingPolicy.allowSensitive,
+          ttlSeconds: existingPolicy.ttlSeconds,
+          enabled: existingPolicy.enabled,
+        }
     const policy = {
       targetMode: 'USERS' as const,
       targetConfig: { userIds: [userId] },
@@ -172,7 +212,68 @@ describe('Notification media public route with PostgreSQL', () => {
   })
 
   afterAll(async () => {
-    await application.close()
+    // 共享测试库必须清理夹具：product-media 生命周期套件会断言媒体域为空。
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe('SET LOCAL session_replication_role = replica')
+        const notificationIds = [notificationId, ...createdNotificationIds]
+        // replica 会话会关闭外键触发器，级联不会发生，必须显式按依赖顺序删除。
+        const deliveries = await tx.assistantDelivery.findMany({
+          where: { notificationId: { in: notificationIds } },
+          select: { id: true },
+        })
+        await tx.assistantDeliveryMedia.deleteMany({
+          where: { deliveryId: { in: deliveries.map(delivery => delivery.id) } },
+        })
+        await tx.assistantDelivery.deleteMany({
+          where: { notificationId: { in: notificationIds } },
+        })
+        await tx.notificationMedia.deleteMany({
+          where: { notificationId: { in: notificationIds } },
+        })
+        await tx.notification.deleteMany({
+          where: { id: { in: notificationIds } },
+        })
+        await tx.mediaAsset.deleteMany({
+          where: { id: { in: [assetId, uploadingAssetId] } },
+        })
+        await tx.assistantBinding.deleteMany({ where: { userId } })
+        await tx.assistantAccount.deleteMany({ where: { id: accountId } })
+        await tx.user.delete({ where: { id: userId } })
+        await tx.notificationTemplate.deleteMany({
+          where: { key: 'sales.receipt.pending', channel: 'ASSISTANT' },
+        })
+        await tx.notificationChannelSettings.update({
+          where: { channel: 'ASSISTANT' },
+          data: { enabled: previousAssistantEnabled },
+        })
+        if (previousPolicy === null) {
+          await tx.notificationChannelPolicy.deleteMany({
+            where: {
+              eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+              channel: 'ASSISTANT',
+            },
+          })
+        }
+        else {
+          await tx.notificationChannelPolicy.update({
+            where: {
+              eventType_channel: {
+                eventType: 'SALES_RECEIPT_REVIEW_PENDING',
+                channel: 'ASSISTANT',
+              },
+            },
+            data: {
+              ...previousPolicy,
+              targetConfig: previousPolicy.targetConfig as Prisma.InputJsonValue,
+            },
+          })
+        }
+      })
+    }
+    finally {
+      await application.close()
+    }
   })
 
   it('serves the signed image without any session cookie and records the first fetch', async () => {
@@ -239,6 +340,7 @@ describe('Notification media public route with PostgreSQL', () => {
       media: [{ assetId }, { assetId: uploadingAssetId }],
       dedupeKey: `notification-media-e2e:${sourceId}`,
     })
+    createdNotificationIds.push(result.notificationId)
 
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'MEDIA_ATTACHMENT_BLOCKED' }),
@@ -289,6 +391,7 @@ describe('Notification media public route with PostgreSQL', () => {
       ],
       dedupeKey: `notification-media-e2e:${sourceId}`,
     })
+    createdNotificationIds.push(result.notificationId)
 
     const media = await prisma.notificationMedia.findMany({
       where: { notificationId: result.notificationId },
@@ -317,6 +420,7 @@ describe('Notification media public route with PostgreSQL', () => {
       media: [{ assetId }],
       dedupeKey: `notification-media-e2e:${sourceId}`,
     })
+    createdNotificationIds.push(result.notificationId)
 
     const media = await prisma.notificationMedia.findMany({
       where: { notificationId: result.notificationId },
