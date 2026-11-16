@@ -197,6 +197,8 @@ describe('SalesOrderCommandService', () => {
           customerName: '王小明',
           lineCount: '1',
           issuerName: '张三',
+          customerFbName: '',
+          customerLineName: '',
         }),
       }),
       { transaction: expect.anything() },
@@ -356,5 +358,44 @@ describe('SalesOrderCommandService', () => {
     }, input())).resolves.toEqual(fixture.detail)
     expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
     expect(fixture.prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('persists optional FB/LINE names and exposes them to the submitted notification', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-social-names',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, input({
+      customer: {
+        name: '王小明',
+        phone: '0912345678',
+        countryRegionId: '11111111-1111-4111-8111-111111111111',
+        provinceStateId: '22222222-2222-4222-8222-222222222222',
+        cityId: '33333333-3333-4333-8333-333333333333',
+        addressDetail: '苓雅区中正一路100号',
+        fbName: 'Wang FB',
+        lineName: 'wangline',
+      },
+    }))).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerFbName: 'Wang FB',
+          customerLineName: 'wangline',
+        }),
+      }),
+    )
+    expect(fixture.notifications.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({
+          customerFbName: 'Wang FB',
+          customerLineName: 'wangline',
+        }),
+      }),
+      { transaction: expect.anything() },
+    )
   })
 })

@@ -1243,6 +1243,9 @@ model SalesOrder {
   currencyCode                      String                      @map("currency_code") @db.VarChar(3)
   customerName                      String                      @map("customer_name") @db.VarChar(128)
   customerPhone                     String                      @map("customer_phone") @db.VarChar(64)
+  /// 客户社交账号名称，均为选填；空串在创建时归一为 null。
+  customerFbName                    String?                     @map("customer_fb_name") @db.VarChar(128)
+  customerLineName                  String?                     @map("customer_line_name") @db.VarChar(128)
   customerCountryRegionId           String                      @map("customer_country_region_id") @db.Uuid
   customerProvinceStateId           String                      @map("customer_province_state_id") @db.Uuid
   customerCityId                    String                      @map("customer_city_id") @db.Uuid

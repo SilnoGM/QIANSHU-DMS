@@ -153,6 +153,30 @@ describe('normalizeSalesOrderCreateCommand', () => {
       .toEqual(['lines.0.actualUnitPriceAmount'])
   })
 
+  it('normalizes optional customer social names and treats blanks as null', () => {
+    const input = validInput()
+    input.customer = {
+      ...(input.customer as Record<string, unknown>),
+      fbName: '  Wang FB  ',
+      lineName: '   ',
+    }
+    const normalized = normalizeSalesOrderCreateCommand(input, TODAY)
+    expect(normalized.customer.fbName).toBe('Wang FB')
+    expect(normalized.customer.lineName).toBeNull()
+
+    const withoutNames = normalizeSalesOrderCreateCommand(validInput(), TODAY)
+    expect(withoutNames.customer.fbName).toBeNull()
+    expect(withoutNames.customer.lineName).toBeNull()
+
+    const tooLong = validInput()
+    tooLong.customer = {
+      ...(tooLong.customer as Record<string, unknown>),
+      fbName: 'x'.repeat(129),
+    }
+    expect(captureApiException(() => normalizeSalesOrderCreateCommand(tooLong, TODAY)))
+      .toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+
   it('accepts canonical UUID v5 region identities from the existing region domain', () => {
     const input = validInput()
     input.customer = {

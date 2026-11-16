@@ -77,6 +77,26 @@ describe('sales order create fingerprint', () => {
     expect(new Set([baseline, ...variants]).size).toBe(variants.length + 1)
   })
 
+  it('keeps the v2 fingerprint stable when social names are absent and changes when present', () => {
+    const baseline = calculateSalesOrderCreateFingerprint(ACTOR_ID, payload())
+    const baseCustomer = {
+      name: 'Customer',
+      phone: '0123456789',
+      countryRegionId: '11111111-1111-4111-8111-111111111111',
+      provinceStateId: '22222222-2222-4222-8222-222222222222',
+      cityId: '33333333-3333-4333-8333-333333333333',
+      addressDetail: 'Street 1',
+    }
+
+    expect(calculateSalesOrderCreateFingerprint(ACTOR_ID, payload({
+      customer: { ...baseCustomer, fbName: '  ', lineName: null },
+    }))).toBe(baseline)
+
+    expect(calculateSalesOrderCreateFingerprint(ACTOR_ID, payload({
+      customer: { ...baseCustomer, fbName: 'Wang FB', lineName: 'wangline' },
+    }))).not.toBe(baseline)
+  })
+
   it('hashes idempotency keys before persistence', () => {
     const key = '123e4567-e89b-42d3-a456-426614174000'
     const hash = hashSalesOrderIdempotencyKey(key)

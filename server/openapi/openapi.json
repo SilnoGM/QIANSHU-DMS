@@ -117398,6 +117398,18 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000
+          },
+          "fbName": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true,
+            "description": "客户 Facebook 名称，选填"
+          },
+          "lineName": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true,
+            "description": "客户 LINE 名称，选填"
           }
         },
         "required": [
@@ -117508,6 +117520,14 @@
           "phone": {
             "type": "string"
           },
+          "fbName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lineName": {
+            "type": "string",
+            "nullable": true
+          },
           "countryRegion": {
             "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
           },
@@ -117527,6 +117547,8 @@
         "required": [
           "name",
           "phone",
+          "fbName",
+          "lineName",
           "countryRegion",
           "provinceState",
           "city",

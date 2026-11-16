@@ -43,6 +43,9 @@ export interface SalesOrderFormModel {
   currencyCode: SalesOrderCurrency
   customerName: string
   customerPhone: string
+  /** 选填；空串按未填写处理，提交时归一为 null。 */
+  customerFbName: string
+  customerLineName: string
   region: RegionSelectorValue
   /** 仅用于客户端重复前缀校验和地址预览，正式快照由 Server 从 UUID 读取。 */
   regionNames: readonly string[]
@@ -400,6 +403,8 @@ export function createSalesOrderFormModel(
     currencyCode,
     customerName: '',
     customerPhone: '',
+    customerFbName: '',
+    customerLineName: '',
     region: {
       countryRegionId: null,
       provinceStateId: null,
@@ -726,6 +731,14 @@ export function buildCreateSalesOrderRequest(
     64,
     errors,
   )
+  const customerFbName = optionalText(model.customerFbName)
+  if (customerFbName !== null && codePointLength(customerFbName) > 128) {
+    errors['customer.fbName'] = '客户FB名称不能超过 128 个字符'
+  }
+  const customerLineName = optionalText(model.customerLineName)
+  if (customerLineName !== null && codePointLength(customerLineName) > 128) {
+    errors['customer.lineName'] = '客户LINE名称不能超过 128 个字符'
+  }
   const { countryRegionId, provinceStateId, cityId } = model.region
   for (const [field, value] of [
     ['countryRegionId', countryRegionId],
@@ -815,6 +828,8 @@ export function buildCreateSalesOrderRequest(
         provinceStateId: provinceStateId as string,
         cityId: cityId as string,
         addressDetail,
+        fbName: customerFbName,
+        lineName: customerLineName,
       },
       lines: lineDtos,
       agreedTotalAmount: formatAmountUnits(amountUnits(normalizedAgreed as string)),
@@ -858,6 +873,8 @@ export function hasSalesOrderChanges(model: SalesOrderFormModel): boolean {
   return model.orderDate !== ''
     || model.customerName !== ''
     || model.customerPhone !== ''
+    || model.customerFbName !== ''
+    || model.customerLineName !== ''
     || model.region.countryRegionId !== null
     || model.addressDetail !== ''
     || model.agreedTotalAmount !== null

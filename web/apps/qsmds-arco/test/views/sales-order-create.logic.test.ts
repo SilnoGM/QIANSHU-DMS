@@ -514,6 +514,8 @@ test('未来出单日期被拦截，有效表单生成去空白客户快照和�
       provinceStateId: IDS.province,
       cityId: IDS.city,
       addressDetail: '苓雅区中正一路100号3楼',
+      fbName: null,
+      lineName: null,
     })
     assert.equal(result.request.agreedTotalAmount, '100.00')
     assert.equal(result.request.depositDueAmount, '30.00')
@@ -561,4 +563,41 @@ test('正式提交时才延迟生成 Key，网络未知结果保留同 Key 与�
     }),
     /身份域变化后不能重放旧的销售订单请求/u,
   )
+})
+
+test('客户 FB/LINE 名称为选填，空白归一为 null 并进入请求', () => {
+  const model = validModel()
+  model.customerFbName = '  Wang FB  '
+  model.customerLineName = '   '
+  const result = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(result.valid, true)
+  if (result.valid) {
+    assert.equal(result.request.customer.fbName, 'Wang FB')
+    assert.equal(result.request.customer.lineName, null)
+  }
+
+  model.customerLineName = 'wangline'
+  const filled = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(filled.valid, true)
+  if (filled.valid) {
+    assert.equal(filled.request.customer.lineName, 'wangline')
+  }
+})
+
+test('客户社交名称超过 128 个字符时阻止提交', () => {
+  const model = validModel()
+  model.customerFbName = 'x'.repeat(129)
+  const result = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(result.valid, false)
+  if (!result.valid) {
+    assert.equal(result.fieldErrors['customer.fbName'], '客户FB名称不能超过 128 个字符')
+  }
+})
+
+test('填写客户社交名称会被视为表单变更', () => {
+  const model = createSalesOrderFormModel('TWD')
+  model.lines = [createCatalogSalesOrderLine('blank')]
+  assert.equal(hasSalesOrderChanges(model), false)
+  model.customerFbName = 'Wang FB'
+  assert.equal(hasSalesOrderChanges(model), true)
 })

@@ -293,7 +293,7 @@
 | 幂等键 | `sales-order-submitted:${salesOrderId}` |
 | 附件来源 | `salesOrder.issuanceVoucher`（出单凭证），发布时先 `activate` 后入队 |
 
-变量：`orderNo`、`orderId`、`customerName`（敏感）、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`issuerName`。
+变量：`orderNo`、`orderId`、`customerName`（敏感）、`customerFbName`、`customerLineName`、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`issuerName`。客户 FB/LINE 名称均为选填，未填写时发布为空字符串。
 
 注意：
 

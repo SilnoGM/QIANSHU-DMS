@@ -321,6 +321,8 @@ export class SalesOrderCommandService {
             currencyCode: command.currencyCode,
             customerName: command.customer.name,
             customerPhone: command.customer.phone,
+            customerFbName: command.customer.fbName,
+            customerLineName: command.customer.lineName,
             customerCountryRegionId: effective.countryRegion.id,
             customerProvinceStateId: effective.provinceState.id,
             customerCityId: effective.city.id,
@@ -417,6 +419,8 @@ export class SalesOrderCommandService {
             currencyCode: command.currencyCode,
             lineCount: String(command.lines.length),
             issuerName: issuer?.displayName ?? '—',
+            customerFbName: command.customer.fbName ?? '',
+            customerLineName: command.customer.lineName ?? '',
           },
           // 出单凭证在同一事务内先激活为 READY，这里只传资产与来源键。
           media: [{

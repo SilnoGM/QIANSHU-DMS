@@ -33,6 +33,14 @@ function serializeSalesOrderCreateFingerprint(
         provinceStateId: payload.customer.provinceStateId,
         cityId: payload.customer.cityId,
         addressDetail: payload.customer.addressDetail,
+        // 选填字段只在填写时进入序列化：旧请求（未填）的指纹与 v2 完全一致，
+        // 部署窗口内的在途重试不会因为新增字段被误判成不同请求。
+        ...(payload.customer.fbName === null
+          ? {}
+          : { fbName: payload.customer.fbName }),
+        ...(payload.customer.lineName === null
+          ? {}
+          : { lineName: payload.customer.lineName }),
       },
       lines: payload.lines.map(line => line.lineType === 'CATALOG'
         ? {

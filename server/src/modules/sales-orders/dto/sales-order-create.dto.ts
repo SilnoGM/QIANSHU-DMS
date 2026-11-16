@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
   ArrayMaxSize,
@@ -52,6 +52,18 @@ export class SalesOrderCustomerInputDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 1000)
   addressDetail!: string
+
+  @ApiPropertyOptional({ type: 'string', maxLength: 128, nullable: true, description: '客户 Facebook 名称，选填' })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(0, 128)
+  fbName?: string | null
+
+  @ApiPropertyOptional({ type: 'string', maxLength: 128, nullable: true, description: '客户 LINE 名称，选填' })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(0, 128)
+  lineName?: string | null
 }
 
 export class SalesOrderLineInputDto {
