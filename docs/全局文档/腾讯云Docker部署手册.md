@@ -245,6 +245,7 @@ ssh <服务器SSH用户>@<服务器公网IP> 'sudo chmod 0600 /srv/qianshu-dms/.
 | `APP_ORIGIN` | `https://<域名>` | **必须与最终对外域名完全一致**，否则登录被 CSRF 校验拒绝 |
 | `TRUST_PROXY_HOPS` | `1` | 只有 web 容器一层反代 |
 | `AUTH_USERNAME_HMAC_KEY` / `AUTH_USER_ID_HMAC_KEY` / `AUTH_IP_HMAC_KEY` | `<key1>` / `<key2>` / `<key3>` | 32-byte base64url，三者互不相同，生成方式见附录 15.1 |
+| `NOTIFICATION_MEDIA_URL_SECRET` | `<key4>` | 32-byte base64url；千树小助理图片取流地址的签名密钥，必须与上面三个 key 不同。生产缺失会拒绝启动 |
 | `MEDIA_CONTENT_DELIVERY_MODE` | `application` | 本次决策；`cos` 驱动下只能取该值 |
 | `MEDIA_FFMPEG_PATH` / `MEDIA_FFPROBE_PATH` / `MEDIA_QPDF_PATH` | `/usr/bin/ffmpeg` / `/usr/bin/ffprobe` / `/usr/bin/qpdf` | 镜像内已安装 |
 | `MEDIA_STORAGE_DRIVER` | `local`（默认）或 `cos` | `cos` 表示 `assets/`、`trash/` 存在腾讯云桶里；切换必须先迁移存量（见第 11.3 节） |
