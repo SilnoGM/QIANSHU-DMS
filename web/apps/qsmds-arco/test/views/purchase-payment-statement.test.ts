@@ -7,7 +7,7 @@ import { effectScope, ref, shallowRef } from 'vue'
 import { usePurchasePaymentStatement } from '../../src/views/workbenches/purchase-payments/use-purchase-payment-statement'
 
 function order(id = 'a'): PurchasePayableOrderDto {
-  return { id, orderNo: `PO/${id}`, orderDate: '2026-09-17', supplierName: '供应商', currencyCode: 'CNY', purchaseTotalAmount: '100.00', items: [
+  return { id, orderNo: `PO/${id}`, orderDate: '2026-09-17', supplierName: '供应商', currencyCode: 'CNY', purchaseTotalAmount: '100.00', shippingMarks: [], shippingMarkSuffix: '', shippingMarkCount: 0, items: [
     { id: `${id}-deposit`, paymentType: 'DEPOSIT', dueAmount: '30.00', paidAmount: '30.00', remainingAmount: '0.00', status: 'PAID', version: 2 },
     { id: `${id}-balance`, paymentType: 'BALANCE', dueAmount: '70.00', paidAmount: '0.00', remainingAmount: '70.00', status: 'PENDING_PAYMENT', version: 1 },
   ] } as PurchasePayableOrderDto

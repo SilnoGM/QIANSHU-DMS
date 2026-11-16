@@ -134,6 +134,7 @@
         "status": "付款状态",
         "total": "合计",
         "currency": "元（CNY）",
+        "shippingMarkMore": "等 {count} 件",
         "note": "本对账单仅供金额核对，付款状态以系统最新记录为准。"
       }
     },
