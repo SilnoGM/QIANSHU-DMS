@@ -60,6 +60,10 @@ export class PurchasePayableOrderDto {
   @ApiProperty({ enum: ['CNY'] }) currencyCode!: 'CNY'
   @ApiProperty({ enum: ['USER', 'COMPANY'] }) accountOwnerType!: 'USER' | 'COMPANY'
   @ApiProperty({ type: () => PurchasePayablePersonDto, nullable: true }) owner!: PurchasePayablePersonDto | null
+  /** 已按「【货件唛头】后缀」拼好；列表与对账单图片直接使用，不再各自拼接。 */
+  @ApiProperty({ type: [String], description: 'Formatted shipment marks, capped at six; cancelled shipments and blank marks are excluded.' }) shippingMarks!: string[]
+  @ApiProperty({ description: 'Sales suffix for the marks; stock purchases use a fixed label because they carry no sales order.' }) shippingMarkSuffix!: string
+  @ApiProperty({ description: 'Active shipment count, used to collapse the remaining marks.' }) shippingMarkCount!: number
   @ApiProperty({ type: [PurchasePayableDto] }) items!: PurchasePayableDto[]
 }
 export class PurchasePayableOrderPageDto {

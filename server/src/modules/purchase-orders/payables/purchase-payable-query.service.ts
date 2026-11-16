@@ -11,14 +11,24 @@ import {
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../../access-control/data-scope.service'
 import type { DataScope } from '../../access-control/data-scope'
 import { DictionaryLookupService, type StoredDictionaryValueResolution } from '../../dictionaries/dictionary-lookup.service'
+import { buildShippingMarkSuffix, formatShippingMark } from '../shipping-mark-label'
 import { purchaseOrderPayableScopeWhere } from '../purchase-order-access'
 import type { PurchasePayableBatchOrdersDto, PurchasePayableBatchSuppliersDto, PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto } from './purchase-payable.dto'
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
 import { normalizeBatchSupplier } from './purchase-payable-batch.logic'
 
 const person = { select: PERSON_REFERENCE_SELECT }
+/** 对账单和付款列表只展示前六个有效货件唛头，其余由总数折叠成「等 N 件」。 */
+const SHIPPING_MARK_LIMIT = 6
+const activeMarkParts = {
+  status: { not: 'CANCELLED' },
+  shippingMarkText: { not: null },
+} satisfies Prisma.PurchaseOrderPartWhereInput
 const include = {
-  salesOrder: { select: { orderNo: true } },
+  salesOrder: { select: { orderNo: true, customerName: true, issuer: { select: { profile: { select: { issuerPrefix: true } } } } } },
+  // 单个采购单最多 1000 个货件；批量付款可能同时读取上百单，必须由数据库限量，不能全量取回后前端裁剪。
+  parts: { where: activeMarkParts, select: { partNumber: true, shippingMarkText: true }, orderBy: { partNumber: 'asc' as const }, take: SHIPPING_MARK_LIMIT },
+  _count: { select: { parts: { where: activeMarkParts } } },
   payables: { include: { owner: person, payments: { where: { voidedAt: null }, include: { createdBy: person, documents: { where: { detachedAt: null, documentType: 'PAYMENT_VOUCHER' }, take: 1 } }, orderBy: [{ paidAt: 'desc' as const }, { id: 'desc' as const }] } } },
 } satisfies Prisma.PurchaseOrderInclude
 type Order = Prisma.PurchaseOrderGetPayload<{ include: typeof include }>
@@ -111,12 +121,20 @@ export class PurchasePayableQueryService {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
     if (!owner || payables.length !== 2) return payableFailure('PURCHASE_PAYABLE_NOT_AVAILABLE', '采购应付款记录不完整，请核对')
+    const shippingMarkSuffix = buildShippingMarkSuffix(row.purchaseType, row.salesOrder === null ? null : {
+      issuerPrefix: row.salesOrder.issuer.profile?.issuerPrefix ?? null,
+      customerName: row.salesOrder.customerName,
+    })
+    const shippingMarks = row.parts.flatMap(part => part.shippingMarkText?.trim()
+      ? [formatShippingMark(part.shippingMarkText.trim(), shippingMarkSuffix)]
+      : []).slice(0, SHIPPING_MARK_LIMIT)
     return {
       paymentRecipientProfile,
       id: row.id, orderNo: row.orderNo, orderDate: row.orderDate.toISOString().slice(0, 10), purchaseType: row.purchaseType,
       supplierName: row.customSupplierName ?? (supplier?.known ? supplier.label : row.supplierValue ?? '—'),
       salesOrderNo: row.salesOrder?.orderNo ?? null, purchaseTotalAmount: row.purchaseTotalAmount.toFixed(2), currencyCode: 'CNY',
       accountOwnerType: owner.accountOwnerType, owner: owner.owner ? toPayablePerson(owner.owner) : null,
+      shippingMarks, shippingMarkSuffix, shippingMarkCount: row._count.parts,
       items: payables.map(payable => {
         const last = payable.payments[0]
         const document = last?.documents[0]
