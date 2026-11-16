@@ -38,7 +38,7 @@ function imageLabels(): StatementImageLabels {
     status: label('status'),
     total: label('total'),
     currency: label('currency'),
-    shippingMarkMore: label('shippingMarkMore'),
+    shippingMarkMore: t('purchasePayment.shippingMarkMore'),
     note: label('note'),
     paymentTypes: { DEPOSIT: t('purchasePayment.types.DEPOSIT'), BALANCE: t('purchasePayment.types.BALANCE') },
     statuses: { PENDING_PAYMENT: t('purchasePayment.status.PENDING_PAYMENT'), PAID: t('purchasePayment.status.PAID'), NO_PAYMENT: t('purchasePayment.status.NO_PAYMENT'), CANCELLED: t('purchasePayment.status.CANCELLED') },
