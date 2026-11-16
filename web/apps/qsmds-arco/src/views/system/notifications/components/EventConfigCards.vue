@@ -70,6 +70,10 @@ function isUnimplementedConfigured(row: EventTableGroupRow['children'][number]):
             </FaTag>
           </header>
 
+          <p v-if="row.event.media !== null" class="qs-type-meta text-muted-foreground m-0">
+            支持附件：{{ row.event.media.sources.map(source => source.label).join('、') || '未声明来源' }}（最多 {{ row.event.media.maxCount }} 张）
+          </p>
+
           <div class="gap-2 grid sm:grid-cols-2">
             <div
               v-for="channel in (['IN_APP', 'ASSISTANT'] as const)"

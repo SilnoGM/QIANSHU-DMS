@@ -417,7 +417,7 @@ defineExpose({ reload })
             <div class="flex flex-col gap-0.5 min-w-0">
               <span class="qs-type-body-medium break-all">{{ media.originalFilename }}</span>
               <span class="qs-type-meta text-muted-foreground">
-                {{ media.mediaType }} · {{ media.mimeType ?? '未知类型' }} · {{ formatAttachmentSize(media.sizeBytes) }}
+                {{ media.sourceLabel !== null ? `${media.sourceLabel} · ` : '' }}{{ media.mediaType }} · {{ media.mimeType ?? '未知类型' }} · {{ formatAttachmentSize(media.sizeBytes) }}
               </span>
             </div>
             <FaTag
