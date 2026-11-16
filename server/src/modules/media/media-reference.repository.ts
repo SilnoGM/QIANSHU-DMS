@@ -21,11 +21,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'fund_withdrawal_requests',
   'user_profiles',
   'advertising_recharge_requests',
+  'notification_media',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile' | 'advertisingRechargeRequest'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile' | 'advertisingRechargeRequest' | 'notificationMedia'
 >
 
 /**
@@ -96,6 +97,8 @@ export class MediaAssetReferenceRepository {
       where: { OR: [{ paymentQrMediaAssetId: assetId }, { paymentProofMediaAssetId: assetId }] },
       select: { id: true },
     }) !== null) return true
+    // 通知附件在保留期内仍需可被上游拉取；被替换的业务图片不能因「业务已解绑」提前回收。
+    if (await reader.notificationMedia.findFirst({ where: { mediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 账单原件是外部凭证的唯一留痕；账单本身不可删，原件同样不可回收。
     return await reader.slhBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }

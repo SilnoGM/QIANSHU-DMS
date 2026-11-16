@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20261116120000_notification_media_attachments/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261102160000_advertising_recharge/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261020140000_user_profile_avatar_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261017130000_fund_withdrawal_requests/migration.sql'), 'utf8'),
@@ -46,7 +47,8 @@ describe('media reference extension contract', () => {
       purchaseOrderMediaReferenceMigration,
     ].join('\n')
     const referenceTables = modelBlocks(schema)
-      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block) || /\bavatarMediaAssetId\b/u.test(block))
+      // 通知附件没有 detachedAt 语义：它是保留期内的读取引用，因此在过滤里按表名显式列出。
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block) || /\bavatarMediaAssetId\b/u.test(block) || /@@map\("notification_media"\)/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
@@ -87,6 +89,10 @@ describe('media reference extension contract', () => {
       }
       if (table === 'advertising_recharge_requests') {
         expect(migration).toContain('FROM advertising_recharge_requests reference WHERE reference.payment_qr_media_asset_id = reference_asset_id OR reference.payment_proof_media_asset_id = reference_asset_id')
+        continue
+      }
+      if (table === 'notification_media') {
+        expect(migration).toContain('FROM notification_media reference WHERE reference.media_asset_id = reference_asset_id')
         continue
       }
       expect(migration).toContain(`FROM "${table}" AS reference`)

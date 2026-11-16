@@ -1183,6 +1183,8 @@ model MediaAsset {
   advertisingRechargeQr AdvertisingRechargeRequest[] @relation("AdvertisingRechargeQr")
   advertisingRechargePaymentProofs AdvertisingRechargeRequest[] @relation("AdvertisingRechargeProof")
   avatarProfile UserProfile? @relation("UserProfileAvatar")
+  notificationMedia NotificationMedia[] @relation("NotificationMediaAsset")
+  assistantDeliveryMedia AssistantDeliveryMedia[] @relation("AssistantDeliveryMediaAsset")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -3375,6 +3377,8 @@ enum AssistantDeliveryStatus {
   PENDING
   SENDING
   ACCEPTED
+  /// 正文已送达但至少一个附件项永久失败；通知级状态按「部分成功」汇总。
+  PARTIAL
   FAILED
   SKIPPED
   EXPIRED
@@ -3409,6 +3413,7 @@ model Notification {
   numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   deliveries         AssistantDelivery[]
   inboxItems         NotificationInboxItem[]
+  media              NotificationMedia[]
 
   @@index([eventType, publishedAt(sort: Desc)], map: "notifications_event_type_published_idx")
   @@index([sourceType, sourceId], map: "notifications_source_idx")
@@ -3416,6 +3421,26 @@ model Notification {
   @@index([publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_published_idx")
   @@index([status, publishedAt(sort: Desc), id(sort: Desc)], map: "notifications_status_published_idx")
   @@map("notifications")
+}
+
+/// 通知级附件清单：发布时快照业务传入的媒体资产与顺序。
+///
+/// `blockedReason` 非空表示业务传了附件但被模板策略或校验拦截，只用于排障展示，
+/// 不会为它创建任何站外投递；附件是否真正发出由 `AssistantDeliveryMedia` 记录。
+model NotificationMedia {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId String   @map("notification_id") @db.Uuid
+  mediaAssetId   String   @map("media_asset_id") @db.Uuid
+  sortOrder      Int      @map("sort_order")
+  blockedReason  String?  @map("blocked_reason") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset   MediaAsset   @relation("NotificationMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([notificationId, sortOrder], map: "notification_media_notification_sort_key")
+  @@index([mediaAssetId], map: "notification_media_asset_idx")
+  @@map("notification_media")
 }
 
 /// 按渠道拆分的模板。业务只传一个 key，每个渠道各有一份渲染。
@@ -3429,6 +3454,8 @@ model NotificationTemplate {
   bodyTemplate    String                   @map("body_template") @db.Text
   linkUrlTemplate String?                  @map("link_url_template") @db.Text
   variables       Json                     @default("[]") @db.JsonB
+  /// 附件策略：{ enabled, maxCount, kinds }；空对象表示该模板不发送业务附件。
+  mediaPolicy     Json                     @default("{}") @map("media_policy") @db.JsonB
   maxLength       Int                      @default(2000) @map("max_length")
   enabled         Boolean                  @default(true)
   version         Int                      @default(1)
@@ -3615,6 +3642,8 @@ model AssistantDelivery {
   templateKey       String                  @map("template_key") @db.VarChar(64)
   templateVersion   Int                     @map("template_version")
   renderedContent   String                  @map("rendered_content") @db.Text
+  /// 正文发送成功时间；非空后重试只补发未完成的附件项，避免重复发正文。
+  contentSentAt     DateTime?               @map("content_sent_at") @db.Timestamptz(6)
   providerMsgId     String?                 @map("provider_msg_id") @db.VarChar(64)
   providerNewMsgId  String?                 @map("provider_new_msg_id") @db.VarChar(64)
   failureCode       String?                 @map("failure_code") @db.VarChar(64)
@@ -3623,10 +3652,11 @@ model AssistantDelivery {
   createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  notification  Notification      @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  recipientUser User?             @relation("AssistantDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  target        AssistantTarget?  @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  account       AssistantAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  notification  Notification             @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  recipientUser User?                    @relation("AssistantDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  target        AssistantTarget?         @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account       AssistantAccount?        @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  media         AssistantDeliveryMedia[]
 
   @@index([status, nextAttemptAt], map: "assistant_deliveries_status_next_attempt_idx")
   @@index([accountId, status], map: "assistant_deliveries_account_status_idx")
@@ -3634,6 +3664,37 @@ model AssistantDelivery {
   @@index([recipientUserId, createdAt(sort: Desc)], map: "assistant_deliveries_recipient_created_idx")
   @@index([targetId, createdAt(sort: Desc)], map: "assistant_deliveries_target_created_idx")
   @@map("assistant_deliveries")
+}
+
+/// 一条投递内的单个附件发送事实。
+///
+/// 正文与附件分开发送：正文成功写 `AssistantDelivery.contentSentAt`，附件项各自持有
+/// 状态、重试计数与上游消息标识；任一项永久失败时投递落到 `PARTIAL`。
+model AssistantDeliveryMedia {
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryId       String                  @map("delivery_id") @db.Uuid
+  mediaAssetId     String                  @map("media_asset_id") @db.Uuid
+  sortOrder        Int                     @map("sort_order")
+  status           AssistantDeliveryStatus @default(PENDING)
+  attemptCount     Int                     @default(0) @map("attempt_count")
+  nextAttemptAt    DateTime                @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  providerMsgId    String?                 @map("provider_msg_id") @db.VarChar(64)
+  providerNewMsgId String?                 @map("provider_new_msg_id") @db.VarChar(64)
+  failureCode      String?                 @map("failure_code") @db.VarChar(64)
+  failureMessage   String?                 @map("failure_message") @db.VarChar(255)
+  /// 公开取流路由首次读到该对象的时间；用于判断上游是否真的来拉取过图片。
+  fetchedAt        DateTime?               @map("fetched_at") @db.Timestamptz(6)
+  acceptedAt       DateTime?               @map("accepted_at") @db.Timestamptz(6)
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  delivery   AssistantDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset MediaAsset        @relation("AssistantDeliveryMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([deliveryId, sortOrder], map: "assistant_delivery_media_delivery_sort_key")
+  @@index([status, nextAttemptAt], map: "assistant_delivery_media_status_next_idx")
+  @@index([mediaAssetId], map: "assistant_delivery_media_asset_idx")
+  @@map("assistant_delivery_media")
 }
 
 /// 派发器单实例租约，固定 id = 'assistant-dispatch'。
