@@ -709,12 +709,14 @@ model User {
   reconciliationBatchLinesReconciled SlhReconciliationBatchLine[] @relation("SlhReconciliationBatchLineReconciledBy")
   reconciliationSettlementsCreated SlhReconciliationSettlement[] @relation("SlhReconciliationSettlementCreatedBy")
   invoiceRequestsCreated InvoiceRequest[] @relation("InvoiceRequestCreatedBy")
+  invoiceRequestsSubmittedOnBehalf InvoiceRequest[] @relation("InvoiceRequestSubmittedOnBehalfBy")
   invoiceRequestsNotified InvoiceRequest[] @relation("InvoiceRequestNotifiedBy")
   invoiceRequestsReturned InvoiceRequest[] @relation("InvoiceRequestReturnedBy")
   invoiceRequestsDocumentUploaded InvoiceRequest[] @relation("InvoiceRequestDocumentUploadedBy")
   invoiceRequestsSettled InvoiceRequest[] @relation("InvoiceRequestSettledBy")
   invoiceRequestsCancelled InvoiceRequest[] @relation("InvoiceRequestCancelledBy")
   invoiceRequestStatusHistoryRecorded InvoiceRequestStatusHistory[] @relation("InvoiceRequestStatusHistoryActor")
+  invoiceRequestStatusHistoryActingFor InvoiceRequestStatusHistory[] @relation("InvoiceRequestStatusHistoryActingFor")
   containerLoadingItemsCreated ContainerLoadingItem[] @relation("ContainerLoadingItemCreatedBy")
   containerLoadingItemsUpdated ContainerLoadingItem[] @relation("ContainerLoadingItemUpdatedBy")
 
@@ -3176,6 +3178,8 @@ model InvoiceRequest {
   requestKeyHash Bytes @map("request_key_hash") @db.ByteA
   version Int @default(1)
   createdById String @map("created_by_id") @db.Uuid
+  /// 代导入人：为空即本人提交；非空表示由特权账号代 createdById 建立，两者不得相同。
+  submittedOnBehalfByUserId String? @map("submitted_on_behalf_by_user_id") @db.Uuid
   createdAt DateTime @map("created_at") @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @map("updated_at") @default(now()) @updatedAt @db.Timestamptz(6)
 
@@ -3184,6 +3188,7 @@ model InvoiceRequest {
   fundPostingBatch FundPostingBatch? @relation("InvoiceRequestSettlementBatch", fields: [fundPostingBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   exchangeRate ExchangeRate? @relation(fields: [exchangeRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   createdBy User @relation("InvoiceRequestCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  submittedOnBehalfBy User? @relation("InvoiceRequestSubmittedOnBehalfBy", fields: [submittedOnBehalfByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   notifiedBy User? @relation("InvoiceRequestNotifiedBy", fields: [notifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   returnedBy User? @relation("InvoiceRequestReturnedBy", fields: [returnedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   documentUploadedBy User? @relation("InvoiceRequestDocumentUploadedBy", fields: [documentUploadedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -3196,6 +3201,7 @@ model InvoiceRequest {
   @@index([createdById, createdAt(sort: Desc), id(sort: Desc)], map: "invoice_requests_creator_created_idx")
   @@index([status, createdAt(sort: Desc), id(sort: Desc)], map: "invoice_requests_status_created_idx")
   @@index([buyerTaxId, totalAmount], map: "invoice_requests_duplicate_key_idx")
+  @@index([submittedOnBehalfByUserId], map: "invoice_requests_on_behalf_idx")
   @@map("invoice_requests")
 }
 
@@ -3228,10 +3234,13 @@ model InvoiceRequestStatusHistory {
   toStatus InvoiceRequestStatus @map("to_status")
   reason String? @db.VarChar(500)
   actorUserId String @map("actor_user_id") @db.Uuid
+  /// 代导入时的受益开票人：与 actor 不同；为空表示这一步由本人执行。
+  actingForUserId String? @map("acting_for_user_id") @db.Uuid
   occurredAt DateTime @map("occurred_at") @default(now()) @db.Timestamptz(6)
 
   request InvoiceRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   actor User @relation("InvoiceRequestStatusHistoryActor", fields: [actorUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actingFor User? @relation("InvoiceRequestStatusHistoryActingFor", fields: [actingForUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([requestId, occurredAt, id], map: "invoice_request_status_history_request_occurred_idx")
   @@map("invoice_request_status_history")

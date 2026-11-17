@@ -15,7 +15,7 @@ async function fixture() {
     .replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
   const route = reactive({ name: 'qsFinanceRealtimePurchasePayments', query: { keyword: 'PO/target' } })
   const account = reactive({ authEpoch: 1 })
-  const permissions = reactive({ pay: true })
+  const permissions = reactive({ pay: true, readOrder: false })
   const copied: string[] = []
   const navigation: unknown[] = []
   const payments: unknown[] = []
@@ -24,7 +24,7 @@ async function fixture() {
   const callbacks: Record<string, () => void> = {}
   let execute = async () => ({ data: { items: [], total: 0 } })
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, openPayment, openBatchPayment, orders, groups, summaryValues, total, loading, error, page })`, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, openPayment, openOrderDetail, openBatchPayment, orders, groups, summaryValues, total, loading, error, page, orderDetailVisible, orderDetailTarget })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     AbortController,
@@ -45,7 +45,11 @@ async function fixture() {
       addEventListener: (name: string, handler: () => void) => focusHandlers.set(name, handler),
       removeEventListener: (name: string) => focusHandlers.delete(name),
     },
-    useAppAuth: () => ({ auth: () => permissions.pay }),
+    useAppAuth: () => ({
+      auth: (value: string | string[]) => Array.isArray(value)
+        ? permissions.pay || permissions.readOrder
+        : permissions.pay,
+    }),
     useAppAccountStore: () => account,
     useCurrencyCatalog: () => ({ currencies: ref([]) }),
     onMounted: (fn: () => void) => callbacks.mount = fn,
@@ -67,6 +71,7 @@ async function fixture() {
   })) as {
     load: () => Promise<void>
     openPayment: (row: PurchasePayableRow) => void
+    openOrderDetail: (order: { id: string, orderNo: string }) => void
     openBatchPayment: () => void
     orders: { value: unknown[] }
     total: { value: number }
@@ -74,6 +79,8 @@ async function fixture() {
     loading: { value: boolean }
     page: { value: number }
     summaryValues: { value: Record<string, string> }
+    orderDetailVisible: { value: boolean }
+    orderDetailTarget: { value: { id: string, orderNo: string } | null }
   }
   return {
     state,
@@ -213,4 +220,67 @@ test('从独立付款页返回窗口时刷新待办，最后一页清空后回�
   assert.equal(f.state.orders.value.length, 0)
   assert.equal(f.state.page.value, 1)
   assert.equal((f.calls.at(-1)?.query as { page: number }).page, 1)
+})
+
+test('采购单号打开详情抽屉时传递当前订单且不触发付款或复制', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.callbacks.mount!()
+  await flush()
+  const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20261117-00918' }
+  f.state.openOrderDetail(order)
+  assert.equal(f.state.orderDetailVisible.value, true)
+  assert.deepEqual(JSON.parse(JSON.stringify(f.state.orderDetailTarget.value)), order)
+  assert.deepEqual(f.navigation, [])
+  assert.deepEqual(f.copied, [])
+  assert.deepEqual(f.payments, [])
+})
+
+test('详情入口在未激活或无付款权限时不打开', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20261117-00918' }
+  f.state.openOrderDetail(order)
+  assert.equal(f.state.orderDetailVisible.value, false)
+  f.callbacks.mount!()
+  await flush()
+  f.permissions.pay = false
+  f.permissions.readOrder = false
+  f.state.openOrderDetail(order)
+  assert.equal(f.state.orderDetailVisible.value, false)
+  f.permissions.readOrder = true
+  f.state.openOrderDetail(order)
+  assert.equal(f.state.orderDetailVisible.value, false)
+  f.permissions.pay = true
+  f.state.openOrderDetail(order)
+  assert.equal(f.state.orderDetailVisible.value, true)
+})
+
+test('切账号或离开采购付款页关闭详情抽屉并清空订单', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.callbacks.mount!()
+  await flush()
+  const order = { id: '11111111-1111-4111-8111-111111111111', orderNo: 'PO/20261117-00918' }
+  f.state.openOrderDetail(order)
+  f.account.authEpoch++
+  await nextTick()
+  assert.equal(f.state.orderDetailVisible.value, false)
+  assert.equal(f.state.orderDetailTarget.value, null)
+  f.state.openOrderDetail(order)
+  f.callbacks.deactivate!()
+  await nextTick()
+  assert.equal(f.state.orderDetailVisible.value, false)
+  assert.equal(f.state.orderDetailTarget.value, null)
+})
+
+test('采购付款页复用采购详情抽屉并从分组头单号打开', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-payments/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /import PurchaseOrderDetailDrawer from '\.\.\/\.\.\/operations\/purchase-orders\/purchase-order-detail-drawer\.vue'/u)
+  assert.match(source, /@click="openOrderDetail\(row\.order\)"/u)
+  assert.match(source, /purchasePayment\.viewOrder/u)
+  assert.match(source, /purchasePayment\.viewOrderHint/u)
+  assert.match(source, /<span class="qs-type-meta shrink-0">\{\{ t\('purchasePayment\.viewOrderHint'\) \}\}<\/span>/u)
+  assert.match(source, /<PurchaseOrderDetailDrawer[\s\S]*?v-model="orderDetailVisible"/u)
+  assert.doesNotMatch(source, /purchaseOrdersApi\.getById/u)
 })

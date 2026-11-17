@@ -45,6 +45,12 @@ export class InvoiceRequestSubmitDto {
   @ApiProperty({ type: [InvoiceRequestLineInputDto], description: `明细行，1–${INVOICE_REQUEST_LINE_LIMIT} 行。` })
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(INVOICE_REQUEST_LINE_LIMIT) @ValidateNested({ each: true }) @Type(() => InvoiceRequestLineInputDto)
   lines!: InvoiceRequestLineInputDto[]
+  /**
+   * 票面含税总计。给了就以它为准、税额取 `总计 − 销售额`（5% 退化为 0.5 元容差校验）；
+   * 省略则按销售额 × 5% 自动计算，与既有调用方完全兼容。
+   */
+  @ApiPropertyOptional({ type: 'string', pattern: '^[1-9]\\d{0,15}$', description: '票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。' })
+  @IsOptional() @IsString() @Matches(POSITIVE_INTEGER_PATTERN) totalAmount?: string | null
   @ApiPropertyOptional({ default: false, description: '确认「存在抬头、统编、营业税与总计完全一致的申请单」后继续提交。' })
   @IsOptional() @Type(() => Boolean) @IsIn([true, false]) duplicateAcknowledged?: boolean
 }
@@ -118,6 +124,8 @@ export class InvoiceRequestHistoryDto {
   @ApiProperty() actorUserId!: string
   @ApiProperty() actorName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) actorAvatarUrl!: string | null
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '代导入时的受益开票人；为空表示这一步由本人执行。' }) actingForUserId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '受益开票人姓名。' }) actingForName!: string | null
   @ApiProperty({ type: 'string', description: 'ISO 8601。' }) occurredAt!: string
 }
 
@@ -144,6 +152,8 @@ export class InvoiceRequestListItemDto {
   @ApiProperty({ format: 'uuid' }) creatorUserId!: string
   @ApiProperty() creatorName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) creatorAvatarUrl!: string | null
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '代导入操作人；为空表示本人提交。' }) submittedOnBehalfByUserId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '代导入操作人姓名。' }) submittedOnBehalfByName!: string | null
   @ApiProperty({ type: 'string', description: '申请日期（= 记录创建时间），ISO 8601。' }) submittedAt!: string
   @ApiProperty({ type: 'string', description: '最近一次提交时间，ISO 8601。' }) lastSubmittedAt!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) notifiedAt!: string | null

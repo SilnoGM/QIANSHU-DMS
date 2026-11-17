@@ -49,8 +49,9 @@
 | `exchangeRateId` / `exchangeRateVersionSnapshot` / `foreignUnitsPerCnySnapshot` / `rateCapturedAt` | UUID / INT / DECIMAL(30,12) / TIMESTAMPTZ NULL | 入账时冻结的汇率快照 |
 | `fundPostingBatchId` | UUID NULL FK | 资金批次 id，入账后回写 |
 | `cancelledAt` / `cancelledByUserId` / `cancelReason` | TIMESTAMPTZ / UUID / VARCHAR(500) NULL | 取消（终态，原因必填） |
-| `createdById` | UUID FK | 提交人 = 申请人（资金成本的归属用户） |
-| `requestKeyHash` | BYTEA | 提交幂等键哈希 |
+| `createdById` | UUID FK | 提交人 = 申请人（资金成本的归属用户）；代导入时仍是开票人本人 |
+| `submittedOnBehalfByUserId` | UUID NULL FK | 代导入人；为空表示本人提交，非空时不得等于 `createdById`（见第 14 节） |
+| `requestKeyHash` | BYTEA | 提交幂等键哈希；代导入用 `import:<batchRef>:<sourceRef>` 的摘要 |
 | `version` | INT | 乐观锁，默认 1 |
 | `createdAt` / `updatedAt` | TIMESTAMPTZ(6) | 仓库统一审计列 |
 
@@ -201,7 +202,7 @@ server/src/modules/invoice-requests/
 | 列表 | `GET /api/invoice-requests` | `invoice_requests_list` | `:read` | 无 `:read-all` 时强制按 `createdById = actor` 过滤；返回 `{items,total,page,pageSize}` |
 | 状态计数 | `GET /api/invoice-requests/status-counts` | `invoice_requests_status_counts` | `:read` | **必须注册在 `:id` 之前**；返回六态 `{value,count}[]` |
 | 详情 | `GET /api/invoice-requests/:id` | `invoice_requests_get` | `:read` + 归属 | 含明细行、状态历史、照片元数据 |
-| 提交 | `POST /api/invoice-requests` | `invoice_requests_create` | `:create` | 201；`Idempotency-Key`；`duplicateAcknowledged` |
+| 提交 | `POST /api/invoice-requests` | `invoice_requests_create` | `:create` | 201；`Idempotency-Key`；`duplicateAcknowledged`；可选 `totalAmount`（票面含税总计，税额作残差，0.5 元容差） |
 | 重新提交 | `POST /api/invoice-requests/:id/resubmissions` | `invoice_requests_resubmit` | `:create` + 本人 | 仅 `RETURNED`；全量字段；`duplicateAcknowledged`；保留单号 |
 | 退回 | `POST /api/invoice-requests/:id/returns` | `invoice_requests_return` | `:return` | 仅 `PENDING_REVIEW`；`reason` 必填 |
 | 审核并通知 | `POST /api/invoice-requests/:id/notifications` | `invoice_requests_notify` | `:review` | 仅 `PENDING_REVIEW` |
@@ -209,6 +210,7 @@ server/src/modules/invoice-requests/
 | 读发票照片 | `GET`/`HEAD` `/api/invoice-requests/:id/document` | `invoice_requests_get_document` / `invoice_requests_head_document` | `:read` + 归属 | 私有、不缓存、inline；没有照片与单据不可见都返回 404 |
 | 结算入账 | `POST /api/invoice-requests/:id/settlements` | `invoice_requests_settle` | `:settle` | 仅 `ISSUED`；≥120 小时；携带 `expectedVersion` 与 `exchangeRateId/version`；`Idempotency-Key` |
 | 取消 | `POST /api/invoice-requests/:id/cancellations` | `invoice_requests_cancel` | `:cancel` + 归属 | `reason` 必填；运营仅 `PENDING_REVIEW/RETURNED`，财务任意非终态 |
+| 代导入 | `POST /api/invoice-requests/imports` | `invoice_requests_import` | `:import`（system_only） | 逐条独立事务；归属写到 `ownerUserId`；支持 `dryRun`、`expected` 与 `totalAmount`（见第 14 节） |
 
 - 变更类接口一律要求 `Idempotency-Key` 头，并在服务层与 `(createdById, requestKeyHash)` / 业务化幂等键配合（提交用请求指纹，结算用 `${id}:SETTLE`）。
 - 全部写动作携带 `expectedVersion`，不一致返回 `INVOICE_REQUEST_STATE_CHANGED`。
@@ -228,11 +230,15 @@ server/src/modules/invoice-requests/
 
 ```
 salesAmount = Σ(quantity × unitPrice)                  // 整数台币
-taxAmount   = roundHalfUp(salesAmount × 5 / 100)       // 整数，四舍五入；销售额为 1 元时为 0
-totalAmount = salesAmount + taxAmount                  // 取整后相加
+taxAmount   = totalAmount − salesAmount                // 提供了票面总计：税额是残差
+            = roundHalfUp(salesAmount × 5 / 100)       // 未提供：整数四舍五入；销售额为 1 元时为 0
+totalAmount = 请求里的 totalAmount ?? salesAmount + taxAmount
 settleAmountCny = ceil(totalAmount / foreignUnitsPerCny × 6 / 100 + 30)   // 整数人民币元
 ```
 
+- **票面总计优先**（2026-11-17）：票面结构是「未税单价 → 金额 → 销售额合计 → 营业税 → 总计」，税额是残差而不是独立计算值。提交时可选 `totalAmount`；提供则 `tax = total − sales`，5% 退化为容差校验：`|total × 100 − sales × 105| ≤ 50`（0.5 元）。容差越界返回 `INVOICE_REQUEST_TOTAL_MISMATCH`，不得静默改数。
+- 0.5 元是精确上界而非经验值：`总计 ÷ 1.05 = 20×总计/21`，小数部分只能取 `k/21`，离 1/2 最近为 1/42，乘回 1.05 恰好 0.5。源数据 159 条全部落在此界内。
+- 不提供 `totalAmount` 时行为与旧版完全一致（向后兼容，`submitFingerprint` 无需升版本）。
 - 全部用整数运算（台币金额与百分比用整数分子/分母，避免浮点）：`taxAmount = Math.round(salesAmount * 5 / 100)` 可用整数形式 `floor((salesAmount * 5 + 50) / 100)`；汇率是 `DECIMAL(30,12)`，成本计算用十进制定点（Prisma `Decimal`）而非 `number`，向上取整用 `Decimal.ceil()`。
 - `6%` 与 `30` 固化为具名常量（参照 `PAYMENT_FEE_RATE = '0.007'` 的做法），成本结果恒 ≥ 31 元，**永不为 0**，因此资金入账不需要「金额为 0 跳过」分支。
 - 前端展示值与服务端重算值不一致（汇率变更）→ `INVOICE_REQUEST_RATE_CHANGED`，前端提示刷新重算。
@@ -253,6 +259,7 @@ settleAmountCny = ceil(totalAmount / foreignUnitsPerCny × 6 / 100 + 30)   // �
 | `INVOICE_REQUEST_OWNER_ONLY` | 403 | 非本人对本人限定动作（重提、运营取消） |
 | `INVOICE_REQUEST_DUPLICATE_SUSPECTED` | 409 | 四项比对命中且未确认；响应携带相似单列表（单号/状态/提交日期） |
 | `INVOICE_REQUEST_SETTLE_WAIT_PERIOD` | 422 | 距上传不足 120 小时 |
+| `INVOICE_REQUEST_TOTAL_MISMATCH` | 422 | 票面总计与明细的税额偏差超过 0.5 元 |
 | `INVOICE_REQUEST_DOCUMENT_REQUIRED` | 422 | 未上传照片即尝试结算 |
 | `INVOICE_REQUEST_DOCUMENT_EXISTS` | 409 | 重复上传（上传即定稿） |
 | `INVOICE_REQUEST_RATE_UNAVAILABLE` | 422 | 台币汇率缺失或 ≤ 0 |
@@ -309,6 +316,7 @@ await postBusinessEventInTransaction(tx, ctx, input, preview)
 - 常量：`server/src/modules/access-control/permission.constants.ts` 新增 `INVOICE_REQUEST_PERMISSION_CODES`（按 code 排序）并展开进 `MANAGEMENT_PERMISSION_CODES`。
 - 迁移 3：8 条权限（稳定 UUID `...171`–`...178`，`system_only = false` 以便委派给内置角色）+ 授予 `system_admin`（`id + code` 双重匹配）+ 自检 DO 块。
 - 角色 seed：`operations_staff` 增加 `create/read/cancel`；`finance_staff` 增加 `read/read-all/review/return/cancel/document/settle`。
+- 迁移 9（2026-11-17）：第 9 条权限 `invoice-requests:import`（UUID `...190`，**`system_only = true`**），只授 `system_admin`，用于历史单据代导入；不可委派给内置角色，避免日常账号获得跨人建单能力。
 
 ### 9.2 审计事件
 
@@ -400,3 +408,102 @@ await postBusinessEventInTransaction(tx, ctx, input, preview)
 | --- | --- | --- |
 | 6 | 单列式引用 `documentMediaAssetId` 是否需进入 `MEDIA_ASSET_REFERENCE_TABLES` 与 `media-reference.contract.spec.ts` 的断言集合 | **已核对：需要并已登记**（`invoice_requests` 进入引用表与就绪校验闭包，契约 spec 的模式匹配与 SQL 断言同步扩展） |
 | 7 | 编号 consumer `INVOICE_REQUEST.CREATE` 与资金 consumer `INVOICE_REQUEST.SETTLE` 同名不同命名空间，两处常量各自独立声明 | T3 / T5 |
+
+## 14. 代导入（历史开票申请）
+
+### 14.1 目标与边界
+
+由持有 `invoice-requests:import` 的特权账号，代历史开票人批量建立开票申请：**归属留在开票人名下**，一次落到位（`NOTIFIED` 或 `ISSUED`），不回放历史通知。
+
+不做：结算入账、票面 OCR、发票字号、按批次整单回滚（单据不可删，只能逐单取消）。
+
+### 14.2 归属模型
+
+| 列 | 值 | 说明 |
+| --- | --- | --- |
+| `created_by_id` | 开票人（`ownerUserId`） | 决定「运营仅可见本人」的行级归属与资金成本归属 |
+| `submitted_on_behalf_by_user_id` | 导入操作人 | 为空即本人提交；CHECK 禁止等于 `created_by_id` |
+| `status_history.acting_for_user_id` | 导入操作人 | 时间线展示「操作人 代 开票人 提交」 |
+| `status_history.actor_user_id` | 导入操作人 | 不变，始终是真实执行者 |
+
+代导入不经过 `submit()`：后者强制 `createdById = actor` 并发布通知，两条都不适用于历史回填。
+
+### 14.3 状态落位：一条事务内跑三次受控流转，**不改触发器**
+
+```
+INSERT  status=PENDING_REVIEW                                  → initial_status_check 满足
+UPDATE  → NOTIFIED   (status, version, notified_at, notified_by_user_id)
+UPDATE  → ISSUED     (status, version, document_media_asset_id,
+                      document_uploaded_at, document_uploaded_by_user_id)
++ 每步写 status_history（occurred_at / acting_for_user_id 可回填）
+```
+
+中间态只存在于事务内部，外部不可见；证据不变量与现有触发器一字不改。这是本方案与「放宽触发器允许直接插 `ISSUED`」的根本区别。
+
+### 14.4 金额：与普通提交共用 `totalAmount` 口径
+
+```
+salesAmount = Σ(quantity × unitPrice)
+taxAmount   = totalAmount − salesAmount            // 提供票面总计：税额作残差
+            = roundHalfUp(salesAmount × 5 / 100)   // 未提供：沿用 5% 口径
+totalAmount = 请求里的 totalAmount ?? salesAmount + taxAmount
+```
+
+- 与普通提交共用 `resolveInvoiceAmounts()`：容差 `|total × 100 − sales × 105| ≤ 50`（0.5 元），越界即 `INVOICE_REQUEST_IMPORT_AMOUNT_MISMATCH`。
+- `expected`（可选）：调用方给出的销售额/税额/合计，与解析结果不一致同样失败，**不允许静默改数**。
+- 存在整数销售额无法命中的合计（`T ≡ 10 (mod 21)`，如 46,000 / 340,000）：传 `totalAmount` 即可精确保真，不再需要单独的税额覆盖字段。
+- 审计记 `{ computedTaxAmount, appliedTaxAmount, taxAdjusted }`；响应回 `taxAdjusted`。
+
+### 14.5 接口与幂等
+
+`POST /api/invoice-requests/imports`，权限 `invoice-requests:import`，请求 `{ batchRef, dryRun?, items[] }`，单批上限 200 条。
+
+- 幂等键：服务端用 `digest('import:<batchRef>:<sourceRef>')` 作为 `request_key_hash`，复用 `(created_by_id, request_key_hash)` 唯一索引；重放返回原单（`REPLAYED`），不重复建单、不重复耗号。
+- 逐条独立事务：单条失败不影响其他条，响应按 `sourceRef` 返回 `CREATED / REPLAYED / FAILED + code + invoiceNo` 与汇总。
+- `dryRun=true`：完成全部校验与金额复算，返回预检报告，不落库（不耗号）。
+- 归属校验：`ownerUserId` 必须存在、`status = ACTIVE` 且持有 `invoice-requests:read`；否则 `INVOICE_REQUEST_IMPORT_OWNER_INVALID`。
+- 照片：`documentMediaAssetId` 必须是操作人上传、用途 `INVOICE_REQUEST_DOCUMENT`、`READY`、mime/size/校验和合法的资产；`targetStatus=ISSUED` 时必填。
+
+### 14.6 时间与单号
+
+`created_at`、`last_submitted_at`、`notified_at`、`document_uploaded_at`、`history.occurred_at` 支持由 `occurredAt` 回填。
+
+单号 `INV/YYYYMMDD-####` 的日期段**取派发时刻**（编号规则按年重置、期段顺序推进，回溯旧日期会打乱序列）。已拍板接受「单号日期 ≠ 申请日期」。
+
+### 14.7 通知与审计
+
+- 导入路径**不发布** `INVOICE_REQUEST_REVIEW_PENDING` / `_NOTIFIED` / `_ISSUED`，避免向用户推送历史消息。
+- 审计复用现有事件类型，metadata 追加 `importBatchRef`、`sourceRef`、`onBehalfOfUserId`、`taxOverride`。
+
+### 14.8 退回归属
+
+导入单（`submitted_on_behalf_by_user_id IS NOT NULL`）**禁止退回重填**：`resubmit()` 会按 5% 重算金额，票面保真会被打破。退回入口返回 `INVOICE_REQUEST_STATUS_NOT_ALLOWED`。
+
+### 14.9 变更清单
+
+| 层 | 内容 |
+| --- | --- |
+| 迁移 | `20261117120000_invoice_request_import`：两列 + 两个 FK + 一个 CHECK + 第 9 条权限 + `system_admin` 授权 + 自检 |
+| 模型 | `schema.prisma`：`submittedOnBehalfByUserId`、`actingForUserId` 及反向关系 |
+| 权限 | `permission.constants.ts` 增 `invoice-requests:import` |
+| 后端 | 新增 `invoice-request-import.logic.ts`（纯函数）、`invoice-request-import.dto.ts`、`invoice-request-import.service.ts`；controller 加路由；module 注册 |
+| 查询 | 列表/详情补 `submittedOnBehalfByUserId/Name`；历史补 `actingForUserId/Name` |
+| 契约 | `server/openapi/openapi.json` → `web/openapi/openapi.json` → `types.gen.ts` |
+| 文档 | 迁移规范第 2 节登记；本文档第 14 节 |
+
+### 14.10 测试策略
+
+- 纯函数单测：金额复算与 `expected`/覆盖的优先级、`T ≡ 10 (mod 21)` 无解判定、幂等键稳定性、逐条计划形状。
+- e2e（隔离库）：列与 CHECK 存在；`submitted_on_behalf_by_user_id = created_by_id` 被拒；权限迁移自检。
+- 回归：普通 `submit` 仍强制 `PENDING_REVIEW`；导入单退回被拒。
+
+### 14.11 已确认决策（2026-11-17）
+
+| # | 决策 | 结论 |
+| --- | --- | --- |
+| 1 | 归属范围 | 限 `ACTIVE` 且持有 `invoice-requests:read` 的用户 |
+| 2 | 单号日期 | 取导入日，接受与申请日期不一致 |
+| 3 | 税额覆盖 | 开启，仅导入路径，审计留痕 |
+| 4 | 通知 | 导入全程静默 |
+| 5 | 回填时间 | 允许，历史单会按 `created_at` 沉底 |
+| 6 | 退回 | 导入单禁用退回重填 |

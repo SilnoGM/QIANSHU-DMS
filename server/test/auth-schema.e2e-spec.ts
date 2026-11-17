@@ -48,6 +48,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'invoice-requests:cancel',
   'invoice-requests:create',
   'invoice-requests:document',
+  'invoice-requests:import',
   'invoice-requests:read',
   'invoice-requests:read-all',
   'invoice-requests:return',

@@ -462,4 +462,49 @@ describe('invoice request schema constraints with isolated PostgreSQL', () => {
       await client.query('ROLLBACK')
     }
   })
+
+  it('carries the on-behalf columns and the system-only import permission', async () => {
+    await client.query('BEGIN')
+    try {
+      const actorUserId = await insertUser(client, 'importer')
+
+      const columns = await client.query<{ column_name: string }>(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND ((table_name = 'invoice_requests' AND column_name = 'submitted_on_behalf_by_user_id') OR (table_name = 'invoice_request_status_history' AND column_name = 'acting_for_user_id')) ORDER BY column_name",
+      )
+      expect(columns.rows.map(row => row.column_name)).toEqual(['acting_for_user_id', 'submitted_on_behalf_by_user_id'])
+
+      // 同一行不得既归属某人、又声明由本人代导入。
+      const issuance = await insertInvoiceRequestIssuance(client, randomBytes(32))
+      await expectDatabaseRejection(
+        client,
+        () => client.query(
+          'INSERT INTO "invoice_requests" ("id", "invoice_no", "numbering_issuance_id", "buyer_name", "buyer_tax_id", "sales_amount", "tax_amount", "total_amount", "recipient_name", "recipient_phone", "recipient_address", "last_submitted_at", "request_key_hash", "created_by_id", "submitted_on_behalf_by_user_id") VALUES ($1, $2, $3, $4, $5, 100, 5, 105, $6, $7, $8, CURRENT_TIMESTAMP, $9, $10, $10)',
+          [randomUUID(), issuance.invoiceNo, issuance.numberingIssuanceId, '代导入自检', '12345678', '收件人', '0900000000', '地址', randomBytes(32), actorUserId],
+        ),
+        '23514',
+        'invoice_requests_on_behalf_distinct_check',
+      )
+
+      // 状态历史的代操作人不得等于实际执行人。
+      const request = await insertInvoiceRequest(client, { actorUserId })
+      await expectDatabaseRejection(
+        client,
+        () => client.query(
+          'INSERT INTO "invoice_request_status_history" ("request_id", "action", "from_status", "to_status", "reason", "actor_user_id", "acting_for_user_id") VALUES ($1, $2, NULL, $3, NULL, $4, $4)',
+          [request.requestId, 'SUBMIT', 'PENDING_REVIEW', actorUserId],
+        ),
+        '23514',
+        'invoice_request_status_history_acting_for_check',
+      )
+
+      // 第 9 条权限必须是系统级，且全局只有一条授权。
+      const permission = await client.query<{ system_only: boolean, grants: string }>(
+        "SELECT permission.system_only, count(grant_entry.role_id)::text AS grants FROM \"permissions\" AS permission LEFT JOIN \"role_permissions\" AS grant_entry ON grant_entry.permission_id = permission.id WHERE permission.code = 'invoice-requests:import' GROUP BY permission.system_only",
+      )
+      expect(permission.rows).toEqual([{ system_only: true, grants: '1' }])
+    }
+    finally {
+      await client.query('ROLLBACK')
+    }
+  })
 })

@@ -2925,7 +2925,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue"
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
     ]
   },
   {
@@ -3192,6 +3193,7 @@
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/index.vue"

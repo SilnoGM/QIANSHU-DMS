@@ -99059,6 +99059,7 @@
             {
               "status": 422,
               "codes": [
+                "INVOICE_REQUEST_TOTAL_MISMATCH",
                 "VALIDATION_FAILED"
               ]
             }
@@ -99537,6 +99538,229 @@
         }
       }
     },
+    "/api/invoice-requests/imports": {
+      "post": {
+        "operationId": "invoice_requests_import",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceRequestImportBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "逐条回执；单条失败不影响其他条，整体仍返回 201。",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceRequestImportBatchResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "invoice-requests"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "INVOICE_REQUEST_OWNER_ONLY",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/invoice-requests/{id}/resubmissions": {
       "post": {
         "operationId": "invoice_requests_resubmit",
@@ -99831,6 +100055,7 @@
             {
               "status": 422,
               "codes": [
+                "INVOICE_REQUEST_TOTAL_MISMATCH",
                 "VALIDATION_FAILED"
               ]
             }
@@ -134334,6 +134559,17 @@
             "type": "string",
             "nullable": true
           },
+          "submittedOnBehalfByUserId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "代导入操作人；为空表示本人提交。"
+          },
+          "submittedOnBehalfByName": {
+            "type": "string",
+            "nullable": true,
+            "description": "代导入操作人姓名。"
+          },
           "submittedAt": {
             "type": "string",
             "description": "申请日期（= 记录创建时间），ISO 8601。"
@@ -134568,6 +134804,17 @@
             "type": "string",
             "nullable": true
           },
+          "actingForUserId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "代导入时的受益开票人；为空表示这一步由本人执行。"
+          },
+          "actingForName": {
+            "type": "string",
+            "nullable": true,
+            "description": "受益开票人姓名。"
+          },
           "occurredAt": {
             "type": "string",
             "description": "ISO 8601。"
@@ -134669,6 +134916,17 @@
           "creatorAvatarUrl": {
             "type": "string",
             "nullable": true
+          },
+          "submittedOnBehalfByUserId": {
+            "type": "object",
+            "format": "uuid",
+            "nullable": true,
+            "description": "代导入操作人；为空表示本人提交。"
+          },
+          "submittedOnBehalfByName": {
+            "type": "string",
+            "nullable": true,
+            "description": "代导入操作人姓名。"
           },
           "submittedAt": {
             "type": "string",
@@ -134876,6 +135134,11 @@
               "$ref": "#/components/schemas/InvoiceRequestLineInputDto"
             }
           },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。"
+          },
           "duplicateAcknowledged": {
             "type": "boolean",
             "default": false,
@@ -134889,6 +135152,298 @@
           "recipientPhone",
           "recipientAddress",
           "lines"
+        ]
+      },
+      "InvoiceRequestImportLineDto": {
+        "type": "object",
+        "properties": {
+          "productName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "品名，允许重复。"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "unitPrice": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "整数台币单价。"
+          }
+        },
+        "required": [
+          "productName",
+          "quantity",
+          "unitPrice"
+        ]
+      },
+      "InvoiceRequestImportExpectedDto": {
+        "type": "object",
+        "properties": {
+          "salesAmount": {
+            "type": "string",
+            "pattern": "^\\d{1,16}$",
+            "description": "期望销售额（整数台币）。"
+          },
+          "taxAmount": {
+            "type": "string",
+            "pattern": "^\\d{1,16}$",
+            "description": "期望税额（整数台币）。"
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^\\d{1,16}$",
+            "description": "期望合计（整数台币）。"
+          }
+        },
+        "required": [
+          "salesAmount",
+          "taxAmount",
+          "totalAmount"
+        ]
+      },
+      "InvoiceRequestImportOccurredAtDto": {
+        "type": "object",
+        "properties": {
+          "submittedAt": {
+            "type": "string",
+            "description": "申请时间（ISO 8601）。省略时取导入时刻。"
+          },
+          "notifiedAt": {
+            "type": "string",
+            "description": "通知时间（ISO 8601）。省略时等于申请时间。"
+          },
+          "documentUploadedAt": {
+            "type": "string",
+            "description": "发票照片上传时间（ISO 8601）。省略时等于通知时间。"
+          }
+        }
+      },
+      "InvoiceRequestImportItemDto": {
+        "type": "object",
+        "properties": {
+          "sourceRef": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "批内唯一的源引用（如源表行号），用于幂等与回执定位。"
+          },
+          "ownerUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "归属开票人：必须是启用用户且持有 invoice-requests:read。"
+          },
+          "buyerName": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "抬头名称。"
+          },
+          "buyerTaxId": {
+            "type": "string",
+            "pattern": "^\\d{8}$",
+            "description": "统一编号，8 位数字。"
+          },
+          "invoiceRemark": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "description": "发票备注，会复制给代开票方。"
+          },
+          "internalRemark": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "description": "内部备注，仅内部可见。"
+          },
+          "recipientName": {
+            "type": "string",
+            "description": "寄送姓名。"
+          },
+          "recipientPhone": {
+            "type": "string",
+            "description": "寄送电话，单值单行，不做格式校验。"
+          },
+          "recipientAddress": {
+            "type": "string",
+            "description": "寄送地址，不要求邮递区号。"
+          },
+          "lines": {
+            "description": "明细行，1–5 行。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestImportLineDto"
+            }
+          },
+          "expected": {
+            "description": "票面期望值；提供时与复算结果不一致即失败。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvoiceRequestImportExpectedDto"
+              }
+            ]
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "票面含税总计；与普通提交同一口径：税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。"
+          },
+          "targetStatus": {
+            "type": "string",
+            "enum": [
+              "NOTIFIED",
+              "ISSUED"
+            ],
+            "description": "目标状态：已通知开票或已开出邮寄（ISSUED 必须带照片）。"
+          },
+          "occurredAt": {
+            "description": "历史时间回填。",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvoiceRequestImportOccurredAtDto"
+              }
+            ]
+          },
+          "documentMediaAssetId": {
+            "type": "object",
+            "format": "uuid",
+            "description": "发票照片媒体资产；目标状态 ISSUED 时必填。"
+          }
+        },
+        "required": [
+          "sourceRef",
+          "ownerUserId",
+          "buyerName",
+          "buyerTaxId",
+          "recipientName",
+          "recipientPhone",
+          "recipientAddress",
+          "lines",
+          "targetStatus"
+        ]
+      },
+      "InvoiceRequestImportBatchDto": {
+        "type": "object",
+        "properties": {
+          "batchRef": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "批次标识，与 sourceRef 共同构成幂等键。"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false,
+            "description": "预检模式：完成全部校验与金额复算，不落库、不耗号。"
+          },
+          "items": {
+            "description": "导入条目，1–200 条。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestImportItemDto"
+            }
+          }
+        },
+        "required": [
+          "batchRef",
+          "items"
+        ]
+      },
+      "InvoiceRequestImportItemResultDto": {
+        "type": "object",
+        "properties": {
+          "sourceRef": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "CREATED",
+              "REPLAYED",
+              "VALID",
+              "FAILED"
+            ],
+            "description": "CREATED 已建单；REPLAYED 幂等命中返回原单；VALID 预检通过；FAILED 失败。"
+          },
+          "invoiceRequestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "invoiceNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "description": "失败码；成功时为 null。"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "失败原因；成功时为 null。"
+          },
+          "salesAmount": {
+            "type": "string",
+            "nullable": true,
+            "description": "落库后的销售额（整数台币）。"
+          },
+          "taxAmount": {
+            "type": "string",
+            "nullable": true,
+            "description": "落库后的税额（整数台币）。"
+          },
+          "totalAmount": {
+            "type": "string",
+            "nullable": true,
+            "description": "落库后的合计（整数台币）。"
+          },
+          "taxAdjusted": {
+            "type": "boolean",
+            "description": "税额是否由票面总计倒推（与 5% 公式不同）。"
+          }
+        },
+        "required": [
+          "sourceRef",
+          "outcome",
+          "taxAdjusted"
+        ]
+      },
+      "InvoiceRequestImportBatchResultDto": {
+        "type": "object",
+        "properties": {
+          "batchRef": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "created": {
+            "type": "number"
+          },
+          "replayed": {
+            "type": "number"
+          },
+          "valid": {
+            "type": "number"
+          },
+          "failed": {
+            "type": "number"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestImportItemResultDto"
+            }
+          }
+        },
+        "required": [
+          "batchRef",
+          "dryRun",
+          "created",
+          "replayed",
+          "valid",
+          "failed",
+          "items"
         ]
       },
       "InvoiceRequestResubmitDto": {
@@ -134934,6 +135489,11 @@
             "items": {
               "$ref": "#/components/schemas/InvoiceRequestLineInputDto"
             }
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。"
           },
           "duplicateAcknowledged": {
             "type": "boolean",

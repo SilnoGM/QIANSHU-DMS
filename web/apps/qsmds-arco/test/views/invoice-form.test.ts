@@ -5,14 +5,62 @@ import test from 'node:test'
 import en from '../../src/locales/lang/invoice-requests/en.json'
 import zhCn from '../../src/locales/lang/invoice-requests/zh-cn.json'
 import zhTw from '../../src/locales/lang/invoice-requests/zh-tw.json'
-import { formatLineAmount } from '../../src/views/workbenches/invoices/invoice-form.logic'
+import { buildInvoiceSubmitPayload, calculateInvoiceTotals, INVOICE_QUANTITY_MAX, INVOICE_TOTAL_TOLERANCE_CENTS, stepQuantityValue } from '../../src/views/workbenches/invoices/invoice-form.logic'
 
-test('行金额展示文本带千分位，空值用「—」占位', () => {
-  assert.equal(formatLineAmount(null), '—')
-  assert.equal(formatLineAmount(0), '0')
-  assert.equal(formatLineAmount(90000), '90,000')
-  assert.equal(formatLineAmount(283500), '283,500')
-  assert.equal(formatLineAmount(1234567890), '1,234,567,890')
+test('票面总计：税额作残差，容差 0.5 元', () => {
+  assert.equal(INVOICE_TOTAL_TOLERANCE_CENTS, 50)
+  const lines = [{ productName: 'X', quantity: '1', unitPrice: '43810' }]
+
+  // 不填总计：维持 5% 口径（43810 × 5% = 2190.5 → 2191 / 46001）。
+  const auto = calculateInvoiceTotals(lines)
+  assert.deepEqual(
+    { sales: auto.salesAmount, tax: auto.taxAmount, total: auto.totalAmount, adjusted: auto.taxAdjusted, invalid: auto.totalInvalid },
+    { sales: 43810, tax: 2191, total: 46001, adjusted: false, invalid: false },
+  )
+
+  // 票面 46,000：税额 2,190，正在容差边界（0.5 元）。
+  const paper = calculateInvoiceTotals(lines, '46000')
+  assert.deepEqual(
+    { sales: paper.salesAmount, tax: paper.taxAmount, total: paper.totalAmount, adjusted: paper.taxAdjusted, invalid: paper.totalInvalid, computed: paper.computedTotalAmount },
+    { sales: 43810, tax: 2190, total: 46000, adjusted: true, invalid: false, computed: 46001 },
+  )
+
+  // 差 2 元越界：金额卡回退到自动口径，由输入框标红。
+  const invalid = calculateInvoiceTotals(lines, '46002')
+  assert.equal(invalid.totalInvalid, true)
+  assert.equal(invalid.taxAmount, 2191)
+  assert.equal(invalid.totalAmount, 46001)
+
+  // 留空与非法输入。
+  assert.equal(calculateInvoiceTotals(lines, '  ').totalInvalid, false)
+  assert.equal(calculateInvoiceTotals(lines, 'abc').totalInvalid, true)
+  assert.deepEqual(calculateInvoiceTotals([{ productName: 'X', quantity: '', unitPrice: '1' }], '46000').computedTotalAmount, null)
+})
+
+test('提交载荷带上票面总计，越界时定位到 totalAmount', () => {
+  const base = {
+    buyerName: '大坑古厝白馬有限公司',
+    buyerTaxId: '42927875',
+    invoiceRemark: '',
+    internalRemark: '',
+    recipientName: '李弇義',
+    recipientPhone: '0939298738',
+    recipientAddress: '台南市新化區',
+    lines: [{ productName: '历史开票导入', quantity: '1', unitPrice: '43810' }],
+  }
+  const ok = buildInvoiceSubmitPayload({ ...base, totalAmount: '46000' })
+  assert.ok('payload' in ok)
+  assert.equal(ok.payload.totalAmount, '46000')
+
+  // 留空：不发送该字段，服务端按 5% 计算。
+  const blank = buildInvoiceSubmitPayload({ ...base, totalAmount: '  ' })
+  assert.ok('payload' in blank)
+  assert.equal('totalAmount' in blank.payload, false)
+
+  assert.deepEqual(buildInvoiceSubmitPayload({ ...base, totalAmount: '46002' }), { invalidField: 'totalAmount' })
+  assert.deepEqual(buildInvoiceSubmitPayload({ ...base, totalAmount: '0' }), { invalidField: 'totalAmount' })
+  // 总计小于销售额必然越界。
+  assert.deepEqual(buildInvoiceSubmitPayload({ ...base, totalAmount: '43000' }), { invalidField: 'totalAmount' })
 })
 
 test('开票申请三语文案键保持对齐', () => {
@@ -28,6 +76,10 @@ test('明细区新增文案键与占位符在三语中都存在', () => {
     'invoiceRequest.form.amountHint',
     'invoiceRequest.form.totalPreview',
     'invoiceRequest.form.taxAmountWithRate',
+    'invoiceRequest.form.totalAmountHint',
+    'invoiceRequest.form.taxToleranceHint',
+    'invoiceRequest.form.taxAdjusted',
+    'invoiceRequest.error.totalTolerance',
     'invoiceRequest.cost.section',
     'invoiceRequest.cost.serviceFeeRate',
     'invoiceRequest.cost.mailingFee',
@@ -74,4 +126,19 @@ test('提交收尾发生在释放提交态之后，且提交中硬阻止离开�
   }
   // R10-3 的「提交进行中硬阻止」必须保留：本次只调整收尾顺序，不放宽守卫。
   assert.match(source, /onBeforeRouteLeave\(\(\) => \{\n {2}if \(submitting\.value\) \{\n {4}return false/u)
+})
+
+test('数量步进夹在 1–上限，空值按方向起步', () => {
+  assert.equal(INVOICE_QUANTITY_MAX, 1_000_000)
+  assert.equal(stepQuantityValue('3', 1), '4')
+  assert.equal(stepQuantityValue('3', -1), '2')
+  // 减到 1 停住，不会出现 0 或负数。
+  assert.equal(stepQuantityValue('1', -1), '1')
+  assert.equal(stepQuantityValue('', -1), '1')
+  // 空值与 0 都按「从 1 开始加」处理。
+  assert.equal(stepQuantityValue('', 1), '1')
+  assert.equal(stepQuantityValue('0', 1), '1')
+  assert.equal(stepQuantityValue('0', -1), '1')
+  // 上限夹紧。
+  assert.equal(stepQuantityValue(String(INVOICE_QUANTITY_MAX), 1), String(INVOICE_QUANTITY_MAX))
 })

@@ -26,6 +26,7 @@ describe('invoice request permission migration', () => {
       'invoice-requests:cancel',
       'invoice-requests:create',
       'invoice-requests:document',
+      'invoice-requests:import',
       'invoice-requests:read',
       'invoice-requests:read-all',
       'invoice-requests:return',
@@ -93,5 +94,28 @@ describe('invoice request permission migration', () => {
     )
     expect(migration).not.toContain('ON CONFLICT DO NOTHING')
     expect(migration).not.toMatch(/\b(?:CREATE|ALTER|DROP)\s+(?:TABLE|TYPE)\b/iu)
+  })
+
+  it('seeds the system-only import permission with its on-behalf columns and admin grant', () => {
+    const importMigration = '20261117120000_invoice_request_import'
+    const migration = readFileSync(resolve(migrationsRoot, importMigration, 'migration.sql'), 'utf8')
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
+
+    // 代导入归属列与状态历史的代操作人列。
+    expect(migration).toContain('"submitted_on_behalf_by_user_id"')
+    expect(migration).toContain('"acting_for_user_id"')
+    expect(migration).toContain('invoice_requests_on_behalf_distinct_check')
+    expect(migration).toContain('invoice_request_status_history_acting_for_check')
+
+    // 第 9 条权限：稳定 ID、系统级、不可委派。
+    expect(migration).toContain("'00000000-0000-4000-8000-000000000190'")
+    expect(migration).toMatch(/'invoice-requests:import',\s*'代导入开票申请',[\s\S]*?\btrue\b/u)
+
+    // 只授 system_admin，且自检证明没有第二条授权。
+    expect(migration).toMatch(
+      /role\."id" = '00000000-0000-4000-8000-000000000001'[\s\S]*?role\."code" = 'system_admin'/u,
+    )
+    expect(migration).toContain('must be granted only to system admin')
   })
 })

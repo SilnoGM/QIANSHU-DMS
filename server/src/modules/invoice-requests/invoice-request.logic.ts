@@ -47,6 +47,75 @@ export function sumLineAmounts(
   return lines.reduce((total, line) => total + line.unitPrice * BigInt(line.quantity), 0n)
 }
 
+/**
+ * 票面总计校验的容差（分）：`|总计 − 1.05 × 销售额|` 的上界。
+ *
+ * 销售额 = round(总计 ÷ 1.05)，而 总计 ÷ 1.05 = 20×总计/21，小数部分只能取 k/21，
+ * 离 1/2 最近为 1/42；乘回 1.05 = 21/20 后恰好是 0.5 元。因此 50 分是精确上界：
+ * 超过它必然说明总计或销售额取错了，而不是四舍五入的正常波动。
+ */
+export const INVOICE_TOTAL_TOLERANCE_CENTS = 50
+
+export type InvoiceAmountResolution =
+  | {
+    readonly status: 'OK'
+    readonly salesAmount: bigint
+    readonly taxAmount: bigint
+    readonly totalAmount: bigint
+    /** 税额由票面总计倒推、与 5% 公式不同时为 true。 */
+    readonly taxAdjusted: boolean
+    readonly deviationCents: number
+  }
+  | {
+    readonly status: 'TOTAL_OUT_OF_TOLERANCE'
+    readonly salesAmount: bigint
+    readonly requestedTotalAmount: bigint
+    /** 不填总计时会得到的合计，供提示文案对比。 */
+    readonly computedTotalAmount: bigint
+    readonly deviationCents: number
+  }
+
+/**
+ * 金额口径：默认按销售额 × 5% 计算；传入票面含税总计时，税额取 `总计 − 销售额`。
+ *
+ * 票面结构是「未税单价 → 金额 → 销售额合计 → 营业税 → 总计」，税额是残差而不是
+ * 独立计算值，所以 5% 在这里退化成容差校验（0.5 元）。这样任何整数总计都能精确
+ * 落库，同时不会接受明显错配的销售额。
+ */
+export function resolveInvoiceAmounts(
+  salesAmount: bigint,
+  totalAmountInput: string | null | undefined,
+): InvoiceAmountResolution {
+  const computedTaxAmount = calculateTaxAmount(salesAmount)
+  const computedTotalAmount = salesAmount + computedTaxAmount
+  const raw = totalAmountInput?.trim() ?? ''
+  if (raw === '') {
+    return {
+      status: 'OK',
+      salesAmount,
+      taxAmount: computedTaxAmount,
+      totalAmount: computedTotalAmount,
+      taxAdjusted: false,
+      deviationCents: 0,
+    }
+  }
+  const requestedTotalAmount = BigInt(raw)
+  const taxAmount = requestedTotalAmount - salesAmount
+  const deviation = requestedTotalAmount * 100n - salesAmount * 105n
+  const deviationCents = Number(deviation < 0n ? -deviation : deviation)
+  if (taxAmount < 0n || deviationCents > INVOICE_TOTAL_TOLERANCE_CENTS) {
+    return { status: 'TOTAL_OUT_OF_TOLERANCE', salesAmount, requestedTotalAmount, computedTotalAmount, deviationCents }
+  }
+  return {
+    status: 'OK',
+    salesAmount,
+    taxAmount,
+    totalAmount: requestedTotalAmount,
+    taxAdjusted: taxAmount !== computedTaxAmount,
+    deviationCents,
+  }
+}
+
 /** 可结算时刻 = 上传时刻 + 120 小时。 */
 export function resolveSettleableAt(documentUploadedAt: Date): Date {
   return new Date(documentUploadedAt.getTime() + INVOICE_SETTLE_WAIT_HOURS * 3_600_000)

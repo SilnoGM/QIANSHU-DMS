@@ -7,6 +7,7 @@ import { NumberingModule } from '../numbering/numbering.module'
 import { NotificationModule } from '../notifications/notification.module'
 import { InvoiceRequestController } from './invoice-request.controller'
 import { InvoiceRequestDocumentService } from './invoice-request-document.service'
+import { InvoiceRequestImportService } from './invoice-request-import.service'
 import { InvoiceRequestQueryService } from './invoice-request-query.service'
 import { InvoiceRequestService } from './invoice-request.service'
 
@@ -21,6 +22,6 @@ import { InvoiceRequestService } from './invoice-request.service'
 @Module({
   imports: [PrismaModule, AuthModule, MediaModule, NumberingModule, FundAccountsModule, NotificationModule],
   controllers: [InvoiceRequestController],
-  providers: [InvoiceRequestService, InvoiceRequestQueryService, InvoiceRequestDocumentService],
+  providers: [InvoiceRequestService, InvoiceRequestQueryService, InvoiceRequestDocumentService, InvoiceRequestImportService],
 })
 export class InvoiceRequestModule {}

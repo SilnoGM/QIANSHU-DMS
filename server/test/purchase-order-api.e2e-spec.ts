@@ -461,10 +461,25 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     review.mockClear()
     updateOrderStatus.mockClear()
     reject.mockClear()
+    getById.mockClear()
+    list.mockClear()
     readShippingMarkResolution.mockClear()
   })
 
   afterAll(async () => { await application?.close() })
+
+  it('lets purchase payment operators read order detail without granting the purchase list', async () => {
+    grantedPermissions = ['purchase-orders:payment']
+    const detail = await request(application.getHttpServer())
+      .get(`/api/purchase-orders/${ORDER_ID}`).set('Cookie', cookie).expect(200)
+    expect(responseBody(detail)).toEqual({ id: ORDER_ID })
+    expect(getById).toHaveBeenCalledWith(ORDER_ID, expect.any(String))
+
+    const listResponse = await request(application.getHttpServer())
+      .get('/api/purchase-orders?view=pending&page=1&pageSize=20').set('Cookie', cookie).expect(403)
+    expect(responseBody(listResponse)).toMatchObject({ code: 'FORBIDDEN' })
+    expect(list).not.toHaveBeenCalled()
+  })
 
   it('allows cancellation from an operations updater without review permission', async () => {
     grantedPermissions = ['purchase-orders:read', 'purchase-orders:update']
