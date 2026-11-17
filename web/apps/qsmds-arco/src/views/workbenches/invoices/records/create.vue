@@ -6,6 +6,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
@@ -36,8 +37,8 @@ const recipientName = ref('')
 const recipientPhone = ref('')
 const recipientAddress = ref('')
 const lines = ref<InvoiceFormLine[]>([emptyInvoiceFormLine()])
-/** 票面含税总计：留空表示按明细自动计算；手填后不再被明细覆盖。 */
-const totalAmount = ref('')
+/** 票面含税总计：null 表示按明细自动计算；手填后不再被明细覆盖。 */
+const totalAmount = ref<string | null>(null)
 const totalDirty = ref(false)
 const loadError = ref<string | null>(null)
 const loadFailed = ref(false)
@@ -51,7 +52,7 @@ const discardOpen = ref(false)
 const duplicateSuspects = ref<ReturnType<typeof parseDuplicateSuspects>>([])
 const dirty = ref(false)
 
-const totals = computed(() => calculateInvoiceTotals(lines.value, totalDirty.value ? totalAmount.value : ''))
+const totals = computed(() => calculateInvoiceTotals(lines.value, totalDirty.value ? (totalAmount.value ?? '') : ''))
 /** 未手工改过总计时跟随明细自动填充；手填后交给容差校验，不再覆盖用户输入。 */
 watch(() => totals.value.computedTotalAmount, (value) => {
   if (!totalDirty.value && value !== null) {
@@ -64,6 +65,11 @@ function onTotalInput(): void {
 }
 const canAddLine = computed(() => lines.value.length < INVOICE_REQUEST_LINE_LIMIT)
 const invoiceCurrency = 'TWD'
+const totalCurrency = ref<string | null>(invoiceCurrency)
+/** 票面金额是整数元：只在本页把 TWD 的小数位压到 0，不回写全局货币目录。 */
+const invoiceCurrencies = computed(() => currencyCatalog.currencies.value.map(entry => (
+  entry.code === invoiceCurrency ? { ...entry, minorUnit: 0 as const } : entry
+)))
 const serviceFeePercent = Math.round(INVOICE_SERVICE_FEE_RATE * 100)
 
 /** 预估成本用的当前台币汇率（1 人民币兑多少台币）；加载失败或缺失时为 null。 */
@@ -116,7 +122,7 @@ function currentPayload(): ReturnType<typeof buildInvoiceSubmitPayload> {
     recipientPhone: recipientPhone.value,
     recipientAddress: recipientAddress.value,
     lines: lines.value,
-    totalAmount: totalAmount.value,
+    totalAmount: totalAmount.value ?? '',
   })
 }
 
@@ -450,16 +456,18 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               </p>
             </div>
             <div class="p-4 border border-border rounded-xl bg-primary/5 flex flex-col gap-2">
-              <label class="text-xs text-muted-foreground" for="invoice-total-amount">{{ t('invoiceRequest.field.totalAmount') }}</label>
-              <FaInput
-                id="invoice-total-amount"
+              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.totalAmount') }}</span>
+              <MoneyInput
                 v-model="totalAmount"
-                class="w-full"
-                inputmode="numeric"
-                maxlength="16"
+                v-model:currency="totalCurrency"
+                :currencies="invoiceCurrencies"
+                :currency-selectable="false"
                 :disabled="submitting"
+                min="1"
+                input-class="text-lg font-bold"
+                autocomplete="off"
                 :aria-invalid="fieldError === 'totalAmount' || totals.totalInvalid"
-                input-class="font-mono! tabular-nums text-right text-lg font-bold"
+                :aria-label="t('invoiceRequest.field.totalAmount')"
                 @update:model-value="onTotalInput"
               />
               <p class="text-xs text-muted-foreground m-0">
