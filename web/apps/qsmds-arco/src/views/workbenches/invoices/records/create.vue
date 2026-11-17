@@ -12,7 +12,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
 import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
-import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, formatLineAmount, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
+import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
 import { parseDuplicateSuspects } from '../invoice-status.logic'
 
 /**
@@ -65,7 +65,7 @@ function onTotalInput(): void {
 }
 const canAddLine = computed(() => lines.value.length < INVOICE_REQUEST_LINE_LIMIT)
 const invoiceCurrency = 'TWD'
-const totalCurrency = ref<string | null>(invoiceCurrency)
+const amountCurrency = ref<string | null>(invoiceCurrency)
 /** 票面金额是整数元：只在本页把 TWD 的小数位压到 0，不回写全局货币目录。 */
 const invoiceCurrencies = computed(() => currencyCatalog.currencies.value.map(entry => (
   entry.code === invoiceCurrency ? { ...entry, minorUnit: 0 as const } : entry
@@ -331,7 +331,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
 
         <FaCard :title="t('invoiceRequest.form.linesSection')" :description="t('invoiceRequest.form.lineLimit')" content-class="space-y-4">
           <div class="border border-border rounded-xl bg-background overflow-x-auto">
-            <table class="text-sm min-w-[46rem] w-full border-collapse">
+            <table class="text-sm min-w-[56rem] w-full border-collapse">
               <caption class="sr-only">
                 {{ t('invoiceRequest.form.linesSection') }}
               </caption>
@@ -346,7 +346,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                   <th scope="col" class="font-medium p-3 text-right w-28">
                     {{ t('invoiceRequest.field.quantity') }}
                   </th>
-                  <th scope="col" class="font-medium p-3 text-right w-36">
+                  <th scope="col" class="font-medium p-3 text-right w-52">
                     {{ t('invoiceRequest.form.unitPriceExTax') }}
                   </th>
                   <th scope="col" class="font-medium p-3 text-right w-36">
@@ -388,12 +388,12 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                     />
                   </td>
                   <td class="p-3">
-                    <FaInput
+                    <MoneyInput
                       v-model="line.unitPrice"
-                      class="w-full"
-                      inputmode="numeric"
-                      maxlength="16"
-                      input-class="text-right font-mono! tabular-nums"
+                      v-model:currency="amountCurrency"
+                      :currencies="invoiceCurrencies"
+                      :currency-selectable="false"
+                      min="1"
                       :aria-label="t('invoiceRequest.field.unitPrice')"
                       :disabled="submitting"
                       :aria-invalid="lineFieldError(index, 'unitPrice')"
@@ -401,7 +401,13 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                     />
                   </td>
                   <td class="p-3 text-right">
-                    <span :class="totals.lineAmounts[index] === null ? 'qs-type-meta' : 'qs-type-data-emphasis'">{{ formatLineAmount(totals.lineAmounts[index]) }}</span>
+                    <AmountDisplay
+                      :value="totals.lineAmounts[index]"
+                      :currency="invoiceCurrency"
+                      :currencies="currencyCatalog.currencies.value"
+                      :minor-unit="0"
+                      :show-code="false"
+                    />
                   </td>
                   <td class="p-3 text-right">
                     <FaButton
@@ -459,7 +465,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
               <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.totalAmount') }}</span>
               <MoneyInput
                 v-model="totalAmount"
-                v-model:currency="totalCurrency"
+                v-model:currency="amountCurrency"
                 :currencies="invoiceCurrencies"
                 :currency-selectable="false"
                 :disabled="submitting"

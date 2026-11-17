@@ -5,15 +5,7 @@ import test from 'node:test'
 import en from '../../src/locales/lang/invoice-requests/en.json'
 import zhCn from '../../src/locales/lang/invoice-requests/zh-cn.json'
 import zhTw from '../../src/locales/lang/invoice-requests/zh-tw.json'
-import { buildInvoiceSubmitPayload, calculateInvoiceTotals, formatLineAmount, INVOICE_TOTAL_TOLERANCE_CENTS } from '../../src/views/workbenches/invoices/invoice-form.logic'
-
-test('行金额展示文本带千分位，空值用「—」占位', () => {
-  assert.equal(formatLineAmount(null), '—')
-  assert.equal(formatLineAmount(0), '0')
-  assert.equal(formatLineAmount(90000), '90,000')
-  assert.equal(formatLineAmount(283500), '283,500')
-  assert.equal(formatLineAmount(1234567890), '1,234,567,890')
-})
+import { buildInvoiceSubmitPayload, calculateInvoiceTotals, INVOICE_TOTAL_TOLERANCE_CENTS } from '../../src/views/workbenches/invoices/invoice-form.logic'
 
 test('票面总计：税额作残差，容差 0.5 元', () => {
   assert.equal(INVOICE_TOTAL_TOLERANCE_CENTS, 50)

@@ -10,13 +10,14 @@ export const INVOICE_REQUEST_LINE_LIMIT = 5
 
 export interface InvoiceFormLine {
   readonly productName: string
-  /** 数量与单价在表单里保持字符串，用户输入到一半（空串）也能编辑。 */
+  /** 数量在表单里保持字符串，用户输入到一半（空串）也能编辑。 */
   readonly quantity: string
-  readonly unitPrice: string
+  /** 单价走 MoneyInput 协议：空值为 null，合法值为十进制字符串。 */
+  readonly unitPrice: string | null
 }
 
 export function emptyInvoiceFormLine(): InvoiceFormLine {
-  return { productName: '', quantity: '1', unitPrice: '' }
+  return { productName: '', quantity: '1', unitPrice: null }
 }
 
 export function parsePositiveInteger(value: string): number | null {
@@ -62,7 +63,7 @@ export interface InvoiceFormTotals {
 export function calculateInvoiceTotals(lines: readonly InvoiceFormLine[], totalOverride = ''): InvoiceFormTotals {
   const lineAmounts = lines.map((line) => {
     const quantity = parsePositiveInteger(line.quantity)
-    const unitPrice = parsePositiveInteger(line.unitPrice)
+    const unitPrice = line.unitPrice === null ? null : parsePositiveInteger(line.unitPrice)
     return quantity === null || unitPrice === null ? null : quantity * unitPrice
   })
   if (lineAmounts.length === 0 || lineAmounts.includes(null)) {
@@ -102,11 +103,6 @@ export function calculateInvoiceTotals(lines: readonly InvoiceFormLine[], totalO
     taxAdjusted: appliedTaxAmount !== autoTaxAmount,
     totalInvalid: false,
   }
-}
-
-/** 明细行金额展示文本：千分位分组（与 AmountDisplay 的整数分组口径一致）；行不完整时用「—」。 */
-export function formatLineAmount(value: number | null): string {
-  return value === null ? '—' : String(value).replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
 }
 
 export interface InvoiceSubmitPayload {
@@ -167,7 +163,7 @@ export function buildInvoiceSubmitPayload(input: {
     if (quantity === null) {
       return { invalidField: `lines.${index}.quantity` }
     }
-    const unitPrice = parsePositiveInteger(line.unitPrice)
+    const unitPrice = line.unitPrice === null ? null : parsePositiveInteger(line.unitPrice)
     if (unitPrice === null) {
       return { invalidField: `lines.${index}.unitPrice` }
     }
