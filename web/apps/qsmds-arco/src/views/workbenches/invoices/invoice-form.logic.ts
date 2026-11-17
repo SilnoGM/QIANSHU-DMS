@@ -39,6 +39,19 @@ export function calculateTaxAmount(salesAmount: number): number {
  */
 export const INVOICE_TOTAL_TOLERANCE_CENTS = 50
 
+/** 明细数量上限，与提交 DTO 的 1–1,000,000 对齐。 */
+export const INVOICE_QUANTITY_MAX = 1_000_000
+
+/**
+ * 数量步进：空值或非法值按方向从 0/1 起步，结果始终夹在 1–1,000,000。
+ * 抽成纯函数是为了让「减到 1 停住、加到上限停住」这类边界能被单测覆盖。
+ */
+export function stepQuantityValue(value: string, delta: number): string {
+  const parsed = parsePositiveInteger(value)
+  const current = parsed ?? (delta > 0 ? 0 : 1)
+  return String(Math.min(INVOICE_QUANTITY_MAX, Math.max(1, current + delta)))
+}
+
 export interface InvoiceFormTotals {
   /** 任一行不完整时为 null：合计只在能算准的时候显示，不显示「部分合计」。 */
   readonly salesAmount: number | null

@@ -12,7 +12,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
 import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
-import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_REQUEST_LINE_LIMIT } from '../invoice-form.logic'
+import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_QUANTITY_MAX, INVOICE_REQUEST_LINE_LIMIT, parsePositiveInteger, stepQuantityValue } from '../invoice-form.logic'
 import { parseDuplicateSuspects } from '../invoice-status.logic'
 
 /**
@@ -100,6 +100,21 @@ function addLine(): void {
     return
   }
   lines.value = [...lines.value, emptyInvoiceFormLine()]
+  markDirty()
+}
+
+function stepQuantity(index: number, delta: number): void {
+  const line = lines.value[index]
+  if (line === undefined) {
+    return
+  }
+  const next = stepQuantityValue(line.quantity, delta)
+  if (next === line.quantity) {
+    return
+  }
+  lines.value = lines.value.map((entry, current) => (
+    current === index ? { ...entry, quantity: next } : entry
+  ))
   markDirty()
 }
 
@@ -331,7 +346,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
 
         <FaCard :title="t('invoiceRequest.form.linesSection')" :description="t('invoiceRequest.form.lineLimit')" content-class="space-y-4">
           <div class="border border-border rounded-xl bg-background overflow-x-auto">
-            <table class="text-sm min-w-[56rem] w-full border-collapse">
+            <table class="text-sm min-w-[48rem] w-full border-collapse table-fixed">
               <caption class="sr-only">
                 {{ t('invoiceRequest.form.linesSection') }}
               </caption>
@@ -343,7 +358,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                   <th scope="col" class="font-medium p-3 text-left">
                     {{ t('invoiceRequest.field.productName') }}
                   </th>
-                  <th scope="col" class="font-medium p-3 text-right w-28">
+                  <th scope="col" class="font-medium p-3 text-right w-40">
                     {{ t('invoiceRequest.field.quantity') }}
                   </th>
                   <th scope="col" class="font-medium p-3 text-right w-52">
@@ -352,7 +367,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                   <th scope="col" class="font-medium p-3 text-right w-36">
                     {{ t('invoiceRequest.field.amount') }}
                   </th>
-                  <th scope="col" class="font-medium p-3 text-right w-20">
+                  <th scope="col" class="font-medium p-3 text-right w-16">
                     <span class="sr-only">{{ t('invoiceRequest.form.removeLine') }}</span>
                   </th>
                 </tr>
@@ -375,17 +390,41 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                     />
                   </td>
                   <td class="p-3">
-                    <FaInput
-                      v-model="line.quantity"
-                      class="w-full"
-                      inputmode="numeric"
-                      maxlength="7"
-                      input-class="text-right font-mono! tabular-nums"
-                      :aria-label="t('invoiceRequest.field.quantity')"
-                      :disabled="submitting"
-                      :aria-invalid="lineFieldError(index, 'quantity')"
-                      @update:model-value="markDirty"
-                    />
+                    <div class="flex gap-1 items-center">
+                      <FaButton
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        class="shrink-0 min-h-11 min-w-11 sm:min-h-9 sm:min-w-9"
+                        :disabled="submitting || (parsePositiveInteger(line.quantity) ?? 0) <= 1"
+                        :aria-label="t('invoiceRequest.form.decreaseQuantity')"
+                        @click="stepQuantity(index, -1)"
+                      >
+                        <FaIcon name="i-lucide:minus" aria-hidden="true" />
+                      </FaButton>
+                      <FaInput
+                        v-model="line.quantity"
+                        class="w-full"
+                        inputmode="numeric"
+                        maxlength="7"
+                        input-class="text-center font-mono! tabular-nums"
+                        :aria-label="t('invoiceRequest.field.quantity')"
+                        :disabled="submitting"
+                        :aria-invalid="lineFieldError(index, 'quantity')"
+                        @update:model-value="markDirty"
+                      />
+                      <FaButton
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        class="shrink-0 min-h-11 min-w-11 sm:min-h-9 sm:min-w-9"
+                        :disabled="submitting || (parsePositiveInteger(line.quantity) ?? 0) >= INVOICE_QUANTITY_MAX"
+                        :aria-label="t('invoiceRequest.form.increaseQuantity')"
+                        @click="stepQuantity(index, 1)"
+                      >
+                        <FaIcon name="i-lucide:plus" aria-hidden="true" />
+                      </FaButton>
+                    </div>
                   </td>
                   <td class="p-3">
                     <MoneyInput
@@ -393,6 +432,7 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                       v-model:currency="amountCurrency"
                       :currencies="invoiceCurrencies"
                       :currency-selectable="false"
+                      :clearable="false"
                       min="1"
                       :aria-label="t('invoiceRequest.field.unitPrice')"
                       :disabled="submitting"

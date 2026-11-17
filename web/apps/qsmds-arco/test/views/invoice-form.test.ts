@@ -5,7 +5,7 @@ import test from 'node:test'
 import en from '../../src/locales/lang/invoice-requests/en.json'
 import zhCn from '../../src/locales/lang/invoice-requests/zh-cn.json'
 import zhTw from '../../src/locales/lang/invoice-requests/zh-tw.json'
-import { buildInvoiceSubmitPayload, calculateInvoiceTotals, INVOICE_TOTAL_TOLERANCE_CENTS } from '../../src/views/workbenches/invoices/invoice-form.logic'
+import { buildInvoiceSubmitPayload, calculateInvoiceTotals, INVOICE_QUANTITY_MAX, INVOICE_TOTAL_TOLERANCE_CENTS, stepQuantityValue } from '../../src/views/workbenches/invoices/invoice-form.logic'
 
 test('票面总计：税额作残差，容差 0.5 元', () => {
   assert.equal(INVOICE_TOTAL_TOLERANCE_CENTS, 50)
@@ -126,4 +126,19 @@ test('提交收尾发生在释放提交态之后，且提交中硬阻止离开�
   }
   // R10-3 的「提交进行中硬阻止」必须保留：本次只调整收尾顺序，不放宽守卫。
   assert.match(source, /onBeforeRouteLeave\(\(\) => \{\n {2}if \(submitting\.value\) \{\n {4}return false/u)
+})
+
+test('数量步进夹在 1–上限，空值按方向起步', () => {
+  assert.equal(INVOICE_QUANTITY_MAX, 1_000_000)
+  assert.equal(stepQuantityValue('3', 1), '4')
+  assert.equal(stepQuantityValue('3', -1), '2')
+  // 减到 1 停住，不会出现 0 或负数。
+  assert.equal(stepQuantityValue('1', -1), '1')
+  assert.equal(stepQuantityValue('', -1), '1')
+  // 空值与 0 都按「从 1 开始加」处理。
+  assert.equal(stepQuantityValue('', 1), '1')
+  assert.equal(stepQuantityValue('0', 1), '1')
+  assert.equal(stepQuantityValue('0', -1), '1')
+  // 上限夹紧。
+  assert.equal(stepQuantityValue(String(INVOICE_QUANTITY_MAX), 1), String(INVOICE_QUANTITY_MAX))
 })

@@ -30,6 +30,8 @@
   "invoiceRequest.form.recipientPhoneHint": "可填写多个号码，不做格式校验",
   "invoiceRequest.form.addLine": "添加一行（{current}/{limit}）",
   "invoiceRequest.form.removeLine": "删除",
+  "invoiceRequest.form.decreaseQuantity": "减少数量",
+  "invoiceRequest.form.increaseQuantity": "增加数量",
   "invoiceRequest.form.lineLimit": "一单最多 5 个明细行",
   "invoiceRequest.form.unitPriceExTax": "单价（未税）",
   "invoiceRequest.form.amountHint": "金额 = 数量 × 单价，系统自动计算",
