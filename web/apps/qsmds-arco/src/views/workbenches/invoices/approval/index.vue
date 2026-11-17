@@ -22,7 +22,7 @@ import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
 import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
-import { buildCompanyLookupUrl } from '../invoice-company-lookup.logic'
+import { buildCompanyLookupUrl, isCompanyLookupTaxId } from '../invoice-company-lookup.logic'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
@@ -401,17 +401,18 @@ onMounted(load)
         <template #cell-buyer="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="whitespace-normal break-words">
-              <FaTooltip :text="t('invoiceRequest.records.companyLookup')" :delay="300">
+              <FaTooltip v-if="isCompanyLookupTaxId(row.original.buyerTaxId)" :text="t('invoiceRequest.records.companyLookup')" :delay="300">
                 <a
-                  :href="buildCompanyLookupUrl(row.original.buyerName)"
+                  :href="buildCompanyLookupUrl(row.original.buyerTaxId)"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="focus-visible:underline hover:underline"
                 >{{ row.original.buyerName }}</a>
               </FaTooltip>
+              <span v-else>{{ row.original.buyerName }}</span>
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted" content-class="qs-type-data">
-              <FaTooltip :text="t('invoiceRequest.records.companyLookup')" :delay="300">
+              <FaTooltip v-if="isCompanyLookupTaxId(row.original.buyerTaxId)" :text="t('invoiceRequest.records.companyLookup')" :delay="300">
                 <a
                   :href="buildCompanyLookupUrl(row.original.buyerTaxId)"
                   target="_blank"
@@ -419,6 +420,7 @@ onMounted(load)
                   class="focus-visible:underline hover:underline"
                 >{{ row.original.buyerTaxId }}</a>
               </FaTooltip>
+              <span v-else>{{ row.original.buyerTaxId }}</span>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>

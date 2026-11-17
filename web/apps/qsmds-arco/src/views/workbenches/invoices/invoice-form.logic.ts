@@ -1,3 +1,5 @@
+import { isBuyerVerificationRequired } from './invoice-buyer-verification.logic'
+
 /**
  * 开票申请表单的纯计算：明细行编辑、金额与营业税。
  *
@@ -154,7 +156,8 @@ export function buildInvoiceSubmitPayload(input: {
     return { invalidField: 'buyerTaxId' }
   }
   // 抬头与统编格式通过后再要求核验，报错顺序与表单从上到下一致。
-  if (!input.buyerVerified) {
+  // 个人抬头 00000000 在工商登记里没有记录，不要求核验。
+  if (isBuyerVerificationRequired(buyerTaxId) && !input.buyerVerified) {
     return { invalidField: 'buyerVerified' }
   }
   const recipientName = input.recipientName.trim()

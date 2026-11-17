@@ -46,6 +46,7 @@
   "invoiceRequest.form.buyerVerifyOpen": "Open registry",
   "invoiceRequest.form.buyerVerifyConfirm": "Verified, continue",
   "invoiceRequest.form.buyerVerifyBlocked": "The browser blocked the new window; allow pop-ups and try again",
+  "invoiceRequest.form.buyerVerifySkipped": "Individual buyers (00000000) need no verification",
   "invoiceRequest.form.totalAmountHint": "Tax-inclusive total as printed on the invoice; leave blank to calculate from lines",
   "invoiceRequest.form.taxToleranceHint": "Checked against 5%; ±0.5 TWD rounding tolerance",
   "invoiceRequest.form.taxAdjusted": "Tax adjusted to absorb the rounding difference",

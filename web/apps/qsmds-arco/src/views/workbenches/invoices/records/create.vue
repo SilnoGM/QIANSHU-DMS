@@ -11,7 +11,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
-import { canVerifyBuyer, resolveVerificationQuery } from '../invoice-buyer-verification.logic'
+import { canVerifyBuyer, isBuyerVerificationRequired } from '../invoice-buyer-verification.logic'
 import { buildCompanyLookupUrl } from '../invoice-company-lookup.logic'
 
 import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
@@ -50,6 +50,7 @@ const buyerVerified = ref(false)
 const verifyOpen = ref(false)
 const verifyLinkOpened = ref(false)
 const buyerVerifiable = computed(() => canVerifyBuyer(buyerName.value, buyerTaxId.value))
+const verificationRequired = computed(() => isBuyerVerificationRequired(buyerTaxId.value))
 const loadError = ref<string | null>(null)
 const loadFailed = ref(false)
 const submitting = ref(false)
@@ -117,11 +118,11 @@ function requestBuyerVerify(value: boolean | undefined): void {
 }
 
 function openVerifyLink(): void {
-  const query = resolveVerificationQuery(buyerName.value, buyerTaxId.value)
-  if (query === '') {
+  const taxId = buyerTaxId.value.trim()
+  if (!isBuyerVerificationRequired(taxId)) {
     return
   }
-  const opened = window.open(buildCompanyLookupUrl(query), '_blank', 'noopener,noreferrer')
+  const opened = window.open(buildCompanyLookupUrl(taxId), '_blank', 'noopener,noreferrer')
   if (opened === null) {
     toast.warning(t('invoiceRequest.form.buyerVerifyBlocked'))
     return
@@ -411,6 +412,9 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                 @update:model-value="requestBuyerVerify"
               />
               <span v-if="buyerVerified" class="text-xs text-primary">{{ t('invoiceRequest.form.buyerVerified') }}</span>
+              <span v-else-if="!verificationRequired && buyerTaxId.trim() !== ''" class="text-xs text-muted-foreground">
+                {{ t('invoiceRequest.form.buyerVerifySkipped') }}
+              </span>
             </div>
             <p v-if="fieldError === 'buyerVerified'" role="alert" class="text-xs text-destructive m-0 mt-1">
               {{ t('invoiceRequest.error.buyerVerifyRequired') }}
