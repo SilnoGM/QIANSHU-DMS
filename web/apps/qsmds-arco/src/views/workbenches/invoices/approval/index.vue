@@ -10,6 +10,7 @@ import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -21,6 +22,7 @@ import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
 import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
+import { buildCompanyLookupUrl } from '../invoice-company-lookup.logic'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
@@ -39,6 +41,7 @@ type ActionMode = 'return' | 'cancel' | 'document' | 'settle'
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const currencyCatalog = useCurrencyCatalog()
+const toast = useQsToast()
 const canReview = computed(() => auth('invoice-requests:review'))
 
 const status = ref<'ALL' | InvoiceRequestStatusValue>('PENDING_REVIEW')
@@ -113,6 +116,20 @@ const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() =
   { id: 'internalRemark', accessorFn: row => row.internalRemark ?? '—', title: t('invoiceRequest.field.internalRemark'), minWidth: 200, cellClass: 'whitespace-normal break-words' },
   { id: 'submittedAt', accessorFn: row => row.submittedAt, title: t('invoiceRequest.column.submittedAt'), minWidth: 190 },
 ])
+
+/** 申请单号点击复制：剪贴板不可用或权限被拒时只提示当前用户，不写日志。 */
+async function copyInvoiceNo(value: string): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable')
+    }
+    await navigator.clipboard.writeText(value)
+    toast.success(t('invoiceRequest.records.copyInvoiceNoSuccess'))
+  }
+  catch {
+    toast.error(t('invoiceRequest.records.copyInvoiceNoFailed'))
+  }
+}
 
 async function load(): Promise<void> {
   if (!canReview.value) {
@@ -349,6 +366,7 @@ onMounted(load)
         v-model:search="search"
         row-key="id"
         :addable="false"
+        :page-size-options="[20, 50, 100]"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -365,7 +383,15 @@ onMounted(load)
         <template #cell-invoiceNo="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="qs-type-data-emphasis break-all whitespace-normal">
-              {{ row.original.invoiceNo }}
+              <FaTooltip :text="t('invoiceRequest.records.copyInvoiceNo')" :delay="300">
+                <button
+                  type="button"
+                  class="text-left whitespace-normal break-all focus-visible:underline hover:underline"
+                  @click="copyInvoiceNo(row.original.invoiceNo)"
+                >
+                  {{ row.original.invoiceNo }}
+                </button>
+              </FaTooltip>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -375,10 +401,24 @@ onMounted(load)
         <template #cell-buyer="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="whitespace-normal break-words">
-              {{ row.original.buyerName }}
+              <FaTooltip :text="t('invoiceRequest.records.companyLookup')" :delay="300">
+                <a
+                  :href="buildCompanyLookupUrl(row.original.buyerName)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="focus-visible:underline hover:underline"
+                >{{ row.original.buyerName }}</a>
+              </FaTooltip>
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted" content-class="qs-type-data">
-              {{ row.original.buyerTaxId }}
+              <FaTooltip :text="t('invoiceRequest.records.companyLookup')" :delay="300">
+                <a
+                  :href="buildCompanyLookupUrl(row.original.buyerTaxId)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="focus-visible:underline hover:underline"
+                >{{ row.original.buyerTaxId }}</a>
+              </FaTooltip>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
