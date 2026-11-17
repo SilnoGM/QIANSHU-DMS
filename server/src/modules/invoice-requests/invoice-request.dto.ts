@@ -45,6 +45,12 @@ export class InvoiceRequestSubmitDto {
   @ApiProperty({ type: [InvoiceRequestLineInputDto], description: `明细行，1–${INVOICE_REQUEST_LINE_LIMIT} 行。` })
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(INVOICE_REQUEST_LINE_LIMIT) @ValidateNested({ each: true }) @Type(() => InvoiceRequestLineInputDto)
   lines!: InvoiceRequestLineInputDto[]
+  /**
+   * 票面含税总计。给了就以它为准、税额取 `总计 − 销售额`（5% 退化为 0.5 元容差校验）；
+   * 省略则按销售额 × 5% 自动计算，与既有调用方完全兼容。
+   */
+  @ApiPropertyOptional({ type: 'string', pattern: '^[1-9]\\d{0,15}$', description: '票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。' })
+  @IsOptional() @IsString() @Matches(POSITIVE_INTEGER_PATTERN) totalAmount?: string | null
   @ApiPropertyOptional({ default: false, description: '确认「存在抬头、统编、营业税与总计完全一致的申请单」后继续提交。' })
   @IsOptional() @Type(() => Boolean) @IsIn([true, false]) duplicateAcknowledged?: boolean
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { InvoiceFormLine } from '../invoice-form.logic'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import exchangeRatesApi from '@/api/modules/exchange-rates'
@@ -36,6 +36,9 @@ const recipientName = ref('')
 const recipientPhone = ref('')
 const recipientAddress = ref('')
 const lines = ref<InvoiceFormLine[]>([emptyInvoiceFormLine()])
+/** 票面含税总计：留空表示按明细自动计算；手填后不再被明细覆盖。 */
+const totalAmount = ref('')
+const totalDirty = ref(false)
 const loadError = ref<string | null>(null)
 const loadFailed = ref(false)
 const submitting = ref(false)
@@ -48,7 +51,17 @@ const discardOpen = ref(false)
 const duplicateSuspects = ref<ReturnType<typeof parseDuplicateSuspects>>([])
 const dirty = ref(false)
 
-const totals = computed(() => calculateInvoiceTotals(lines.value))
+const totals = computed(() => calculateInvoiceTotals(lines.value, totalDirty.value ? totalAmount.value : ''))
+/** 未手工改过总计时跟随明细自动填充；手填后交给容差校验，不再覆盖用户输入。 */
+watch(() => totals.value.computedTotalAmount, (value) => {
+  if (!totalDirty.value && value !== null) {
+    totalAmount.value = String(value)
+  }
+})
+function onTotalInput(): void {
+  totalDirty.value = true
+  markDirty()
+}
 const canAddLine = computed(() => lines.value.length < INVOICE_REQUEST_LINE_LIMIT)
 const invoiceCurrency = 'TWD'
 const serviceFeePercent = Math.round(INVOICE_SERVICE_FEE_RATE * 100)
@@ -103,6 +116,7 @@ function currentPayload(): ReturnType<typeof buildInvoiceSubmitPayload> {
     recipientPhone: recipientPhone.value,
     recipientAddress: recipientAddress.value,
     lines: lines.value,
+    totalAmount: totalAmount.value,
   })
 }
 
@@ -119,6 +133,9 @@ async function loadForRefill(id: string): Promise<void> {
     recipientPhone.value = data.recipientPhone
     recipientAddress.value = data.recipientAddress
     lines.value = data.lines.map(line => ({ productName: line.productName, quantity: String(line.quantity), unitPrice: line.unitPrice }))
+    // 退回重填：票面总计必须回填并锁定，否则按 5% 重算会把舍入差改回去。
+    totalAmount.value = data.totalAmount
+    totalDirty.value = true
     returnedReason.value = data.history.filter(entry => entry.action === 'RETURN').at(-1)?.reason ?? null
     dirty.value = false
   }
@@ -428,16 +445,32 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
                 :minor-unit="0"
                 class="text-lg font-semibold self-end"
               />
+              <p class="text-xs text-muted-foreground m-0">
+                {{ t('invoiceRequest.form.taxToleranceHint') }}
+              </p>
             </div>
             <div class="p-4 border border-border rounded-xl bg-primary/5 flex flex-col gap-2">
-              <span class="text-xs text-muted-foreground">{{ t('invoiceRequest.field.totalAmount') }}</span>
-              <AmountDisplay
-                :value="totals.totalAmount === null ? null : String(totals.totalAmount)"
-                :currency="invoiceCurrency"
-                :currencies="currencyCatalog.currencies.value"
-                :minor-unit="0"
-                class="text-lg font-bold self-end"
+              <label class="text-xs text-muted-foreground" for="invoice-total-amount">{{ t('invoiceRequest.field.totalAmount') }}</label>
+              <FaInput
+                id="invoice-total-amount"
+                v-model="totalAmount"
+                class="w-full"
+                inputmode="numeric"
+                maxlength="16"
+                :disabled="submitting"
+                :aria-invalid="fieldError === 'totalAmount' || totals.totalInvalid"
+                input-class="font-mono! tabular-nums text-right text-lg font-bold"
+                @update:model-value="onTotalInput"
               />
+              <p class="text-xs text-muted-foreground m-0">
+                {{ t('invoiceRequest.form.totalAmountHint') }}
+              </p>
+              <p v-if="totals.totalInvalid" role="alert" class="text-xs text-destructive m-0">
+                {{ t('invoiceRequest.error.totalTolerance') }}
+              </p>
+              <p v-else-if="totals.taxAdjusted" class="text-xs text-muted-foreground m-0">
+                {{ t('invoiceRequest.form.taxAdjusted') }}
+              </p>
             </div>
           </div>
         </FaCard>

@@ -202,7 +202,7 @@ server/src/modules/invoice-requests/
 | 列表 | `GET /api/invoice-requests` | `invoice_requests_list` | `:read` | 无 `:read-all` 时强制按 `createdById = actor` 过滤；返回 `{items,total,page,pageSize}` |
 | 状态计数 | `GET /api/invoice-requests/status-counts` | `invoice_requests_status_counts` | `:read` | **必须注册在 `:id` 之前**；返回六态 `{value,count}[]` |
 | 详情 | `GET /api/invoice-requests/:id` | `invoice_requests_get` | `:read` + 归属 | 含明细行、状态历史、照片元数据 |
-| 提交 | `POST /api/invoice-requests` | `invoice_requests_create` | `:create` | 201；`Idempotency-Key`；`duplicateAcknowledged` |
+| 提交 | `POST /api/invoice-requests` | `invoice_requests_create` | `:create` | 201；`Idempotency-Key`；`duplicateAcknowledged`；可选 `totalAmount`（票面含税总计，税额作残差，0.5 元容差） |
 | 重新提交 | `POST /api/invoice-requests/:id/resubmissions` | `invoice_requests_resubmit` | `:create` + 本人 | 仅 `RETURNED`；全量字段；`duplicateAcknowledged`；保留单号 |
 | 退回 | `POST /api/invoice-requests/:id/returns` | `invoice_requests_return` | `:return` | 仅 `PENDING_REVIEW`；`reason` 必填 |
 | 审核并通知 | `POST /api/invoice-requests/:id/notifications` | `invoice_requests_notify` | `:review` | 仅 `PENDING_REVIEW` |
@@ -230,11 +230,15 @@ server/src/modules/invoice-requests/
 
 ```
 salesAmount = Σ(quantity × unitPrice)                  // 整数台币
-taxAmount   = roundHalfUp(salesAmount × 5 / 100)       // 整数，四舍五入；销售额为 1 元时为 0
-totalAmount = salesAmount + taxAmount                  // 取整后相加
+taxAmount   = totalAmount − salesAmount                // 提供了票面总计：税额是残差
+            = roundHalfUp(salesAmount × 5 / 100)       // 未提供：整数四舍五入；销售额为 1 元时为 0
+totalAmount = 请求里的 totalAmount ?? salesAmount + taxAmount
 settleAmountCny = ceil(totalAmount / foreignUnitsPerCny × 6 / 100 + 30)   // 整数人民币元
 ```
 
+- **票面总计优先**（2026-11-17）：票面结构是「未税单价 → 金额 → 销售额合计 → 营业税 → 总计」，税额是残差而不是独立计算值。提交时可选 `totalAmount`；提供则 `tax = total − sales`，5% 退化为容差校验：`|total × 100 − sales × 105| ≤ 50`（0.5 元）。容差越界返回 `INVOICE_REQUEST_TOTAL_MISMATCH`，不得静默改数。
+- 0.5 元是精确上界而非经验值：`总计 ÷ 1.05 = 20×总计/21`，小数部分只能取 `k/21`，离 1/2 最近为 1/42，乘回 1.05 恰好 0.5。源数据 159 条全部落在此界内。
+- 不提供 `totalAmount` 时行为与旧版完全一致（向后兼容，`submitFingerprint` 无需升版本）。
 - 全部用整数运算（台币金额与百分比用整数分子/分母，避免浮点）：`taxAmount = Math.round(salesAmount * 5 / 100)` 可用整数形式 `floor((salesAmount * 5 + 50) / 100)`；汇率是 `DECIMAL(30,12)`，成本计算用十进制定点（Prisma `Decimal`）而非 `number`，向上取整用 `Decimal.ceil()`。
 - `6%` 与 `30` 固化为具名常量（参照 `PAYMENT_FEE_RATE = '0.007'` 的做法），成本结果恒 ≥ 31 元，**永不为 0**，因此资金入账不需要「金额为 0 跳过」分支。
 - 前端展示值与服务端重算值不一致（汇率变更）→ `INVOICE_REQUEST_RATE_CHANGED`，前端提示刷新重算。
@@ -255,6 +259,7 @@ settleAmountCny = ceil(totalAmount / foreignUnitsPerCny × 6 / 100 + 30)   // �
 | `INVOICE_REQUEST_OWNER_ONLY` | 403 | 非本人对本人限定动作（重提、运营取消） |
 | `INVOICE_REQUEST_DUPLICATE_SUSPECTED` | 409 | 四项比对命中且未确认；响应携带相似单列表（单号/状态/提交日期） |
 | `INVOICE_REQUEST_SETTLE_WAIT_PERIOD` | 422 | 距上传不足 120 小时 |
+| `INVOICE_REQUEST_TOTAL_MISMATCH` | 422 | 票面总计与明细的税额偏差超过 0.5 元 |
 | `INVOICE_REQUEST_DOCUMENT_REQUIRED` | 422 | 未上传照片即尝试结算 |
 | `INVOICE_REQUEST_DOCUMENT_EXISTS` | 409 | 重复上传（上传即定稿） |
 | `INVOICE_REQUEST_RATE_UNAVAILABLE` | 422 | 台币汇率缺失或 ≤ 0 |

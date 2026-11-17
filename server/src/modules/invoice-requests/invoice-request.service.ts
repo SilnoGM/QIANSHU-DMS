@@ -32,7 +32,7 @@ import {
   INVOICE_REQUEST_POSTING_TYPE,
   INVOICE_REQUEST_SETTLE_CONSUMER,
 } from '../fund-accounts/application/fund-invoice-request'
-import { calculateSettleAmountCny, calculateTaxAmount, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE, isSettleable, resolveSettleableAt, sumLineAmounts } from './invoice-request.logic'
+import { calculateSettleAmountCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE, INVOICE_TOTAL_TOLERANCE_CENTS, isSettleable, resolveInvoiceAmounts, resolveSettleableAt, sumLineAmounts } from './invoice-request.logic'
 import { assertInvoiceRequestVisible, InvoiceRequestQueryService } from './invoice-request-query.service'
 
 export interface InvoiceRequestCommandContext {
@@ -73,6 +73,8 @@ interface NormalizedSubmit {
   readonly salesAmount: bigint
   readonly taxAmount: bigint
   readonly totalAmount: bigint
+  /** 税额由票面总计倒推（与 5% 公式不同）时为 true，进审计 metadata。 */
+  readonly taxAdjusted: boolean
 }
 
 /** 幂等键必须是客户端生成的 UUID：它同时用于咨询锁与幂等唯一键，必须稳定且不可预测。 */
@@ -103,7 +105,16 @@ function normalizeSubmit(input: InvoiceRequestSubmitDto): NormalizedSubmit {
     return { productName: line.productName.trim(), quantity: line.quantity, unitPrice, amount: unitPrice * BigInt(line.quantity) }
   })
   const salesAmount = sumLineAmounts(lines)
-  const taxAmount = calculateTaxAmount(salesAmount)
+  // 票面总计优先：给了就按「总计 − 销售额」定税额，5% 只是容差校验。
+  const amounts = resolveInvoiceAmounts(salesAmount, input.totalAmount)
+  if (amounts.status === 'TOTAL_OUT_OF_TOLERANCE') {
+    const deviation = (amounts.deviationCents / 100).toFixed(2)
+    invoiceRequestFailure(
+      INVOICE_REQUEST_ERROR_CODES.TOTAL_MISMATCH,
+      ['含税总计 ', amounts.requestedTotalAmount.toString(), ' 与明细不匹配：当前税额与 5% 的偏差为 ', deviation, ' 元，超过 ', (INVOICE_TOTAL_TOLERANCE_CENTS / 100).toFixed(2), ' 元容差；按明细应为合计 ', amounts.computedTotalAmount.toString()].join(''),
+      422,
+    )
+  }
   return {
     buyerName: input.buyerName.trim(),
     buyerTaxId: input.buyerTaxId.trim(),
@@ -113,9 +124,10 @@ function normalizeSubmit(input: InvoiceRequestSubmitDto): NormalizedSubmit {
     recipientPhone: input.recipientPhone.trim(),
     recipientAddress: input.recipientAddress.trim(),
     lines,
-    salesAmount,
-    taxAmount,
-    totalAmount: salesAmount + taxAmount,
+    salesAmount: amounts.salesAmount,
+    taxAmount: amounts.taxAmount,
+    totalAmount: amounts.totalAmount,
+    taxAdjusted: amounts.taxAdjusted,
     duplicateAcknowledged: input.duplicateAcknowledged === true,
   }
 }
@@ -218,7 +230,7 @@ export class InvoiceRequestService {
         await this.audit.record(tx, {
           eventType: 'INVOICE_REQUEST_CREATED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: created.id,
-          metadata: { invoiceNo: created.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
+          metadata: { invoiceNo: created.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString(), taxAdjusted: payload.taxAdjusted },
         })
         await this.notifications.publish({
           eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
@@ -292,7 +304,7 @@ export class InvoiceRequestService {
         await this.audit.record(tx, {
           eventType: 'INVOICE_REQUEST_RESUBMITTED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
           requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
-          metadata: { invoiceNo: row.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString() },
+          metadata: { invoiceNo: row.invoiceNo, lineCount: payload.lines.length, totalAmount: payload.totalAmount.toString(), taxAdjusted: payload.taxAdjusted },
         })
         await this.notifications.publish({
           eventType: 'INVOICE_REQUEST_REVIEW_PENDING',

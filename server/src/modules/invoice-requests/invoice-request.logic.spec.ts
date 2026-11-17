@@ -4,7 +4,9 @@ import {
   calculateTaxAmount,
   describeSettleFormula,
   INVOICE_SETTLE_WAIT_HOURS,
+  INVOICE_TOTAL_TOLERANCE_CENTS,
   isSettleable,
+  resolveInvoiceAmounts,
   resolveInvoiceDocumentVariant,
   resolveSettleableAt,
   sumLineAmounts,
@@ -20,6 +22,58 @@ describe('invoice request amounts and settle window', () => {
     expect(calculateTaxAmount(10n)).toBe(1n)
     expect(calculateTaxAmount(30n)).toBe(2n)
     expect(calculateTaxAmount(270_001n)).toBe(13_500n)
+  })
+
+  it('derives the tax as the residual when the paper total is provided', () => {
+    // 源行 55：43,810 × 5% = 2,190.5，票面是 2,190 / 总计 46,000。
+    const paper = resolveInvoiceAmounts(43_810n, '46000')
+    expect(paper).toEqual({
+      status: 'OK',
+      salesAmount: 43_810n,
+      taxAmount: 2_190n,
+      totalAmount: 46_000n,
+      taxAdjusted: true,
+      deviationCents: 50,
+    })
+    // 源行 163 同理：323,810 → 16,190 / 340,000。
+    expect(resolveInvoiceAmounts(323_810n, '340000')).toMatchObject({ status: 'OK', taxAmount: 16_190n, totalAmount: 340_000n, taxAdjusted: true })
+
+    // 不传总计（或空串）时保持现行 5% 口径。
+    for (const input of [undefined, null, '', '   ']) {
+      expect(resolveInvoiceAmounts(47_619n, input)).toEqual({
+        status: 'OK',
+        salesAmount: 47_619n,
+        taxAmount: 2_381n,
+        totalAmount: 50_000n,
+        taxAdjusted: false,
+        deviationCents: 0,
+      })
+    }
+  })
+
+  it('accepts the nearest sales amount only and rejects the neighbour', () => {
+    expect(INVOICE_TOTAL_TOLERANCE_CENTS).toBe(50)
+    // 46,000 只允许 43,810：偏差恰好 0.5 元，落在容差边界内。
+    expect(resolveInvoiceAmounts(43_810n, '46000')).toMatchObject({ status: 'OK', taxAmount: 2_190n })
+    // 43,809 会得到 2,191 / 46,000，但偏差 0.55 元越界。
+    expect(resolveInvoiceAmounts(43_809n, '46000')).toEqual({
+      status: 'TOTAL_OUT_OF_TOLERANCE',
+      salesAmount: 43_809n,
+      requestedTotalAmount: 46_000n,
+      computedTotalAmount: 45_999n,
+      deviationCents: 55,
+    })
+    // 总计差 1 元的另一侧：46,001 与 43,810 的偏差仍是 0.5 元，接受。
+    expect(resolveInvoiceAmounts(43_810n, '46001')).toMatchObject({ status: 'OK', taxAmount: 2_191n, totalAmount: 46_001n })
+    // 再差 1 元即越界。
+    expect(resolveInvoiceAmounts(43_810n, '46002')).toMatchObject({ status: 'TOTAL_OUT_OF_TOLERANCE', deviationCents: 150 })
+  })
+
+  it('rejects a total that would make the tax negative or the rate wildly wrong', () => {
+    expect(resolveInvoiceAmounts(100_000n, '50000')).toMatchObject({ status: 'TOTAL_OUT_OF_TOLERANCE', deviationCents: 5_500_000 })
+    expect(resolveInvoiceAmounts(100_000n, '100000')).toMatchObject({ status: 'TOTAL_OUT_OF_TOLERANCE', deviationCents: 500_000 })
+    // 极小金额仍按容差判定：1 元含税、税额 0，偏差 0.05 元，接受。
+    expect(resolveInvoiceAmounts(1n, '1')).toMatchObject({ status: 'OK', taxAmount: 0n, totalAmount: 1n, taxAdjusted: false })
   })
 
   it('sums line amounts as quantity × unit price', () => {

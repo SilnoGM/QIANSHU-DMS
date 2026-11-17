@@ -34,6 +34,7 @@ function contract(operationId: string, mutation = false, errors: ApiContractErro
 const notFound: ApiContractErrorOptions = { status: 404, codes: ['INVOICE_REQUEST_NOT_FOUND', 'INVOICE_REQUEST_DOCUMENT_REQUIRED'] }
 const submitErrors: ApiContractErrorOptions[] = [
   { status: 409, codes: ['INVOICE_REQUEST_DUPLICATE_SUSPECTED', 'INVOICE_REQUEST_CONFLICT', 'INVOICE_REQUEST_NUMBER_UNAVAILABLE', 'INVOICE_REQUEST_STATE_CHANGED'] },
+  { status: 422, codes: ['VALIDATION_FAILED', 'INVOICE_REQUEST_TOTAL_MISMATCH'] },
 ]
 const transitionErrors: ApiContractErrorOptions[] = [
   { status: 409, codes: ['INVOICE_REQUEST_STATE_CHANGED', 'INVOICE_REQUEST_STATUS_NOT_ALLOWED'] },

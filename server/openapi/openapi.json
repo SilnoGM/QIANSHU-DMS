@@ -99059,6 +99059,7 @@
             {
               "status": 422,
               "codes": [
+                "INVOICE_REQUEST_TOTAL_MISMATCH",
                 "VALIDATION_FAILED"
               ]
             }
@@ -100054,6 +100055,7 @@
             {
               "status": 422,
               "codes": [
+                "INVOICE_REQUEST_TOTAL_MISMATCH",
                 "VALIDATION_FAILED"
               ]
             }
@@ -135132,6 +135134,11 @@
               "$ref": "#/components/schemas/InvoiceRequestLineInputDto"
             }
           },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。"
+          },
           "duplicateAcknowledged": {
             "type": "boolean",
             "default": false,
@@ -135482,6 +135489,11 @@
             "items": {
               "$ref": "#/components/schemas/InvoiceRequestLineInputDto"
             }
+          },
+          "totalAmount": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,15}$",
+            "description": "票面含税总计（整数台币）。提供时税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。"
           },
           "duplicateAcknowledged": {
             "type": "boolean",
