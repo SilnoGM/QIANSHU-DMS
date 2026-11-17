@@ -210,7 +210,7 @@ server/src/modules/invoice-requests/
 | 读发票照片 | `GET`/`HEAD` `/api/invoice-requests/:id/document` | `invoice_requests_get_document` / `invoice_requests_head_document` | `:read` + 归属 | 私有、不缓存、inline；没有照片与单据不可见都返回 404 |
 | 结算入账 | `POST /api/invoice-requests/:id/settlements` | `invoice_requests_settle` | `:settle` | 仅 `ISSUED`；≥120 小时；携带 `expectedVersion` 与 `exchangeRateId/version`；`Idempotency-Key` |
 | 取消 | `POST /api/invoice-requests/:id/cancellations` | `invoice_requests_cancel` | `:cancel` + 归属 | `reason` 必填；运营仅 `PENDING_REVIEW/RETURNED`，财务任意非终态 |
-| 代导入 | `POST /api/invoice-requests/imports` | `invoice_requests_import` | `:import`（system_only） | 逐条独立事务；归属写到 `ownerUserId`；支持 `dryRun`、`expected` 与 `taxAmountOverride`（见第 14 节） |
+| 代导入 | `POST /api/invoice-requests/imports` | `invoice_requests_import` | `:import`（system_only） | 逐条独立事务；归属写到 `ownerUserId`；支持 `dryRun`、`expected` 与 `totalAmount`（见第 14 节） |
 
 - 变更类接口一律要求 `Idempotency-Key` 头，并在服务层与 `(createdById, requestKeyHash)` / 业务化幂等键配合（提交用请求指纹，结算用 `${id}:SETTLE`）。
 - 全部写动作携带 `expectedVersion`，不一致返回 `INVOICE_REQUEST_STATE_CHANGED`。
@@ -440,17 +440,19 @@ UPDATE  → ISSUED     (status, version, document_media_asset_id,
 
 中间态只存在于事务内部，外部不可见；证据不变量与现有触发器一字不改。这是本方案与「放宽触发器允许直接插 `ISSUED`」的根本区别。
 
-### 14.4 金额：默认复算，允许票面覆盖
+### 14.4 金额：与普通提交共用 `totalAmount` 口径
 
 ```
 salesAmount = Σ(quantity × unitPrice)
-taxAmount   = taxAmountOverride ?? roundHalfUp(salesAmount × 5 / 100)
-totalAmount = salesAmount + taxAmount
+taxAmount   = totalAmount − salesAmount            // 提供票面总计：税额作残差
+            = roundHalfUp(salesAmount × 5 / 100)   // 未提供：沿用 5% 口径
+totalAmount = 请求里的 totalAmount ?? salesAmount + taxAmount
 ```
 
-- `expected`（可选）：调用方给出的销售额/税额/合计，与复算结果不一致即 `INVOICE_REQUEST_IMPORT_AMOUNT_MISMATCH`（422），**不允许静默改数**。
-- `taxAmountOverride`（可选整数）：仅在导入路径生效，用于票面税额与 5% 四舍五入不一致的历史单。审核要点：数据库只校验 `total = sales + tax`，因此覆盖值可落库；审计记 `{ computedTax, appliedTax }`，响应回 `taxOverridden`。
-- 存在整数销售额无法命中的合计（`T ≡ 10 (mod 21)`，如 46,000 / 340,000）：覆盖税额是唯一能在接口路径保真票面的方式。
+- 与普通提交共用 `resolveInvoiceAmounts()`：容差 `|total × 100 − sales × 105| ≤ 50`（0.5 元），越界即 `INVOICE_REQUEST_IMPORT_AMOUNT_MISMATCH`。
+- `expected`（可选）：调用方给出的销售额/税额/合计，与解析结果不一致同样失败，**不允许静默改数**。
+- 存在整数销售额无法命中的合计（`T ≡ 10 (mod 21)`，如 46,000 / 340,000）：传 `totalAmount` 即可精确保真，不再需要单独的税额覆盖字段。
+- 审计记 `{ computedTaxAmount, appliedTaxAmount, taxAdjusted }`；响应回 `taxAdjusted`。
 
 ### 14.5 接口与幂等
 

@@ -1,4 +1,4 @@
-import { calculateTaxAmount, sumLineAmounts } from './invoice-request.logic'
+import { calculateTaxAmount, resolveInvoiceAmounts, sumLineAmounts } from './invoice-request.logic'
 
 /**
  * 代导入的纯计算与校验：金额复算、票面覆盖、时间口径、幂等键。
@@ -43,7 +43,8 @@ export interface InvoiceRequestImportItemInput {
   readonly recipientAddress: string
   readonly lines: readonly InvoiceRequestImportLineInput[]
   readonly expected?: InvoiceRequestImportExpectedInput | null
-  readonly taxAmountOverride?: string | null
+  /** 票面含税总计；与普通提交共用同一口径（税额 = 总计 − 销售额，0.5 元容差）。 */
+  readonly totalAmount?: string | null
   readonly targetStatus: InvoiceRequestImportTargetStatus
   readonly occurredAt?: InvoiceRequestImportOccurredAtInput | null
   readonly documentMediaAssetId?: string | null
@@ -70,8 +71,8 @@ export interface InvoiceRequestImportItemPlan {
   readonly salesAmount: bigint
   readonly taxAmount: bigint
   readonly totalAmount: bigint
-  /** 票面税额由覆盖值决定（与 5% 四舍五入不同）时为 true，用于响应与审计。 */
-  readonly taxOverridden: boolean
+  /** 税额由票面总计倒推（与 5% 公式不同）时为 true，用于响应与审计。 */
+  readonly taxAdjusted: boolean
   /** 5% 四舍五入本应得到的税额；未覆盖时等于 taxAmount。 */
   readonly computedTaxAmount: bigint
   readonly targetStatus: InvoiceRequestImportTargetStatus
@@ -98,7 +99,7 @@ export class InvoiceRequestImportItemError extends Error {
 
 /**
  * 合计值的结构性空洞：销售额每 +1，合计只能 +1 或 +2，因此 `21k + 10` 永远取不到。
- * 这类票面只能靠 `taxAmountOverride` 保真，预检报告要把它们单独挑出来。
+ * 这类票面只能靠传 `totalAmount` 保真，预检报告要把它们单独挑出来。
  */
 export function isUnreachableTotalAmount(totalAmount: bigint): boolean {
   return totalAmount % 21n === 10n
@@ -164,7 +165,8 @@ function assertChronology(plan: { readonly submittedAt: Date, readonly notifiedA
 /**
  * 把一条导入载荷算成落库计划。
  *
- * 金额优先级：`taxAmountOverride` > 5% 四舍五入；`expected` 只用于比对，不参与计算。
+ * 金额口径与普通提交一致：`totalAmount` 优先（税额作残差），缺省按 5% 四舍五入；
+ * `expected` 只用于比对，不参与计算。
  * 这样「票面保真」与「默认口径」是同一条路径上的两个显式选择，不存在隐式改数。
  */
 export function planInvoiceRequestImportItem(item: InvoiceRequestImportItemInput, now: Date): InvoiceRequestImportItemPlan {
@@ -186,12 +188,16 @@ export function planInvoiceRequestImportItem(item: InvoiceRequestImportItemInput
   if (salesAmount <= 0n) {
     throw new InvoiceRequestImportItemError(INVOICE_REQUEST_IMPORT_ITEM_ERROR.INVALID, '销售额必须大于 0')
   }
+  // 与普通提交同一口径：给了票面总计就按残差定税额，5% 只做 0.5 元容差校验。
+  const resolved = resolveInvoiceAmounts(salesAmount, item.totalAmount)
+  if (resolved.status !== 'OK') {
+    throw new InvoiceRequestImportItemError(
+      INVOICE_REQUEST_IMPORT_ITEM_ERROR.AMOUNT_MISMATCH,
+      ['票面总计 ', resolved.requestedTotalAmount.toString(), ' 与明细不匹配：税额偏差 ', (resolved.deviationCents / 100).toFixed(2), ' 元，超过 0.50 元容差；按明细应为合计 ', resolved.computedTotalAmount.toString()].join(''),
+    )
+  }
+  const { taxAmount, totalAmount, taxAdjusted } = resolved
   const computedTaxAmount = calculateTaxAmount(salesAmount)
-  const override = item.taxAmountOverride === null || item.taxAmountOverride === undefined || item.taxAmountOverride.trim() === ''
-    ? null
-    : parseAmount(item.taxAmountOverride, '票面税额')
-  const taxAmount = override ?? computedTaxAmount
-  const totalAmount = salesAmount + taxAmount
 
   if (item.expected !== null && item.expected !== undefined) {
     const expectedSales = parseAmount(item.expected.salesAmount, '期望销售额')
@@ -239,7 +245,7 @@ export function planInvoiceRequestImportItem(item: InvoiceRequestImportItemInput
     salesAmount,
     taxAmount,
     totalAmount,
-    taxOverridden: override !== null,
+    taxAdjusted,
     computedTaxAmount,
     targetStatus: item.targetStatus,
     documentMediaAssetId,

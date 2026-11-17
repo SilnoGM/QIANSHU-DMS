@@ -22,7 +22,7 @@ function item(overrides: Partial<InvoiceRequestImportItemInput> = {}): InvoiceRe
     recipientAddress: '台南市新化區大坑里大坑尾18-6號',
     lines: [{ productName: '历史开票导入', quantity: 1, unitPrice: '47619' }],
     expected: { salesAmount: '47619', taxAmount: '2381', totalAmount: '50000' },
-    taxAmountOverride: null,
+    totalAmount: null,
     targetStatus: 'ISSUED',
     occurredAt: { submittedAt: '2026-06-01T02:00:00.000Z', notifiedAt: '2026-06-01T03:00:00.000Z', documentUploadedAt: '2026-06-02T03:00:00.000Z' },
     documentMediaAssetId: '00000000-0000-4000-8000-000000000301',
@@ -48,7 +48,7 @@ describe('invoice request import planning', () => {
     expect(plan.salesAmount).toBe(47_619n)
     expect(plan.taxAmount).toBe(2_381n)
     expect(plan.totalAmount).toBe(50_000n)
-    expect(plan.taxOverridden).toBe(false)
+    expect(plan.taxAdjusted).toBe(false)
     expect(plan.computedTaxAmount).toBe(2_381n)
     expect(plan.lines[0].amount).toBe(47_619n)
     expect(plan.documentMediaAssetId).toBe('00000000-0000-4000-8000-000000000301')
@@ -64,17 +64,18 @@ describe('invoice request import planning', () => {
     expect(plan.totalAmount).toBe(39_937n)
   })
 
-  it('keeps the paper amount when the tax is overridden', () => {
+  it('keeps the paper amount when the total is provided', () => {
     // 源行 55：43,810 × 5% = 2,190.5 → 系统进位 2,191，票面是 2,190 / 合计 46,000。
+    // 与普通提交共用 totalAmount 口径：税额作残差。
     const plan = planInvoiceRequestImportItem(item({
       lines: [{ productName: '历史开票导入', quantity: 1, unitPrice: '43810' }],
       expected: { salesAmount: '43810', taxAmount: '2190', totalAmount: '46000' },
-      taxAmountOverride: '2190',
+      totalAmount: '46000',
     }), NOW)
     expect(plan.taxAmount).toBe(2_190n)
     expect(plan.totalAmount).toBe(46_000n)
     expect(plan.computedTaxAmount).toBe(2_191n)
-    expect(plan.taxOverridden).toBe(true)
+    expect(plan.taxAdjusted).toBe(true)
   })
 
   it('rejects an amount that differs from the expected paper values', () => {
@@ -82,11 +83,19 @@ describe('invoice request import planning', () => {
       () => planInvoiceRequestImportItem(item({ expected: { salesAmount: '47619', taxAmount: '2381', totalAmount: '49999' } }), NOW),
       INVOICE_REQUEST_IMPORT_ITEM_ERROR.AMOUNT_MISMATCH,
     )
-    // 不带覆盖时，46,000 无法用 5% 复算得到。
+    // 不传总计又期望 46,000：按 5% 复算得到 46,001，期望不符。
     expectItemError(
       () => planInvoiceRequestImportItem(item({
         lines: [{ productName: '历史开票导入', quantity: 1, unitPrice: '43810' }],
         expected: { salesAmount: '43810', taxAmount: '2190', totalAmount: '46000' },
+      }), NOW),
+      INVOICE_REQUEST_IMPORT_ITEM_ERROR.AMOUNT_MISMATCH,
+    )
+    // 票面总计本身越界（差 2 元）同样失败。
+    expectItemError(
+      () => planInvoiceRequestImportItem(item({
+        lines: [{ productName: '历史开票导入', quantity: 1, unitPrice: '43810' }],
+        totalAmount: '46002',
       }), NOW),
       INVOICE_REQUEST_IMPORT_ITEM_ERROR.AMOUNT_MISMATCH,
     )

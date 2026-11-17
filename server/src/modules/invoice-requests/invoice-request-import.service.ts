@@ -192,7 +192,7 @@ export class InvoiceRequestImportService {
             onBehalfOfUserId: plan.ownerUserId,
             lineCount: plan.lines.length,
             totalAmount: plan.totalAmount.toString(),
-            taxOverridden: plan.taxOverridden,
+            taxAdjusted: plan.taxAdjusted,
             computedTaxAmount: plan.computedTaxAmount.toString(),
             appliedTaxAmount: plan.taxAmount.toString(),
           },
@@ -259,7 +259,7 @@ export class InvoiceRequestImportService {
           salesAmount: plan.salesAmount.toString(),
           taxAmount: plan.taxAmount.toString(),
           totalAmount: plan.totalAmount.toString(),
-          taxOverridden: plan.taxOverridden,
+          taxAdjusted: plan.taxAdjusted,
         }
       }
       return this.replayed(input.sourceRef, outcome.row)
@@ -327,7 +327,7 @@ export class InvoiceRequestImportService {
       salesAmount: plan.salesAmount.toString(),
       taxAmount: plan.taxAmount.toString(),
       totalAmount: plan.totalAmount.toString(),
-      taxOverridden: plan.taxOverridden,
+      taxAdjusted: plan.taxAdjusted,
     }
   }
 
@@ -345,12 +345,12 @@ export class InvoiceRequestImportService {
       salesAmount: row.salesAmount.toFixed(0),
       taxAmount: row.taxAmount.toFixed(0),
       totalAmount: row.totalAmount.toFixed(0),
-      taxOverridden: appliedTaxAmount !== computedTaxAmount,
+      taxAdjusted: appliedTaxAmount !== computedTaxAmount,
     }
   }
 
   private failed(sourceRef: string, code: string, message: string): InvoiceRequestImportItemResultDto {
-    return { sourceRef, outcome: 'FAILED', invoiceRequestId: null, invoiceNo: null, code, message, salesAmount: null, taxAmount: null, totalAmount: null, taxOverridden: false }
+    return { sourceRef, outcome: 'FAILED', invoiceRequestId: null, invoiceNo: null, code, message, salesAmount: null, taxAmount: null, totalAmount: null, taxAdjusted: false }
   }
 
   /**

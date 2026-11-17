@@ -64,8 +64,8 @@ export class InvoiceRequestImportItemDto {
   lines!: InvoiceRequestImportLineDto[]
   @ApiPropertyOptional({ type: InvoiceRequestImportExpectedDto, description: '票面期望值；提供时与复算结果不一致即失败。' })
   @IsOptional() @ValidateNested() @Type(() => InvoiceRequestImportExpectedDto) expected?: InvoiceRequestImportExpectedDto | null
-  @ApiPropertyOptional({ type: 'string', pattern: '^\\d{1,16}$', description: '票面税额覆盖：仅导入路径生效，用于 5% 四舍五入与票面不一致的历史单。' })
-  @IsOptional() @IsString() @Matches(NON_NEGATIVE_INTEGER_PATTERN) taxAmountOverride?: string | null
+  @ApiPropertyOptional({ type: 'string', pattern: '^[1-9]\\d{0,15}$', description: '票面含税总计；与普通提交同一口径：税额 = 总计 − 销售额，且与 5% 的偏差不得超过 0.5 元。' })
+  @IsOptional() @IsString() @Matches(POSITIVE_INTEGER_PATTERN) totalAmount?: string | null
   @ApiProperty({ enum: IMPORT_TARGET_STATUSES, description: '目标状态：已通知开票或已开出邮寄（ISSUED 必须带照片）。' })
   @IsIn([...IMPORT_TARGET_STATUSES]) targetStatus!: InvoiceRequestImportTargetStatus
   @ApiPropertyOptional({ type: InvoiceRequestImportOccurredAtDto, description: '历史时间回填。' })
@@ -95,7 +95,7 @@ export class InvoiceRequestImportItemResultDto {
   @ApiPropertyOptional({ type: 'string', nullable: true, description: '落库后的销售额（整数台币）。' }) salesAmount!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: '落库后的税额（整数台币）。' }) taxAmount!: string | null
   @ApiPropertyOptional({ type: 'string', nullable: true, description: '落库后的合计（整数台币）。' }) totalAmount!: string | null
-  @ApiProperty({ description: '税额是否来自票面覆盖。' }) taxOverridden!: boolean
+  @ApiProperty({ description: '税额是否由票面总计倒推（与 5% 公式不同）。' }) taxAdjusted!: boolean
 }
 
 export class InvoiceRequestImportBatchResultDto {
