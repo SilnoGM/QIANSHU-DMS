@@ -130,15 +130,17 @@ export const SLH_BILL_PERMISSION_CODES = [
 ] as const
 
 /**
- * 开票申请与审批：提交、查看、跨提交人查看、审核并通知、退回、上传照片、结算入账、取消。
+ * 开票申请与审批：提交、查看、跨提交人查看、审核并通知、退回、上传照片、结算入账、取消、代导入。
  *
  * 「运营仅可见本人」是行级归属校验而不是权限点：读单条时按提交人过滤，`:read-all`
  * 只负责把财务从「仅本人」放开到全量。顺序与权限目录按 code 的排序一致。
+ * `:import` 是 system_only 的运维能力（代历史开票人建单），只授 system_admin，不参与角色委派。
  */
 export const INVOICE_REQUEST_PERMISSION_CODES = [
   'invoice-requests:cancel',
   'invoice-requests:create',
   'invoice-requests:document',
+  'invoice-requests:import',
   'invoice-requests:read',
   'invoice-requests:read-all',
   'invoice-requests:return',

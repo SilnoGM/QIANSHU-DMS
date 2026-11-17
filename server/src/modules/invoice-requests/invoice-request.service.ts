@@ -328,6 +328,10 @@ export class InvoiceRequestService {
         assertInvoiceRequestVisible(row, viewer)
         this.assertStatus(row.status, ['PENDING_REVIEW'], '只有开票审核中的申请单可以退回')
         this.assertVersion(row.version, input.expectedVersion)
+        // 代导入的历史单禁止退回：重填会按 5% 复算金额，票面保真被打破。
+        if (row.submittedOnBehalfByUserId !== null) {
+          invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.STATUS_NOT_ALLOWED, '代导入的历史单据不支持退回重填，票面金额需要保持原样', 409)
+        }
         await tx.invoiceRequest.update({
           where: { id },
           data: { status: 'RETURNED', returnedAt: new Date(), returnedByUserId: context.actorUserId, version: { increment: 1 } },
@@ -722,6 +726,7 @@ export class InvoiceRequestService {
     readonly documentUploadedAt: Date | null
     readonly invoiceNo: string
     readonly status: InvoiceRequestStatusValue
+    readonly submittedOnBehalfByUserId: string | null
     readonly taxAmount: Prisma.Decimal
     readonly totalAmount: Prisma.Decimal
     readonly version: number
@@ -735,7 +740,7 @@ export class InvoiceRequestService {
     }
     const row = await tx.invoiceRequest.findUnique({
       where: { id },
-      select: { createdById: true, documentMediaAssetId: true, documentUploadedAt: true, invoiceNo: true, status: true, taxAmount: true, totalAmount: true, version: true, buyerName: true, invoiceRemark: true },
+      select: { createdById: true, documentMediaAssetId: true, documentUploadedAt: true, invoiceNo: true, status: true, submittedOnBehalfByUserId: true, taxAmount: true, totalAmount: true, version: true, buyerName: true, invoiceRemark: true },
     })
     if (row === null) {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.NOT_FOUND, '开票申请不存在', 404)

@@ -14,6 +14,8 @@ import {
   InvoiceRequestPageDto, InvoiceRequestResubmitDto, InvoiceRequestReturnDto, InvoiceRequestSettleDto, InvoiceRequestStatusCountsDto,
   InvoiceRequestStatusCountsQueryDto, InvoiceRequestSubmitDto,
 } from './invoice-request.dto'
+import { InvoiceRequestImportBatchDto, InvoiceRequestImportBatchResultDto } from './invoice-request-import.dto'
+import { InvoiceRequestImportService } from './invoice-request-import.service'
 import { InvoiceRequestQueryService } from './invoice-request-query.service'
 import { INVOICE_DOCUMENT_VARIANT_NAMES } from './invoice-request.logic'
 import { InvoiceRequestService, type InvoiceRequestCommandContext } from './invoice-request.service'
@@ -63,6 +65,7 @@ export class InvoiceRequestController {
     private readonly commands: InvoiceRequestService,
     private readonly queries: InvoiceRequestQueryService,
     private readonly documents: InvoiceRequestDocumentService,
+    private readonly imports: InvoiceRequestImportService,
   ) {}
 
   @Get() @RequirePermissions('invoice-requests:read') @ApiContractResponse({ status: 200, type: InvoiceRequestPageDto })
@@ -83,6 +86,17 @@ export class InvoiceRequestController {
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
   @ApiContractResponse({ status: 201, type: InvoiceRequestDto }) @contract('invoice_requests_create', true, submitErrors)
   create(@Body() input: InvoiceRequestSubmitDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.commands.submit(context(request), input, key) }
+
+  /**
+   * 代导入历史单据：逐条独立事务，失败只影响本条（回执里带 sourceRef 与错误码）。
+   * 归属写到 ownerUserId，操作人记在 submitted_on_behalf_by_user_id，全程不发通知。
+   */
+  @Post('imports') @HttpCode(201) @RequirePermissions('invoice-requests:import')
+  @ApiContractResponse({ status: 201, type: InvoiceRequestImportBatchResultDto, description: '逐条回执；单条失败不影响其他条，整体仍返回 201。' })
+  @contract('invoice_requests_import', true)
+  importBatch(@Body() input: InvoiceRequestImportBatchDto, @Req() request: object) {
+    return this.imports.importBatch(context(request), input)
+  }
 
   @Post(':id/resubmissions') @HttpCode(200) @RequirePermissions('invoice-requests:create')
   @ApiContractResponse({ status: 200, type: InvoiceRequestDto }) @contract('invoice_requests_resubmit', true, [notFound, ...submitErrors, ...transitionErrors])

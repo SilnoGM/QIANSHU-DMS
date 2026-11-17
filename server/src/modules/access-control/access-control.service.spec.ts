@@ -123,6 +123,7 @@ describe('permission constants', () => {
       'invoice-requests:cancel',
       'invoice-requests:create',
       'invoice-requests:document',
+      'invoice-requests:import',
       'invoice-requests:read',
       'invoice-requests:read-all',
       'invoice-requests:return',
@@ -160,7 +161,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 128)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 129)
   })
 })
 

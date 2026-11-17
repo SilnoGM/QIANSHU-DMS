@@ -44,6 +44,40 @@ export interface InvoiceRequestDocumentContent {
   stream?: Readable
 }
 
+/**
+ * 发票照片的数据库侧可用性判定：上传即定稿、必须由操作人自己上传、用途与形状固定。
+ * 抽成纯函数让代导入的 dryRun 预检与真实 attach 共用同一口径，避免两处条件漂移。
+ */
+export interface InvoiceDocumentAssetFacts {
+  readonly checksumSha256: string | null
+  readonly createdByUserId: string
+  readonly deletedAt: Date | null
+  readonly mediaType: string
+  readonly mimeType: string | null
+  readonly objectKey: string | null
+  readonly sizeBytes: bigint | null
+  readonly status: string
+  readonly uploadExpiresAt: Date | null
+  readonly uploadPurpose: string | null
+}
+
+export function isUsableInvoiceDocumentAsset(asset: InvoiceDocumentAssetFacts, actorUserId: string, now = new Date()): boolean {
+  return asset.createdByUserId === actorUserId
+    && asset.deletedAt === null
+    && asset.uploadPurpose === INVOICE_REQUEST_DOCUMENT_UPLOAD_PURPOSE
+    && asset.mediaType === 'IMAGE'
+    && asset.mimeType !== null
+    && INVOICE_DOCUMENT_MIME_TYPES.includes(asset.mimeType)
+    && asset.objectKey !== null
+    && asset.checksumSha256 !== null
+    && /^[a-f0-9]{64}$/u.test(asset.checksumSha256)
+    && asset.sizeBytes !== null
+    && asset.sizeBytes > 0n
+    && asset.sizeBytes <= BigInt(MEDIA_CONTENT_SIZE_LIMITS.IMAGE)
+    && (asset.status === 'READY' || asset.status === 'UPLOADING')
+    && (asset.status !== 'UPLOADING' || (asset.uploadExpiresAt !== null && asset.uploadExpiresAt.getTime() > now.getTime()))
+}
+
 /** 发票照片：上传即定稿，只允许一张，且引用后必须保持 READY（数据库侧的就绪校验兜底）。 */
 @Injectable()
 export class InvoiceRequestDocumentService {
@@ -134,21 +168,7 @@ export class InvoiceRequestDocumentService {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.DOCUMENT_UNAVAILABLE, '所选发票照片当前不可用')
     }
     const asset = await transaction.mediaAsset.findUnique({ where: { id: input.mediaAssetId } })
-    if (asset === null
-      || asset.createdByUserId !== input.actorUserId
-      || asset.deletedAt !== null
-      || asset.uploadPurpose !== INVOICE_REQUEST_DOCUMENT_UPLOAD_PURPOSE
-      || asset.mediaType !== 'IMAGE'
-      || asset.mimeType === null
-      || !INVOICE_DOCUMENT_MIME_TYPES.includes(asset.mimeType)
-      || asset.objectKey === null
-      || asset.checksumSha256 === null
-      || !/^[a-f0-9]{64}$/u.test(asset.checksumSha256)
-      || asset.sizeBytes === null
-      || asset.sizeBytes <= 0n
-      || asset.sizeBytes > BigInt(MEDIA_CONTENT_SIZE_LIMITS.IMAGE)
-      || (asset.status !== 'READY' && asset.status !== 'UPLOADING')
-      || (asset.status === 'UPLOADING' && (asset.uploadExpiresAt === null || asset.uploadExpiresAt.getTime() <= Date.now()))) {
+    if (asset === null || !isUsableInvoiceDocumentAsset(asset, input.actorUserId)) {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.DOCUMENT_UNAVAILABLE, '所选发票照片当前不可用')
     }
     try {

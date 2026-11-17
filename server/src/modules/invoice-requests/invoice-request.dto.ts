@@ -118,6 +118,8 @@ export class InvoiceRequestHistoryDto {
   @ApiProperty() actorUserId!: string
   @ApiProperty() actorName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) actorAvatarUrl!: string | null
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '代导入时的受益开票人；为空表示这一步由本人执行。' }) actingForUserId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '受益开票人姓名。' }) actingForName!: string | null
   @ApiProperty({ type: 'string', description: 'ISO 8601。' }) occurredAt!: string
 }
 
@@ -144,6 +146,8 @@ export class InvoiceRequestListItemDto {
   @ApiProperty({ format: 'uuid' }) creatorUserId!: string
   @ApiProperty() creatorName!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) creatorAvatarUrl!: string | null
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: '代导入操作人；为空表示本人提交。' }) submittedOnBehalfByUserId!: string | null
+  @ApiPropertyOptional({ type: 'string', nullable: true, description: '代导入操作人姓名。' }) submittedOnBehalfByName!: string | null
   @ApiProperty({ type: 'string', description: '申请日期（= 记录创建时间），ISO 8601。' }) submittedAt!: string
   @ApiProperty({ type: 'string', description: '最近一次提交时间，ISO 8601。' }) lastSubmittedAt!: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) notifiedAt!: string | null

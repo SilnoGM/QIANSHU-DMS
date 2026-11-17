@@ -28,6 +28,7 @@ type RequestRow = Prisma.InvoiceRequestGetPayload<{ include: typeof LIST_INCLUDE
 const LIST_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
   createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
+  submittedOnBehalfBy: { select: { id: true, displayName: true } },
   documentMediaAsset: { select: { id: true, originalFilename: true } },
   statusHistory: { where: { action: 'RETURN' }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 1 },
 } satisfies Prisma.InvoiceRequestInclude
@@ -35,8 +36,15 @@ const LIST_INCLUDE = {
 const DETAIL_INCLUDE = {
   lines: { orderBy: { lineNo: 'asc' } },
   createdBy: { select: { id: true, displayName: true, profile: { select: { avatarUrl: true } } } },
+  submittedOnBehalfBy: { select: { id: true, displayName: true } },
   documentMediaAsset: { select: { id: true, originalFilename: true } },
-  statusHistory: { orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }], include: { actor: { select: { displayName: true, profile: { select: { avatarUrl: true } } } } } },
+  statusHistory: {
+    orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+    include: {
+      actor: { select: { displayName: true, profile: { select: { avatarUrl: true } } } },
+      actingFor: { select: { displayName: true } },
+    },
+  },
 } satisfies Prisma.InvoiceRequestInclude
 
 type DetailRow = Prisma.InvoiceRequestGetPayload<{ include: typeof DETAIL_INCLUDE }>
@@ -79,6 +87,8 @@ function toListItem(row: RequestRow): InvoiceRequestListItemDto {
     creatorUserId: row.createdById,
     creatorName: row.createdBy.displayName,
     creatorAvatarUrl: row.createdBy.profile?.avatarUrl ?? null,
+    submittedOnBehalfByUserId: row.submittedOnBehalfBy?.id ?? null,
+    submittedOnBehalfByName: row.submittedOnBehalfBy?.displayName ?? null,
     submittedAt: row.createdAt.toISOString(),
     lastSubmittedAt: row.lastSubmittedAt.toISOString(),
     notifiedAt: toIso(row.notifiedAt),
@@ -117,6 +127,8 @@ function toDetail(row: DetailRow, duplicate?: DuplicateHint): InvoiceRequestDto 
       actorUserId: entry.actorUserId,
       actorName: entry.actor.displayName,
       actorAvatarUrl: entry.actor.profile?.avatarUrl ?? null,
+      actingForUserId: entry.actingForUserId,
+      actingForName: entry.actingFor?.displayName ?? null,
       occurredAt: entry.occurredAt.toISOString(),
     })),
     document: row.documentMediaAsset === null || row.documentUploadedAt === null
