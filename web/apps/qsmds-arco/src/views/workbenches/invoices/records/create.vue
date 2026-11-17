@@ -7,9 +7,13 @@ import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
+import { canVerifyBuyer, resolveVerificationQuery } from '../invoice-buyer-verification.logic'
+import { buildCompanyLookupUrl } from '../invoice-company-lookup.logic'
+
 import { calculateEstimatedCostCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE } from '../invoice-cost.logic'
 import { resolveDuplicateFieldErrors, resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import { buildInvoiceSubmitPayload, calculateInvoiceTotals, emptyInvoiceFormLine, INVOICE_QUANTITY_MAX, INVOICE_REQUEST_LINE_LIMIT, parsePositiveInteger, stepQuantityValue } from '../invoice-form.logic'
@@ -26,6 +30,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const currencyCatalog = useCurrencyCatalog()
+const toast = useQsToast()
 
 const editingId = computed(() => (typeof route.query.id === 'string' ? route.query.id : null))
 const editingVersion = ref<number | null>(null)
@@ -40,6 +45,11 @@ const lines = ref<InvoiceFormLine[]>([emptyInvoiceFormLine()])
 /** 票面含税总计：null 表示按明细自动计算；手填后不再被明细覆盖。 */
 const totalAmount = ref<string | null>(null)
 const totalDirty = ref(false)
+/** 开票主体核验：只有走完弹窗里的两步才会置为 true。 */
+const buyerVerified = ref(false)
+const verifyOpen = ref(false)
+const verifyLinkOpened = ref(false)
+const buyerVerifiable = computed(() => canVerifyBuyer(buyerName.value, buyerTaxId.value))
 const loadError = ref<string | null>(null)
 const loadFailed = ref(false)
 const submitting = ref(false)
@@ -95,6 +105,49 @@ function markDirty(): void {
   fieldError.value = null
 }
 
+/** 开关不做真实切换：打开先弹核验，关闭直接置回未核验。 */
+function requestBuyerVerify(value: boolean | undefined): void {
+  if (value) {
+    verifyLinkOpened.value = false
+    verifyOpen.value = true
+    return
+  }
+  buyerVerified.value = false
+  markDirty()
+}
+
+function openVerifyLink(): void {
+  const query = resolveVerificationQuery(buyerName.value, buyerTaxId.value)
+  if (query === '') {
+    return
+  }
+  const opened = window.open(buildCompanyLookupUrl(query), '_blank', 'noopener,noreferrer')
+  if (opened === null) {
+    toast.warning(t('invoiceRequest.form.buyerVerifyBlocked'))
+    return
+  }
+  verifyLinkOpened.value = true
+}
+
+function confirmBuyerVerified(): void {
+  buyerVerified.value = true
+  verifyOpen.value = false
+  verifyLinkOpened.value = false
+  fieldError.value = null
+  markDirty()
+}
+
+function onVerifyOpenChange(value: boolean): void {
+  if (!value) {
+    verifyLinkOpened.value = false
+  }
+}
+
+// 抬头或统编一改，之前的核验就不再对应当前主体，必须重新核验。
+watch([buyerName, buyerTaxId], () => {
+  buyerVerified.value = false
+})
+
 function addLine(): void {
   if (!canAddLine.value) {
     return
@@ -138,6 +191,7 @@ function currentPayload(): ReturnType<typeof buildInvoiceSubmitPayload> {
     recipientAddress: recipientAddress.value,
     lines: lines.value,
     totalAmount: totalAmount.value ?? '',
+    buyerVerified: buyerVerified.value,
   })
 }
 
@@ -340,6 +394,26 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
             />
             <p v-if="fieldError === 'buyerTaxId'" role="alert" class="text-xs text-destructive m-0 mt-1">
               {{ t('invoiceRequest.error.taxIdFormat') }}
+            </p>
+          </FaFormItem>
+          <FaFormItem
+            name="buyerVerified"
+            :label="t('invoiceRequest.form.buyerVerify')"
+            :description="t('invoiceRequest.form.buyerVerifyHint')"
+            :auto-bind="false"
+            class="md:col-span-12"
+          >
+            <div class="flex gap-3 items-center">
+              <FaSwitch
+                :model-value="buyerVerified"
+                :disabled="submitting || !buyerVerifiable"
+                :aria-label="t('invoiceRequest.form.buyerVerify')"
+                @update:model-value="requestBuyerVerify"
+              />
+              <span v-if="buyerVerified" class="text-xs text-primary">{{ t('invoiceRequest.form.buyerVerified') }}</span>
+            </div>
+            <p v-if="fieldError === 'buyerVerified'" role="alert" class="text-xs text-destructive m-0 mt-1">
+              {{ t('invoiceRequest.error.buyerVerifyRequired') }}
             </p>
           </FaFormItem>
         </FaCard>
@@ -684,4 +758,33 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
       </template>
     </QsGenericModal>
   </div>
+  <QsGenericModal
+    v-model="verifyOpen"
+    :title="t('invoiceRequest.form.buyerVerifyTitle')"
+    size="sm"
+    @update:model-value="onVerifyOpenChange"
+  >
+    <dl class="text-sm m-0 gap-x-4 gap-y-2 grid grid-cols-[auto,1fr]">
+      <dt class="text-muted-foreground">
+        {{ t('invoiceRequest.form.buyerVerifyName') }}
+      </dt>
+      <dd class="m-0 break-words">
+        {{ buyerName }}
+      </dd>
+      <dt class="text-muted-foreground">
+        {{ t('invoiceRequest.form.buyerVerifyTaxId') }}
+      </dt>
+      <dd class="m-0 break-words">
+        {{ buyerTaxId }}
+      </dd>
+    </dl>
+    <template #footer>
+      <FaButton v-if="!verifyLinkOpened" type="button" class="min-h-11 sm:min-h-9" @click="openVerifyLink">
+        {{ t('invoiceRequest.form.buyerVerifyOpen') }}
+      </FaButton>
+      <FaButton v-else type="button" class="min-h-11 sm:min-h-9" @click="confirmBuyerVerified">
+        {{ t('invoiceRequest.form.buyerVerifyConfirm') }}
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

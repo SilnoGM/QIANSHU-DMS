@@ -142,6 +142,8 @@ export function buildInvoiceSubmitPayload(input: {
   readonly recipientAddress: string
   readonly lines: readonly InvoiceFormLine[]
   readonly totalAmount: string
+  /** 开票主体信息核验开关：未打开时不允许提交。 */
+  readonly buyerVerified: boolean
 }): { payload: InvoiceSubmitPayload } | { invalidField: string } {
   const buyerName = input.buyerName.trim()
   if (buyerName === '') {
@@ -150,6 +152,10 @@ export function buildInvoiceSubmitPayload(input: {
   const buyerTaxId = input.buyerTaxId.trim()
   if (!/^\d{8}$/u.test(buyerTaxId)) {
     return { invalidField: 'buyerTaxId' }
+  }
+  // 抬头与统编格式通过后再要求核验，报错顺序与表单从上到下一致。
+  if (!input.buyerVerified) {
+    return { invalidField: 'buyerVerified' }
   }
   const recipientName = input.recipientName.trim()
   if (recipientName === '') {
