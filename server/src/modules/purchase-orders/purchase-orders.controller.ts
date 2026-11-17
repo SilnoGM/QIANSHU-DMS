@@ -382,7 +382,7 @@ export class PurchaseOrdersController {
 
   @Head(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
   @ImmutableMediaContentCache()
-  @RequirePermissions('purchase-orders:read')
+  @RequireAnyPermissions('purchase-orders:read', 'purchase-orders:payment')
   @ApiProductMediaContentContract('HEAD', {
     operationId: 'purchase_orders_head_product_preview_main_image',
     notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
@@ -411,7 +411,7 @@ export class PurchaseOrdersController {
 
   @Get(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
   @ImmutableMediaContentCache()
-  @RequirePermissions('purchase-orders:read')
+  @RequireAnyPermissions('purchase-orders:read', 'purchase-orders:payment')
   @ApiProductMediaContentContract('GET', {
     operationId: 'purchase_orders_get_product_preview_main_image',
     notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
@@ -535,7 +535,7 @@ export class PurchaseOrdersController {
   }
 
   @Get(':purchaseOrderId')
-  @RequirePermissions('purchase-orders:read')
+  @RequireAnyPermissions('purchase-orders:read', 'purchase-orders:payment')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'purchase_orders_get_by_id',
@@ -835,7 +835,7 @@ export class PurchaseOrdersController {
   }
 
   @Head(':purchaseOrderId/documents/:documentId/content')
-  @RequirePermissions('purchase-orders:read')
+  @RequireAnyPermissions('purchase-orders:read', 'purchase-orders:payment')
   @ApiContractResponse({ status: HttpStatus.OK, description: 'Private purchase order document.' })
   @ApiContractResponse({ status: HttpStatus.NOT_MODIFIED, description: 'Document ETag matched.' })
   @ApiApplicationContract({
@@ -862,7 +862,7 @@ export class PurchaseOrdersController {
   }
 
   @Get(':purchaseOrderId/documents/:documentId/content')
-  @RequirePermissions('purchase-orders:read')
+  @RequireAnyPermissions('purchase-orders:read', 'purchase-orders:payment')
   @ApiContractResponse({
     status: HttpStatus.OK,
     description: 'Private purchase order document.',

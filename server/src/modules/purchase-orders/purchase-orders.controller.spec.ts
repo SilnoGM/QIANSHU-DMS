@@ -467,9 +467,39 @@ describe('PurchaseOrdersController', () => {
       'headProductPreviewMainImage', 'getProductPreviewMainImage',
     ] as const) {
       expect(reflector.get(
+        REQUIRED_ANY_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:read', 'purchase-orders:payment'])
+    }
+  })
+
+  it('lets purchase payment operators read order detail and private media without the purchase list', () => {
+    const reflector = new Reflector()
+    for (const method of [
+      'getById',
+      'headDocumentContent',
+      'getDocumentContent',
+      'headProductPreviewMainImage',
+      'getProductPreviewMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_ANY_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:read', 'purchase-orders:payment'])
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toBeUndefined()
+    }
+    for (const method of ['list', 'statusCounts'] as const) {
+      expect(reflector.get(
         REQUIRED_PERMISSIONS_METADATA,
         PurchaseOrdersController.prototype[method],
       )).toEqual(['purchase-orders:read'])
+      expect(reflector.get(
+        REQUIRED_ANY_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toBeUndefined()
     }
   })
 })

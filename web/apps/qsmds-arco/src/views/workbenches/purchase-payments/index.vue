@@ -9,6 +9,7 @@ import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import PurchaseOrderDetailDrawer from '../../operations/purchase-orders/purchase-order-detail-drawer.vue'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
 import { canPayPurchasePayable, createPurchasePayableGroups } from './purchase-payments.logic'
 
@@ -29,6 +30,9 @@ const orders = shallowRef<PurchasePayableOrderDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
+const canOpenOrderDetail = computed(() => auth(['purchase-orders:read', 'purchase-orders:payment']))
+const orderDetailVisible = ref(false)
+const orderDetailTarget = shallowRef<PurchasePayableOrderDto | null>(null)
 let controller: AbortController | null = null
 const groups = computed(() => createPurchasePayableGroups(orders.value))
 const grouping: QsGenericTableGrouping<PurchasePayableRow> = { getRows: group => group.children ?? [], getLabel: group => group.order.orderNo }
@@ -109,6 +113,13 @@ function openPayment(row: PurchasePayableRow) {
   }
   void router.push({ name: 'qsFinanceRealtimePurchasePayablePayment', params: { id: row.payable.id } })
 }
+function openOrderDetail(order: PurchasePayableOrderDto): void {
+  if (!enabled.value || !canOpenOrderDetail.value) {
+    return
+  }
+  orderDetailTarget.value = order
+  orderDetailVisible.value = true
+}
 function refreshOnFocus() {
   if (enabled.value) {
     void load()
@@ -119,6 +130,8 @@ watch(() => route.query.keyword, (value) => {
   search()
 })
 watch([enabled, () => account.authEpoch], () => {
+  orderDetailVisible.value = false
+  orderDetailTarget.value = null
   orders.value = []
   total.value = 0
   void load()
@@ -160,7 +173,20 @@ onBeforeUnmount(() => {
         <template #group-header="{ row }">
           <div class="min-w-0 w-full space-y-2">
             <div class="flex flex-wrap gap-x-5 gap-y-2 items-center justify-between">
-              <span class="qs-type-data-emphasis break-all">{{ row.order.orderNo }}</span>
+              <FaButton
+                v-if="canOpenOrderDetail"
+                type="button"
+                variant="link"
+                size="sm"
+                class="qs-type-data-emphasis px-0 py-0 text-left shrink flex-wrap gap-1 h-auto min-w-0 whitespace-normal justify-start"
+                :disabled="!enabled"
+                :aria-label="t('purchasePayment.viewOrder', { orderNo: row.order.orderNo })"
+                @click="openOrderDetail(row.order)"
+              >
+                <span class="break-all">{{ row.order.orderNo }}</span>
+                <span class="qs-type-meta shrink-0">{{ t('purchasePayment.viewOrderHint') }}</span>
+              </FaButton>
+              <span v-else class="qs-type-data-emphasis break-all">{{ row.order.orderNo }}</span>
               <span class="flex gap-2 items-center">
                 <span class="qs-type-meta text-muted-foreground">{{ t('purchasePayment.orderTotal') }}</span>
                 <AmountDisplay :value="row.order.purchaseTotalAmount" currency="CNY" :currencies="currencyCatalog.currencies.value" />
@@ -228,5 +254,10 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+    <PurchaseOrderDetailDrawer
+      v-model="orderDetailVisible"
+      :order="orderDetailTarget"
+      :currencies="currencyCatalog.currencies.value"
+    />
   </div>
 </template>

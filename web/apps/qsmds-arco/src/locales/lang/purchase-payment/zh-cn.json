@@ -14,6 +14,8 @@
     "ownerUnavailable": "归属人未记录",
     "orderTotal": "采购总额",
     "orderNo": "采购订单",
+    "viewOrder": "查看采购单 {orderNo} 详情",
+    "viewOrderHint": "（点击查看采购详情）",
     "paymentType": "款项",
     "types": {
       "DEPOSIT": "定金",
