@@ -128,8 +128,8 @@ watch(() => props.product.id, () => {
         </div>
 
         <div class="p-2 rounded-lg bg-muted/40 flex flex-1 flex-col">
-          <dl class="m-0 flex flex-1 flex-col gap-2 min-w-0">
-            <div class="flex-1 gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+          <dl class="m-0 flex flex-1 flex-col gap-2 min-w-0 justify-center">
+            <div class="gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
               <dt class="qs-type-meta">
                 标准售价
               </dt>
