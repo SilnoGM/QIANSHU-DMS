@@ -129,23 +129,18 @@ watch(() => props.product.id, () => {
 
         <div class="p-2 rounded-lg bg-muted/40">
           <dl class="m-0 flex flex-col gap-2 min-w-0">
-            <div class="gap-6 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-2">
-              <div class="text-right min-w-0">
-                <dt class="qs-type-meta">
-                  台币标准价
-                </dt>
-                <dd class="m-0 mt-0.5">
-                  <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
-                </dd>
-              </div>
-              <div class="text-right min-w-0">
-                <dt class="qs-type-meta">
-                  马币标准价
-                </dt>
-                <dd class="m-0 mt-0.5">
-                  <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
-                </dd>
-              </div>
+            <div class="gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+              <dt class="qs-type-meta">
+                标准售价
+              </dt>
+              <dd class="m-0 text-right min-w-0">
+                <span class="qs-type-meta block">台币</span>
+                <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+              </dd>
+              <dd class="m-0 text-right min-w-0">
+                <span class="qs-type-meta block">马币</span>
+                <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+              </dd>
             </div>
             <div class="pt-2 border-t border-border/60 flex gap-3 min-w-0 items-baseline justify-between">
               <dt class="qs-type-meta">
