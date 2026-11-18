@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
         class="py-12"
       />
       <template v-else>
-        <FaCard class="mb-4" content-class="p-4">
+        <FaCard class="mb-4 py-0 gap-0" content-class="p-3">
           <div class="flex flex-wrap gap-3 items-center">
             <FaInput
               :model-value="keyword"
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
               clearable
               placeholder="搜索产品名称或编号"
               aria-label="搜索产品名称或编号"
-              class="w-full sm:flex-1 sm:min-w-48 sm:w-auto"
+              class="w-full sm:w-96"
               @update:model-value="onKeywordInput"
             >
               <template #start>
@@ -456,7 +456,7 @@ onBeforeUnmount(() => {
               :options="categoryOptions"
               placeholder="分类"
               aria-label="分类"
-              class="w-full sm:w-36"
+              class="w-full sm:flex-1"
               @update:model-value="changeCategory"
             />
             <FaSelect
@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
               :disabled="categoryFilter === 'ALL'"
               placeholder="产品头"
               aria-label="产品头"
-              class="w-full sm:w-36"
+              class="w-full sm:flex-1"
               @update:model-value="changeProductHead"
             />
             <FaSelect
@@ -475,8 +475,6 @@ onBeforeUnmount(() => {
               class="w-full sm:w-32"
               @update:model-value="changeStatus"
             />
-            <!-- 与搜索框等分剩余空间：搜索框宽度只有原来的半，重置按钮仍贴右端 -->
-            <div class="hidden sm:flex-1 sm:block" aria-hidden="true" />
             <FaButton variant="outline" class="shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto" @click="resetFilters">
               重置
             </FaButton>
