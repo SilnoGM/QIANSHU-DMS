@@ -475,6 +475,8 @@ onBeforeUnmount(() => {
               class="w-full sm:w-32"
               @update:model-value="changeStatus"
             />
+            <!-- 与搜索框等分剩余空间：搜索框宽度只有原来的半，重置按钮仍贴右端 -->
+            <div class="hidden sm:flex-1 sm:block" aria-hidden="true" />
             <FaButton variant="outline" class="shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto" @click="resetFilters">
               重置
             </FaButton>
