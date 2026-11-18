@@ -46,8 +46,8 @@ const aliasTitle = computed(() => props.alias?.trim() ? `自定义别名：${pro
 const statusLabel = computed(() => productLibraryStatusLabel(props.product.status))
 const statusDotClass = computed(() => (
   props.product.status === 'ACTIVE'
-    ? 'bg-green-600 shadow-[0_0_8px_2px_rgba(22,163,74,0.55)]'
-    : 'bg-red-600 shadow-[0_0_8px_2px_rgba(220,38,38,0.55)]'
+    ? 'bg-green-600 shadow-[0_0_4px_1px_rgba(22,163,74,0.45)]'
+    : 'bg-red-600 shadow-[0_0_4px_1px_rgba(220,38,38,0.45)]'
 ))
 
 function onImageError(): void {
@@ -91,7 +91,7 @@ watch(() => props.product.id, () => {
           role="status"
           :aria-label="statusLabel"
           :title="statusLabel"
-          class="rounded-full size-3 bottom-2 right-2 absolute motion-safe:animate-pulse"
+          class="rounded-full size-2 bottom-2 right-2 absolute motion-safe:animate-pulse"
           :class="statusDotClass"
         />
       </div>
