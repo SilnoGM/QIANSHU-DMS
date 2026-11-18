@@ -109,9 +109,51 @@ export function validateProductLibraryAlias(value: string): string | null {
   return null
 }
 
-export function productLibraryAliasLabel(alias: string | null | undefined): string {
-  const normalized = alias?.trim()
-  return normalized || '使用产品名'
+export type ProductLibraryAliasSource = 'DEFAULT' | 'PERSONAL' | 'PRODUCT'
+
+export interface ProductLibraryAliasDisplay {
+  /** 卡片上直接展示的一行文案。 */
+  readonly label: string
+  /** 实际用于 SALES_LINKED 唛头的名称；无别名时是“使用产品名”。 */
+  readonly name: string
+  readonly source: ProductLibraryAliasSource
+  /** 详情抽屉展示的来源说明。 */
+  readonly sourceLabel: string
+  readonly title: string
+}
+
+/** 个人别名优先于产品默认别名；都没有时回退采购行产品名。 */
+export function productLibraryAliasDisplay(
+  personalAlias: string | null | undefined,
+  defaultAlias: string | null | undefined,
+): ProductLibraryAliasDisplay {
+  const personal = personalAlias?.trim()
+  if (personal) {
+    return {
+      label: `自定义别名：${personal}`,
+      name: personal,
+      source: 'PERSONAL',
+      sourceLabel: '个人别名',
+      title: `自定义别名：${personal}`,
+    }
+  }
+  const fallback = defaultAlias?.trim()
+  if (fallback) {
+    return {
+      label: `默认别名：${fallback}`,
+      name: fallback,
+      source: 'DEFAULT',
+      sourceLabel: '默认别名（管理员维护）',
+      title: `默认别名：${fallback}`,
+    }
+  }
+  return {
+    label: '自定义别名：使用产品名',
+    name: '使用产品名',
+    source: 'PRODUCT',
+    sourceLabel: '产品名',
+    title: '自定义别名：使用产品名',
+  }
 }
 
 export function productLibraryStatusLabel(status: ProductListItemViewModel['status']): string {

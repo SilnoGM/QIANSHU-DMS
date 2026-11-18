@@ -10,6 +10,7 @@ defineOptions({ name: 'ProductLibraryAliasModal' })
 
 const props = withDefaults(defineProps<{
   currentAlias?: string | null
+  defaultAlias?: string | null
   error?: string
   modelValue: boolean
   productName: string
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<{
   saving?: boolean
 }>(), {
   currentAlias: null,
+  defaultAlias: null,
   error: '',
   saving: false,
 })
@@ -35,6 +37,13 @@ const canSave = computed(() => !props.saving
   && draft.value.trim() !== ''
   && !unchanged.value)
 const hasAlias = computed(() => Boolean(props.currentAlias?.trim()))
+const defaultAliasLabel = computed(() => props.defaultAlias?.trim() || null)
+const fallbackLabel = computed(() => defaultAliasLabel.value
+  ? `默认别名「${defaultAliasLabel.value}」`
+  : '产品名称')
+const placeholder = computed(() => defaultAliasLabel.value
+  ? `留空则使用默认别名：${defaultAliasLabel.value}`
+  : '留空则使用产品名称')
 
 watch(
   () => [props.modelValue, props.currentAlias] as const,
@@ -80,17 +89,20 @@ function save(): void {
       <FaInput
         v-model="draft"
         :maxlength="36"
-        placeholder="留空则唛头使用产品名称"
+        :placeholder="placeholder"
         aria-label="产品别名"
         class="w-full"
         @keydown.enter.prevent="save"
       />
       <div class="flex gap-3 items-center justify-between">
         <p class="qs-type-meta text-muted-foreground m-0">
-          留空时唛头使用采购单上的产品名称。
+          留空时唛头使用{{ fallbackLabel }}。
         </p>
         <span class="qs-type-meta text-muted-foreground shrink-0">{{ Array.from(draft).length }}/36</span>
       </div>
+      <p v-if="defaultAliasLabel" class="qs-type-meta text-muted-foreground m-0">
+        默认别名：{{ defaultAliasLabel }}（由管理员维护；个人别名优先）。
+      </p>
       <p v-if="validationError" class="qs-type-meta text-destructive m-0">
         {{ validationError }}
       </p>
@@ -108,7 +120,7 @@ function save(): void {
           :disabled="saving"
           @click="emit('clear')"
         >
-          清除别名
+          清除个人别名
         </FaButton>
         <FaButton
           variant="outline"

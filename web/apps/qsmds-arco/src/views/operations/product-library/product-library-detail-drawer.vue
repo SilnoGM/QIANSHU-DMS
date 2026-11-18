@@ -12,7 +12,7 @@ import {
   buildProductMainImageItems,
 } from '@/views/admin/product-management/list/product-list.logic'
 import {
-  productLibraryAliasLabel,
+  productLibraryAliasDisplay,
   productLibraryStatusLabel,
 } from './product-library.logic'
 
@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<{
   canManageAlias?: boolean
   canReadMedia?: boolean
   currencies: readonly CurrencyDescriptor[]
+  defaultAlias?: string | null
   error?: string
   loading?: boolean
   modelValue: boolean
@@ -32,6 +33,7 @@ const props = withDefaults(defineProps<{
   alias: null,
   canManageAlias: false,
   canReadMedia: false,
+  defaultAlias: null,
   error: '',
   loading: false,
   requestId: undefined,
@@ -63,7 +65,7 @@ const supplierState = computed(() => {
 })
 const categoryText = computed(() => props.product?.categoryName ?? '未分类')
 const headText = computed(() => props.product?.productHeadName ?? '未填写产品头')
-const aliasLabel = computed(() => productLibraryAliasLabel(props.alias))
+const aliasDisplay = computed(() => productLibraryAliasDisplay(props.alias, props.defaultAlias))
 const mainImageItems = computed(() => props.product === null
   ? []
   : buildProductMainImageItems(props.product, props.canReadMedia))
@@ -118,18 +120,33 @@ const imageItems = computed(() => props.product === null
               {{ product.productNo }}
             </code>
           </div>
-          <div class="flex flex-wrap gap-2 items-center">
-            <FaTag variant="outline" class="qs-type-status-tag">
+          <div class="flex flex-col gap-2 min-w-0">
+            <FaTag variant="outline" class="qs-type-status-tag self-start">
               {{ productLibraryStatusLabel(product.status) }}
             </FaTag>
+            <dl class="m-0 gap-x-3 gap-y-1 grid grid-cols-[auto_minmax(0,1fr)] min-w-0">
+              <dt class="qs-type-compact-label m-0">
+                唛头名称
+              </dt>
+              <dd class="qs-type-body-medium m-0 break-all">
+                {{ aliasDisplay.name }}
+              </dd>
+              <dt class="qs-type-compact-label m-0">
+                来源
+              </dt>
+              <dd class="qs-type-meta text-muted-foreground m-0">
+                {{ aliasDisplay.sourceLabel }}
+              </dd>
+            </dl>
             <FaButton
               v-if="canManageAlias"
               variant="outline"
               size="sm"
+              class="self-start"
               @click="emit('editAlias')"
             >
               <FaIcon name="i-lucide:tag" class="size-4" aria-hidden="true" />
-              {{ aliasLabel }}
+              设置个人别名
             </FaButton>
           </div>
         </div>

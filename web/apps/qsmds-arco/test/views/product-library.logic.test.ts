@@ -12,7 +12,7 @@ import {
   buildProductLibraryQuery,
   buildProductLibraryThumbnailUrl,
   buildSupplierOptions,
-  productLibraryAliasLabel,
+  productLibraryAliasDisplay,
   validateProductLibraryAlias,
 } from '../../src/views/operations/product-library/product-library.logic'
 
@@ -148,6 +148,25 @@ test('别名去空白、36 字符上限与 ×/控制字符校验', () => {
   assert.match(validateProductLibraryAlias('破碎机×2') ?? '', /不能包含/u)
   assert.match(validateProductLibraryAlias('破碎\n机') ?? '', /不能包含/u)
   assert.match(validateProductLibraryAlias('   ') ?? '', /请输入别名/u)
-  assert.equal(productLibraryAliasLabel('  破碎机 '), '破碎机')
-  assert.equal(productLibraryAliasLabel(null), '使用产品名')
+  assert.deepEqual(productLibraryAliasDisplay('  破碎机 ', '默认破碎机'), {
+    label: '自定义别名：破碎机',
+    name: '破碎机',
+    source: 'PERSONAL',
+    sourceLabel: '个人别名',
+    title: '自定义别名：破碎机',
+  })
+  assert.deepEqual(productLibraryAliasDisplay(null, ' 默认破碎机 '), {
+    label: '默认别名：默认破碎机',
+    name: '默认破碎机',
+    source: 'DEFAULT',
+    sourceLabel: '默认别名（管理员维护）',
+    title: '默认别名：默认破碎机',
+  })
+  assert.deepEqual(productLibraryAliasDisplay(null, null), {
+    label: '自定义别名：使用产品名',
+    name: '使用产品名',
+    source: 'PRODUCT',
+    sourceLabel: '产品名',
+    title: '自定义别名：使用产品名',
+  })
 })

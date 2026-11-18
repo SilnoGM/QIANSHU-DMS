@@ -6,7 +6,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import {
   buildProductLibraryOriginalImageUrl,
   buildProductLibraryThumbnailUrl,
-  productLibraryAliasLabel,
+  productLibraryAliasDisplay,
   productLibraryStatusLabel,
 } from './product-library.logic'
 
@@ -17,11 +17,13 @@ const props = withDefaults(defineProps<{
   canManageAlias?: boolean
   canReadMedia?: boolean
   currencies: readonly CurrencyDescriptor[]
+  defaultAlias?: string | null
   product: ProductListItemViewModel
 }>(), {
   alias: null,
   canManageAlias: false,
   canReadMedia: false,
+  defaultAlias: null,
 })
 
 const emit = defineEmits<{
@@ -41,8 +43,7 @@ const displayImageUrl = computed(() => (
   useOriginalImage.value ? originalUrl.value : thumbnailUrl.value
 ))
 const hasImage = computed(() => displayImageUrl.value !== null && !imageFailed.value)
-const aliasLabel = computed(() => productLibraryAliasLabel(props.alias))
-const aliasTitle = computed(() => props.alias?.trim() ? `自定义别名：${props.alias}` : '自定义别名：使用产品名')
+const aliasDisplay = computed(() => productLibraryAliasDisplay(props.alias, props.defaultAlias))
 const statusLabel = computed(() => productLibraryStatusLabel(props.product.status))
 const statusDotClass = computed(() => (
   props.product.status === 'ACTIVE'
@@ -109,14 +110,15 @@ watch(() => props.product.id, () => {
               {{ product.name }}
             </button>
           </h3>
-          <div v-if="canManageAlias" class="mt-1 flex gap-1 min-w-0 items-center">
+          <div class="mt-1 flex gap-1 min-w-0 items-center">
             <p
-              :title="aliasTitle"
+              :title="aliasDisplay.title"
               class="qs-type-body text-muted-foreground m-0 min-w-0 truncate"
             >
-              自定义别名：{{ aliasLabel }}
+              {{ aliasDisplay.label }}
             </p>
             <FaButton
+              v-if="canManageAlias"
               variant="ghost"
               size="icon-sm"
               class="text-muted-foreground shrink-0 size-6 hover:text-foreground"
