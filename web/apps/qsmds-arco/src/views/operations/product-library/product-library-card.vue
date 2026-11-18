@@ -130,7 +130,7 @@ watch(() => props.product.id, () => {
         <div class="p-2 rounded-lg bg-muted/40">
           <dl class="m-0 flex flex-col gap-2 min-w-0">
             <div class="gap-6 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-2">
-              <div class="min-w-0">
+              <div class="text-right min-w-0">
                 <dt class="qs-type-meta">
                   台币标准价
                 </dt>
@@ -138,7 +138,7 @@ watch(() => props.product.id, () => {
                   <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
                 </dd>
               </div>
-              <div class="min-w-0">
+              <div class="text-right min-w-0">
                 <dt class="qs-type-meta">
                   马币标准价
                 </dt>
