@@ -108,7 +108,7 @@ watch(() => props.product.id, () => {
           </p>
         </div>
 
-        <dl class="m-0 gap-3 grid grid-cols-1 min-w-0 sm:grid-cols-3">
+        <dl class="m-0 gap-3 grid grid-cols-2 min-w-0">
           <div class="min-w-0">
             <dt class="qs-type-meta">
               台币
@@ -125,9 +125,9 @@ watch(() => props.product.id, () => {
               <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
             </dd>
           </div>
-          <div class="min-w-0">
+          <div class="col-span-2 min-w-0">
             <dt class="qs-type-meta">
-              成本
+              采购成本
             </dt>
             <dd class="m-0 mt-0.5">
               <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
