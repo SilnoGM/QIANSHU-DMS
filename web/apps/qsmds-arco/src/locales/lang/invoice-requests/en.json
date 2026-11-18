@@ -45,6 +45,7 @@
   "invoiceRequest.form.buyerVerifyTaxId": "Tax ID",
   "invoiceRequest.form.buyerVerifyOpen": "Open registry",
   "invoiceRequest.form.buyerVerifyConfirm": "Verified, continue",
+  "invoiceRequest.form.buyerVerifyRefill": "Wrong info, re-enter",
   "invoiceRequest.form.buyerVerifyFallback": "If the new tab did not open, click",
   "invoiceRequest.form.buyerVerifySkipped": "Individual buyers (00000000) need no verification",
   "invoiceRequest.form.totalAmountHint": "Tax-inclusive total as printed on the invoice; leave blank to calculate from lines",

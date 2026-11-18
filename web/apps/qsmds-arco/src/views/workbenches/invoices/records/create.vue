@@ -138,6 +138,17 @@ function confirmBuyerVerified(): void {
   markDirty()
 }
 
+/** 信息有误：关闭弹窗并清空抬头与统编，开关保持关闭，等用户重新填写后核验。 */
+function refillBuyerInfo(): void {
+  verifyOpen.value = false
+  verifyLinkOpened.value = false
+  buyerName.value = ''
+  buyerTaxId.value = ''
+  buyerVerified.value = false
+  fieldError.value = null
+  markDirty()
+}
+
 function onVerifyOpenChange(value: boolean): void {
   if (!value) {
     verifyLinkOpened.value = false
@@ -792,6 +803,9 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
       >{{ t('invoiceRequest.form.buyerVerifyOpen') }}</a>
     </p>
     <template #footer>
+      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="refillBuyerInfo">
+        {{ t('invoiceRequest.form.buyerVerifyRefill') }}
+      </FaButton>
       <FaButton v-if="!verifyLinkOpened" type="button" class="min-h-11 sm:min-h-9" @click="openVerifyLink">
         {{ t('invoiceRequest.form.buyerVerifyOpen') }}
       </FaButton>

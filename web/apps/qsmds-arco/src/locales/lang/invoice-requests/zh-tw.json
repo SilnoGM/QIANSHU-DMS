@@ -45,6 +45,7 @@
   "invoiceRequest.form.buyerVerifyTaxId": "統一編號",
   "invoiceRequest.form.buyerVerifyOpen": "前往核驗",
   "invoiceRequest.form.buyerVerifyConfirm": "核驗無誤",
+  "invoiceRequest.form.buyerVerifyRefill": "有誤重填",
   "invoiceRequest.form.buyerVerifyFallback": "若新視窗沒有自動開啟，可手動點擊",
   "invoiceRequest.form.buyerVerifySkipped": "個人抬頭（00000000）無需核驗",
   "invoiceRequest.form.totalAmountHint": "含稅總計，按票面填寫；留空則按明細自動計算",
