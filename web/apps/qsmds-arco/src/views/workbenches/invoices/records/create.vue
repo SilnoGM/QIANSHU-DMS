@@ -803,14 +803,14 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
       >{{ t('invoiceRequest.form.buyerVerifyOpen') }}</a>
     </p>
     <template #footer>
-      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="refillBuyerInfo">
-        {{ t('invoiceRequest.form.buyerVerifyRefill') }}
+      <FaButton type="button" variant="destructive" class="min-h-11 sm:min-h-9" @click="refillBuyerInfo">
+        <FaIcon name="i-lucide:rotate-ccw" aria-hidden="true" />{{ t('invoiceRequest.form.buyerVerifyRefill') }}
       </FaButton>
       <FaButton v-if="!verifyLinkOpened" type="button" class="min-h-11 sm:min-h-9" @click="openVerifyLink">
-        {{ t('invoiceRequest.form.buyerVerifyOpen') }}
+        <FaIcon name="i-lucide:external-link" aria-hidden="true" />{{ t('invoiceRequest.form.buyerVerifyOpen') }}
       </FaButton>
       <FaButton v-else type="button" class="min-h-11 sm:min-h-9" @click="confirmBuyerVerified">
-        {{ t('invoiceRequest.form.buyerVerifyConfirm') }}
+        <FaIcon name="i-lucide:check" aria-hidden="true" />{{ t('invoiceRequest.form.buyerVerifyConfirm') }}
       </FaButton>
     </template>
   </QsGenericModal>
