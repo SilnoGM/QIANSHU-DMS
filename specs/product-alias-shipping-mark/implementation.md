@@ -65,12 +65,13 @@
 - 定向隔离数据库 E2E：`product-alias`、`auth-api`、`auth-schema`、`seed`、`contract`、`purchase-order-parts`、`purchase-payable` 共 7 个套件、80 项通过。
 - 单独复跑：`packaging-cost` 19 项、`purchase-order-service` 10 项、`purchase-order-review-marks`（含新的 22 字符基础码与 30 字符拒绝用例）通过。
 - 迁移在隔离 PostgreSQL 连续部署两次，无待执行项；191 条迁移基线一致。
+- 开发库 `qianshu_dms_prodcopy`（`127.0.0.1:15433`，`server/.env` 指向）已应用 `20261117130000_user_product_aliases`；应用前备份到 `~/qianshu-db-backups/dev-qianshu_dms_prodcopy-pre-user-product-aliases-20261118T100752Z.dump`（3.2 MB、5473 个 TOC 条目）。应用后 `migrate status` 无待执行项，表、权限、审计枚举和三项 CHECK 均已核对。
 
 ### 3.2 未完成或未通过
 
 - 全量 `ci:server-e2e` 在同一进程运行到后段出现 Node OOM（`FATAL ERROR: Ineffective mark-compacts near heap limit`）；同时出现 `packaging-cost` 与 `purchase-order-service` 两个跨套件偶发失败，单独复跑均通过。该组合结果不作为全绿结论。
 - 页面级浏览器验收未执行：需要真实账号、图片与产品数据，验证筛选、卡片、详情抽屉、别名保存/清除和 500 字符对账单实际出图。
-- 未对本地开发库或生产库执行迁移；只在隔离临时 PostgreSQL 验证。
+- 生产库未执行迁移；开发库已完成应用，测试机/生产发布与部署不在本次范围。
 - 未做真实采购单图片/对账单的亮色/暗色人工出图核对（渲染器单测通过）。
 
 ## 4. 实现偏差与说明
@@ -85,5 +86,5 @@
 
 1. 页面级浏览器验收：产品库筛选/分页/详情/别名、无图占位、无媒体权限、无别名权限。
 2. 真实渲染验收：采购单图片与对账单图片在亮色/暗色、最长 500 字符唛头下的布局和高度。
-3. 在获得单独授权后，将迁移应用到开发库；生产迁移、发布与部署不在本次范围。
+3. 开发库迁移已应用；运营账号需重新登录以刷新 `products:read`、`product-media:read`、`product-aliases:manage` 权限。生产迁移、发布与部署不在本次范围。
 4. 如需彻底消除 `packaging-cost` / `purchase-order-service` 跨套件偶发失败，应单独排查临时 schema 隔离器的测试顺序，不与本功能混改。
