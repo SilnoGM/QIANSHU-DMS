@@ -132,7 +132,7 @@ watch(() => props.product.id, () => {
             <div class="gap-6 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-2">
               <div class="min-w-0">
                 <dt class="qs-type-meta">
-                  台币
+                  台币标准价
                 </dt>
                 <dd class="m-0 mt-0.5">
                   <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
@@ -140,7 +140,7 @@ watch(() => props.product.id, () => {
               </div>
               <div class="min-w-0">
                 <dt class="qs-type-meta">
-                  马币
+                  马币标准价
                 </dt>
                 <dd class="m-0 mt-0.5">
                   <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
