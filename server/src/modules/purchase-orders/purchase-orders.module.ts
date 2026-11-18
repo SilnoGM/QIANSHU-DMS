@@ -14,6 +14,7 @@ import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
+import { ProductAliasesModule } from '../product-aliases/product-alias.module'
 import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
 import { SalesOrdersModule } from '../sales-orders/sales-orders.module'
 import { NotificationModule } from '../notifications/notification.module'
@@ -64,6 +65,7 @@ import { PurchaseCorrectionService } from './corrections/purchase-correction.ser
     MediaModule,
     NumberingModule,
     ProductsModule,
+    ProductAliasesModule,
     PurchaseShippingMarksModule,
     SalesOrdersModule,
     ShipmentOwnershipModule,

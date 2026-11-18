@@ -26,9 +26,9 @@ const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 export class SalesOrderCustomerInputDto {
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128 })
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 24 })
   @IsString()
-  @IsUnicodeCodePointLength(1, 128)
+  @IsUnicodeCodePointLength(1, 24)
   name!: string
 
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })

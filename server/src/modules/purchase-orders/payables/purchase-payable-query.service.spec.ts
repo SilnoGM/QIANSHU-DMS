@@ -8,10 +8,18 @@ function row() {
   return {
     id: 'order', orderNo: 'PO/20260916-00001', orderDate: new Date('2026-09-16'), purchaseType: 'SALES_LINKED',
     supplierValue: 'SUPPLIER', customSupplierName: null,
-    salesOrder: { orderNo: 'SO/1', customerName: '赖文寿', issuer: { profile: { issuerPrefix: '李华' } } }, purchaseTotalAmount: new Prisma.Decimal('100'),
+    salesOrder: { orderNo: 'SO/1', customerName: '赖文寿', issuer: { id: 'issuer', profile: { issuerPrefix: '李华' } } }, purchaseTotalAmount: new Prisma.Decimal('100'),
     parts: [
-      { partNumber: 1, shippingMarkText: 'QSM-20260916-0001/货件-01' },
-      { partNumber: 2, shippingMarkText: 'QSM-20260916-0001/货件-02' },
+      {
+        partNumber: 1,
+        shippingMarkText: 'QSM-20260916-0001/货件-01',
+        items: [{ quantity: 1, line: { productId: 'product-1', productNameSnapshot: '破碎机', lineNumber: 1 } }],
+      },
+      {
+        partNumber: 2,
+        shippingMarkText: 'QSM-20260916-0001/货件-02',
+        items: [{ quantity: 2, line: { productId: 'product-2', productNameSnapshot: '木桌', lineNumber: 2 } }],
+      },
     ],
     _count: { parts: 2 },
     payables: [
@@ -138,26 +146,34 @@ describe('PurchasePayableQueryService', () => {
     expect(await h.service.getOrder('order')).toMatchObject({
       shippingMarkSuffix: '李华-赖文寿',
       shippingMarkCount: 2,
-      shippingMarks: ['【QSM-20260916-0001/货件-01】李华-赖文寿', '【QSM-20260916-0001/货件-02】李华-赖文寿'],
+      shippingMarks: ['【QSM-20260916-0001/货件-01】破碎机（李华-赖文寿）', '【QSM-20260916-0001/货件-02】木桌×2（李华-赖文寿）'],
     })
   })
   it('labels stock purchases with the fixed suffix because they carry no sales order', async () => {
     const h = setup()
     h.tx.purchaseOrder.findUnique.mockResolvedValue({
       ...h.order, purchaseType: 'STOCK', salesOrder: null,
-      parts: [{ partNumber: 1, shippingMarkText: 'QSM-20260916-0001' }], _count: { parts: 1 },
+      parts: [{
+        partNumber: 1,
+        shippingMarkText: 'QSM-20260916-0001',
+        items: [{ quantity: 1, line: { productId: 'product-1', productNameSnapshot: '破碎机', lineNumber: 1 } }],
+      }], _count: { parts: 1 },
     })
     expect(await h.service.getOrder('order')).toMatchObject({
       shippingMarkSuffix: '公司囤货采购',
       shippingMarkCount: 1,
-      shippingMarks: ['【QSM-20260916-0001】公司囤货采购'],
+      shippingMarks: ['【QSM-20260916-0001】破碎机（公司囤货采购）'],
     })
   })
   it('caps the visible marks at six while still reporting every active shipment', async () => {
     const h = setup()
     h.tx.purchaseOrder.findUnique.mockResolvedValue({
       ...h.order,
-      parts: Array.from({ length: 9 }, (_, index) => ({ partNumber: index + 1, shippingMarkText: `MARK-${index + 1}` })),
+      parts: Array.from({ length: 9 }, (_, index) => ({
+        partNumber: index + 1,
+        shippingMarkText: `MARK-${index + 1}`,
+        items: [{ quantity: 1, line: { productId: `product-${index + 1}`, productNameSnapshot: `产品${index + 1}`, lineNumber: index + 1 } }],
+      })),
       _count: { parts: 9 },
     })
     const result = await h.service.getOrder('order')
@@ -168,14 +184,30 @@ describe('PurchasePayableQueryService', () => {
     const h = setup()
     h.tx.purchaseOrder.findUnique.mockResolvedValue({
       ...h.order,
-      parts: [{ partNumber: 1, shippingMarkText: '   ' }, { partNumber: 2, shippingMarkText: 'MARK-2' }],
+      parts: [
+        {
+          partNumber: 1,
+          shippingMarkText: '   ',
+          items: [{ quantity: 1, line: { productId: 'product-1', productNameSnapshot: '破碎机', lineNumber: 1 } }],
+        },
+        {
+          partNumber: 2,
+          shippingMarkText: 'MARK-2',
+          items: [{ quantity: 1, line: { productId: 'product-2', productNameSnapshot: '木桌', lineNumber: 2 } }],
+        },
+      ],
       _count: { parts: 1 },
     })
-    expect((await h.service.getOrder('order')).shippingMarks).toEqual(['【MARK-2】李华-赖文寿'])
+    expect((await h.service.getOrder('order')).shippingMarks).toEqual(['【MARK-2】木桌（李华-赖文寿）'])
     const markFilter = { status: { not: 'CANCELLED' }, shippingMarkText: { not: null } }
     expect(h.tx.purchaseOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       include: expect.objectContaining({
-        parts: expect.objectContaining({ where: markFilter, select: { partNumber: true, shippingMarkText: true }, orderBy: { partNumber: 'asc' }, take: 6 }) as unknown,
+        parts: expect.objectContaining({
+          where: markFilter,
+          orderBy: { partNumber: 'asc' },
+          take: 6,
+          select: expect.objectContaining({ partNumber: true, shippingMarkText: true, items: expect.any(Object) as unknown }) as unknown,
+        }) as unknown,
         _count: { select: { parts: { where: markFilter } } },
       }) as unknown,
     }))

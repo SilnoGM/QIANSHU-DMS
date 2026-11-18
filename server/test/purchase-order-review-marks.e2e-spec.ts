@@ -205,11 +205,11 @@ describe('purchase review mark issuance with isolated PostgreSQL', () => {
     })
   })
 
-  it.each([1, 2, 1000])('persists a 64 character base and exact derived suffixes for %i parts', async count => {
+  it.each([1, 2, 1000])('persists a 22 character base and exact derived suffixes for %i parts', async count => {
     await withFixture(async fixture => {
       const draft = await fixture.numberingCommands.update(fixture.configContext, fixture.customRule.id, {
         expectedVersion: fixture.customRule.version,
-        segments: [{ type: 'FIXED', value: 'M'.repeat(56) }, { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' }],
+        segments: [{ type: 'FIXED', value: 'M'.repeat(14) }, { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' }],
       })
       await fixture.numberingCommands.publish(fixture.configContext, fixture.customRule.id, { expectedVersion: draft.version, draftRevision: 2 })
       const original = await customInput(fixture)
@@ -218,14 +218,29 @@ describe('purchase review mark issuance with isolated PostgreSQL', () => {
       }
       const id = await createCommands(fixture).create(fixture.context(), input)
       const detail = await createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: 1 })
-      expect(detail.shippingMarkText).toBe(`${'M'.repeat(56)}00000001`)
+      expect(detail.shippingMarkText).toBe(`${'M'.repeat(14)}00000001`)
       expect(detail.parts.map(part => part.shippingMarkText)).toEqual(Array.from({ length: count }, (_, index) => count === 1
         ? detail.shippingMarkText : `${detail.shippingMarkText}/货件-${String(index + 1).padStart(2, '0')}`))
-      expect(detail.parts.at(-1)?.shippingMarkText?.length).toBe(count === 1 ? 64 : count === 1000 ? 72 : 70)
+      expect(detail.parts.at(-1)?.shippingMarkText?.length).toBe(count === 1 ? 22 : count === 1000 ? 30 : 28)
       expect((await atomicFacts(fixture.prisma)).ledger).toHaveLength(1)
       const first = await fixture.prisma.purchaseOrderPart.findFirstOrThrow({ where: { purchaseOrderId: id } })
       await expect(fixture.prisma.purchaseOrderPart.update({ where: { id: first.id }, data: { shippingMarkText: 'CHANGED' } })).rejects.toThrow()
       await expect(fixture.prisma.purchaseOrderPart.update({ where: { id: first.id }, data: { partNumber: count + 1 } })).rejects.toThrow()
+    })
+  })
+
+  it('rejects a base whose derived part mark exceeds 30 characters', async () => {
+    await withFixture(async fixture => {
+      const draft = await fixture.numberingCommands.update(fixture.configContext, fixture.customRule.id, {
+        expectedVersion: fixture.customRule.version,
+        segments: [{ type: 'FIXED', value: 'M'.repeat(56) }, { type: 'SEQUENCE', width: 8, startValue: '1', step: '1' }],
+      })
+      await fixture.numberingCommands.publish(fixture.configContext, fixture.customRule.id, { expectedVersion: draft.version, draftRevision: 2 })
+      const id = await createCommands(fixture).create(fixture.context(), await customInput(fixture))
+      const before = await reviewFacts(fixture)
+      await expect(createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: 1 }))
+        .rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_TOO_LONG' })
+      expect(await reviewFacts(fixture)).toEqual(before)
     })
   })
 })

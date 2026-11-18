@@ -230,7 +230,7 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
     return salesOrderValidationFailure('customer.addressDetail')
   }
   return Object.freeze({
-    name: normalizeText(customer.name, 'customer.name', 128),
+    name: normalizeText(customer.name, 'customer.name', 24),
     phone: normalizeText(customer.phone, 'customer.phone', 64),
     countryRegionId: normalizeRegionUuid(
       customer.countryRegionId,

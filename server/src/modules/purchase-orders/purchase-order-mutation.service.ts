@@ -52,6 +52,7 @@ import {
   purchaseOrderRuleFailure,
   purchaseOrderValidationFailure,
 } from './domain/purchase-order-errors'
+import { SHIPPING_MARK_TEXT_MAX_LENGTH } from './shipping-mark-label'
 import {
   assertPurchaseOrderFulfillmentTransition,
   assertPurchaseOrderStatusTransition,
@@ -226,6 +227,23 @@ function effectivePaidAmount(
   return aggregate._sum.amount === null ? '0.00' : fixed2(aggregate._sum.amount)
 }
 
+/**
+ * 审核时一次派发全部货件唛头；货件序号也属于【】内文本，必须按最长的最后一件校验，
+ * 不能只校验基础唛头。超限时拒绝审核，不截断基础码以免破坏编号唯一性。
+ */
+function assertReviewPartMarksLength(baseMark: string, partCount: number): void {
+  const partNumber = Math.max(1, partCount)
+  const suffix = partCount === 1
+    ? ''
+    : `/货件-${String(partNumber).padStart(Math.max(2, String(partNumber).length), '0')}`
+  if (Array.from(`${baseMark}${suffix}`).length > SHIPPING_MARK_TEXT_MAX_LENGTH) {
+    return purchaseOrderRuleFailure(
+      'PURCHASE_ORDER_SHIPPING_MARK_TOO_LONG',
+      `货件唛头超过 ${SHIPPING_MARK_TEXT_MAX_LENGTH} 个字符，请调整唛头规则后重试`,
+    )
+  }
+}
+
 @Injectable()
 export class PurchaseOrderMutationService {
   private readonly dependencies: PurchaseOrderMutationDependencies
@@ -286,6 +304,7 @@ export class PurchaseOrderMutationService {
         }
         const mark = await this.issueReviewShippingMark(transaction, order)
         if (mark === null) return
+        assertReviewPartMarksLength(mark.number, order._count.parts)
         await transaction.purchaseOrder.update({ where: { id: order.id }, data: {
           shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId, version: { increment: 1 },
         } })

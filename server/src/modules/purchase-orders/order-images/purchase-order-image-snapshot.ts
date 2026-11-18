@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto'
 
 import { normalizePurchaseOrderSnapshotAmount } from '../domain/purchase-order-decimal'
-import { normalizeShippingMarkLabel } from '../shipping-mark-label'
 import type { PurchaseOrderDetail } from '../purchase-order-query.service'
 
-export const PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION = '5'
+export const PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION = '6'
 
 export class PurchaseOrderImageError extends Error {
   constructor(readonly code: 'PURCHASE_ORDER_IMAGE_SNAPSHOT_INVALID' | 'PURCHASE_ORDER_IMAGE_TOO_LARGE' | 'PURCHASE_ORDER_IMAGE_GENERATION_UNAVAILABLE' | 'PURCHASE_ORDER_IMAGE_PRODUCT_IMAGE_UNAVAILABLE') {
@@ -22,7 +21,6 @@ export interface PurchaseOrderImageSnapshot {
   readonly supplierName: string
   readonly purchaserName: string
   readonly shippingMarkText: string
-  readonly shippingMarkSuffix: string
   readonly purchaseTotalAmount: string
   readonly depositDueAmount: string
   readonly balanceDueAmount: string
@@ -44,12 +42,20 @@ export interface PurchaseOrderImageSnapshot {
     readonly shipmentNo: string
     readonly partNumber: number
     readonly shippingMarkText: string
-    readonly items: readonly { readonly purchaseOrderLineId: string, readonly quantity: number }[]
+    readonly shippingMarkSuffix: string
+    readonly items: readonly {
+      readonly purchaseOrderLineId: string
+      readonly lineNumber: number
+      readonly quantity: number
+    }[]
   }[]
 }
 
-type SnapshotInput = Pick<PurchaseOrderDetail, 'id' | 'orderNo' | 'orderDate' | 'currencyCode' | 'supplier' | 'createdBy' | 'shippingMarkText' | 'amounts' | 'remark' | 'lines' | 'lineSummary' | 'sourceSalesOrder'> & {
-  readonly parts: readonly Pick<PurchaseOrderDetail['parts'][number], 'id' | 'shipmentNo' | 'partNumber' | 'status' | 'shippingMarkText' | 'items'>[]
+type SnapshotInput = Pick<PurchaseOrderDetail, 'id' | 'orderNo' | 'orderDate' | 'currencyCode' | 'supplier' | 'createdBy' | 'shippingMarkText' | 'amounts' | 'remark' | 'lines' | 'lineSummary'> & {
+  readonly parts: readonly Pick<
+    PurchaseOrderDetail['parts'][number],
+    'id' | 'shipmentNo' | 'partNumber' | 'status' | 'shippingMarkText' | 'shippingMarkSuffix' | 'items'
+  >[]
 }
 
 function invalid(): never {
@@ -64,13 +70,12 @@ function optionalText(value: unknown): string | null {
 function positiveInteger(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : invalid()
 }
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : invalid()
+}
 function amount(value: unknown): string {
   try { return normalizePurchaseOrderSnapshotAmount(value) }
   catch { return invalid() }
-}
-/** 贴标后缀与前端复制文案保持同一规则：去首尾空白、折叠内部空白，缺项不留分隔符。 */
-function labelPart(value: unknown): string {
-  return normalizeShippingMarkLabel(optionalText(value) ?? '')
 }
 function attributes(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return invalid()
@@ -103,21 +108,22 @@ export function createPurchaseOrderImageSnapshot(detail: SnapshotInput): Purchas
   const parts = detail.parts.filter(part => part.status !== 'CANCELLED').map(part => ({
     id: requiredText(part.id), shipmentNo: requiredText(part.shipmentNo),
     partNumber: positiveInteger(part.partNumber), shippingMarkText: requiredText(part.shippingMarkText),
+    shippingMarkSuffix: stringValue(part.shippingMarkSuffix),
     items: part.items.map(item => {
       if (!lineIds.has(item.purchaseOrderLineId)) return invalid()
-      return { purchaseOrderLineId: item.purchaseOrderLineId, quantity: positiveInteger(item.quantity) }
-    }).sort((a, b) => a.purchaseOrderLineId.localeCompare(b.purchaseOrderLineId)),
+      return {
+        purchaseOrderLineId: item.purchaseOrderLineId,
+        lineNumber: positiveInteger(item.lineNumber),
+        quantity: positiveInteger(item.quantity),
+      }
+    }).sort((a, b) => a.lineNumber - b.lineNumber || a.purchaseOrderLineId.localeCompare(b.purchaseOrderLineId)),
   })).sort((a, b) => a.partNumber - b.partNumber || a.id.localeCompare(b.id))
   if (parts.length === 0 || parts.some(part => part.items.length === 0)) return invalid()
-  const shippingMarkSuffix = [
-    labelPart(detail.sourceSalesOrder?.issuerPrefix),
-    labelPart(detail.sourceSalesOrder?.customerName),
-  ].filter(Boolean).join('-')
   return {
     templateVersion: PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION,
     purchaseOrderId: requiredText(detail.id), orderNo: requiredText(detail.orderNo), orderDate: requiredText(detail.orderDate),
     currencyCode: requiredText(detail.currencyCode), supplierName: requiredText(detail.supplier.label), purchaserName: requiredText(detail.createdBy.displayName),
-    shippingMarkText: requiredText(detail.shippingMarkText), shippingMarkSuffix, purchaseTotalAmount: amount(detail.amounts.purchaseTotalAmount),
+    shippingMarkText: requiredText(detail.shippingMarkText), purchaseTotalAmount: amount(detail.amounts.purchaseTotalAmount),
     depositDueAmount: amount(detail.amounts.depositDueAmount), balanceDueAmount: amount(detail.amounts.balanceDueAmount), remark: optionalText(detail.remark), lines, parts,
   }
 }

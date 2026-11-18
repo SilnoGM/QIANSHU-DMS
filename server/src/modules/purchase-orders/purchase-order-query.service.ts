@@ -20,10 +20,12 @@ import {
 } from '../../infrastructure/database/person-reference'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { DataScopeService, dataScopeFallback, resolveDataScopeActor } from '../access-control/data-scope.service'
+import { ProductAliasService, noopProductAliasService } from '../product-aliases/product-alias.service'
 import {
   DictionaryLookupService,
   type StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
+import { buildShippingMarkSuffix } from './shipping-mark-label'
 import {
   formatPurchaseOrderAmountUnits,
   normalizePurchaseOrderSnapshotAmount,
@@ -122,7 +124,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       id: true,
       orderNo: true,
       customerName: true,
-      issuer: { select: { profile: { select: { issuerPrefix: true } } } },
+      issuer: { select: { id: true, profile: { select: { issuerPrefix: true } } } },
     },
   },
   parts: {
@@ -351,6 +353,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly partNumber: number
     readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
     readonly shippingMarkText: string | null
+    readonly shippingMarkSuffix?: string
     readonly shippedAt: string | null
     readonly shippedById: string | null
     readonly shipmentRecordedAt: string | null
@@ -651,6 +654,7 @@ export class PurchaseOrderQueryService {
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly recipients: PaymentRecipientService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
+    private readonly aliases: ProductAliasService = noopProductAliasService,
   ) {}
 
   /**
@@ -973,6 +977,17 @@ export class PurchaseOrderQueryService {
     const totalUnits = parsePurchaseOrderAmountUnits(
       decimalToFixed2(row.purchaseTotalAmount),
     )
+    const lineById = new Map(row.lines.map(line => [line.id, line]))
+    const aliasProductIds = row.purchaseType === 'SALES_LINKED' && row.salesOrder !== null
+      ? [...new Set(row.lines.flatMap(line => line.productId === null ? [] : [line.productId]))]
+      : []
+    const aliasesByProduct = aliasProductIds.length === 0 || row.salesOrder === null
+      ? new Map<string, string>()
+      : await this.aliases.resolveForIssuer(
+          row.salesOrder.issuer.id,
+          aliasProductIds,
+          transaction ?? this.prisma,
+        )
     return {
       ...summary,
       paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
@@ -982,25 +997,44 @@ export class PurchaseOrderQueryService {
         customerName: row.salesOrder.customerName,
         issuerPrefix: row.salesOrder.issuer.profile?.issuerPrefix ?? null,
       },
-      parts: row.parts.map(part => ({
-        id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
-        shippedAt: part.shippedAt?.toISOString() ?? null,
-        shippedById: part.shippedById ?? null,
-        shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
-        shipmentRemark: part.shipmentRemark ?? null,
-        trackingNo: part.trackingNo ?? null,
-        destinationWarehouseValue: part.destinationWarehouseValue ?? null,
-        shippedBy: toNullablePersonReference(part.shippedBy),
-        warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
-        warehouseReceivedById: part.warehouseReceivedById ?? null,
-        warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
-        warehouseRemark: part.warehouseRemark ?? null,
-        warehouseReceivedBy: toNullablePersonReference(part.warehouseReceivedBy),
+      parts: row.parts.map((part) => {
+        const products = part.items.map(item => {
+          const line = lineById.get(item.purchaseOrderLineId)
+          return {
+            lineNumber: item.line.lineNumber,
+            productId: line?.productId ?? null,
+            productName: line?.productNameSnapshot ?? '',
+            quantity: item.quantity,
+          }
+        })
+        return {
+          id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+          ...(part.shippingMarkText === null ? {} : {
+            shippingMarkSuffix: buildShippingMarkSuffix(row.purchaseType, {
+              issuerPrefix: row.salesOrder?.issuer.profile?.issuerPrefix ?? null,
+              customerName: row.salesOrder?.customerName ?? null,
+              products,
+              aliases: aliasesByProduct,
+            }),
+          }),
+          shippedAt: part.shippedAt?.toISOString() ?? null,
+          shippedById: part.shippedById ?? null,
+          shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
+          shipmentRemark: part.shipmentRemark ?? null,
+          trackingNo: part.trackingNo ?? null,
+          destinationWarehouseValue: part.destinationWarehouseValue ?? null,
+          shippedBy: toNullablePersonReference(part.shippedBy),
+          warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
+          warehouseReceivedById: part.warehouseReceivedById ?? null,
+          warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
+          warehouseRemark: part.warehouseRemark ?? null,
+          warehouseReceivedBy: toNullablePersonReference(part.warehouseReceivedBy),
 
-        items: part.items.map(item => ({
-          purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
-        })),
-      })),
+          items: part.items.map(item => ({
+            purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
+          })),
+        }
+      }),
       shippingMarkText: row.shippingMarkText,
       amounts: {
         lineSubtotalAmount: decimalToFixed2(row.lineSubtotalAmount),

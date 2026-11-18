@@ -26,6 +26,13 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 
 /**
+ * 运营个人产品别名的读写权限。
+ *
+ * 别名只属于当前登录用户；服务端从登录上下文取 userId，不提供跨用户读写入口。
+ */
+export const PRODUCT_ALIAS_PERMISSION_CODES = ['product-aliases:manage'] as const
+
+/**
  * 分类/产品头目录权限。读取供产品表单/列表使用，create 覆盖管理页与产品保存时的
  * 内联新建；update/delete 只授予目录维护者。
  */
@@ -326,6 +333,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:disable',
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
+  ...PRODUCT_ALIAS_PERMISSION_CODES,
   ...PRODUCT_TAXONOMY_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
   ...PERSONAL_FUND_PERMISSION_CODES,
