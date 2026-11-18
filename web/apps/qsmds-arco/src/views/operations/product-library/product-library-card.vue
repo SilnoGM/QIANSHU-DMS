@@ -147,7 +147,7 @@ watch(() => props.product.id, () => {
                 采购成本（人民币）
               </dt>
               <dd class="m-0 min-w-0">
-                <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
+                <AmountDisplay class="!text-[15px]" :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
               </dd>
             </div>
           </dl>

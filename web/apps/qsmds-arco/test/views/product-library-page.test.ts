@@ -49,7 +49,7 @@ test('卡片是左侧图片、右侧产品名/自定义别名/价格区的横向
   assert.match(card, /border-t border-border\/60/u)
   assert.match(card, /bg-muted\/40/u)
   assert.equal(card.match(/<AmountDisplay/gu)?.length, 3)
-  assert.equal(card.match(/!text-\[15px\]/gu)?.length, 2)
+  assert.equal(card.match(/!text-\[15px\]/gu)?.length, 3)
   assert.doesNotMatch(card, /!text-xs/u)
   assert.equal(card.match(/text-right/gu)?.length, 2)
   assert.match(card, /标准售价/u)
