@@ -97,7 +97,15 @@ watch(() => props.product.id, () => {
       <div class="flex flex-1 flex-col gap-2 min-w-0">
         <div class="min-w-0">
           <h3 class="qs-type-component-title m-0 break-words [overflow-wrap:anywhere]">
-            {{ product.name }}
+            <button
+              type="button"
+              title="查看详情"
+              :aria-label="`查看 ${product.name} 详情`"
+              class="text-inherit text-left rounded-sm cursor-pointer transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              @click="emit('open')"
+            >
+              {{ product.name }}
+            </button>
           </h3>
           <div v-if="canManageAlias" class="mt-1 flex gap-1 min-w-0 items-center">
             <p
@@ -114,7 +122,7 @@ watch(() => props.product.id, () => {
               title="设置自定义别名"
               @click="emit('editAlias')"
             >
-              <FaIcon name="i-lucide:pencil" class="size-3.5" />
+              <FaIcon name="i-lucide:pencil" class="size-3" />
             </FaButton>
           </div>
         </div>
@@ -146,17 +154,6 @@ watch(() => props.product.id, () => {
               </dd>
             </div>
           </dl>
-        </div>
-
-        <div class="mt-auto flex flex-wrap gap-2 w-full justify-end">
-          <FaButton
-            variant="outline"
-            size="sm"
-            :aria-label="`查看 ${product.name} 详情`"
-            @click="emit('open')"
-          >
-            查看详情
-          </FaButton>
         </div>
       </div>
     </div>
