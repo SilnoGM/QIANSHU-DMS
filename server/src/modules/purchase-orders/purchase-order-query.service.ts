@@ -35,7 +35,8 @@ import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/pu
 import { purchaseOrderScopeWhere } from './purchase-order-access'
 import { summarizePurchaseOrderRecords, type PurchaseOrderRecordSummaries } from './purchase-order-record-summary'
 
-const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
+/** 采购单供货方字典 code；列表、详情和通知发布共用同一份，避免出现第二份字面量。 */
+export const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 const PURCHASE_ORDER_LINE_SUMMARY_SELECT = {
   id: true,

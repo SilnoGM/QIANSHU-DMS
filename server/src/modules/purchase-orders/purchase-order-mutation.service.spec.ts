@@ -7,6 +7,7 @@ import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
+import type { SystemNotificationService } from '../notifications/system-notification.service'
 import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import type { PurchaseOrderQueryService } from './purchase-order-query.service'
@@ -56,6 +57,10 @@ function setup() {
     balanceDueAmount: decimal('70'),
     purchaseType: 'SALES_LINKED',
     salesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    currencyCode: 'CNY',
+    supplierValue: null as string | null,
+    customSupplierName: null as string | null,
+    shippingMarkText: null as string | null,
     version: 1,
     createRequestFingerprintVersion: 'purchase-order.create.v4',
   }
@@ -142,6 +147,9 @@ function setup() {
         label: '银行转账',
         tone: 'DEFAULT',
       }),
+    // 通知变量取字典显示名；用例里的供货方值按可解析处理，回退分支由查询层用例覆盖。
+    resolveStoredValueInTransaction: jest.fn<Promise<unknown>, [unknown, unknown]>()
+      .mockResolvedValue({ known: true, label: '示例供应商' }),
   }
   const media = {
     activate: jest.fn<Promise<void>, [unknown, string]>()
@@ -168,7 +176,7 @@ function setup() {
     }),
   }
   const warehouseReceipts = { receiveAll: jest.fn().mockResolvedValue(detail) }
-  const imageDrafts = { attachForReview: jest.fn().mockResolvedValue(undefined), invalidateForOrder: jest.fn().mockResolvedValue(undefined) }
+  const imageDrafts = { attachForReview: jest.fn().mockResolvedValue(detail), invalidateForOrder: jest.fn().mockResolvedValue(undefined) }
   const payables = {
     createForReview: jest.fn<Promise<void>, Parameters<PurchasePayableService['createForReview']>>().mockResolvedValue(undefined),
     closeForCancellation: jest.fn<Promise<void>, Parameters<PurchasePayableService['closeForCancellation']>>().mockResolvedValue(undefined),
@@ -181,6 +189,10 @@ function setup() {
         idempotencyKeyHash: prepared.idempotencyKeyHash, requestFingerprintHash: prepared.requestFingerprintHash,
       })),
     reversePayment: jest.fn<ReturnType<PurchasePayableService['reversePayment']>, Parameters<PurchasePayableService['reversePayment']>>().mockResolvedValue(null),
+  }
+  const notifications = {
+    publish: jest.fn<Promise<unknown>, [unknown, unknown]>()
+      .mockResolvedValue({ notificationId: 'notification-id', duplicated: false, channels: [], warnings: [] }),
   }
   const service = new PurchaseOrderMutationService(
     prisma as unknown as PrismaService,
@@ -195,6 +207,9 @@ function setup() {
     imageDrafts as unknown as PurchaseOrderImageDraftService,
     payables as unknown as PurchasePayableService,
     { now: () => new Date('2026-08-27T12:00:00.000Z') },
+    undefined,
+    undefined,
+    notifications as unknown as SystemNotificationService,
   )
   return {
     audit,
@@ -202,6 +217,7 @@ function setup() {
     detail,
     dictionaryLookup,
     media,
+    notifications,
     order,
     numbering,
     resolver,
@@ -453,6 +469,48 @@ describe('PurchaseOrderMutationService', () => {
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledTimes(1)
     expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledTimes(2)
     expect(fixture.coverage.advanceWhenFullyCovered).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes the approved notification with order blocks and the dictionary display name', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    fixture.order.supplierValue = 'acme'
+    fixture.order.customSupplierName = null
+    fixture.transaction.purchaseOrder.findUnique
+      .mockResolvedValueOnce({ ...fixture.order })
+      .mockResolvedValueOnce({ ...fixture.order })
+      .mockResolvedValue({ ...fixture.order, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
+    fixture.imageDrafts.attachForReview.mockResolvedValue({
+      id: ORDER_ID,
+      remark: '请按货件分别包装并附采购单。',
+      lines: [
+        { id: 'line-a', lineNumber: 1, productName: '木桌', description: '请附带说明书', actualPurchaseUnitPriceAmount: '100.00', quantity: 1, lineTotalAmount: '100.00' },
+      ],
+      parts: [
+        { partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: 'TEST/0001/货件-01', shippingMarkSuffix: '木桌（李华-赖文寿）', items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 1 }] },
+      ],
+    })
+
+    await fixture.service.review(context, ORDER_ID, { imageDraftId: MEDIA_ID, expectedVersion: 1 })
+
+    expect(fixture.notifications.publish).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      variables: {
+        balanceAmount: '70.00',
+        currencyCode: 'CNY',
+        depositAmount: '30.00',
+        orderDate: expect.any(String),
+        orderNo: fixture.order.orderNo,
+        orderRemark: '\n\n采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上；请按货件分别包装并附采购单。',
+        orderStatus: expect.any(String),
+        partMarks: '货件-01：木桌\n唛头：【TEST/0001/货件-01】木桌（李华-赖文寿）',
+        paymentStatus: expect.any(String),
+        productLines: '产品名：木桌*1\n金额小计：100.00*1=100.00\n备注：请附带说明书',
+        shippingMark: '—',
+        totalAmount: '100.00',
+        vendorName: '示例供应商',
+      },
+    }), { transaction: fixture.transaction })
   })
 
   it.each([

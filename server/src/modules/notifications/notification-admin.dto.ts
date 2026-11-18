@@ -72,7 +72,7 @@ export class NotificationTemplateMediaPolicyInputDto {
 export class NotificationTemplateVariableDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/^[a-zA-Z0-9_]+$/u) name!: string
   @ApiPropertyOptional() @IsOptional() @IsBoolean() required?: boolean
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 200 }) @IsOptional() @IsInt() @Min(1) @Max(200) maxLength?: number
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 1500 }) @IsOptional() @IsInt() @Min(1) @Max(1500) maxLength?: number
   @ApiPropertyOptional() @IsOptional() @IsBoolean() sensitive?: boolean
 }
 

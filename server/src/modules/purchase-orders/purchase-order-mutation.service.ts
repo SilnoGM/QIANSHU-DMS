@@ -60,8 +60,10 @@ import {
 } from './domain/purchase-order-state-machine'
 import { isCanonicalPurchaseOrderActorId } from './purchase-order-command.normalizer'
 import { purchaseOrderPayableScopeWhere, purchaseOrderScopeWhere } from './purchase-order-access'
+import { buildPurchaseOrderNotificationBlocks } from './purchase-order-notification-text'
 import {
   PurchaseOrderQueryService,
+  SUPPLIER_DICTIONARY_CODE,
   type PurchaseOrderDetail,
 } from './purchase-order-query.service'
 import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
@@ -368,7 +370,7 @@ export class PurchaseOrderMutationService {
         )
       }
       // 审核只归档操作者已经预览过的同一张图片，不再申请或替换唛头。
-      await this.imageDrafts.attachForReview(transaction, trusted, purchaseOrderId, expectedVersion, imageDraftId)
+      const reviewDetail = await this.imageDrafts.attachForReview(transaction, trusted, purchaseOrderId, expectedVersion, imageDraftId)
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: {
@@ -416,20 +418,27 @@ export class PurchaseOrderMutationService {
         where: { purchaseOrderId, documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null },
         select: { mediaAssetId: true },
       })
+      // 明细与货件块由服务端按复制文案同一口径拼装；模板不支持循环，整块只能作为变量下发。
+      const notificationBlocks = buildPurchaseOrderNotificationBlocks(reviewDetail)
       await this.notifications.publish({
         eventType: 'PURCHASE_REVIEW_APPROVED',
         source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
         templateKey: 'purchase.review.approved',
         variables: {
+          balanceAmount: order.balanceDueAmount.toFixed(2),
           currencyCode: order.currencyCode,
+          depositAmount: order.depositDueAmount.toFixed(2),
           orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
+          orderRemark: notificationBlocks.orderRemark,
           orderStatus: purchaseOrderStatusLabel(order.orderStatus),
+          partMarks: notificationBlocks.partMarks,
           paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
+          productLines: notificationBlocks.productLines,
           shippingMark: order.shippingMarkText ?? '—',
           totalAmount: order.purchaseTotalAmount.toFixed(2),
-          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+          vendorName: await this.notificationVendorName(transaction, order),
         },
         media: reviewVoucher === null ? [] : [{ assetId: reviewVoucher.mediaAssetId, sourceKey: 'purchase.orderImage' }],
         dedupeKey: `purchase-review-approved:${purchaseOrderId}:v${order.version + 1}`,
@@ -518,7 +527,7 @@ export class PurchaseOrderMutationService {
           paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
           reason: reason ?? '用户取消采购订单',
           shippingMark: order.shippingMarkText ?? '—',
-          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+          vendorName: await this.notificationVendorName(transaction, order),
         },
         dedupeKey: `purchase-order-cancelled:${purchaseOrderId}:v${order.version + 1}`,
         requestedByUserId: trusted.actorUserId,
@@ -581,7 +590,7 @@ export class PurchaseOrderMutationService {
           paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
           reason,
           shippingMark: order.shippingMarkText ?? '—',
-          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+          vendorName: await this.notificationVendorName(transaction, order),
         },
         dedupeKey: `purchase-review-rejected:${purchaseOrderId}:v${order.version + 1}`,
         requestedByUserId: trusted.actorUserId,
@@ -1726,7 +1735,7 @@ export class PurchaseOrderMutationService {
           orderStatus: purchaseOrderStatusLabel(newStatus),
           paymentStatus: purchaseOrderPaymentStatusLabel(order.paymentStatus),
           shippingMark: order.shippingMarkText ?? '—',
-          vendorName: order.customSupplierName ?? order.supplierValue ?? '—',
+          vendorName: await this.notificationVendorName(transaction, order),
         },
         media: completedDocuments.map(document => ({
           assetId: document.mediaAssetId,
@@ -1739,6 +1748,24 @@ export class PurchaseOrderMutationService {
         requestedByUserId: context.actorUserId,
       }, { transaction })
     }
+  }
+
+  /**
+   * 通知里的供货方名称必须与复制文案抬头一致：字典值取显示名，自定义名称原样返回，
+   * 字典项停用或无法解析时回退存储值。四个采购事件发布点共用同一口径。
+   */
+  private async notificationVendorName(
+    transaction: Prisma.TransactionClient,
+    order: { readonly supplierValue?: string | null, readonly customSupplierName?: string | null },
+  ): Promise<string> {
+    if (!order.supplierValue) {
+      return order.customSupplierName ?? '—'
+    }
+    const resolution = await this.dictionaryLookup.resolveStoredValueInTransaction(transaction, {
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      value: order.supplierValue,
+    })
+    return resolution.known ? resolution.label : order.supplierValue
   }
 
   private recordAudit(
