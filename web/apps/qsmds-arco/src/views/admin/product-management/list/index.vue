@@ -68,6 +68,7 @@ const canUpdate = computed(() => authAll([
   'products:update',
   'product-categories:create',
 ]))
+const canEditDefaultAlias = computed(() => auth('products:update'))
 const canReadProductMedia = computed(() => auth('product-media:read'))
 const canBatchSetImages = computed(() => auth('products:update'))
 const selectedProducts = ref<ReadonlyMap<string, ProductListItemViewModel>>(new Map())
@@ -1813,6 +1814,7 @@ onBeforeUnmount(() => {
       :product="detailProduct"
       :currencies="currencies"
       :can-edit="canUpdate"
+      :can-edit-default-alias="canEditDefaultAlias"
       :content-readable="canReadProductMedia"
       :loading="detailLoading"
       :error="detailError"

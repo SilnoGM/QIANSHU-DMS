@@ -21,6 +21,7 @@ defineOptions({ name: 'ProductDetailDrawer' })
 
 const props = withDefaults(defineProps<{
   canEdit?: boolean
+  canEditDefaultAlias?: boolean
   contentReadable?: boolean
   currencies: readonly CurrencyDescriptor[]
   error?: string
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{
   requestId?: string
 }>(), {
   canEdit: false,
+  canEditDefaultAlias: false,
   contentReadable: false,
   error: '',
   loading: false,
@@ -58,7 +60,7 @@ const defaultAliasUnchanged = computed(() => (
   normalizedDefaultAliasDraft.value === (props.product?.defaultAlias ?? '')
 ))
 const canSaveDefaultAlias = computed(() => (
-  props.canEdit
+  props.canEditDefaultAlias
   && props.product !== null
   && !defaultAliasSaving.value
   && normalizedDefaultAliasDraft.value !== ''
@@ -94,7 +96,7 @@ function validateDefaultAlias(value: string): string | null {
 
 async function submitDefaultAlias(defaultAlias: string | null): Promise<void> {
   const product = props.product
-  if (!props.canEdit || product === null || defaultAliasSaving.value) {
+  if (!props.canEditDefaultAlias || product === null || defaultAliasSaving.value) {
     return
   }
   if (defaultAlias !== null) {
@@ -140,7 +142,7 @@ function saveDefaultAlias(): void {
 }
 
 function clearDefaultAlias(): void {
-  if (props.canEdit && props.product?.defaultAlias) {
+  if (props.canEditDefaultAlias && props.product?.defaultAlias) {
     void submitDefaultAlias(null)
   }
 }
@@ -243,7 +245,7 @@ function supplierDisplay(product: ProductListItemViewModel): string {
         <p class="qs-type-meta text-muted-foreground m-0 mt-1">
           个人别名优先；STOCK 不读个人别名，直接使用默认别名。
         </p>
-        <div v-if="canEdit" class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+        <div v-if="canEditDefaultAlias" class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
           <div class="flex-1 min-w-0">
             <FaInput
               v-model="defaultAliasDraft"
