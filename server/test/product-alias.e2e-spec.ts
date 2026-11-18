@@ -108,7 +108,9 @@ describe('product aliases against PostgreSQL', () => {
       data: { defaultAlias: '默认破碎机' },
     })
     expect((await service.resolveDefaults([productId])).get(productId)).toBe('默认破碎机')
-    expect((await service.resolveForIssuer(userAId, [productId])).has(productId)).toBe(false)
+    // 个人别名与默认别名互不回退：上一个用例已给 userA 建了个人别名，userB 没有任何别名。
+    expect((await service.resolveForIssuer(userAId, [productId])).get(productId)).toBe('破碎 机')
+    expect((await service.resolveForIssuer(userBId, [productId])).has(productId)).toBe(false)
   })
 
   it('updates once, then clears and audits the clear', async () => {

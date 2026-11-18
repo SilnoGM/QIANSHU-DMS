@@ -1737,6 +1737,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'packaging-costs:create',
     'packaging-costs:pay',
     'packaging-costs:read',
+    'product-aliases:manage',
     'product-categories:create',
     'product-categories:delete',
     'product-categories:read',
