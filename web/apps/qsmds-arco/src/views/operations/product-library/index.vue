@@ -508,16 +508,18 @@ onBeforeUnmount(() => {
               <div class="rounded bg-muted/50 h-4 w-3/4 motion-safe:animate-pulse" />
               <div class="rounded bg-muted/50 h-3 w-1/2 motion-safe:animate-pulse" />
               <div class="p-2 rounded-lg bg-muted/40">
-                <div class="gap-2 grid grid-cols-1 min-[480px]:grid-cols-3">
-                  <div v-for="cell in 3" :key="cell" class="flex flex-col gap-1">
-                    <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
-                    <div class="rounded bg-muted/50 h-4 w-16 motion-safe:animate-pulse" />
+                <div class="flex flex-col gap-2">
+                  <div class="gap-6 grid grid-cols-1 min-[480px]:grid-cols-2">
+                    <div v-for="cell in 2" :key="cell" class="flex flex-col gap-1">
+                      <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
+                      <div class="rounded bg-muted/50 h-4 w-16 motion-safe:animate-pulse" />
+                    </div>
+                  </div>
+                  <div class="pt-2 border-t border-border/60 flex justify-between">
+                    <div class="rounded bg-muted/50 h-3 w-12 motion-safe:animate-pulse" />
+                    <div class="rounded bg-muted/50 h-4 w-20 motion-safe:animate-pulse" />
                   </div>
                 </div>
-              </div>
-              <div class="mt-auto flex gap-2 w-full justify-end">
-                <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
-                <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
               </div>
             </div>
           </div>

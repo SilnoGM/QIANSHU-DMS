@@ -128,28 +128,30 @@ watch(() => props.product.id, () => {
         </div>
 
         <div class="p-2 rounded-lg bg-muted/40">
-          <dl class="m-0 gap-2 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-3">
-            <div class="min-w-0">
-              <dt class="qs-type-meta">
-                台币
-              </dt>
-              <dd class="m-0 mt-0.5">
-                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
-              </dd>
+          <dl class="m-0 flex flex-col gap-2 min-w-0">
+            <div class="gap-6 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-2">
+              <div class="min-w-0">
+                <dt class="qs-type-meta">
+                  台币
+                </dt>
+                <dd class="m-0 mt-0.5">
+                  <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+                </dd>
+              </div>
+              <div class="min-w-0">
+                <dt class="qs-type-meta">
+                  马币
+                </dt>
+                <dd class="m-0 mt-0.5">
+                  <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+                </dd>
+              </div>
             </div>
-            <div class="min-w-0">
-              <dt class="qs-type-meta">
-                马币
-              </dt>
-              <dd class="m-0 mt-0.5">
-                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
-              </dd>
-            </div>
-            <div class="min-w-0">
+            <div class="pt-2 border-t border-border/60 flex gap-3 min-w-0 items-baseline justify-between">
               <dt class="qs-type-meta">
                 采购成本
               </dt>
-              <dd class="m-0 mt-0.5">
+              <dd class="m-0 min-w-0">
                 <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
               </dd>
             </div>
