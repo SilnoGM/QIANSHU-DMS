@@ -45,7 +45,7 @@
   "invoiceRequest.form.buyerVerifyTaxId": "统一编号",
   "invoiceRequest.form.buyerVerifyOpen": "前往核验",
   "invoiceRequest.form.buyerVerifyConfirm": "核验无误",
-  "invoiceRequest.form.buyerVerifyBlocked": "浏览器拦截了新窗口，请允许弹窗后重试",
+  "invoiceRequest.form.buyerVerifyFallback": "若新窗口没有自动打开，可手动点击",
   "invoiceRequest.form.buyerVerifySkipped": "个人抬头（00000000）无需核验",
   "invoiceRequest.form.totalAmountHint": "含税总计，按票面填写；留空则按明细自动计算",
   "invoiceRequest.form.taxToleranceHint": "按 5% 校验，允许 ±0.5 元舍入差",

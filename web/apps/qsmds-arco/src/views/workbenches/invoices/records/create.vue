@@ -7,7 +7,6 @@ import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
@@ -30,7 +29,6 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const currencyCatalog = useCurrencyCatalog()
-const toast = useQsToast()
 
 const editingId = computed(() => (typeof route.query.id === 'string' ? route.query.id : null))
 const editingVersion = ref<number | null>(null)
@@ -122,11 +120,13 @@ function openVerifyLink(): void {
   if (!isBuyerVerificationRequired(taxId)) {
     return
   }
-  const opened = window.open(buildCompanyLookupUrl(taxId), '_blank', 'noopener,noreferrer')
-  if (opened === null) {
-    toast.warning(t('invoiceRequest.form.buyerVerifyBlocked'))
-    return
-  }
+  // 用临时 <a> 触发：不依赖 window.open 的返回值（带 noopener 时它恒为 null），
+  // 因此无论新标签是否被浏览器拦截，都进入「核验无误」这一步；被拦截时用弹窗里的链接兜底。
+  const link = document.createElement('a')
+  link.href = buildCompanyLookupUrl(taxId)
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  link.click()
   verifyLinkOpened.value = true
 }
 
@@ -782,6 +782,15 @@ const pageTitle = computed(() => editingId.value === null ? t('invoiceRequest.cr
         {{ buyerTaxId }}
       </dd>
     </dl>
+    <p v-if="verifyLinkOpened" class="text-xs text-muted-foreground m-0 mt-3">
+      {{ t('invoiceRequest.form.buyerVerifyFallback') }}
+      <a
+        :href="buildCompanyLookupUrl(buyerTaxId)"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="underline"
+      >{{ t('invoiceRequest.form.buyerVerifyOpen') }}</a>
+    </p>
     <template #footer>
       <FaButton v-if="!verifyLinkOpened" type="button" class="min-h-11 sm:min-h-9" @click="openVerifyLink">
         {{ t('invoiceRequest.form.buyerVerifyOpen') }}
