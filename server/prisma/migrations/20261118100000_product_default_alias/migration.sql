@@ -1,5 +1,7 @@
 -- 产品级默认别名：个人别名缺失时用于 SALES_LINKED 与 STOCK 货件唛头。
 -- 只回填与产品名不同的 103 条；其余产品保持 NULL，运行时回退采购行产品名快照。
+-- 自检必须兼容空库与部分数据集（CI、全新环境没有历史产品），因此校验的是
+-- “清单中每个存在于此库的产品都被回填”，而不是固定 103 行。
 ALTER TABLE "products" ADD COLUMN "default_alias" VARCHAR(36);
 
 ALTER TABLE "products"
@@ -18,11 +20,11 @@ ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'PRODUCT_DEFAULT_ALIAS_CLE
 
 DO $$
 DECLARE
+  expected_rows integer;
   updated_rows integer;
 BEGIN
-  UPDATE "products" AS product
-  SET "default_alias" = source.alias
-  FROM (VALUES
+  CREATE TEMP TABLE "_product_default_alias_backfill" (product_no text, alias text);
+  INSERT INTO "_product_default_alias_backfill" (product_no, alias) VALUES
     ('PROD/00086', '100旋耕机'),
     ('PROD/00087', '110旋耕机'),
     ('PROD/00088', '120旋耕机'),
@@ -125,13 +127,22 @@ BEGIN
     ('PROD/00190', '150起垄犁'),
     ('PROD/00191', '100秸秆还田机'),
     ('PROD/00192', '120秸秆还田机'),
-    ('PROD/00193', '80秸秆还田机')
-  ) AS source(product_no, alias)
+    ('PROD/00193', '80秸秆还田机');
+
+  SELECT count(*) INTO expected_rows
+  FROM "products" AS product
+  JOIN "_product_default_alias_backfill" AS source
+    ON product."product_no" = source.product_no;
+
+  UPDATE "products" AS product
+  SET "default_alias" = source.alias
+  FROM "_product_default_alias_backfill" AS source
   WHERE product."product_no" = source.product_no;
 
   GET DIAGNOSTICS updated_rows = ROW_COUNT;
-  IF updated_rows <> 103 THEN
-    RAISE EXCEPTION 'product default alias backfill expected 103 rows, updated %', updated_rows;
+  IF updated_rows <> expected_rows THEN
+    RAISE EXCEPTION 'product default alias backfill expected % rows, updated %', expected_rows, updated_rows;
   END IF;
+  DROP TABLE "_product_default_alias_backfill";
 END
 $$;
