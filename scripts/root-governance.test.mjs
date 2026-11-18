@@ -361,10 +361,10 @@ const supplierResidueAllowlist = Object.freeze([
   // 运营产品库只复用既有供应商字典和产品供应商快照，不新增 Supplier 主数据。
   'server/test/product-alias.e2e-spec.ts',
   'web/apps/qsmds-arco/src/views/operations/product-library/index.vue',
-  'web/apps/qsmds-arco/src/views/operations/product-library/product-library-card.vue',
   'web/apps/qsmds-arco/src/views/operations/product-library/product-library-detail-drawer.vue',
   'web/apps/qsmds-arco/src/views/operations/product-library/product-library.logic.ts',
   'web/apps/qsmds-arco/test/views/product-library.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/product-library-page.test.ts',
   'web/apps/qsmds-arco/src/components/business/QsProductSelector/index.vue',
   'web/apps/qsmds-arco/src/components/business/QsProductSelector/logic.ts',
   'web/apps/qsmds-arco/src/components/business/QsProductSelector/types.ts',

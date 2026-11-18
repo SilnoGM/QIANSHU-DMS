@@ -17,9 +17,8 @@ test('产品库是图片优先卡片库，不使用管理员表格或管理工�
   assert.match(page, /<FaPageMain/u)
   assert.match(page, /<ProductLibraryCard/u)
   assert.match(page, /grid/u)
-  assert.match(page, /sm:grid-cols-2/u)
-  assert.match(page, /lg:grid-cols-3/u)
-  assert.match(page, /2xl:grid-cols-4/u)
+  assert.match(page, /lg:grid-cols-2/u)
+  assert.doesNotMatch(page, /2xl:grid-cols-4/u)
   assert.match(page, /<FaPagination/u)
   assert.match(page, /:sizes="\[\.\.\.PRODUCT_LIBRARY_PAGE_SIZES\]"/u)
   assert.doesNotMatch(page, /<QsGenericTable/u)
@@ -27,16 +26,34 @@ test('产品库是图片优先卡片库，不使用管理员表格或管理工�
   assert.doesNotMatch(page, /产品分类树/u)
 })
 
-test('卡片使用 1:1 contain 主图、thumb 变体、占位和始终可见的别名入口', () => {
-  assert.match(card, /aspect-square/u)
+test('卡片是左侧图片、右侧产品名/自定义名称/价格区的横向布局', () => {
+  assert.match(card, /flex/u)
+  assert.match(card, /gap-3/u)
+  assert.match(card, /sm:gap-4/u)
+  assert.match(card, /w-28/u)
+  assert.match(card, /sm:w-40/u)
   assert.match(card, /object-contain/u)
   assert.match(card, /buildProductLibraryThumbnailUrl/u)
   assert.match(card, /loading="lazy"/u)
   assert.match(card, /qs-products/u)
+  assert.match(card, /自定义名称/u)
   assert.match(card, /productLibraryAliasLabel/u)
   assert.match(card, /canManageAlias/u)
   assert.match(card, /@click\.stop="emit\('editAlias'\)"/u)
   assert.match(card, /查看详情/u)
+  assert.doesNotMatch(card, /aspect-square/u)
+  assert.doesNotMatch(card, /productNo/u)
+  assert.doesNotMatch(card, /categoryName/u)
+  assert.doesNotMatch(card, /supplier/u)
+})
+
+test('启用停用状态使用图片右下角绿色/红色小圆点', () => {
+  assert.match(card, /role="status"/u)
+  assert.match(card, /bottom-2/u)
+  assert.match(card, /right-2/u)
+  assert.match(card, /bg-green-600/u)
+  assert.match(card, /bg-red-600/u)
+  assert.match(card, /size-3/u)
 })
 
 test('详情抽屉展示完整资料、价格、媒体、审计和设置别名，不提供编辑产品', () => {

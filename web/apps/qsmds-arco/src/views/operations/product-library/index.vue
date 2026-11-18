@@ -494,14 +494,14 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-else-if="loading"
-          class="gap-4 grid 2xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2"
+          class="gap-4 grid lg:grid-cols-2"
           aria-busy="true"
         >
           <div
             v-for="index in 8"
             :key="index"
             aria-hidden="true"
-            class="border border-border rounded-xl bg-card h-[430px] motion-safe:animate-pulse"
+            class="border border-border rounded-xl bg-card h-48 motion-safe:animate-pulse"
           />
         </div>
         <FaEmpty
@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
         </FaEmpty>
         <div
           v-else
-          class="gap-4 grid 2xl:grid-cols-4 lg:grid-cols-3 sm:grid-cols-2"
+          class="gap-4 grid lg:grid-cols-2"
           aria-live="polite"
         >
           <ProductLibraryCard
