@@ -127,7 +127,7 @@ watch(() => props.product.id, () => {
           </div>
         </div>
 
-        <div class="p-2 rounded-lg bg-muted/40">
+        <div class="p-2 rounded-lg bg-muted/40 flex-1">
           <dl class="m-0 flex flex-col gap-2 min-w-0">
             <div class="gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
               <dt class="qs-type-meta">
