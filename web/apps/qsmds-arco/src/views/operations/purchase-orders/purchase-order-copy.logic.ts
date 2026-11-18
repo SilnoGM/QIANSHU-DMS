@@ -4,6 +4,18 @@ import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 type Translate = (key: string, values?: Record<string, string | number>) => string
 
+// 备注在文本通道里压成一行：拆行、去首尾空白、折叠内部空白、丢弃空行后用全角分号连接。
+function flattenRemark(value: string | null | undefined): string {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  return value
+    .split(/\r?\n/u)
+    .map(line => line.trim().replace(/\s+/gu, ' '))
+    .filter(Boolean)
+    .join('；')
+}
+
 export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Translate): string {
   const text = (value: string | null | undefined, fallback = t('purchaseReview.copy.notRecorded')) => value?.trim().replace(/\s+/gu, ' ') || fallback
   const money = (value: string) => {
@@ -16,12 +28,16 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
   }
   const lines = [...detail.lines].sort((a, b) => a.lineNumber - b.lineNumber)
   const products = new Map(lines.map(line => [line.id, text(line.productName)]))
-  const lineText = lines.map(line => t('purchaseReview.copy.line', {
-    productName: text(line.productName),
-    quantity: line.quantity,
-    unitPrice: money(line.actualPurchaseUnitPriceAmount),
-    subtotal: money(line.lineTotalAmount),
-  })).join('\n\n') || t('purchaseReview.detail.noProducts')
+  const lineText = lines.map((line) => {
+    const base = t('purchaseReview.copy.line', {
+      productName: text(line.productName),
+      quantity: line.quantity,
+      unitPrice: money(line.actualPurchaseUnitPriceAmount),
+      subtotal: money(line.lineTotalAmount),
+    })
+    const remark = flattenRemark(line.description)
+    return remark ? `${base}\n${t('purchaseReview.copy.lineRemark', { remark })}` : base
+  }).join('\n\n') || t('purchaseReview.detail.noProducts')
   // 贴标后缀由服务端按货件产品、别名和数量统一生成，前端不再自行拼接。
   // 只给当前有效货件提供贴标信息；复制不派发编号或唛头，也不推断尚未生成的值。
   const partsText = detail.parts.filter(part => part.status !== 'CANCELLED')
@@ -35,6 +51,11 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
       })
     })
     .join('\n\n') || t('purchaseReview.copy.noParts')
+  // 贴标提示只出现一次并归入采购备注；自定义备注压平后跟在其后。
+  const customRemark = flattenRemark(detail.remark)
+  const orderRemark = customRemark
+    ? `${t('purchaseReview.copy.pasteHint')}；${customRemark}`
+    : t('purchaseReview.copy.pasteHint')
 
   return [
     t('purchaseReview.copy.header', {
@@ -48,6 +69,7 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
       deposit: money(detail.amounts.depositDueAmount),
       balance: money(detail.amounts.balanceDueAmount),
     }),
-    `${t('purchaseReview.copy.shippingTitle')}\n${partsText}`,
+    partsText,
+    t('purchaseReview.copy.orderRemark', { remark: orderRemark }),
   ].join('\n\n')
 }
