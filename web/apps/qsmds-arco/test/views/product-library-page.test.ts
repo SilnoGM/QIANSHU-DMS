@@ -60,7 +60,7 @@ test('卡片是左侧图片、右侧产品名/自定义别名/价格区的横向
   assert.match(card, /台币/u)
   assert.match(card, /马币/u)
   assert.match(card, /采购成本（人民币）/u)
-  assert.match(card, /ring-2 ring-background/u)
+  assert.match(card, /motion-safe:animate-pulse/u)
   assert.match(card, /暂无图片/u)
   assert.match(card, /无图片权限/u)
   assert.doesNotMatch(card, /\{\{ initial \}\}/u)
@@ -91,6 +91,10 @@ test('启用停用状态使用图片右下角绿色/红色小圆点', () => {
   assert.match(card, /bg-green-600/u)
   assert.match(card, /bg-red-600/u)
   assert.match(card, /size-3/u)
+  assert.match(card, /shadow-\[0_0_8px_2px_rgba/u)
+  assert.match(card, /motion-safe:animate-pulse/u)
+  assert.doesNotMatch(card, /ring-2 ring-background/u)
+  assert.doesNotMatch(card, /border-2 border-background/u)
 })
 
 test('详情抽屉展示完整资料、价格、媒体、审计和设置别名，不提供编辑产品', () => {
