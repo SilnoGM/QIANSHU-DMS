@@ -35,7 +35,7 @@ test('卡片是左侧图片、右侧产品名/自定义名称/价格区的横向
   assert.match(card, /object-contain/u)
   assert.match(card, /buildProductLibraryThumbnailUrl/u)
   assert.match(card, /buildProductLibraryOriginalImageUrl/u)
-  assert.match(card, /qs-type-compact-title/u)
+  assert.match(card, /qs-type-component-title/u)
   assert.match(card, /无图片权限/u)
   assert.match(card, /onImageError/u)
   assert.doesNotMatch(card, /line-clamp-2/u)

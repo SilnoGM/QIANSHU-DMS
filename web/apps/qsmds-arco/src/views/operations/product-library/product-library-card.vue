@@ -99,7 +99,7 @@ watch(() => props.product.id, () => {
 
       <div class="flex flex-1 flex-col gap-2 min-w-0">
         <div class="min-w-0">
-          <h3 class="qs-type-compact-title m-0 break-words [overflow-wrap:anywhere]">
+          <h3 class="qs-type-component-title m-0 break-words [overflow-wrap:anywhere]">
             {{ product.name }}
           </h3>
           <FaButton
