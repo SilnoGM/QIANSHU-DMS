@@ -429,59 +429,55 @@ onBeforeUnmount(() => {
       />
       <template v-else>
         <FaCard class="mb-4" content-class="p-4">
-          <div class="flex flex-col gap-3">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <FaInput
-                :model-value="keyword"
-                type="search"
-                clearable
-                placeholder="搜索产品名称或编号"
-                aria-label="搜索产品名称或编号"
-                class="w-full sm:flex-1"
-                @update:model-value="onKeywordInput"
-              >
-                <template #start>
-                  <FaIcon name="i-lucide:search" />
-                </template>
-              </FaInput>
-              <FaSelect
-                :model-value="statusFilter"
-                :options="statusOptions"
-                aria-label="产品状态"
-                class="w-full sm:w-40"
-                @update:model-value="changeStatus"
-              />
-              <FaButton variant="outline" class="min-h-11 sm:min-h-9" @click="resetFilters">
-                重置
-              </FaButton>
-            </div>
-            <div class="gap-3 grid sm:grid-cols-3">
-              <FaSelect
-                :model-value="supplierFilter"
-                :options="supplierOptions"
-                placeholder="供应商"
-                aria-label="供应商"
-                class="w-full"
-                @update:model-value="changeSupplier"
-              />
-              <FaSelect
-                :model-value="categoryFilter"
-                :options="categoryOptions"
-                placeholder="分类"
-                aria-label="分类"
-                class="w-full"
-                @update:model-value="changeCategory"
-              />
-              <FaSelect
-                :model-value="productHeadFilter"
-                :options="productHeadOptions"
-                :disabled="categoryFilter === 'ALL'"
-                placeholder="产品头"
-                aria-label="产品头"
-                class="w-full"
-                @update:model-value="changeProductHead"
-              />
-            </div>
+          <div class="flex flex-wrap gap-3 items-center">
+            <FaInput
+              :model-value="keyword"
+              type="search"
+              clearable
+              placeholder="搜索产品名称或编号"
+              aria-label="搜索产品名称或编号"
+              class="w-full sm:flex-1 sm:min-w-48 sm:w-auto"
+              @update:model-value="onKeywordInput"
+            >
+              <template #start>
+                <FaIcon name="i-lucide:search" />
+              </template>
+            </FaInput>
+            <FaSelect
+              :model-value="supplierFilter"
+              :options="supplierOptions"
+              placeholder="供应商"
+              aria-label="供应商"
+              class="w-full sm:w-36"
+              @update:model-value="changeSupplier"
+            />
+            <FaSelect
+              :model-value="categoryFilter"
+              :options="categoryOptions"
+              placeholder="分类"
+              aria-label="分类"
+              class="w-full sm:w-36"
+              @update:model-value="changeCategory"
+            />
+            <FaSelect
+              :model-value="productHeadFilter"
+              :options="productHeadOptions"
+              :disabled="categoryFilter === 'ALL'"
+              placeholder="产品头"
+              aria-label="产品头"
+              class="w-full sm:w-36"
+              @update:model-value="changeProductHead"
+            />
+            <FaSelect
+              :model-value="statusFilter"
+              :options="statusOptions"
+              aria-label="产品状态"
+              class="w-full sm:w-32"
+              @update:model-value="changeStatus"
+            />
+            <FaButton variant="outline" class="shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto" @click="resetFilters">
+              重置
+            </FaButton>
           </div>
         </FaCard>
 

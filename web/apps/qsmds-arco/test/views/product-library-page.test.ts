@@ -19,6 +19,8 @@ test('产品库是图片优先卡片库，不使用管理员表格或管理工�
   assert.match(page, /grid/u)
   assert.match(page, /xl:grid-cols-2/u)
   assert.doesNotMatch(page, /2xl:grid-cols-4/u)
+  assert.match(page, /flex flex-wrap gap-3 items-center/u)
+  assert.doesNotMatch(page, /sm:grid-cols-3/u)
   assert.match(page, /<FaPagination/u)
   assert.match(page, /:sizes="\[\.\.\.PRODUCT_LIBRARY_PAGE_SIZES\]"/u)
   assert.doesNotMatch(page, /<QsGenericTable/u)
