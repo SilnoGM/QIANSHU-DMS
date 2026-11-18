@@ -96,12 +96,12 @@ watch(() => props.product.id, () => {
 
       <div class="flex flex-1 flex-col gap-2 min-w-0">
         <div class="min-w-0">
-          <h3 class="qs-type-component-title m-0 break-words [overflow-wrap:anywhere]">
+          <h3 class="qs-type-component-title m-0 min-w-0">
             <button
               type="button"
               title="查看详情"
               :aria-label="`查看 ${product.name} 详情`"
-              class="text-inherit text-left rounded-sm cursor-pointer transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              class="text-inherit text-left rounded-sm max-w-full block cursor-pointer truncate transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               @click="emit('open')"
             >
               {{ product.name }}
@@ -127,9 +127,9 @@ watch(() => props.product.id, () => {
           </div>
         </div>
 
-        <div class="p-2 rounded-lg bg-muted/40 flex-1">
-          <dl class="m-0 flex flex-col gap-2 min-w-0">
-            <div class="gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+        <div class="p-2 rounded-lg bg-muted/40 flex flex-1 flex-col">
+          <dl class="m-0 flex flex-1 flex-col gap-2 min-w-0">
+            <div class="flex-1 gap-x-6 gap-y-2 grid grid-cols-1 min-w-0 min-[480px]:gap-y-0 min-[480px]:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
               <dt class="qs-type-meta">
                 标准售价
               </dt>
