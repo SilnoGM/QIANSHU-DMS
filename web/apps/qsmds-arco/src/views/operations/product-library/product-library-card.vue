@@ -99,13 +99,24 @@ watch(() => props.product.id, () => {
           <h3 class="qs-type-component-title m-0 break-words [overflow-wrap:anywhere]">
             {{ product.name }}
           </h3>
-          <p
-            v-if="canManageAlias"
-            :title="aliasTitle"
-            class="qs-type-body text-muted-foreground m-0 mt-1 truncate"
-          >
-            自定义别名：{{ aliasLabel }}
-          </p>
+          <div v-if="canManageAlias" class="mt-1 flex gap-1 min-w-0 items-center">
+            <p
+              :title="aliasTitle"
+              class="qs-type-body text-muted-foreground m-0 min-w-0 truncate"
+            >
+              自定义别名：{{ aliasLabel }}
+            </p>
+            <FaButton
+              variant="ghost"
+              size="icon-sm"
+              class="text-muted-foreground shrink-0 size-6 hover:text-foreground"
+              :aria-label="`设置 ${product.name} 的自定义别名`"
+              title="设置自定义别名"
+              @click="emit('editAlias')"
+            >
+              <FaIcon name="i-lucide:pencil" class="size-3.5" />
+            </FaButton>
+          </div>
         </div>
 
         <div class="p-2 rounded-lg bg-muted/40">
@@ -138,15 +149,6 @@ watch(() => props.product.id, () => {
         </div>
 
         <div class="mt-auto flex flex-wrap gap-2 w-full justify-end">
-          <FaButton
-            v-if="canManageAlias"
-            variant="ghost"
-            size="sm"
-            :aria-label="`设置 ${product.name} 的自定义别名`"
-            @click="emit('editAlias')"
-          >
-            自定义别名
-          </FaButton>
           <FaButton
             variant="outline"
             size="sm"
