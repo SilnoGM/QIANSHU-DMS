@@ -17,27 +17,29 @@
 - 新增权限 `product-aliases:manage`（UUID `...215`），授予 `system_admin`；`operations_staff` 存在时增量授予 `products:read`、`product-media:read`、`product-aliases:manage`。
 - 新增客户名 `char_length <= 24` 与货件唛头 `char_length <= 30` 的数据库 CHECK；迁移以存量预检失败关闭，不回填既有业务行。
 - 迁移：`server/prisma/migrations/20261117130000_user_product_aliases/migration.sql`。
+- 追加 `products.default_alias VARCHAR(36)` 可空列与字符 CHECK，审计枚举 `PRODUCT_DEFAULT_ALIAS_UPDATED/CLEARED`；迁移 `20261118100000_product_default_alias` 按 `product_no` 只回填 103 条与产品名不同的默认别名，`DO` 块要求恰好 103 行，其余保持 `NULL`。
 
 ### 2.2 别名 API
 
 - `GET /api/product-aliases/mine`
 - `PUT /api/product-aliases/mine/:productId`
 - `DELETE /api/product-aliases/mine/:productId`
+- `PATCH /api/products/:productId/default-alias`（`products:update`，body `{ defaultAlias: string | null, expectedVersion }`）
 - 只从登录上下文取用户；支持批量 `productIds`（逗号分隔，最多 100 个）。
-- 设置/清除写入审计；相同值重复保存不写审计；产品不存在返回 `PRODUCT_NOT_FOUND`。
-- 新增 `ProductAliasesModule`，并向采购模块导出 `ProductAliasService` 供详情和应付批量解析。
+- 个人别名设置/清除与默认别名更新都写审计；相同值重复保存不写审计；产品不存在返回 `PRODUCT_NOT_FOUND`；默认别名版本冲突返回 `PRODUCT_STATE_CHANGED`。
+- 新增 `ProductAliasesModule`，并向采购模块导出 `ProductAliasService` 供详情和应付批量解析；`resolveDefaults` 批量读取产品默认别名。
 
 ### 2.3 唛头格式
 
 - `shipping-mark-label.ts` 改为货件级生成：
-  - SALES_LINKED：`【唛头】展示名+展示名（出单前缀-客户名）`
-  - STOCK：`【唛头】产品名+产品名（公司囤货采购）`
-  - 目录产品按 `productId` 聚合数量；自定义行按行独立。
-  - 数量 >1 输出 `×N`；别名优先，否则采购行产品名。
+  - SALES_LINKED：`【唛头】个人别名或默认别名或产品名+…（出单前缀-客户名）`
+  - STOCK：`【唛头】默认别名或产品名+…（公司囤货采购）`，不读个人别名
+  - 目录产品按 `productId` 聚合数量；自定义行按行独立且不参与别名回退。
+  - 数量 >1 输出 `×N`；个人别名 > 默认别名 > 采购行产品名。
   - 别名块 438 字符上限，按整项截断并加 `…`；完整唛头 500 字符上限。
 - 采购详情新增 `parts[].shippingMarkSuffix`（可选字段，仅在有货件唛头时返回）；复制文案直接消费该字段。
 - 采购单图片快照改为每货件自己的后缀；模板版本 `5 → 6`；货件项按 `lineNumber` 排序。
-- 应付/对账单按每货件产品集合和出单人别名生成 `shippingMarks`；批量读取别名，避免 N+1；`shippingMarkSuffix` 保留为销售级兼容字段。
+- 应付/对账单按每货件产品集合、出单人个人别名和产品默认别名生成 `shippingMarks`；批量读取两类别名，避免 N+1；`shippingMarkSuffix` 保留为销售级兼容字段。
 - 对账单图片单条唛头校验 `300 → 500`。
 - 审核时增加货件唛头 30 字符校验，超限返回 `PURCHASE_ORDER_SHIPPING_MARK_TOO_LONG`。
 
@@ -45,12 +47,13 @@
 
 - 新增路由 `/qs-operations/products`，菜单“产品库”，单页菜单，位于“看机预约”之前。
 - 横向长方形卡片使用固定网格列（图片 112/160/176px + 右侧 `minmax(0,1fr)`），内容容器加 `flex-1` 撑满 `FaCard` 内容区（内容区本身是 flex 容器），标题长短既不改变右侧宽度、也不在卡片右侧留下空白；图片使用 `object-contain`、thumb 变体、懒加载、缩略图失败回退原图、无图/无权限占位；启用/停用为图片右下角绿色/红色柔光呼吸小圆点（无白色描边，`motion-safe:animate-pulse`）。
-- 卡片只展示名称、自定义别名只读展示、带底色的两行价格区（第一行左侧“标准售价”行标题 + 台币/马币两列，币种列留空 24px；第二行采购成本（人民币）整行；价格面板 `flex-1` 撑满右栏剩余高度，两行价格作为整体垂直居中、额外高度均分到上下）、别名行右侧的铅笔编辑图标；产品编号、分类/产品头、供应商只在详情抽屉展示；标题使用 16px 组件标题排版并单行截断，标题文字本身是按钮（hover 变主色）用于打开详情抽屉；别名同样单行截断并以 `title` 提供全文；别名编辑用 24px 热区、12px 图标的 ghost 按钮就近触发；卡片不再有底部操作按钮；筛选条单行平铺（搜索 24rem、供应商 9rem、状态 8rem 固定，分类/产品头均分剩余，重置贴右端；卡片上下内边距收紧，窄屏自动换行），加载骨架按卡片结构绘制。
+- 卡片只展示名称、别名行（个人别名 > 默认别名 > 使用产品名）、带底色的两行价格区（第一行左侧“标准售价”行标题 + 台币/马币两列，币种列留空 24px；第二行采购成本（人民币）整行；价格面板 `flex-1` 撑满右栏剩余高度，两行价格作为整体垂直居中、额外高度均分到上下）、别名行右侧的铅笔编辑图标；产品编号、分类/产品头、供应商只在详情抽屉展示；标题使用 16px 组件标题排版并单行截断，标题文字本身是按钮（hover 变主色）用于打开详情抽屉；别名同样单行截断并以 `title` 提供全文；个人别名编辑用 24px 热区、12px 图标的 ghost 按钮就近触发；卡片不再有底部操作按钮；筛选条单行平铺（搜索 24rem、供应商 9rem、状态 8rem 固定，分类/产品头均分剩余，重置贴右端；卡片上下内边距收紧，窄屏自动换行），加载骨架按卡片结构绘制。
 - 顶部筛选：关键字、供应商、分类、产品头、状态（默认启用）、重置。
 - `FaPagination` 每页 24/48/96。
-- 详情抽屉展示完整资料、价格、媒体、属性/备注、折叠审计；不显示编辑产品。
-- 别名弹窗支持保存/清除、36 字符计数、控制字符/`×` 校验和历史影响提示。
-- 无媒体权限占位；无别名权限隐藏别名入口；无别名显示“使用产品名”。
+- 详情抽屉展示完整资料、价格、媒体、属性/备注、折叠审计；显示实际唛头名称与来源（个人别名 / 默认别名（管理员维护）/ 产品名），不显示编辑产品。
+- 别名弹窗只写个人别名，支持保存/清除、36 字符计数、控制字符/`×` 校验；有默认别名时提示清除后回退默认别名，否则回退产品名。
+- 默认别名由管理员在“基础数据-产品管理”的详情抽屉维护（`PATCH /api/products/:productId/default-alias`，`products:update`），运营页只读展示，不提供产品主数据编辑。
+- 无媒体权限占位；无 `product-aliases:manage` 时隐藏铅笔入口，但仍显示默认别名或“使用产品名”。
 
 ## 3. 验证结果
 
