@@ -7,6 +7,7 @@ import type {
   ProductsListData,
   ProductTaxonomyOptionsDto,
   ProductTaxonomyTreeDto,
+  UpdateProductDefaultAliasRequestDto,
   UpdateProductRequestDto,
   UpdateProductStatusRequestDto,
 } from '../generated/types.gen'
@@ -89,6 +90,19 @@ export function createProductsApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.patch<ProductListItemDto>(
       `products/${encodeURIComponent(productId)}/status`,
+      data,
+      {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      },
+    ),
+    updateDefaultAlias: (
+      productId: string,
+      data: UpdateProductDefaultAliasRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<ProductListItemDto>(
+      `products/${encodeURIComponent(productId)}/default-alias`,
       data,
       {
         errorPresentation: 'local',

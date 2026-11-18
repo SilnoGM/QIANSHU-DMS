@@ -25,7 +25,9 @@ test('详情 Drawer 使用真实详情、完整组件语义、恢复错误和权
   assert.match(source, /<template #footer>[\s\S]*?<FaButton[\s\S]*?v-if="product !== null && canEdit"/u)
   assert.doesNotMatch(source, /<template v-if="[^"]*canEdit[^"]*" #footer>/u)
   assert.match(source, /编辑产品/u)
-  assert.doesNotMatch(source, /productsApi/u)
+  assert.match(source, /productsApi\.updateDefaultAlias/u)
+  assert.match(source, /唛头默认别名/u)
+  assert.match(source, /清除默认别名/u)
 })
 
 test('详情 Drawer 使用单列区块顺序并交由通用 Drawer 负责纵向滚动', async () => {

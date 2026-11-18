@@ -2,6 +2,8 @@
 import type { ProductListItemViewModel } from './product-list.logic'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import productsApi from '@/api/modules/products'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
@@ -9,8 +11,10 @@ import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
 import {
+  adaptProductListItemDto,
   buildProductImageItems,
   buildProductMainImageItems,
+  getProductListApiFailure,
 } from './product-list.logic'
 
 defineOptions({ name: 'ProductDetailDrawer' })
@@ -34,10 +38,112 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'closed': []
+  'defaultAliasUpdated': [product: ProductListItemViewModel]
   'edit': [productId: string]
   'retry': []
   'update:modelValue': [value: boolean]
 }>()
+
+const DEFAULT_ALIAS_MAX_CODE_POINTS = 36
+
+const defaultAliasDraft = ref('')
+const defaultAliasSaving = ref(false)
+const defaultAliasError = ref('')
+let defaultAliasController: AbortController | null = null
+
+const normalizedDefaultAliasDraft = computed(() => (
+  defaultAliasDraft.value.trim().replace(/\s+/gu, ' ')
+))
+const defaultAliasUnchanged = computed(() => (
+  normalizedDefaultAliasDraft.value === (props.product?.defaultAlias ?? '')
+))
+const canSaveDefaultAlias = computed(() => (
+  props.canEdit
+  && props.product !== null
+  && !defaultAliasSaving.value
+  && normalizedDefaultAliasDraft.value !== ''
+  && !defaultAliasUnchanged.value
+))
+
+watch(
+  () => [props.product?.id, props.product?.defaultAlias] as const,
+  () => {
+    defaultAliasDraft.value = props.product?.defaultAlias ?? ''
+    defaultAliasError.value = ''
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  defaultAliasController?.abort()
+})
+
+function validateDefaultAlias(value: string): string | null {
+  if (/[\p{Cc}×]/u.test(value)) {
+    return '默认别名不能包含换行、控制字符或 ×'
+  }
+  const normalized = value.trim().replace(/\s+/gu, ' ')
+  if (!normalized) {
+    return '请输入默认别名，或使用“清除默认别名”回退产品名'
+  }
+  if (Array.from(normalized).length > DEFAULT_ALIAS_MAX_CODE_POINTS) {
+    return `默认别名最多 ${DEFAULT_ALIAS_MAX_CODE_POINTS} 个字符`
+  }
+  return null
+}
+
+async function submitDefaultAlias(defaultAlias: string | null): Promise<void> {
+  const product = props.product
+  if (!props.canEdit || product === null || defaultAliasSaving.value) {
+    return
+  }
+  if (defaultAlias !== null) {
+    const validationError = validateDefaultAlias(defaultAlias)
+    if (validationError !== null) {
+      defaultAliasError.value = validationError
+      return
+    }
+  }
+  defaultAliasController?.abort()
+  const controller = new AbortController()
+  defaultAliasController = controller
+  defaultAliasSaving.value = true
+  defaultAliasError.value = ''
+  try {
+    const response = await productsApi.updateDefaultAlias(product.id, {
+      defaultAlias,
+      expectedVersion: product.version,
+    }, controller.signal)
+    if (controller.signal.aborted) {
+      return
+    }
+    emit('defaultAliasUpdated', adaptProductListItemDto(response.data))
+  }
+  catch (error) {
+    if (!controller.signal.aborted) {
+      defaultAliasError.value = getProductListApiFailure(error).message
+    }
+  }
+  finally {
+    if (defaultAliasController === controller) {
+      defaultAliasController = null
+      defaultAliasSaving.value = false
+    }
+  }
+}
+
+function saveDefaultAlias(): void {
+  if (!canSaveDefaultAlias.value) {
+    return
+  }
+  void submitDefaultAlias(normalizedDefaultAliasDraft.value)
+}
+
+function clearDefaultAlias(): void {
+  if (props.canEdit && props.product?.defaultAlias) {
+    void submitDefaultAlias(null)
+  }
+}
 
 const title = computed(() => props.product === null
   ? '产品详情'
@@ -121,6 +227,52 @@ function supplierDisplay(product: ProductListItemViewModel): string {
           <FaTag variant="outline" class="qs-type-status-tag">
             {{ statusLabel(product.status) }}
           </FaTag>
+        </div>
+      </section>
+
+      <section
+        class="p-4 border border-border rounded-lg min-w-0"
+        aria-labelledby="product-default-alias-title"
+      >
+        <h3 id="product-default-alias-title" class="qs-type-section-title m-0 mb-3">
+          唛头默认别名
+        </h3>
+        <p class="qs-type-body-medium m-0 break-all">
+          {{ product.defaultAlias ?? '未设置（回退产品名）' }}
+        </p>
+        <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+          个人别名优先；STOCK 不读个人别名，直接使用默认别名。
+        </p>
+        <div v-if="canEdit" class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div class="flex-1 min-w-0">
+            <FaInput
+              v-model="defaultAliasDraft"
+              :maxlength="36"
+              placeholder="留空则回退产品名"
+              class="w-full"
+              @keydown.enter.prevent="saveDefaultAlias"
+            />
+            <p v-if="defaultAliasError" class="qs-type-meta text-destructive m-0 mt-1">
+              {{ defaultAliasError }}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <FaButton
+              :disabled="!canSaveDefaultAlias"
+              :loading="defaultAliasSaving"
+              @click="saveDefaultAlias"
+            >
+              保存默认别名
+            </FaButton>
+            <FaButton
+              v-if="product.defaultAlias"
+              variant="outline"
+              :disabled="defaultAliasSaving"
+              @click="clearDefaultAlias"
+            >
+              清除默认别名
+            </FaButton>
+          </div>
         </div>
       </section>
 
