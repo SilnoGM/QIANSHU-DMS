@@ -23,8 +23,9 @@ function source(
   aliases: ReadonlyMap<string, string> = new Map(),
   issuerPrefix: string | null = '李华',
   customerName: string | null = '赖文寿',
+  defaultAliases: ReadonlyMap<string, string> = new Map(),
 ): ShippingMarkLabelSource {
-  return { issuerPrefix, customerName, products, aliases }
+  return { issuerPrefix, customerName, products, aliases, defaultAliases }
 }
 
 describe('shipping mark label', () => {
@@ -41,6 +42,43 @@ describe('shipping mark label', () => {
     ]
     expect(buildShippingMarkSuffix('SALES_LINKED', source(products, new Map([['b', '靠椅']]))))
       .toBe('木桌+靠椅（李华-赖文寿）')
+  })
+
+  it('prefers the personal alias, then the product default alias, then the purchase name', () => {
+    const products = [
+      product(1, 'a', '木桌'),
+      product(2, 'b', '椅子'),
+      product(3, 'c', '柜子'),
+    ]
+    const aliases = new Map([['a', '个人木桌']])
+    const defaultAliases = new Map([['a', '默认木桌'], ['b', '默认椅子']])
+    expect(buildShippingMarkSuffix('SALES_LINKED', source(
+      products,
+      aliases,
+      '李华',
+      '赖文寿',
+      defaultAliases,
+    ))).toBe('个人木桌+默认椅子+柜子（李华-赖文寿）')
+  })
+
+  it('keeps custom line names and never applies default aliases to them', () => {
+    const products = [product(1, null, '定制架')]
+    expect(buildShippingMarkSuffix('SALES_LINKED', source(
+      products,
+      new Map(),
+      '李华',
+      '赖文寿',
+      new Map([['x', '不应命中']]),
+    ))).toBe('定制架（李华-赖文寿）')
+  })
+  it('falls back to the product name when alias maps contain blank values', () => {
+    expect(buildShippingMarkSuffix('SALES_LINKED', source(
+      [product(1, 'a', '木桌')],
+      new Map([['a', '  ']]),
+      '李华',
+      '赖文寿',
+      new Map([['a', '  ']]),
+    ))).toBe('木桌（李华-赖文寿）')
   })
 
   it('keeps the purchase line order, not product ID order', () => {
@@ -90,9 +128,17 @@ describe('shipping mark label', () => {
     expect(buildShippingMarkSuffix('SALES_LINKED', null)).toBe('')
   })
 
-  it('uses product names only for stock and ignores aliases', () => {
+  it('uses default aliases for stock and ignores personal aliases', () => {
     const products = [product(1, 'a', '破碎机', 2), product(2, 'b', '木桌', 1)]
-    const aliases = new Map([['a', '别名破碎机'], ['b', '别名木桌']])
+    const aliases = new Map([['a', '个人破碎机'], ['b', '个人木桌']])
+    const defaultAliases = new Map([['a', '默认破碎机']])
+    expect(buildShippingMarkSuffix('STOCK', source(
+      products,
+      aliases,
+      null,
+      null,
+      defaultAliases,
+    ))).toBe('默认破碎机×2+木桌（公司囤货采购）')
     expect(buildShippingMarkSuffix('STOCK', source(products, aliases)))
       .toBe('破碎机×2+木桌（公司囤货采购）')
     expect(buildShippingMarkSuffix('STOCK', null)).toBe('（公司囤货采购）')

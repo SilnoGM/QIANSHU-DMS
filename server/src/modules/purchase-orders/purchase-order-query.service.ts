@@ -978,8 +978,11 @@ export class PurchaseOrderQueryService {
       decimalToFixed2(row.purchaseTotalAmount),
     )
     const lineById = new Map(row.lines.map(line => [line.id, line]))
+    const catalogProductIds = [...new Set(row.lines.flatMap(
+      line => line.productId === null ? [] : [line.productId],
+    ))]
     const aliasProductIds = row.purchaseType === 'SALES_LINKED' && row.salesOrder !== null
-      ? [...new Set(row.lines.flatMap(line => line.productId === null ? [] : [line.productId]))]
+      ? catalogProductIds
       : []
     const aliasesByProduct = aliasProductIds.length === 0 || row.salesOrder === null
       ? new Map<string, string>()
@@ -988,6 +991,10 @@ export class PurchaseOrderQueryService {
           aliasProductIds,
           transaction ?? this.prisma,
         )
+    const defaultAliasesByProduct = await this.aliases.resolveDefaults(
+      catalogProductIds,
+      transaction ?? this.prisma,
+    )
     return {
       ...summary,
       paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
@@ -1015,6 +1022,7 @@ export class PurchaseOrderQueryService {
               customerName: row.salesOrder?.customerName ?? null,
               products,
               aliases: aliasesByProduct,
+              defaultAliases: defaultAliasesByProduct,
             }),
           }),
           shippedAt: part.shippedAt?.toISOString() ?? null,

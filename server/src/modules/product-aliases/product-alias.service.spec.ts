@@ -12,6 +12,7 @@ function fixture() {
     $queryRaw: jest.fn().mockResolvedValue([]),
     product: {
       findUnique: jest.fn().mockResolvedValue({ id: PRODUCT_ID, productNo: 'PROD/00001', name: '破碎机' }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     userProductAlias: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -26,6 +27,7 @@ function fixture() {
   }
   const prisma = {
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) => callback(transaction)),
+    product: transaction.product,
     userProductAlias: transaction.userProductAlias,
   }
   const audit = { record: jest.fn().mockResolvedValue(undefined) }
@@ -162,5 +164,23 @@ describe('ProductAliasService', () => {
       ] },
       select: { userId: true, productId: true, alias: true },
     })
+  })
+
+  it('resolves product default aliases in one batch and drops null values', async () => {
+    const { service, transaction } = fixture()
+    transaction.product.findMany.mockResolvedValue([
+      { id: PRODUCT_ID, defaultAlias: '默认破碎机' },
+      { id: OTHER_PRODUCT_ID, defaultAlias: null },
+    ])
+    const resolved = await service.resolveDefaults([PRODUCT_ID, OTHER_PRODUCT_ID, PRODUCT_ID])
+    expect([...resolved]).toEqual([[PRODUCT_ID, '默认破碎机']])
+    expect(transaction.product.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [PRODUCT_ID, OTHER_PRODUCT_ID] },
+        defaultAlias: { not: null },
+      },
+      select: { id: true, defaultAlias: true },
+    })
+    await expect(service.resolveDefaults([])).resolves.toEqual(new Map())
   })
 })

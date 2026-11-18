@@ -93,13 +93,13 @@ export class PurchasePayableQueryService {
       const rows = await tx.purchaseOrder.findMany({ where: { ...this.outstandingOrderWhere(scope, actorUserId), productMode: 'CATALOG', supplierValue }, include,
         orderBy: { orderNo: 'desc' } })
       const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])
-      const [supplierResolutions, recipientsByOrderId, aliasesByOrder] = await Promise.all([
+      const [supplierResolutions, recipientsByOrderId, aliasContext] = await Promise.all([
         this.dictionary.resolveStoredValuesInTransaction(tx, {
           dictionaryCode: 'service_provider.supplier',
           values: supplierValues,
         }),
         this.recipients.getForOrders(tx, rows),
-        this.loadAliasesByOrder(tx, rows),
+        this.loadAliasContext(tx, rows),
       ])
       const supplierByValue = new Map(supplierValues.map((value, index) => [
         value,
@@ -110,7 +110,8 @@ export class PurchasePayableQueryService {
           row,
           row.supplierValue === null ? undefined : supplierByValue.get(row.supplierValue),
           recipientsByOrderId.get(row.id) ?? null,
-          aliasesByOrder.get(row.id) ?? new Map(),
+          aliasContext.personalByOrder.get(row.id) ?? new Map(),
+          aliasContext.defaultAliases,
         )),
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
@@ -136,32 +137,42 @@ export class PurchasePayableQueryService {
           dictionaryCode: 'service_provider.supplier',
           value: row.supplierValue,
         })
-    const aliasesByOrder = await this.loadAliasesByOrder(tx, [row])
+    const aliasContext = await this.loadAliasContext(tx, [row])
     return this.map(
       row,
       supplier,
       await this.recipients.getForOrder(tx, row),
-      aliasesByOrder.get(row.id) ?? new Map(),
+      aliasContext.personalByOrder.get(row.id) ?? new Map(),
+      aliasContext.defaultAliases,
     )
   }
 
-  /** 应付批量页一次读取所有订单的出单人别名，避免按订单 N+1 查询。 */
-  private async loadAliasesByOrder(
+  /** 批量读取个人别名与产品默认别名，避免按订单/产品 N+1 查询。 */
+  private async loadAliasContext(
     tx: Prisma.TransactionClient,
     rows: readonly Order[],
-  ): Promise<ReadonlyMap<string, ReadonlyMap<string, string>>> {
+  ): Promise<{
+    readonly defaultAliases: ReadonlyMap<string, string>
+    readonly personalByOrder: ReadonlyMap<string, ReadonlyMap<string, string>>
+  }> {
+    const productIds = [...new Set(rows.flatMap(row => row.parts.flatMap(part => (
+      part.items.flatMap(item => item.line.productId === null ? [] : [item.line.productId])
+    ))))]
     const requests = rows.flatMap((row) => {
       if (row.purchaseType !== 'SALES_LINKED' || row.salesOrder === null) {
         return []
       }
       const issuerUserId = row.salesOrder.issuer.id
-      const productIds = new Set(row.parts.flatMap(part => part.items.flatMap((item) => {
+      const orderProductIds = new Set(row.parts.flatMap(part => part.items.flatMap((item) => {
         return item.line.productId === null ? [] : [item.line.productId]
       })))
-      return [...productIds].map(productId => ({ userId: issuerUserId, productId }))
+      return [...orderProductIds].map(productId => ({ userId: issuerUserId, productId }))
     })
-    const resolved = await this.aliases.resolveAliases(requests, tx)
-    const byOrder = new Map<string, Map<string, string>>()
+    const [resolved, defaultAliases] = await Promise.all([
+      this.aliases.resolveAliases(requests, tx),
+      this.aliases.resolveDefaults(productIds, tx),
+    ])
+    const personalByOrder = new Map<string, Map<string, string>>()
     for (const row of rows) {
       if (row.purchaseType !== 'SALES_LINKED' || row.salesOrder === null) {
         continue
@@ -180,9 +191,9 @@ export class PurchasePayableQueryService {
           }
         }
       }
-      byOrder.set(row.id, aliases)
+      personalByOrder.set(row.id, aliases)
     }
-    return byOrder
+    return { defaultAliases, personalByOrder }
   }
 
   private map(
@@ -190,6 +201,7 @@ export class PurchasePayableQueryService {
     supplier: StoredDictionaryValueResolution | undefined,
     paymentRecipientProfile: PaymentRecipientProfileDto | null,
     aliasesByProduct: ReadonlyMap<string, string>,
+    defaultAliases: ReadonlyMap<string, string>,
   ): PurchasePayableOrderDto {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
@@ -217,6 +229,7 @@ export class PurchasePayableQueryService {
         customerName: row.salesOrder?.customerName ?? null,
         products,
         aliases: aliasesByProduct,
+        defaultAliases,
       }))]
     }).slice(0, SHIPPING_MARK_LIMIT)
     return {
@@ -287,13 +300,13 @@ export class PurchasePayableQueryService {
         tx.purchaseOrder.count({ where }),
       ])
       const supplierValues = rows.flatMap(row => row.supplierValue === null ? [] : [row.supplierValue])
-      const [supplierResolutions, recipientsByOrderId, aliasesByOrder] = await Promise.all([
+      const [supplierResolutions, recipientsByOrderId, aliasContext] = await Promise.all([
         this.dictionary.resolveStoredValuesInTransaction(tx, {
           dictionaryCode: 'service_provider.supplier',
           values: supplierValues,
         }),
         this.recipients.getForOrders(tx, rows),
-        this.loadAliasesByOrder(tx, rows),
+        this.loadAliasContext(tx, rows),
       ])
       const supplierByValue = new Map(supplierValues.map((value, index) => [
         value,
@@ -304,7 +317,8 @@ export class PurchasePayableQueryService {
           row,
           row.supplierValue === null ? undefined : supplierByValue.get(row.supplierValue),
           recipientsByOrderId.get(row.id) ?? null,
-          aliasesByOrder.get(row.id) ?? new Map(),
+          aliasContext.personalByOrder.get(row.id) ?? new Map(),
+          aliasContext.defaultAliases,
         )),
         total,
         page,

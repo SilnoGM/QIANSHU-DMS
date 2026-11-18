@@ -27,6 +27,7 @@ export interface ShippingMarkLabelSource {
   readonly customerName: string | null
   readonly products: readonly ShippingMarkLabelProduct[]
   readonly aliases: ReadonlyMap<string, string>
+  readonly defaultAliases: ReadonlyMap<string, string>
 }
 
 interface AliasEntry {
@@ -35,11 +36,20 @@ interface AliasEntry {
   quantity: number
 }
 
-function productNameOf(product: ShippingMarkLabelProduct, aliases: ReadonlyMap<string, string>): string {
+function productNameOf(
+  product: ShippingMarkLabelProduct,
+  aliases: ReadonlyMap<string, string>,
+  defaultAliases: ReadonlyMap<string, string>,
+): string {
   if (product.productId === null) {
     return normalizeShippingMarkLabel(product.productName)
   }
-  return normalizeShippingMarkLabel(aliases.get(product.productId) ?? product.productName)
+  const aliasName = normalizeShippingMarkLabel(
+    aliases.get(product.productId)
+      ?? defaultAliases.get(product.productId)
+      ?? '',
+  )
+  return aliasName || normalizeShippingMarkLabel(product.productName)
 }
 
 /**
@@ -49,6 +59,7 @@ function productNameOf(product: ShippingMarkLabelProduct, aliases: ReadonlyMap<s
 function buildAliasEntries(
   products: readonly ShippingMarkLabelProduct[],
   aliases: ReadonlyMap<string, string>,
+  defaultAliases: ReadonlyMap<string, string>,
 ): readonly AliasEntry[] {
   const catalog = new Map<string, AliasEntry>()
   const custom: AliasEntry[] = []
@@ -57,7 +68,7 @@ function buildAliasEntries(
       || !Number.isSafeInteger(product.quantity) || product.quantity < 1) {
       continue
     }
-    const name = productNameOf(product, aliases)
+    const name = productNameOf(product, aliases, defaultAliases)
     if (!name) {
       continue
     }
@@ -121,8 +132,8 @@ function buildParenthetical(source: ShippingMarkLabelSource): string {
 
 /**
  * 生成货件级后缀：
- * - SALES_LINKED：`展示名+展示名（出单前缀-客户名）`
- * - STOCK：`产品名+产品名（公司囤货采购）`，即使调用方传入别名也忽略
+ * - SALES_LINKED：`个人别名或默认别名或产品名+…（出单前缀-客户名）`
+ * - STOCK：`默认别名或产品名+…（公司囤货采购）`，不读个人别名
  */
 export function buildShippingMarkSuffix(
   purchaseType: 'SALES_LINKED' | 'STOCK',
@@ -131,13 +142,15 @@ export function buildShippingMarkSuffix(
   if (purchaseType === 'STOCK') {
     const items = source === null
       ? []
-      : buildAliasEntries(source.products, new Map())
+      : buildAliasEntries(source.products, new Map(), source.defaultAliases)
     return `${joinAliasItems(items.map(aliasItem))}（${STOCK_SHIPPING_MARK_SUFFIX}）`
   }
   if (source === null) {
     return ''
   }
-  const block = joinAliasItems(buildAliasEntries(source.products, source.aliases).map(aliasItem))
+  const block = joinAliasItems(
+    buildAliasEntries(source.products, source.aliases, source.defaultAliases).map(aliasItem),
+  )
   return `${block}${buildParenthetical(source)}`
 }
 

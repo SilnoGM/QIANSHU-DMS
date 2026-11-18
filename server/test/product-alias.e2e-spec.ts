@@ -102,6 +102,15 @@ describe('product aliases against PostgreSQL', () => {
     expect((await service.resolveForIssuer(userBId, [productId])).has(productId)).toBe(false)
   })
 
+  it('resolves product default aliases independently from personal aliases', async () => {
+    await prisma.product.update({
+      where: { id: productId },
+      data: { defaultAlias: '默认破碎机' },
+    })
+    expect((await service.resolveDefaults([productId])).get(productId)).toBe('默认破碎机')
+    expect((await service.resolveForIssuer(userAId, [productId])).has(productId)).toBe(false)
+  })
+
   it('updates once, then clears and audits the clear', async () => {
     await service.upsert(
       { actorUserId: userAId, requestId: 'alias-e2e-update' },

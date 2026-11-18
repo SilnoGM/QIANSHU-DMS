@@ -30,7 +30,7 @@ export interface ProductAliasResolveRequest {
   readonly productId: string
 }
 
-type AliasReadClient = Pick<Prisma.TransactionClient, 'userProductAlias'>
+type AliasReadClient = Pick<Prisma.TransactionClient, 'product' | 'userProductAlias'>
 
 const emptyAliasMap: ReadonlyMap<string, string> = new Map()
 
@@ -41,6 +41,7 @@ const emptyAliasMap: ReadonlyMap<string, string> = new Map()
 export const noopProductAliasService = {
   resolveForIssuer: (): Promise<ReadonlyMap<string, string>> => Promise.resolve(emptyAliasMap),
   resolveAliases: (): Promise<ReadonlyMap<string, string>> => Promise.resolve(emptyAliasMap),
+  resolveDefaults: (): Promise<ReadonlyMap<string, string>> => Promise.resolve(emptyAliasMap),
 } as unknown as ProductAliasService
 
 function validationFailure(message: string): never {
@@ -216,6 +217,31 @@ export class ProductAliasService {
     return new Map(uniqueProductIds.flatMap((productId) => {
       const alias = resolved.get(aliasLookupKey(userId, productId))
       return alias === undefined ? [] : [[productId, alias] as const]
+    }))
+  }
+
+  /**
+   * 默认别名是产品级、全局生效的：SALES_LINKED 在个人别名缺失时使用，
+   * STOCK 直接使用（不读个人别名）。空值不进入映射，调用方回退产品名。
+   */
+  async resolveDefaults(
+    productIds: readonly string[],
+    client: AliasReadClient = this.prisma,
+  ): Promise<ReadonlyMap<string, string>> {
+    const uniqueProductIds = [...new Set(productIds)]
+    if (uniqueProductIds.length === 0) {
+      return new Map()
+    }
+    const rows = await client.product.findMany({
+      where: {
+        id: { in: uniqueProductIds },
+        defaultAlias: { not: null },
+      },
+      select: { id: true, defaultAlias: true },
+    })
+    return new Map(rows.flatMap((row) => {
+      const alias = row.defaultAlias?.trim()
+      return alias ? [[row.id, alias] as const] : []
     }))
   }
 

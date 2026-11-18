@@ -1,4 +1,5 @@
 import type { PaymentRecipientService } from '../../payment-recipients/payment-recipient.service'
+import type { ProductAliasService } from '../../product-aliases/product-alias.service'
 import { Prisma } from '../../../generated/prisma/client'
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
@@ -164,6 +165,48 @@ describe('PurchasePayableQueryService', () => {
       shippingMarkCount: 1,
       shippingMarks: ['【QSM-20260916-0001】破碎机（公司囤货采购）'],
     })
+  })
+  it('prefers personal aliases, then default aliases, and uses defaults for stock', async () => {
+    const h = setup()
+    const aliases = {
+      resolveAliases: jest.fn().mockResolvedValue(new Map([
+        ['issuer:product-1', '个人破碎机'],
+      ])),
+      resolveDefaults: jest.fn().mockResolvedValue(new Map([
+        ['product-1', '默认破碎机'],
+        ['product-2', '默认木桌'],
+      ])),
+    }
+    const prisma = h.prisma
+    const dictionary = h.dictionary
+    const recipients = h.recipients
+    const service = new PurchasePayableQueryService(
+      prisma as unknown as PrismaService,
+      dictionary as unknown as DictionaryLookupService,
+      recipients as unknown as PaymentRecipientService,
+      undefined,
+      aliases as unknown as ProductAliasService,
+    )
+
+    expect((await service.getOrder('order')).shippingMarks).toEqual([
+      '【QSM-20260916-0001/货件-01】个人破碎机（李华-赖文寿）',
+      '【QSM-20260916-0001/货件-02】默认木桌×2（李华-赖文寿）',
+    ])
+
+    h.tx.purchaseOrder.findUnique.mockResolvedValue({
+      ...h.order,
+      purchaseType: 'STOCK',
+      salesOrder: null,
+      parts: [{
+        partNumber: 1,
+        shippingMarkText: 'QSM-20260916-0001',
+        items: [{ quantity: 1, line: { productId: 'product-1', productNameSnapshot: '破碎机', lineNumber: 1 } }],
+      }],
+      _count: { parts: 1 },
+    })
+    expect((await service.getOrder('order')).shippingMarks).toEqual([
+      '【QSM-20260916-0001】默认破碎机（公司囤货采购）',
+    ])
   })
   it('caps the visible marks at six while still reporting every active shipment', async () => {
     const h = setup()
