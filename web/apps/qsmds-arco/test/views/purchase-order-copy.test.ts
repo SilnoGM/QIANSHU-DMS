@@ -20,8 +20,22 @@ function fixture(): PurchaseOrderDetailDto {
       { id: 'a', lineNumber: 1, productName: '木桌', actualPurchaseUnitPriceAmount: '100.0000', referencePurchaseUnitPriceAmount: '999', quantity: 1, lineTotalAmount: '100.0000' },
     ],
     parts: [
-      { partNumber: 2, status: 'PENDING_REVIEW', shipmentNo: 'PKG/20260916-00002', shippingMarkText: 'TEST/00016/货件-02', items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }] },
-      { partNumber: 1, status: 'PENDING_REVIEW', shipmentNo: 'PKG/20260916-00001', shippingMarkText: 'TEST/00016/货件-01', items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }, { purchaseOrderLineId: 'a', lineNumber: 1, quantity: 1 }] },
+      {
+        partNumber: 2,
+        status: 'PENDING_REVIEW',
+        shipmentNo: 'PKG/20260916-00002',
+        shippingMarkText: 'TEST/00016/货件-02',
+        shippingMarkSuffix: '椅子（李华-赖文寿）',
+        items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }],
+      },
+      {
+        partNumber: 1,
+        status: 'PENDING_REVIEW',
+        shipmentNo: 'PKG/20260916-00001',
+        shippingMarkText: 'TEST/00016/货件-01',
+        shippingMarkSuffix: '木桌+椅子（李华-赖文寿）',
+        items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }, { purchaseOrderLineId: 'a', lineNumber: 1, quantity: 1 }],
+      },
     ],
   } as PurchaseOrderDetailDto
 }
@@ -46,10 +60,10 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
 
 出货请贴货物唛头：
 货件-01：木桌+椅子
-此货件唛头：【TEST/00016/货件-01】李华-赖文寿
+此货件唛头：【TEST/00016/货件-01】木桌+椅子（李华-赖文寿）
 
 货件-02：椅子
-此货件唛头：【TEST/00016/货件-02】李华-赖文寿`)
+此货件唛头：【TEST/00016/货件-02】椅子（李华-赖文寿）`)
   assert.equal(JSON.stringify(detail), before)
 })
 
@@ -76,15 +90,19 @@ test('货件序号不依赖 PKG 编号，未派发唛头明确标注，已取消
   assert.ok(buildPurchaseOrderCopyText(detail, t).endsWith('出货请贴货物唛头：\n暂无预定义货件'))
 })
 
-test('出单人前缀为空时只拼客户名，STOCK 采购单只输出方括号唛头', () => {
+test('出单人前缀为空时使用服务端已生成的后缀，STOCK 使用公司囤货采购括号', () => {
   const salesLinked = fixture()
   salesLinked.sourceSalesOrder!.issuerPrefix = null
-  assert.ok(buildPurchaseOrderCopyText(salesLinked, t).includes('此货件唛头：【TEST/00016/货件-01】赖文寿'))
+  salesLinked.parts[0]!.shippingMarkSuffix = '椅子（赖文寿）'
+  salesLinked.parts[1]!.shippingMarkSuffix = '木桌+椅子（赖文寿）'
+  assert.ok(buildPurchaseOrderCopyText(salesLinked, t).includes('此货件唛头：【TEST/00016/货件-01】木桌+椅子（赖文寿）'))
 
   const stock = fixture()
   stock.sourceSalesOrder = null
   stock.customerName = null
-  assert.ok(buildPurchaseOrderCopyText(stock, t).includes('此货件唛头：【TEST/00016/货件-01】'))
+  stock.parts[0]!.shippingMarkSuffix = '（公司囤货采购）'
+  stock.parts[1]!.shippingMarkSuffix = '（公司囤货采购）'
+  assert.ok(buildPurchaseOrderCopyText(stock, t).includes('此货件唛头：【TEST/00016/货件-01】（公司囤货采购）'))
 })
 
 test('复制字段内换行归一，缺失产品和金额保留明确占位', () => {

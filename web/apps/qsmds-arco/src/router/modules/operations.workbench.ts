@@ -11,7 +11,14 @@ function Layout() {
  */
 const routes: RouteRecordRaw[] = [
   {
-    // 看机预约是单页，用 singleMenu 平铺成与分组并列的一级菜单，并放在菜单最前。
+    // 产品库是图片优先的运营目录，放在看机预约之前；节点编辑仍留在管理员产品管理。
+    path: '/qs-operations/products',
+    name: 'qsOperationsProducts',
+    component: () => import('@/views/operations/product-library/index.vue'),
+    meta: { title: '产品库', icon: 'qs-products', singleMenu: true, auth: 'products:read' },
+  },
+  {
+    // 看机预约是单页，用 singleMenu 平铺成与分组并列的一级菜单。
     // 列表归属由服务端按 data-scope:all 判定：运营只看本人，采运看全部。
     path: '/qs-operations/machine-viewings',
     name: 'qsOperationsMachineViewings',

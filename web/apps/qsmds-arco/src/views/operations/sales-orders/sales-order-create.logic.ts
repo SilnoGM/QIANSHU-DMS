@@ -721,7 +721,7 @@ export function buildCreateSalesOrderRequest(
     model.customerName,
     'customer.name',
     '客户姓名',
-    128,
+    24,
     errors,
   )
   const customerPhone = requireText(
