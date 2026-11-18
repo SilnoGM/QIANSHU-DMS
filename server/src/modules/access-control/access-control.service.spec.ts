@@ -72,6 +72,7 @@ describe('permission constants', () => {
       'products:read',
       'products:create',
       'products:update',
+      'product-aliases:manage',
       'product-categories:read',
       'product-categories:create',
       'product-categories:update',
@@ -161,7 +162,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 129)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 130)
   })
 })
 

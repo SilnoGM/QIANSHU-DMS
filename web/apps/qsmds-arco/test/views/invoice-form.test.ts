@@ -47,6 +47,7 @@ test('提交载荷带上票面总计，越界时定位到 totalAmount', () => {
     recipientPhone: '0939298738',
     recipientAddress: '台南市新化區',
     lines: [{ productName: '历史开票导入', quantity: '1', unitPrice: '43810' }],
+    buyerVerified: true,
   }
   const ok = buildInvoiceSubmitPayload({ ...base, totalAmount: '46000' })
   assert.ok('payload' in ok)
@@ -57,6 +58,16 @@ test('提交载荷带上票面总计，越界时定位到 totalAmount', () => {
   assert.ok('payload' in blank)
   assert.equal('totalAmount' in blank.payload, false)
 
+  // 未完成核验时先卡在开关上，报错顺序与表单自上而下一致。
+  assert.deepEqual(buildInvoiceSubmitPayload({ ...base, buyerVerified: false, totalAmount: '46000' }), { invalidField: 'buyerVerified' })
+  // 个人抬头 00000000 没有企业登记记录，不要求核验即可提交。
+  const individual = buildInvoiceSubmitPayload({
+    ...base,
+    buyerTaxId: '00000000',
+    buyerVerified: false,
+    totalAmount: '46000',
+  })
+  assert.ok('payload' in individual)
   assert.deepEqual(buildInvoiceSubmitPayload({ ...base, totalAmount: '46002' }), { invalidField: 'totalAmount' })
   assert.deepEqual(buildInvoiceSubmitPayload({ ...base, totalAmount: '0' }), { invalidField: 'totalAmount' })
   // 总计小于销售额必然越界。

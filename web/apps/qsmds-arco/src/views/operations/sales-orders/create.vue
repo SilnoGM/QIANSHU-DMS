@@ -1320,7 +1320,7 @@ onBeforeUnmount(() => {
                 <FaFormItem name="customerName" label="客户姓名" required>
                   <FaInput
                     :model-value="formModel.customerName"
-                    maxlength="128"
+                    maxlength="24"
                     autocomplete="name"
                     class="w-full"
                     @update:model-value="handleCustomerNameUpdate"

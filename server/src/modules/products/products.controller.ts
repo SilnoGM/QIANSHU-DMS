@@ -41,6 +41,7 @@ import {
 import {
   MoveProductRequestDto,
   ProductIdParamDto,
+  UpdateProductDefaultAliasRequestDto,
   UpdateProductRequestDto,
   UpdateProductStatusRequestDto,
 } from './dto/product-update.dto'
@@ -381,6 +382,40 @@ export class ProductsController {
     @Req() request: object,
   ): Promise<ProductListItem> {
     return this.updates.update({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, dto)
+  }
+
+  @Patch(':productId/default-alias')
+  @RequirePermissions('products:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_update_default_alias',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  updateDefaultAlias(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: UpdateProductDefaultAliasRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.updates.updateDefaultAlias({
       actorUserId: getRequestAuthContext(request).userId,
       requestId: getRequestId(request),
     }, params.productId, dto)

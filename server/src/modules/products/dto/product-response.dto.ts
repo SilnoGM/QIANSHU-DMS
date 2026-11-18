@@ -127,6 +127,9 @@ export class ProductListItemDto {
   @ApiProperty({ type: 'string' })
   readonly productNo!: string
 
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 36 })
+  readonly defaultAlias!: string | null
+
   @ApiProperty({ enum: ProductStatus })
   readonly status!: ProductStatus
 

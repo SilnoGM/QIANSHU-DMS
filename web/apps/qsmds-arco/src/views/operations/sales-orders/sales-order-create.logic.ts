@@ -623,6 +623,7 @@ function validateLine(
       dto = {
         lineType: 'CATALOG',
         productId: line.productId,
+        description: optionalText(line.description),
         actualUnitPriceAmount: formatAmountUnitsForPrecision(
           amountUnits(price),
           precision,
@@ -721,7 +722,7 @@ export function buildCreateSalesOrderRequest(
     model.customerName,
     'customer.name',
     '客户姓名',
-    128,
+    24,
     errors,
   )
   const customerPhone = requireText(

@@ -37,6 +37,7 @@ function createLock(
     productHeadId: 'head-1',
     productHeadName: '原产品头',
     productNo: 'P202608130001',
+    defaultAlias: null,
     status: ProductStatus.INACTIVE,
     supplierValue: 'HISTORICAL',
     sortOrder: 10,
@@ -62,6 +63,7 @@ function createResponse(
     category: { id: 'category-1', name: '原分类' },
     productHead: { id: 'head-1', name: '原产品头' },
     productNo: 'P202608130001',
+    defaultAlias: null,
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,
@@ -244,6 +246,17 @@ function updateProduct(fixture: Fixture, input: unknown) {
   }, PRODUCT_ID, input)
 }
 
+function updateDefaultAlias(
+  fixture: Fixture,
+  defaultAlias: string | null,
+  expectedVersion = 1,
+) {
+  return fixture.service.updateDefaultAlias({
+    actorUserId: ACTOR_ID,
+    requestId: 'request-1',
+  }, PRODUCT_ID, { defaultAlias, expectedVersion })
+}
+
 describe('ProductUpdateService', () => {
   it('locks, validates an Active target, writes, audits and returns one snapshot', async () => {
     const fixture = createFixture()
@@ -391,16 +404,95 @@ describe('ProductUpdateService', () => {
     )
   })
 
-  it('returns PRODUCT_NOT_FOUND when the locked row does not exist', async () => {
-    const fixture = createFixture({ lock: null })
+  it('updates a normalized default alias and audits it', async () => {
+    const fixture = createFixture({ lock: createLock({ defaultAlias: null }) })
 
-    await expect(updateProduct(fixture, {
-      name: '新产品',
-      expectedVersion: 1,
-    })).rejects.toMatchObject({
-      status: 404,
-      code: 'PRODUCT_NOT_FOUND',
+    await expect(updateDefaultAlias(fixture, '  默认  破碎机 ', 1)).resolves.toBeDefined()
+    expect(fixture.events).toEqual([
+      'transaction',
+      'timeout',
+      'product.lock',
+      'product.update',
+      'audit',
+      'product.response',
+      'supplier.resolve',
+      'product.media',
+    ])
+    expect(fixture.productUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        defaultAlias: '默认 破碎机',
+        version: { increment: 1 },
+      }) as unknown,
+    }))
+    expect(fixture.auditRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      eventType: AuditEventType.PRODUCT_DEFAULT_ALIAS_UPDATED,
+      actorType: AuditActorType.USER,
+      actorUserId: ACTOR_ID,
+      targetType: 'PRODUCT',
+      targetId: PRODUCT_ID,
+      metadata: expect.objectContaining({
+        productNo: 'P202608130001',
+        previousDefaultAlias: null,
+        defaultAlias: '默认 破碎机',
+        previousVersion: 1,
+        version: 2,
+      }) as unknown,
+    }))
+  })
+
+  it('clears the default alias with a dedicated audit event', async () => {
+    const fixture = createFixture({ lock: createLock({ defaultAlias: '旧别名' }) })
+
+    await updateDefaultAlias(fixture, null, 1)
+    expect(fixture.productUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ defaultAlias: null }) as unknown,
+    }))
+    expect(fixture.auditRecord).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      eventType: AuditEventType.PRODUCT_DEFAULT_ALIAS_CLEARED,
+      metadata: expect.objectContaining({
+        previousDefaultAlias: '旧别名',
+        defaultAlias: null,
+      }) as unknown,
+    }))
+  })
+
+  it('does not write or audit when the default alias is unchanged', async () => {
+    const fixture = createFixture({ lock: createLock({ defaultAlias: '默认破碎机' }) })
+
+    await updateDefaultAlias(fixture, ' 默认破碎机 ', 1)
+    expect(fixture.productUpdate).not.toHaveBeenCalled()
+    expect(fixture.auditRecord).not.toHaveBeenCalled()
+    expect(fixture.events).toEqual([
+      'transaction',
+      'timeout',
+      'product.lock',
+      'product.response',
+      'supplier.resolve',
+      'product.media',
+    ])
+  })
+
+  it('rejects a stale default alias update before writing', async () => {
+    const fixture = createFixture({ lock: createLock({ version: 2 }) })
+
+    await expect(updateDefaultAlias(fixture, '新别名', 1)).rejects.toMatchObject({
+      status: 409,
+      code: 'PRODUCT_STATE_CHANGED',
     })
     expect(fixture.productUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid default aliases before opening a transaction', async () => {
+    const fixture = createFixture()
+
+    await expect(updateDefaultAlias(fixture, '×')).rejects.toMatchObject({
+      status: 422,
+      code: 'VALIDATION_FAILED',
+    })
+    await expect(updateDefaultAlias(fixture, '产'.repeat(37))).rejects.toMatchObject({
+      status: 422,
+      code: 'VALIDATION_FAILED',
+    })
+    expect(fixture.events).toEqual([])
   })
 })

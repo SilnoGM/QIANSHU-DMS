@@ -58,7 +58,7 @@ const MAX_HEIGHT = 12000
 const MAX_ORDERS = 100
 /** 对账单每单最多展示六条唛头；后端已限量，这里再防一次脏数据把画布撑爆。 */
 const MAX_SHIPPING_MARKS = 6
-const MAX_SHIPPING_MARK_LENGTH = 300
+const MAX_SHIPPING_MARK_LENGTH = 500
 // 白底业务文档固定使用亮色文档配色，不随界面主题和明暗模式变化，与采购单图片渲染器保持同一组色值。
 const DOCUMENT_COLORS = { primary: '#008236', destructive: '#e7000b' }
 

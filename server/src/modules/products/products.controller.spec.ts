@@ -61,6 +61,10 @@ function createController(): {
     Promise<{ id: string; version: number }>,
     [ProductUpdateContext, string, unknown]
   >
+  readonly updateDefaultAlias: jest.Mock<
+    Promise<{ id: string; version: number }>,
+    [ProductUpdateContext, string, unknown]
+  >
 } {
   const list = jest.fn().mockResolvedValue({
     items: [],
@@ -81,12 +85,19 @@ function createController(): {
     id: '44444444-4444-4444-8444-444444444444',
     version: 2,
   })
+  const updateDefaultAlias = jest.fn<
+    Promise<{ id: string; version: number }>,
+    [ProductUpdateContext, string, unknown]
+  >().mockResolvedValue({
+    id: '44444444-4444-4444-8444-444444444444',
+    version: 2,
+  })
   return {
     controller: new ProductsController(
       { list, getById } as unknown as ProductQueryService,
       { options: jest.fn() } as unknown as import('./product-taxonomy.service').ProductTaxonomyService,
       { create } as unknown as ProductCommandService,
-      { update } as unknown as ProductUpdateService,
+      { update, updateDefaultAlias } as unknown as ProductUpdateService,
       {
         upload: jest.fn(),
         updateLayout: jest.fn(),
@@ -98,6 +109,7 @@ function createController(): {
     getById,
     create,
     update,
+    updateDefaultAlias,
   }
 }
 
@@ -114,7 +126,7 @@ function createController(): {
     useValue: { create: jest.fn() },
   }, {
     provide: ProductUpdateService,
-    useValue: { update: jest.fn() },
+    useValue: { update: jest.fn(), updateDefaultAlias: jest.fn() },
   }, {
     provide: ProductMediaHttpService,
     useValue: { upload: jest.fn(), updateLayout: jest.fn(), detach: jest.fn() },
@@ -153,6 +165,8 @@ describe('ProductsController', () => {
     await fixture.controller.getById({ productId })
     const updateDto = { name: '新产品', expectedVersion: 1 }
     await fixture.controller.update({ productId }, updateDto, request)
+    const defaultAliasDto = { defaultAlias: '默认破碎机', expectedVersion: 1 }
+    await fixture.controller.updateDefaultAlias({ productId }, defaultAliasDto, request)
 
     expect(fixture.list).toHaveBeenCalledWith(query)
     const createContext = fixture.create.mock.calls[0]?.[0]
@@ -170,6 +184,14 @@ describe('ProductsController', () => {
       updateContext,
       productId,
       updateDto,
+    )
+    const aliasUpdateContext = fixture.updateDefaultAlias.mock.calls[0]?.[0]
+    expect(aliasUpdateContext).toMatchObject({ actorUserId: ACTOR_ID })
+    expect(typeof aliasUpdateContext?.requestId).toBe('string')
+    expect(fixture.updateDefaultAlias).toHaveBeenCalledWith(
+      aliasUpdateContext,
+      productId,
+      defaultAliasDto,
     )
     const reflector = new Reflector()
     expect(reflector.get(
@@ -193,6 +215,10 @@ describe('ProductsController', () => {
       ProductsController.prototype.updateStatus,
     )).toEqual(['products:update'])
     expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      ProductsController.prototype.updateDefaultAlias,
+    )).toEqual(['products:update'])
+    expect(reflector.get(
       REQUIRE_AUTHENTICATED_SESSION_METADATA,
       ProductsController,
     )).toBeUndefined()
@@ -213,6 +239,7 @@ describe('ProductsController', () => {
         'taxonomyOptions',
         'taxonomyTree',
         'update',
+        'updateDefaultAlias',
         'updateMediaLayout',
         'updateStatus',
         'uploadMedia',
@@ -250,6 +277,7 @@ describe('ProductsController OpenAPI contract', () => {
       '/api/products/taxonomy-options',
       '/api/products/taxonomy-tree',
       '/api/products/{productId}',
+      '/api/products/{productId}/default-alias',
       '/api/products/{productId}/move',
       '/api/products/{productId}/status',
       '/api/products/{productId}/media',

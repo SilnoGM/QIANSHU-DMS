@@ -120,10 +120,14 @@ test('空白唛头直接忽略，但类型、长度和件数异常必须显式�
   source.shippingMarks = ['  ', '【QSM-0001】公司囤货采购']
   source.shippingMarkCount = 1
   assert.deepEqual(buildPurchasePaymentStatement([source], '供应商', '2026-09-17').orders[0].shippingMarks, ['【QSM-0001】公司囤货采购'])
+  const boundary = order()
+  boundary.shippingMarks = ['x'.repeat(500)]
+  boundary.shippingMarkCount = 1
+  assert.equal(buildPurchasePaymentStatement([boundary], '供应商', '2026-09-17').orders[0].shippingMarks[0]?.length, 500)
   for (const mutate of [
     (input: PurchasePayableOrderDto) => { input.shippingMarks = 'x' as unknown as string[] },
     (input: PurchasePayableOrderDto) => { input.shippingMarks = [1 as unknown as string] },
-    (input: PurchasePayableOrderDto) => { input.shippingMarks = ['x'.repeat(301)] },
+    (input: PurchasePayableOrderDto) => { input.shippingMarks = ['x'.repeat(501)] },
     (input: PurchasePayableOrderDto) => { input.shippingMarkCount = -1 },
     (input: PurchasePayableOrderDto) => { input.shippingMarkCount = 1.5 },
     (input: PurchasePayableOrderDto) => {

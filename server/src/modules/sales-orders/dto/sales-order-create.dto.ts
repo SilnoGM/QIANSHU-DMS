@@ -26,9 +26,9 @@ const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 export class SalesOrderCustomerInputDto {
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128 })
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 24 })
   @IsString()
-  @IsUnicodeCodePointLength(1, 128)
+  @IsUnicodeCodePointLength(1, 24)
   name!: string
 
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
@@ -82,8 +82,13 @@ export class SalesOrderLineInputDto {
   @IsUnicodeCodePointLength(1, 128)
   name?: string
 
-  @ApiProperty({ type: 'string', maxLength: 1000, nullable: true, required: false })
-  @ValidateIf((item: SalesOrderLineInputDto) => item.lineType === 'CUSTOM')
+  @ApiProperty({
+    type: 'string',
+    maxLength: 1000,
+    nullable: true,
+    required: false,
+    description: '行备注，选填；数据库产品行与临时产品行都可提交',
+  })
   @IsOptional()
   @IsString()
   @IsUnicodeCodePointLength(1, 1000)

@@ -17,6 +17,7 @@ function createRow(
     category: { id: 'category-1', name: '护肤品' },
     productHead: { id: 'head-1', name: '精华' },
     productNo: 'P202608120001',
+    defaultAlias: null,
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,
@@ -78,6 +79,7 @@ describe('mapProductListItem', () => {
       productHeadId: 'head-1',
       productHeadName: '精华',
       productNo: 'P202608120001',
+      defaultAlias: null,
       status: 'INACTIVE',
       supplier: {
         value: 'SUPPLIER_A',

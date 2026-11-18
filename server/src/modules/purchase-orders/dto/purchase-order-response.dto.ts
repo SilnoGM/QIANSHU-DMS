@@ -228,6 +228,7 @@ export class PurchaseOrderPartDto {
   @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: 'SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空' }) readonly shipmentNo!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
   @ApiProperty({ type: 'string', nullable: true, maxLength: 72, description: '审核前为空；单货件使用基础唛头，多货件追加货件序号' }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: 'string', maxLength: 500, description: '按货件内产品别名或产品名、数量、出单前缀和客户名生成的后缀', required: false }) readonly shippingMarkSuffix?: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shippedAt!: string | null
   @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly shippedById!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null

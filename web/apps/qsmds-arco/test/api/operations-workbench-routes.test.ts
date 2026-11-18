@@ -205,3 +205,15 @@ test('待办采购页面复用共享列表并固定 pending 模式', () => {
   assert.match(source, /import PurchaseOrderListPage from '.\/index\.vue'/u)
   assert.match(source, /<PurchaseOrderListPage view-mode="pending"/u)
 })
+
+test('产品库是运营工作台首个单页菜单，位于看机预约之前', () => {
+  const productRoute = operationsWorkbenchRoutes[0]
+  assert.equal(productRoute?.path, '/qs-operations/products')
+  assert.equal(productRoute?.name, 'qsOperationsProducts')
+  assert.equal(productRoute?.meta?.title, '产品库')
+  assert.equal(productRoute?.meta?.icon, 'qs-products')
+  assert.equal(productRoute?.meta?.singleMenu, true)
+  assert.equal(productRoute?.meta?.auth, 'products:read')
+  assert.match(String(productRoute?.component), /operations\/product-library\/index\.vue/u)
+  assert.equal(operationsWorkbenchRoutes[1]?.name, 'qsOperationsMachineViewings')
+})

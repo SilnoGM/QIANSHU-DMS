@@ -398,6 +398,7 @@ test('产品数量只接受正整数，目录产品和订单临时产品映射�
       {
         lineType: 'CATALOG',
         productId: IDS.product,
+        description: null,
         actualUnitPriceAmount: '50.00',
         quantity: 2,
       },
@@ -418,6 +419,24 @@ test('产品数量只接受正整数，目录产品和订单临时产品映射�
     if (!invalid.valid) {
       assert.equal(invalid.fieldErrors['lines.0.quantity'], '产品数量必须是正整数')
     }
+  }
+})
+
+test('数据库产品行备注进入创建 DTO，空白输入归一为 null', () => {
+  const model = validModel()
+  model.lines[0]!.description = ' 货件需加固 '
+
+  const withRemark = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(withRemark.valid, true)
+  if (withRemark.valid) {
+    assert.equal(withRemark.request.lines[0]?.description, '货件需加固')
+  }
+
+  model.lines[0]!.description = '   '
+  const blank = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(blank.valid, true)
+  if (blank.valid) {
+    assert.equal(blank.request.lines[0]?.description, null)
   }
 })
 

@@ -45,8 +45,32 @@ export class UpdateProductStatusRequestDto {
   expectedVersion!: number
 }
 
-export class MoveProductRequestDto {
-  @ApiProperty({ type: 'string', enum: ['up', 'down'] })
+/** 产品级默认别名：管理员维护，null 表示清除并回退产品名。 */
+export class UpdateProductDefaultAliasRequestDto {
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    minLength: 1,
+    maxLength: 36,
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().normalize('NFC') : value)
+  @ValidateIf((_object: UpdateProductDefaultAliasRequestDto, value: unknown) =>
+    value !== null)
+  @IsString({ message: '必须是字符串或 null' })
+  @IsUnicodeCodePointLength(1, 36, { message: '默认别名长度必须为 1 到 36 个字符' })
+  @Matches(/\S/u, { message: '默认别名不能为空白文本' })
+  @Matches(/^[^\p{Cc}×]+$/u, { message: '默认别名不能包含控制字符或 ×' })
+  defaultAlias!: string | null
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_INT32 })
+  @IsInt({ message: '必须是整数' })
+  @Min(1, { message: '不能小于 1' })
+  @Max(MAX_INT32, { message: '不能超过 2147483647' })
+  expectedVersion!: number
+}
+
+export class MoveProductRequestDto {  @ApiProperty({ type: 'string', enum: ['up', 'down'] })
   @IsIn(['up', 'down'], { message: 'direction 必须是 up 或 down' })
   direction!: 'up' | 'down'
 }

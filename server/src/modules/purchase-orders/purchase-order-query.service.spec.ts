@@ -1,4 +1,5 @@
 import type { PaymentRecipientService } from '../payment-recipients/payment-recipient.service'
+import type { ProductAliasService } from '../product-aliases/product-alias.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
@@ -295,6 +296,68 @@ describe('PurchaseOrderQueryService', () => {
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
     expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, trackingNo: null, destinationWarehouseValue: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null, items: [] }])
+  })
+
+  it('prefers personal aliases, then product default aliases, and uses defaults for stock', async () => {
+    const fixture = setup()
+    const aliases = {
+      resolveForIssuer: jest.fn().mockResolvedValue(new Map([['product-id', '个人产品']])),
+      resolveDefaults: jest.fn().mockResolvedValue(new Map([['product-id', '默认产品']])),
+    }
+    const service = new PurchaseOrderQueryService(
+      fixture.prisma as unknown as PrismaService,
+      fixture.dictionaryLookup as unknown as DictionaryLookupService,
+      { getForOrder: jest.fn().mockResolvedValue(null) } as unknown as PaymentRecipientService,
+      undefined,
+      aliases as unknown as ProductAliasService,
+    )
+    const part = {
+      id: 'part-1',
+      shipmentNo: 'PKG/01',
+      partNumber: 1,
+      status: 'ACTIVE',
+      shippingMarkText: 'MARK/01',
+      items: [{
+        purchaseOrderLineId: 'line-id',
+        quantity: 2,
+        line: { lineNumber: 1 },
+      }],
+    }
+    const lines = [{
+      id: 'line-id',
+      lineNumber: 1,
+      lineType: 'CATALOG',
+      productId: 'product-id',
+      sourceSalesOrderLineId: 'sales-line-id',
+      productNoSnapshot: 'P-001',
+      productNameSnapshot: '产品甲',
+      productAttributesSnapshot: [],
+      descriptionSnapshot: null,
+      referencePurchaseUnitPriceAmount: decimal('12'),
+      actualPurchaseUnitPriceAmount: decimal('10'),
+      quantity: 2,
+      lineTotalAmount: decimal('20'),
+    }]
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      parts: [part],
+      lines,
+    }))
+
+    expect((await service.getById('order-id')).parts[0]?.shippingMarkSuffix)
+      .toBe('个人产品×2（李华-客户甲）')
+
+    aliases.resolveForIssuer.mockResolvedValue(new Map())
+    expect((await service.getById('order-id')).parts[0]?.shippingMarkSuffix)
+      .toBe('默认产品×2（李华-客户甲）')
+
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      purchaseType: 'STOCK',
+      salesOrder: null,
+      parts: [part],
+      lines,
+    }))
+    expect((await service.getById('order-id')).parts[0]?.shippingMarkSuffix)
+      .toBe('默认产品×2（公司囤货采购）')
   })
 
   it.each(['CN-A', null])('returns destination warehouse %s in order details', async destinationWarehouseValue => {

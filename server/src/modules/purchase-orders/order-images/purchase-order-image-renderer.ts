@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import sharp, { type OverlayOptions } from 'sharp'
 
 import { MEDIA_CONTENT_SIZE_LIMITS } from '../../media/media-validation'
+import { flattenPurchaseOrderRemark } from '../purchase-order-remark'
+import { SHIPPING_MARK_PASTE_HINT } from '../shipping-mark-label'
 import { PurchaseOrderImageError, type PurchaseOrderImageSnapshot } from './purchase-order-image-snapshot'
 
 const WIDTH = 1600
@@ -151,9 +153,13 @@ class PurchaseOrderImageCanvas {
 
     await this.section(`采购货件  ·  ${snapshot.parts.length} 件`)
     for (const part of snapshot.parts) await this.shipment(part, snapshot)
+    // 贴标提示只出现一次并归入采购备注；自定义备注另起一行跟在提示语之后。
+    await this.section('采购备注')
+    const pasteHint = await this.text(SHIPPING_MARK_PASTE_HINT, CONTENT_WIDTH, 23, COLORS.destructive, true)
+    this.place(pasteHint, MARGIN, this.y)
+    this.advance(pasteHint.height + 12)
     if (snapshot.remark) {
-      await this.section('采购备注')
-      const remark = await this.text(snapshot.remark, CONTENT_WIDTH, 23)
+      const remark = await this.text(snapshot.remark, CONTENT_WIDTH, 23, COLORS.muted)
       this.place(remark, MARGIN, this.y)
       this.advance(remark.height + 16)
     }
@@ -182,10 +188,8 @@ class PurchaseOrderImageCanvas {
     const infoLeft = MARGIN + 136
     let infoY = top
     for (const [value, size, color, bold] of [
-      [product.productNo ?? '临时产品', 20, COLORS.muted, false],
       [product.productName, 26, COLORS.ink, true],
-      [product.attributes.join('；'), 21, COLORS.muted, false],
-      [product.description ? `备注：${product.description}` : '', 21, COLORS.muted, false],
+      [`备注：${product.description?.trim() || '-'}`, 21, COLORS.muted, false],
     ] as const) {
       if (!value) continue
       const info = await this.text(value, 548, size, color, bold)
@@ -228,26 +232,14 @@ class PurchaseOrderImageCanvas {
     this.place(label, MARGIN + 16, this.y + 14)
     this.place(number, MARGIN + CONTENT_WIDTH - 856, this.y + 14, 840)
     this.advance(Math.max(label.height, number.height) + 44)
-    const [mark, hint] = await Promise.all([
-      this.text(`唛头：【${part.shippingMarkText}】${snapshot.shippingMarkSuffix}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true),
-      this.text('（请将此货件唛头贴到包装箱 / 货物上）', CONTENT_WIDTH - 32, 24, COLORS.destructive, true),
-    ])
+    const mark = await this.text(`唛头：【${part.shippingMarkText}】${part.shippingMarkSuffix}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true)
     this.place(mark, MARGIN + 16, this.y)
-    if (mark.width + 16 + hint.width <= CONTENT_WIDTH - 32) {
-      this.place(hint, MARGIN + 32 + mark.width, this.y + Math.max(0, mark.height - hint.height))
-      this.advance(Math.max(mark.height, hint.height) + 20)
-    }
-    else {
-      // 长唛头保留完整内容，提示另起一行，避免挤压或覆盖唛头。
-      this.advance(mark.height + 10)
-      this.place(hint, MARGIN + 16, this.y)
-      this.advance(hint.height + 20)
-    }
+    this.advance(mark.height + 20)
     for (const item of part.items) {
       const product = snapshot.lines.find(line => line.id === item.purchaseOrderLineId)
       if (!product) throw new PurchaseOrderImageError('PURCHASE_ORDER_IMAGE_SNAPSHOT_INVALID')
       const [name, quantity] = await Promise.all([
-        this.text(`${product.productNo ? `${product.productNo}  ·  ` : ''}${product.productName}`, CONTENT_WIDTH - 220, 22),
+        this.text(this.shipmentProductLabel(product), CONTENT_WIDTH - 220, 22),
         this.text(`数量 ${item.quantity}`, 170, 22),
       ])
       this.place(name, MARGIN + 16, this.y)
@@ -255,5 +247,11 @@ class PurchaseOrderImageCanvas {
       this.advance(Math.max(name.height, quantity.height) + 14)
     }
     this.advance(14)
+  }
+
+  /** 货件区产品行不出现产品编号；行备注压平后以全角括号内联，空备注不渲染空括号。 */
+  private shipmentProductLabel(product: PurchaseOrderImageSnapshot['lines'][number]): string {
+    const remark = flattenPurchaseOrderRemark(product.description)
+    return remark ? `${product.productName}（${remark}）` : product.productName
   }
 }

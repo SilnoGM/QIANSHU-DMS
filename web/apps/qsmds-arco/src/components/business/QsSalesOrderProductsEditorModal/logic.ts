@@ -400,10 +400,21 @@ export function buildSalesOrderProductEditIntent(input: {
       if (line.productId === null || !UUID_PATTERN.test(line.productId)) {
         errors[`${field}.productId`] = '请选择数据库产品'
       }
-      if (line.productId !== null && UUID_PATTERN.test(line.productId) && price !== null && quantity !== null) {
+      const description = normalizeText(line.description)
+      if (description !== '' && codePointLength(description) > 1000) {
+        errors[`${field}.description`] = '产品备注最多 1000 个字符'
+      }
+      if (
+        line.productId !== null
+        && UUID_PATTERN.test(line.productId)
+        && codePointLength(description) <= 1000
+        && price !== null
+        && quantity !== null
+      ) {
         newLines.push({
           lineType: 'CATALOG',
           productId: line.productId,
+          description: description === '' ? null : description,
           actualUnitPriceAmount: price,
           quantity,
         })

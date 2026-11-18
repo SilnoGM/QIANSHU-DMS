@@ -39,6 +39,11 @@ export interface NormalizedPurchaseOrderCatalogLine
   extends NormalizedPurchaseOrderLineBase {
   readonly lineType: 'CATALOG'
   readonly productId: string
+  /**
+   * 数据库产品行备注：缺省表示旧客户端未提交该字段，由创建依赖服务回退销售明细
+   * 快照；显式 null 或空白表示采购侧清空，不再回退。
+   */
+  readonly description?: string | null
 }
 
 export interface NormalizedPurchaseOrderCustomLine
@@ -124,6 +129,26 @@ function normalizeNullableText(
   return value === undefined || value === null
     ? null
     : normalizeText(value, field, maximumCodePoints)
+}
+
+/**
+ * 数据库产品行备注与 CUSTOM 说明不同：必须保留“未提交”与“显式清空”的区别，
+ * 否则旧客户端重试会把已经继承的销售行说明误清空。
+ */
+function normalizeCatalogDescription(
+  value: unknown,
+  field: string,
+  maximumCodePoints: number,
+): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') return purchaseOrderValidationFailure(field)
+  const normalized = value.trim().normalize('NFKC')
+  if (normalized === '') return null
+  if ([...normalized].length > maximumCodePoints) {
+    return purchaseOrderValidationFailure(field)
+  }
+  return normalized
 }
 
 function normalizeSupplierValue(value: unknown): string {
@@ -228,6 +253,7 @@ function normalizeCatalogLine(
     'lineType',
     'productId',
     'sourceSalesOrderLineId',
+    'description',
     'actualPurchaseUnitPriceAmount',
     'quantity',
   ], field)
@@ -240,6 +266,11 @@ function normalizeCatalogLine(
   if (purchaseType === 'STOCK' && line.sourceSalesOrderLineId !== undefined) {
     return purchaseOrderValidationFailure(`${field}.sourceSalesOrderLineId`)
   }
+  const description = normalizeCatalogDescription(
+    line.description,
+    `${field}.description`,
+    1000,
+  )
   const actualPurchaseUnitPriceAmount = normalizeAmountField(
     line.actualPurchaseUnitPriceAmount,
     `${field}.actualPurchaseUnitPriceAmount`,
@@ -250,6 +281,7 @@ function normalizeCatalogLine(
     lineType: 'CATALOG',
     productId: normalizeUuid(line.productId, `${field}.productId`),
     sourceSalesOrderLineId,
+    ...(description === undefined ? {} : { description }),
     actualPurchaseUnitPriceAmount,
     quantity,
     lineTotalAmount: calculatePurchaseOrderLineTotal(

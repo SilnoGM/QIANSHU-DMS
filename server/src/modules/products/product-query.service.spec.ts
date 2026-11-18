@@ -22,6 +22,7 @@ function createRow(
     category: null,
     productHead: null,
     productNo: `NO-${id}`,
+    defaultAlias: null,
     status: ProductStatus.INACTIVE,
     supplierValue,
     sortOrder: 10,

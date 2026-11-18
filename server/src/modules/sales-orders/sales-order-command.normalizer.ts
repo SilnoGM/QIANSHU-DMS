@@ -45,6 +45,7 @@ export interface NormalizedSalesOrderCatalogLine
   extends NormalizedSalesOrderLineBase {
   readonly lineType: 'CATALOG'
   readonly productId: string
+  readonly description: string | null
 }
 
 export interface NormalizedSalesOrderCustomLine
@@ -230,7 +231,7 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
     return salesOrderValidationFailure('customer.addressDetail')
   }
   return Object.freeze({
-    name: normalizeText(customer.name, 'customer.name', 128),
+    name: normalizeText(customer.name, 'customer.name', 24),
     phone: normalizeText(customer.phone, 'customer.phone', 64),
     countryRegionId: normalizeRegionUuid(
       customer.countryRegionId,
@@ -259,6 +260,7 @@ function normalizeLine(
     rejectUnknownKeys(line, [
       'lineType',
       'productId',
+      'description',
       'actualUnitPriceAmount',
       'quantity',
     ], field)
@@ -271,6 +273,12 @@ function normalizeLine(
       lineNumber: startingLineNumber + index,
       lineType,
       productId: normalizeUuid(line.productId, `${field}.productId`),
+      // 数据库产品行备注属于本单录入值，选填；空白输入统一归一为 null。
+      description: normalizeOptionalText(
+        line.description,
+        `${field}.description`,
+        1000,
+      ),
       actualUnitPriceAmount,
       quantity,
       lineTotalAmount: calculateSalesOrderLineTotal(

@@ -1554,6 +1554,7 @@
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/create-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/proxy-nodes/index.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-bill-select-modal.vue",
@@ -2124,6 +2125,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/EventTemplateBlock.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-order-flip-card.vue"
     ]
@@ -2479,6 +2481,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/form/product-form.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-card.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue",
@@ -3044,6 +3047,8 @@
       "apps/qsmds-arco/src/views/component_library/business/components/ProductSelectorShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
       "apps/qsmds-arco/src/views/component_library/business/product-selector.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/index.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
     ]
   },
@@ -3120,6 +3125,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/categories/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-card.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue"
@@ -3333,7 +3339,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue",
-      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue"
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue"
     ]
   },
   {
@@ -3445,6 +3452,7 @@
       "apps/qsmds-arco/src/views/operations/goods-storage/index.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/all.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
       "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
@@ -3522,6 +3530,8 @@
       "apps/qsmds-arco/src/views/operations/network-ads/static-nodes/index.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/all.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/index.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-detail-drawer.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
@@ -3773,6 +3783,16 @@
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
       "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:tag",
+    "label": "i-lucide:tag",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-alias-modal.vue",
+      "apps/qsmds-arco/src/views/operations/product-library/product-library-detail-drawer.vue"
     ]
   },
   {

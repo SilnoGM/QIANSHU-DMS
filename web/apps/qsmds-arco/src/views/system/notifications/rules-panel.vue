@@ -666,8 +666,8 @@ const templateVariableError = computed(() => {
     if (!/^\w+$/u.test(name)) {
       return `变量名「${name}」只能包含字母、数字和下划线`
     }
-    if (!Number.isInteger(variable.maxLength) || variable.maxLength < 1 || variable.maxLength > 200) {
-      return `变量「${name}」的最大长度必须是 1–200`
+    if (!Number.isInteger(variable.maxLength) || variable.maxLength < 1 || variable.maxLength > 1500) {
+      return `变量「${name}」的最大长度必须是 1–1500`
     }
   }
   return null
@@ -1158,7 +1158,7 @@ onMounted(() => {
               class="w-full"
               type="number"
               min="1"
-              max="200"
+              max="1500"
               :aria-label="`第 ${index + 1} 个变量的最大长度`"
             />
             <FaSwitch v-model="variable.required" class="justify-self-center" :aria-label="`第 ${index + 1} 个变量必填`" />

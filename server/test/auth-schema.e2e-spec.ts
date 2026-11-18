@@ -73,6 +73,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'packaging-costs:create',
   'packaging-costs:pay',
   'packaging-costs:read',
+  'product-aliases:manage',
   'product-categories:create',
   'product-categories:delete',
   'product-categories:read',

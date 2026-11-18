@@ -264,6 +264,32 @@ describe('SalesOrderCommandService', () => {
     expect(auditJson).not.toContain('idempotencyKey')
   })
 
+  it('persists a catalog line remark into the trusted snapshot', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-catalog-remark',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, input({
+      lines: [{
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        description: ' 货件需加固 ',
+        actualUnitPriceAmount: '50',
+        quantity: 2,
+      }],
+    }))).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrderLine.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        lineNumber: 1,
+        lineType: 'CATALOG',
+        descriptionSnapshot: '货件需加固',
+      })],
+    })
+  })
+
   it('allows an active catalog product without the current currency standard price', async () => {
     const fixture = setup()
     fixture.transaction.product.findMany.mockResolvedValue([{

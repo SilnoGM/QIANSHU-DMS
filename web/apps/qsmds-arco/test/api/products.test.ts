@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateProductRequestDto,
+  UpdateProductDefaultAliasRequestDto,
   UpdateProductRequestDto,
   UpdateProductStatusRequestDto,
 } from '../../src/api/generated/types.gen'
@@ -67,6 +68,7 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     'create',
     'update',
     'updateStatus',
+    'updateDefaultAlias',
   ])
 
   await products.taxonomyOptions(controller.signal)
@@ -129,10 +131,15 @@ test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PA
     expectedVersion: 2,
     status: 'INACTIVE',
   }
+  const updateDefaultAlias: UpdateProductDefaultAliasRequestDto = {
+    defaultAlias: '默认破碎机',
+    expectedVersion: 3,
+  }
 
   await products.getById(productId, controller.signal)
   await products.update(productId, update, controller.signal)
   await products.updateStatus(productId, updateStatus, controller.signal)
+  await products.updateDefaultAlias(productId, updateDefaultAlias, controller.signal)
 
   assert.deepEqual(calls, [
     {
@@ -162,6 +169,16 @@ test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PA
       data: updateStatus,
       method: 'patch',
       url: `products/${productId}/status`,
+    },
+    {
+      config: {
+        errorPresentation: 'local',
+        retry: false,
+        signal: controller.signal,
+      },
+      data: updateDefaultAlias,
+      method: 'patch',
+      url: `products/${productId}/default-alias`,
     },
   ])
 })

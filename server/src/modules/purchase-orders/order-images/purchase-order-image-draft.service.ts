@@ -180,8 +180,11 @@ export class PurchaseOrderImageDraftService {
     }
   }
 
-  /** 调用方已锁定采购单；先校验并归档预览文件，再由同一事务推进订单及货件状态。 */
-  async attachForReview(transaction: Prisma.TransactionClient, context: PurchaseOrderMutationContext, purchaseOrderId: string, expectedVersion: number, rawDraftId: unknown): Promise<void> {
+  /**
+   * 调用方已锁定采购单；先校验并归档预览文件，再由同一事务推进订单及货件状态。
+   * 返回本次校验用的采购详情，供审核通知拼装文案复用，避免事务内重复查询。
+   */
+  async attachForReview(transaction: Prisma.TransactionClient, context: PurchaseOrderMutationContext, purchaseOrderId: string, expectedVersion: number, rawDraftId: unknown): Promise<PurchaseOrderDetail> {
     requirePurchaseOrderImageContext(context)
     if (rawDraftId === undefined || rawDraftId === null) return purchaseOrderRuleFailure('PURCHASE_ORDER_IMAGE_REQUIRED', '请先生成采购单图片再确认审核')
     const draftId = requirePurchaseOrderImageUuid(rawDraftId, 'imageDraftId')
@@ -203,6 +206,7 @@ export class PurchaseOrderImageDraftService {
       actorUserId: context.actorUserId, requestId: context.requestId, targetType: 'PURCHASE_ORDER_DOCUMENT', targetId: document.id,
       metadata: { purchaseOrderId, documentType: 'ORDER_ISSUANCE_VOUCHER' },
     })
+    return detail
   }
 
   async invalidateForOrder(transaction: Prisma.TransactionClient, purchaseOrderId: string): Promise<void> {

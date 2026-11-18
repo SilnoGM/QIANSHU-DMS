@@ -68,6 +68,7 @@ const canUpdate = computed(() => authAll([
   'products:update',
   'product-categories:create',
 ]))
+const canEditDefaultAlias = computed(() => auth('products:update'))
 const canReadProductMedia = computed(() => auth('product-media:read'))
 const canBatchSetImages = computed(() => auth('products:update'))
 const selectedProducts = ref<ReadonlyMap<string, ProductListItemViewModel>>(new Map())
@@ -998,6 +999,18 @@ async function submitStatusChange(): Promise<void> {
   }
 }
 
+function handleDefaultAliasUpdated(updated: ProductListItemViewModel): void {
+  rows.value = rows.value.map(row => row.id === updated.id ? updated : row)
+  selectedProducts.value = updateProductBatchSelectionSnapshot(
+    selectedProducts.value,
+    [updated],
+  )
+  if (detailProduct.value?.id === updated.id) {
+    detailProduct.value = updated
+  }
+  toast.success(`产品 ${updated.productNo} 默认别名已更新`)
+}
+
 watch(
   [() => appAccountStore.authEpoch, canRead],
   ([nextAuthEpoch, nextCanRead], [previousAuthEpoch]) => {
@@ -1801,11 +1814,13 @@ onBeforeUnmount(() => {
       :product="detailProduct"
       :currencies="currencies"
       :can-edit="canUpdate"
+      :can-edit-default-alias="canEditDefaultAlias"
       :content-readable="canReadProductMedia"
       :loading="detailLoading"
       :error="detailError"
       :request-id="detailRequestId"
       @retry="loadProductDetail"
+      @default-alias-updated="handleDefaultAliasUpdated"
       @edit="navigateToEdit"
       @closed="closeProductDetail"
     />

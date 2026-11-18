@@ -108,6 +108,10 @@ enum AuditEventType {
   AUTH_RETENTION_PURGED
   PRODUCT_CREATED
   PRODUCT_UPDATED
+  PRODUCT_ALIAS_UPDATED
+  PRODUCT_ALIAS_CLEARED
+  PRODUCT_DEFAULT_ALIAS_UPDATED
+  PRODUCT_DEFAULT_ALIAS_CLEARED
   PRODUCT_CATEGORY_CREATED
   PRODUCT_CATEGORY_RENAMED
   PRODUCT_CATEGORY_DELETED
@@ -753,6 +757,7 @@ model User {
   profile                     UserProfile?
   productsCreated             Product[]                  @relation("ProductCreatedBy")
   productsUpdated             Product[]                  @relation("ProductUpdatedBy")
+  productAliases              UserProductAlias[]
   mediaAssetsCreated          MediaAsset[]               @relation("MediaAssetCreatedBy")
   productMediaCreated         ProductMedia[]             @relation("ProductMediaCreatedBy")
   productMediaDetached        ProductMedia[]             @relation("ProductMediaDetachedBy")
@@ -1084,6 +1089,7 @@ model Product {
   categoryId           String?       @map("category_id") @db.Uuid
   productHeadId        String?       @map("product_head_id") @db.Uuid
   productNo            String        @unique(map: "products_product_no_key") @map("product_no") @db.VarChar(64)
+  defaultAlias         String?       @map("default_alias") @db.VarChar(36)
   status               ProductStatus @default(ACTIVE)
   supplierValue        String        @map("supplier_value") @db.VarChar(64)
   sortOrder            Int           @default(0) @map("sort_order")
@@ -1108,6 +1114,7 @@ model Product {
   media           ProductMedia[]
   salesOrderLines SalesOrderLine[]
   purchaseOrderLines PurchaseOrderLine[]
+  aliases         UserProductAlias[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
@@ -1116,6 +1123,23 @@ model Product {
   @@index([productHeadId, name], map: "products_product_head_id_name_idx")
   @@index([productHeadId, sortOrder, name], map: "products_product_head_sort_idx")
   @@map("products")
+}
+
+/// 运营个人产品别名：只影响本人作为销售单出单人时的货件唛头展示，不修改产品主数据。
+model UserProductAlias {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  alias     String   @db.VarChar(36)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([productId, userId], map: "user_product_aliases_product_id_user_id_key")
+  @@index([userId], map: "user_product_aliases_user_idx")
+  @@map("user_product_aliases")
 }
 
 enum PackagingCostStatus {

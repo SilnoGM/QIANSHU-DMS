@@ -347,7 +347,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   SALES_RECEIPT_REVIEW_PENDING: ['collectionNo', 'orderNo', 'customerName', 'amount', 'currencyCode', 'paymentType', 'paymentMethod', 'receivedAt', 'remark'],
   SALES_RECEIPT_APPROVED: ['collectionNo', 'orderNo', 'amount', 'currencyCode', 'paymentType', 'paymentMethod', 'receivedAt', 'remark'],
   SALES_RECEIPT_REJECTED: ['collectionNo', 'orderNo', 'amount', 'currencyCode', 'paymentType', 'reason', 'paymentMethod', 'receivedAt', 'remark'],
-  PURCHASE_REVIEW_APPROVED: ['orderNo', 'vendorName', 'totalAmount', 'currencyCode', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
+  PURCHASE_REVIEW_APPROVED: ['orderNo', 'vendorName', 'totalAmount', 'currencyCode', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate', 'productLines', 'partMarks', 'depositAmount', 'balanceAmount', 'orderRemark'],
   PURCHASE_REVIEW_REJECTED: ['orderNo', 'vendorName', 'reason', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
   PURCHASE_ORDER_CANCELLED: ['orderNo', 'vendorName', 'reason', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
   STORAGE_CLAIM_REQUEST_PENDING: ['shipmentNo', 'salesOrderNo', 'storageRecordId', 'originCustomerName', 'shippingMark', 'warehouseLabel'],
@@ -1153,6 +1153,51 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     maxLength: 2_000,
     required: false,
   },
+  productLines: {
+    name: 'productLines',
+    label: '采购产品明细',
+    description: '按采购行拼装的多行明细块，含产品名、数量、单价、小计和行备注。',
+    example: '产品名：木桌*1\n金额小计：100.00*1=100.00',
+    sensitive: false,
+    maxLength: 1_500,
+    required: false,
+  },
+  partMarks: {
+    name: 'partMarks',
+    label: '货件与唛头',
+    description: '按货件拼装的多行文本块，含货件产品与唛头，块间空一行。',
+    example: '货件-01：木桌\n唛头：【TEST/0001】木桌（李华-赖文寿）',
+    sensitive: false,
+    maxLength: 1_500,
+    required: false,
+  },
+  depositAmount: {
+    name: 'depositAmount',
+    label: '约定订金',
+    description: '采购单约定订金，两位小数。',
+    example: '30.00',
+    sensitive: true,
+    maxLength: 32,
+    required: false,
+  },
+  balanceAmount: {
+    name: 'balanceAmount',
+    label: '约定尾款',
+    description: '采购单约定尾款，两位小数。',
+    example: '130.00',
+    sensitive: true,
+    maxLength: 32,
+    required: false,
+  },
+  orderRemark: {
+    name: 'orderRemark',
+    label: '采购备注段',
+    description: '含贴标提示与自定义采购备注的整段文本，前置两个换行以便模板直接拼接。',
+    example: '\n\n采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上',
+    sensitive: false,
+    maxLength: 1_500,
+    required: false,
+  },
   orderDate: {
     name: 'orderDate',
     label: '下单日期',
@@ -1335,7 +1380,8 @@ export const MAX_NOTIFICATION_TTL_SECONDS = 7 * 24 * 60 * 60
 export const DEFAULT_NOTIFICATION_TTL_SECONDS = 24 * 60 * 60
 export const MAX_NOTIFICATION_TEMPLATE_LENGTH = 2_000
 export const MAX_NOTIFICATION_VARIABLES = 20
-export const MAX_NOTIFICATION_VARIABLE_LENGTH = 200
+/** 单变量上限；采购明细与货件多行块需要整段下发，正文长度仍受模板 2000 字限制。 */
+export const MAX_NOTIFICATION_VARIABLE_LENGTH = 1_500
 export const MAX_NOTIFICATION_DEDUPE_KEY_LENGTH = 200
 
 export function notificationDomainOf(eventType: string): NotificationDomain | null {

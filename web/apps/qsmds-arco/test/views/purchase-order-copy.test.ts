@@ -14,19 +14,34 @@ function fixture(): PurchaseOrderDetailDto {
     orderDate: '2026-09-16',
     supplier: { label: '示例供应商' },
     sourceSalesOrder: { id: 'sales-order-id', orderNo: 'SO/20260916-00001', customerName: '赖文寿', issuerPrefix: '李华' },
+    remark: '请按货件分别包装并附采购单。',
     amounts: { purchaseTotalAmount: '160.0000', depositDueAmount: '30.0000', balanceDueAmount: '130.0000', paidAmount: '100.0000', outstandingAmount: '60.0000' },
     lines: [
-      { id: 'b', lineNumber: 2, productName: '椅子', actualPurchaseUnitPriceAmount: '30.0000', referencePurchaseUnitPriceAmount: '99', quantity: 2, lineTotalAmount: '60.0000' },
-      { id: 'a', lineNumber: 1, productName: '木桌', actualPurchaseUnitPriceAmount: '100.0000', referencePurchaseUnitPriceAmount: '999', quantity: 1, lineTotalAmount: '100.0000' },
+      { id: 'b', lineNumber: 2, productName: '椅子', description: null, actualPurchaseUnitPriceAmount: '30.0000', referencePurchaseUnitPriceAmount: '99', quantity: 2, lineTotalAmount: '60.0000' },
+      { id: 'a', lineNumber: 1, productName: '木桌', description: '请附带说明书', actualPurchaseUnitPriceAmount: '100.0000', referencePurchaseUnitPriceAmount: '999', quantity: 1, lineTotalAmount: '100.0000' },
     ],
     parts: [
-      { partNumber: 2, status: 'PENDING_REVIEW', shipmentNo: 'PKG/20260916-00002', shippingMarkText: 'TEST/00016/货件-02', items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }] },
-      { partNumber: 1, status: 'PENDING_REVIEW', shipmentNo: 'PKG/20260916-00001', shippingMarkText: 'TEST/00016/货件-01', items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }, { purchaseOrderLineId: 'a', lineNumber: 1, quantity: 1 }] },
+      {
+        partNumber: 2,
+        status: 'PENDING_REVIEW',
+        shipmentNo: 'PKG/20260916-00002',
+        shippingMarkText: 'TEST/00016/货件-02',
+        shippingMarkSuffix: '椅子（李华-赖文寿）',
+        items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }],
+      },
+      {
+        partNumber: 1,
+        status: 'PENDING_REVIEW',
+        shipmentNo: 'PKG/20260916-00001',
+        shippingMarkText: 'TEST/00016/货件-01',
+        shippingMarkSuffix: '木桌+椅子（李华-赖文寿）',
+        items: [{ purchaseOrderLineId: 'b', lineNumber: 2, quantity: 1 }, { purchaseOrderLineId: 'a', lineNumber: 1, quantity: 1 }],
+      },
     ],
   } as PurchaseOrderDetailDto
 }
 
-test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关联本件产品，使用约定订金尾款', () => {
+test('完整复制模板按采购行和货件顺序输出，行备注只在该行有值时出现，采购备注恒定收尾', () => {
   const detail = fixture()
   const before = JSON.stringify(detail)
   assert.equal(buildPurchaseOrderCopyText(detail, t), `【PO/20260916-00016】
@@ -36,6 +51,7 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
 [采购产品明细]
 产品名：木桌*1
 金额小计：100.00*1=100.00
+备注：请附带说明书
 
 产品名：椅子*2
 金额小计：30.00*2=60.00
@@ -44,12 +60,13 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
 订金：30.00
 尾款：130.00
 
-出货请贴货物唛头：
 货件-01：木桌+椅子
-此货件唛头：【TEST/00016/货件-01】李华-赖文寿
+唛头：【TEST/00016/货件-01】木桌+椅子（李华-赖文寿）
 
 货件-02：椅子
-此货件唛头：【TEST/00016/货件-02】李华-赖文寿`)
+唛头：【TEST/00016/货件-02】椅子（李华-赖文寿）
+
+采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上；请按货件分别包装并附采购单。`)
   assert.equal(JSON.stringify(detail), before)
 })
 
@@ -69,22 +86,28 @@ test('货件序号不依赖 PKG 编号，未派发唛头明确标注，已取消
   detail.parts[1]!.shipmentNo = null
   detail.parts[1]!.shippingMarkText = null
   const text = buildPurchaseOrderCopyText(detail, t)
-  assert.ok(text.includes('货件-01：木桌+椅子\n此货件唛头：待派发'))
+  assert.ok(text.includes('货件-01：木桌+椅子\n唛头：待派发'))
   assert.ok(!text.includes('货件-02'))
   assert.ok(!text.includes('PKG/'))
   detail.parts = []
-  assert.ok(buildPurchaseOrderCopyText(detail, t).endsWith('出货请贴货物唛头：\n暂无预定义货件'))
+  const empty = buildPurchaseOrderCopyText(detail, t)
+  assert.ok(empty.includes('暂无预定义货件'))
+  assert.ok(empty.endsWith('采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上；请按货件分别包装并附采购单。'))
 })
 
-test('出单人前缀为空时只拼客户名，STOCK 采购单只输出方括号唛头', () => {
+test('出单人前缀为空时使用服务端已生成的后缀，STOCK 使用公司囤货采购括号', () => {
   const salesLinked = fixture()
   salesLinked.sourceSalesOrder!.issuerPrefix = null
-  assert.ok(buildPurchaseOrderCopyText(salesLinked, t).includes('此货件唛头：【TEST/00016/货件-01】赖文寿'))
+  salesLinked.parts[0]!.shippingMarkSuffix = '椅子（赖文寿）'
+  salesLinked.parts[1]!.shippingMarkSuffix = '木桌+椅子（赖文寿）'
+  assert.ok(buildPurchaseOrderCopyText(salesLinked, t).includes('唛头：【TEST/00016/货件-01】木桌+椅子（赖文寿）'))
 
   const stock = fixture()
   stock.sourceSalesOrder = null
   stock.customerName = null
-  assert.ok(buildPurchaseOrderCopyText(stock, t).includes('此货件唛头：【TEST/00016/货件-01】'))
+  stock.parts[0]!.shippingMarkSuffix = '（公司囤货采购）'
+  stock.parts[1]!.shippingMarkSuffix = '（公司囤货采购）'
+  assert.ok(buildPurchaseOrderCopyText(stock, t).includes('唛头：【TEST/00016/货件-01】（公司囤货采购）'))
 })
 
 test('复制字段内换行归一，缺失产品和金额保留明确占位', () => {
@@ -96,4 +119,21 @@ test('复制字段内换行归一，缺失产品和金额保留明确占位', ()
   assert.ok(text.includes('供应商：示例 供应商\n采购日期：'))
   assert.ok(text.includes('金额小计：未记录*2=60.00'))
   assert.ok(text.includes('货件-02：产品信息不可用'))
+})
+
+test('备注按全角分号压平，空备注不产生备注行，无自定义采购备注时只保留贴标提示', () => {
+  const detail = fixture()
+  detail.lines[1]!.description = '  请附带\n说明书  '
+  detail.remark = '请按货件分别包装\n并附采购单'
+  const text = buildPurchaseOrderCopyText(detail, t)
+  assert.ok(text.includes('金额小计：100.00*1=100.00\n备注：请附带；说明书'))
+  assert.ok(text.endsWith('采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上；请按货件分别包装；并附采购单'))
+
+  detail.lines[0]!.description = '   '
+  detail.lines[1]!.description = null
+  detail.remark = null
+  const blank = buildPurchaseOrderCopyText(detail, t)
+  assert.ok(!blank.includes('备注：-'))
+  assert.ok(!blank.includes('\n备注：\n'))
+  assert.ok(blank.endsWith('采购备注：请将上述货件唛头贴到对应的包装箱 / 货物上'))
 })

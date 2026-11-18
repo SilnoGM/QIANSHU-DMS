@@ -53,6 +53,11 @@ function serializePurchaseOrderCreateFingerprint(
             lineType: line.lineType,
             productId: line.productId,
             sourceSalesOrderLineId: line.sourceSalesOrderLineId,
+            // 选填备注只在有值时进入序列化：旧客户端（缺省或 null）指纹保持不变，
+            // 部署窗口内的在途重试不会被误判成不同请求。
+            ...(line.description == null
+              ? {}
+              : { description: line.description }),
             actualPurchaseUnitPriceAmount: amount(line.actualPurchaseUnitPriceAmount),
             quantity: line.quantity,
             lineTotalAmount: amount(line.lineTotalAmount),

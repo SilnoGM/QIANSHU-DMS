@@ -51,6 +51,7 @@ export type SalesOrderProductEditIntentLine
   = | {
     readonly lineType: 'CATALOG'
     readonly productId: string
+    readonly description: string | null
     readonly actualUnitPriceAmount: string
     readonly quantity: number
   }

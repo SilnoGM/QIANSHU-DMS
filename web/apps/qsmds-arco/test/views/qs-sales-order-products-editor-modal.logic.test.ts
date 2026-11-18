@@ -217,6 +217,29 @@ test('已采购行可修改销售快照但数量不能低于有效已采购数�
   }
 })
 
+test('新增数据库产品行备注进入产品修改意图', () => {
+  const result = buildSalesOrderProductEditIntent({
+    context,
+    lines: [
+      { ...createSalesOrderProductEditLines(context)[0]!, quantity: '3' },
+      { ...newCatalogLine(), description: ' 补充备注 ' },
+    ],
+    precision: 2,
+    reason: '客户追加产品',
+    confirmDepositReduction: false,
+  })
+  assert.equal(result.valid, true)
+  if (result.valid) {
+    assert.deepEqual(result.intent.newLines, [{
+      lineType: 'CATALOG',
+      productId: '33333333-3333-4333-8333-333333333333',
+      description: '补充备注',
+      actualUnitPriceAmount: '30.00',
+      quantity: 2,
+    }])
+  }
+})
+
 test('已采购行不能从统一编辑器删除，未采购行可以删除', () => {
   const onlyUnpurchasedRemoved = createSalesOrderProductEditLines(context).slice(0, 1)
   const allowed = buildSalesOrderProductEditIntent({
