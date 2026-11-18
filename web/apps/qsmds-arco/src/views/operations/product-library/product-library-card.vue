@@ -42,12 +42,11 @@ const displayImageUrl = computed(() => (
 ))
 const hasImage = computed(() => displayImageUrl.value !== null && !imageFailed.value)
 const aliasLabel = computed(() => productLibraryAliasLabel(props.alias))
-const aliasTitle = computed(() => props.alias?.trim() ? `自定义名称：${props.alias}` : '自定义名称：使用产品名')
+const aliasTitle = computed(() => props.alias?.trim() ? `自定义别名：${props.alias}` : '自定义别名：使用产品名')
 const statusLabel = computed(() => productLibraryStatusLabel(props.product.status))
 const statusDotClass = computed(() => (
   props.product.status === 'ACTIVE' ? 'bg-green-600' : 'bg-red-600'
 ))
-const initial = computed(() => Array.from(props.product.name.trim())[0] ?? '产')
 
 function onImageError(): void {
   if (!useOriginalImage.value && originalUrl.value !== null) {
@@ -71,7 +70,7 @@ watch(() => props.product.id, () => {
     content-class="p-0 flex flex-1"
   >
     <div class="p-3 flex gap-3 min-w-0 sm:gap-4">
-      <div class="rounded-lg bg-muted/20 shrink-0 h-28 w-28 relative overflow-hidden sm:h-40 sm:w-40">
+      <div class="rounded-lg bg-muted/20 shrink-0 h-28 w-28 relative overflow-hidden sm:h-40 sm:w-40 xl:h-44 xl:w-44">
         <img
           v-if="hasImage && displayImageUrl"
           :key="displayImageUrl"
@@ -83,15 +82,14 @@ watch(() => props.product.id, () => {
           @error="onImageError"
         >
         <div v-else class="text-muted-foreground flex flex-col gap-2 h-full w-full items-center justify-center">
-          <FaIcon :name="canReadMedia ? 'qs-products' : 'i-lucide:image-off'" class="opacity-50 size-8 sm:size-10" aria-hidden="true" />
-          <span v-if="canReadMedia" class="text-2xl font-semibold opacity-40 sm:text-3xl">{{ initial }}</span>
-          <span v-else class="text-xs px-2 text-center">无图片权限</span>
+          <FaIcon :name="canReadMedia ? 'qs-products' : 'i-lucide:image-off'" class="opacity-50 size-9 sm:size-10" aria-hidden="true" />
+          <span class="text-xs px-2 text-center">{{ canReadMedia ? '暂无图片' : '无图片权限' }}</span>
         </div>
         <span
           role="status"
           :aria-label="statusLabel"
           :title="statusLabel"
-          class="border-2 border-background rounded-full size-3 shadow-sm bottom-2 right-2 absolute"
+          class="border-2 border-background rounded-full size-3 ring-2 ring-background shadow-sm bottom-2 right-2 absolute"
           :class="statusDotClass"
         />
       </div>
@@ -110,31 +108,37 @@ watch(() => props.product.id, () => {
           </p>
         </div>
 
-        <dl class="text-sm m-0 mt-auto gap-1 grid grid-cols-[auto_1fr] min-w-0">
-          <dt class="text-muted-foreground">
-            台币
-          </dt>
-          <dd class="m-0 text-right">
-            <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
-          </dd>
-          <dt class="text-muted-foreground">
-            马币
-          </dt>
-          <dd class="m-0 text-right">
-            <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
-          </dd>
-          <dt class="text-muted-foreground">
-            成本
-          </dt>
-          <dd class="m-0 text-right">
-            <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
-          </dd>
+        <dl class="m-0 gap-3 grid grid-cols-1 min-w-0 sm:grid-cols-3">
+          <div class="min-w-0">
+            <dt class="qs-type-meta">
+              台币
+            </dt>
+            <dd class="m-0 mt-0.5">
+              <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="qs-type-meta">
+              马币
+            </dt>
+            <dd class="m-0 mt-0.5">
+              <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+            </dd>
+          </div>
+          <div class="min-w-0">
+            <dt class="qs-type-meta">
+              成本
+            </dt>
+            <dd class="m-0 mt-0.5">
+              <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
+            </dd>
+          </div>
         </dl>
 
-        <div class="flex flex-wrap gap-2 justify-end">
+        <div class="mt-auto flex flex-wrap gap-2 justify-end">
           <FaButton
             v-if="canManageAlias"
-            variant="outline"
+            variant="ghost"
             size="sm"
             :aria-label="`设置 ${product.name} 的自定义别名`"
             @click="emit('editAlias')"

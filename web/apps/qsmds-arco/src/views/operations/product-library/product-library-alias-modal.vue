@@ -64,7 +64,7 @@ function save(): void {
 <template>
   <QsGenericModal
     :model-value="modelValue"
-    title="设置产品别名"
+    title="设置自定义别名"
     :description="`${productName} · ${productNo}`"
     size="sm"
     :submitting="saving"

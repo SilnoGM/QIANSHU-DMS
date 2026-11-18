@@ -429,55 +429,59 @@ onBeforeUnmount(() => {
       />
       <template v-else>
         <FaCard class="mb-4" content-class="p-4">
-          <div class="gap-3 grid xl:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))_auto] sm:grid-cols-2">
-            <FaInput
-              :model-value="keyword"
-              type="search"
-              clearable
-              placeholder="搜索产品名称或编号"
-              aria-label="搜索产品名称或编号"
-              class="w-full"
-              @update:model-value="onKeywordInput"
-            >
-              <template #start>
-                <FaIcon name="i-lucide:search" />
-              </template>
-            </FaInput>
-            <FaSelect
-              :model-value="supplierFilter"
-              :options="supplierOptions"
-              placeholder="供应商"
-              aria-label="供应商"
-              class="w-full"
-              @update:model-value="changeSupplier"
-            />
-            <FaSelect
-              :model-value="categoryFilter"
-              :options="categoryOptions"
-              placeholder="分类"
-              aria-label="分类"
-              class="w-full"
-              @update:model-value="changeCategory"
-            />
-            <FaSelect
-              :model-value="productHeadFilter"
-              :options="productHeadOptions"
-              :disabled="categoryFilter === 'ALL'"
-              placeholder="产品头"
-              aria-label="产品头"
-              class="w-full"
-              @update:model-value="changeProductHead"
-            />
-            <FaSelect
-              :model-value="statusFilter"
-              :options="statusOptions"
-              aria-label="产品状态"
-              class="w-full"
-              @update:model-value="changeStatus"
-            />
-            <FaButton variant="outline" class="min-h-11 sm:min-h-9" @click="resetFilters">
-              重置
-            </FaButton>
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <FaInput
+                :model-value="keyword"
+                type="search"
+                clearable
+                placeholder="搜索产品名称或编号"
+                aria-label="搜索产品名称或编号"
+                class="w-full sm:flex-1"
+                @update:model-value="onKeywordInput"
+              >
+                <template #start>
+                  <FaIcon name="i-lucide:search" />
+                </template>
+              </FaInput>
+              <FaSelect
+                :model-value="statusFilter"
+                :options="statusOptions"
+                aria-label="产品状态"
+                class="w-full sm:w-40"
+                @update:model-value="changeStatus"
+              />
+              <FaButton variant="outline" class="min-h-11 sm:min-h-9" @click="resetFilters">
+                重置
+              </FaButton>
+            </div>
+            <div class="gap-3 grid sm:grid-cols-3">
+              <FaSelect
+                :model-value="supplierFilter"
+                :options="supplierOptions"
+                placeholder="供应商"
+                aria-label="供应商"
+                class="w-full"
+                @update:model-value="changeSupplier"
+              />
+              <FaSelect
+                :model-value="categoryFilter"
+                :options="categoryOptions"
+                placeholder="分类"
+                aria-label="分类"
+                class="w-full"
+                @update:model-value="changeCategory"
+              />
+              <FaSelect
+                :model-value="productHeadFilter"
+                :options="productHeadOptions"
+                :disabled="categoryFilter === 'ALL'"
+                placeholder="产品头"
+                aria-label="产品头"
+                class="w-full"
+                @update:model-value="changeProductHead"
+              />
+            </div>
           </div>
         </FaCard>
 
@@ -498,11 +502,27 @@ onBeforeUnmount(() => {
           aria-busy="true"
         >
           <div
-            v-for="index in 8"
+            v-for="index in 6"
             :key="index"
             aria-hidden="true"
-            class="border border-border rounded-xl bg-card h-48 motion-safe:animate-pulse"
-          />
+            class="p-3 border border-border rounded-xl bg-card flex gap-3 min-w-0 sm:gap-4"
+          >
+            <div class="rounded-lg bg-muted/50 shrink-0 h-28 w-28 sm:h-40 sm:w-40 xl:h-44 xl:w-44 motion-safe:animate-pulse" />
+            <div class="flex flex-1 flex-col gap-2 min-w-0">
+              <div class="rounded bg-muted/50 h-4 w-3/4 motion-safe:animate-pulse" />
+              <div class="rounded bg-muted/50 h-3 w-1/2 motion-safe:animate-pulse" />
+              <div class="mt-2 gap-3 grid grid-cols-1 sm:grid-cols-3">
+                <div v-for="cell in 3" :key="cell" class="flex flex-col gap-1">
+                  <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
+                  <div class="rounded bg-muted/50 h-4 w-20 motion-safe:animate-pulse" />
+                </div>
+              </div>
+              <div class="mt-auto flex gap-2 justify-end">
+                <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
+                <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
+              </div>
+            </div>
+          </div>
         </div>
         <FaEmpty
           v-else-if="rows.length === 0"

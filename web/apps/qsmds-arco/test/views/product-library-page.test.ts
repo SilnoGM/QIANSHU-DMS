@@ -36,7 +36,11 @@ test('卡片是左侧图片、右侧产品名/自定义别名/价格区的横向
   assert.match(card, /buildProductLibraryThumbnailUrl/u)
   assert.match(card, /buildProductLibraryOriginalImageUrl/u)
   assert.match(card, /qs-type-component-title/u)
+  assert.match(card, /sm:grid-cols-3/u)
+  assert.match(card, /ring-2 ring-background/u)
+  assert.match(card, /暂无图片/u)
   assert.match(card, /无图片权限/u)
+  assert.doesNotMatch(card, /\{\{ initial \}\}/u)
   assert.match(card, /onImageError/u)
   assert.doesNotMatch(card, /line-clamp-2/u)
   assert.match(card, /loading="lazy"/u)
@@ -75,7 +79,7 @@ test('详情抽屉展示完整资料、价格、媒体、审计和设置别名�
 })
 
 test('别名弹窗限制 36 字符、支持清除并提示历史影响', () => {
-  assert.match(modal, /title="设置产品别名"/u)
+  assert.match(modal, /title="设置自定义别名"/u)
   assert.match(modal, /:maxlength="36"/u)
   assert.match(modal, /清除别名/u)
   assert.match(modal, /包括历史单据/u)
