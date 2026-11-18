@@ -110,6 +110,8 @@ enum AuditEventType {
   PRODUCT_UPDATED
   PRODUCT_ALIAS_UPDATED
   PRODUCT_ALIAS_CLEARED
+  PRODUCT_DEFAULT_ALIAS_UPDATED
+  PRODUCT_DEFAULT_ALIAS_CLEARED
   PRODUCT_CATEGORY_CREATED
   PRODUCT_CATEGORY_RENAMED
   PRODUCT_CATEGORY_DELETED
@@ -1087,6 +1089,7 @@ model Product {
   categoryId           String?       @map("category_id") @db.Uuid
   productHeadId        String?       @map("product_head_id") @db.Uuid
   productNo            String        @unique(map: "products_product_no_key") @map("product_no") @db.VarChar(64)
+  defaultAlias         String?       @map("default_alias") @db.VarChar(36)
   status               ProductStatus @default(ACTIVE)
   supplierValue        String        @map("supplier_value") @db.VarChar(64)
   sortOrder            Int           @default(0) @map("sort_order")
