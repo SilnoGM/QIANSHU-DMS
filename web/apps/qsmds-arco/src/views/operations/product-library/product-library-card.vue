@@ -66,11 +66,11 @@ watch(() => props.product.id, () => {
   <FaCard
     role="article"
     :aria-label="`${product.name}，${statusLabel}`"
-    class="product-library-card py-0 rounded-xl gap-0 h-full shadow-sm overflow-hidden"
+    class="product-library-card py-0 rounded-xl gap-0 h-full w-full shadow-sm overflow-hidden"
     content-class="p-0 flex flex-1"
   >
-    <div class="p-3 flex gap-3 min-w-0 sm:gap-4">
-      <div class="rounded-lg bg-muted/20 shrink-0 h-28 w-28 relative overflow-hidden sm:h-40 sm:w-40 xl:h-44 xl:w-44">
+    <div class="p-3 gap-3 grid grid-cols-[7rem_minmax(0,1fr)] min-w-0 sm:gap-4 sm:grid-cols-[10rem_minmax(0,1fr)] xl:grid-cols-[11rem_minmax(0,1fr)]">
+      <div class="rounded-lg bg-muted/20 w-full aspect-square relative overflow-hidden">
         <img
           v-if="hasImage && displayImageUrl"
           :key="displayImageUrl"
@@ -108,34 +108,36 @@ watch(() => props.product.id, () => {
           </p>
         </div>
 
-        <dl class="m-0 gap-3 grid grid-cols-2 min-w-0">
-          <div class="min-w-0">
-            <dt class="qs-type-meta">
-              台币
-            </dt>
-            <dd class="m-0 mt-0.5">
-              <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
-            </dd>
-          </div>
-          <div class="min-w-0">
-            <dt class="qs-type-meta">
-              马币
-            </dt>
-            <dd class="m-0 mt-0.5">
-              <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
-            </dd>
-          </div>
-          <div class="col-span-2 min-w-0">
-            <dt class="qs-type-meta">
-              采购成本
-            </dt>
-            <dd class="m-0 mt-0.5">
-              <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
-            </dd>
-          </div>
-        </dl>
+        <div class="p-2 rounded-lg bg-muted/40">
+          <dl class="m-0 gap-2 grid grid-cols-3 min-w-0">
+            <div class="min-w-0">
+              <dt class="qs-type-meta">
+                台币
+              </dt>
+              <dd class="m-0 mt-0.5">
+                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-meta">
+                马币
+              </dt>
+              <dd class="m-0 mt-0.5">
+                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-meta">
+                采购成本
+              </dt>
+              <dd class="m-0 mt-0.5">
+                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
+              </dd>
+            </div>
+          </dl>
+        </div>
 
-        <div class="mt-auto flex flex-wrap gap-2 justify-end">
+        <div class="mt-auto flex flex-wrap gap-2 w-full justify-end">
           <FaButton
             v-if="canManageAlias"
             variant="ghost"

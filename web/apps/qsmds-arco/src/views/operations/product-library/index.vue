@@ -505,23 +505,21 @@ onBeforeUnmount(() => {
             v-for="index in 6"
             :key="index"
             aria-hidden="true"
-            class="p-3 border border-border rounded-xl bg-card flex gap-3 min-w-0 sm:gap-4"
+            class="p-3 border border-border rounded-xl bg-card gap-3 grid grid-cols-[7rem_minmax(0,1fr)] min-w-0 sm:gap-4 sm:grid-cols-[10rem_minmax(0,1fr)] xl:grid-cols-[11rem_minmax(0,1fr)]"
           >
-            <div class="rounded-lg bg-muted/50 shrink-0 h-28 w-28 sm:h-40 sm:w-40 xl:h-44 xl:w-44 motion-safe:animate-pulse" />
+            <div class="rounded-lg bg-muted/50 w-full aspect-square motion-safe:animate-pulse" />
             <div class="flex flex-1 flex-col gap-2 min-w-0">
               <div class="rounded bg-muted/50 h-4 w-3/4 motion-safe:animate-pulse" />
               <div class="rounded bg-muted/50 h-3 w-1/2 motion-safe:animate-pulse" />
-              <div class="mt-2 gap-3 grid grid-cols-2">
-                <div v-for="cell in 2" :key="cell" class="flex flex-col gap-1">
-                  <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
-                  <div class="rounded bg-muted/50 h-4 w-20 motion-safe:animate-pulse" />
+              <div class="p-2 rounded-lg bg-muted/40">
+                <div class="gap-2 grid grid-cols-3">
+                  <div v-for="cell in 3" :key="cell" class="flex flex-col gap-1">
+                    <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
+                    <div class="rounded bg-muted/50 h-4 w-16 motion-safe:animate-pulse" />
+                  </div>
                 </div>
               </div>
-              <div class="flex flex-col gap-1">
-                <div class="rounded bg-muted/50 h-3 w-12 motion-safe:animate-pulse" />
-                <div class="rounded bg-muted/50 h-4 w-24 motion-safe:animate-pulse" />
-              </div>
-              <div class="mt-auto flex gap-2 justify-end">
+              <div class="mt-auto flex gap-2 w-full justify-end">
                 <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
                 <div class="rounded bg-muted/50 h-8 w-20 motion-safe:animate-pulse" />
               </div>
