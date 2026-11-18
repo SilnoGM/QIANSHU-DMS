@@ -26,7 +26,7 @@ test('产品库是图片优先卡片库，不使用管理员表格或管理工�
   assert.doesNotMatch(page, /产品分类树/u)
 })
 
-test('卡片是左侧图片、右侧产品名/自定义名称/价格区的横向布局', () => {
+test('卡片是左侧图片、右侧产品名/自定义别名/价格区的横向布局', () => {
   assert.match(card, /flex/u)
   assert.match(card, /gap-3/u)
   assert.match(card, /sm:gap-4/u)
@@ -41,11 +41,14 @@ test('卡片是左侧图片、右侧产品名/自定义名称/价格区的横向
   assert.doesNotMatch(card, /line-clamp-2/u)
   assert.match(card, /loading="lazy"/u)
   assert.match(card, /qs-products/u)
-  assert.match(card, /自定义名称/u)
+  assert.match(card, /自定义别名：/u)
   assert.match(card, /productLibraryAliasLabel/u)
   assert.match(card, /canManageAlias/u)
-  assert.match(card, /@click\.stop="emit\('editAlias'\)"/u)
+  assert.equal(card.match(/@click="emit\('editAlias'\)"/gu)?.length, 1)
+  assert.match(card, />\s*自定义别名\s*</u)
   assert.match(card, /查看详情/u)
+  assert.equal(card.match(/@click="emit\('open'\)"/gu)?.length, 1)
+  assert.doesNotMatch(card, /@click\.stop/u)
   assert.doesNotMatch(card, /aspect-square/u)
   assert.doesNotMatch(card, /productNo/u)
   assert.doesNotMatch(card, /categoryName/u)

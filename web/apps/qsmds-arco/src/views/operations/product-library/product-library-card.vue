@@ -67,9 +67,8 @@ watch(() => props.product.id, () => {
   <FaCard
     role="article"
     :aria-label="`${product.name}，${statusLabel}`"
-    class="product-library-card py-0 rounded-xl gap-0 h-full shadow-sm transition-shadow overflow-hidden hover:shadow-md"
+    class="product-library-card py-0 rounded-xl gap-0 h-full shadow-sm overflow-hidden"
     content-class="p-0 flex flex-1"
-    @click="emit('open')"
   >
     <div class="p-3 flex gap-3 min-w-0 sm:gap-4">
       <div class="rounded-lg bg-muted/20 shrink-0 h-28 w-28 relative overflow-hidden sm:h-40 sm:w-40">
@@ -102,19 +101,13 @@ watch(() => props.product.id, () => {
           <h3 class="qs-type-component-title m-0 break-words [overflow-wrap:anywhere]">
             {{ product.name }}
           </h3>
-          <FaButton
+          <p
             v-if="canManageAlias"
-            variant="ghost"
-            size="sm"
-            class="mt-1 px-0 py-0.5 h-auto min-w-0 justify-start"
             :title="aliasTitle"
-            :aria-label="`${product.name}：${aliasTitle}`"
-            @click.stop="emit('editAlias')"
+            class="qs-type-body text-muted-foreground m-0 mt-1 truncate"
           >
-            <span class="text-muted-foreground shrink-0">自定义名称</span>
-            <span class="truncate">{{ aliasLabel }}</span>
-            <FaIcon name="i-lucide:pencil" class="opacity-60 shrink-0 size-3.5" aria-hidden="true" />
-          </FaButton>
+            自定义别名：{{ aliasLabel }}
+          </p>
         </div>
 
         <dl class="text-sm m-0 mt-auto gap-1 grid grid-cols-[auto_1fr] min-w-0">
@@ -138,12 +131,21 @@ watch(() => props.product.id, () => {
           </dd>
         </dl>
 
-        <div class="flex justify-end">
+        <div class="flex flex-wrap gap-2 justify-end">
+          <FaButton
+            v-if="canManageAlias"
+            variant="outline"
+            size="sm"
+            :aria-label="`设置 ${product.name} 的自定义别名`"
+            @click="emit('editAlias')"
+          >
+            自定义别名
+          </FaButton>
           <FaButton
             variant="outline"
             size="sm"
             :aria-label="`查看 ${product.name} 详情`"
-            @click.stop="emit('open')"
+            @click="emit('open')"
           >
             查看详情
           </FaButton>
