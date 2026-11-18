@@ -8,6 +8,7 @@ import test from 'node:test'
 import {
   buildCategoryOptions,
   buildProductHeadOptions,
+  buildProductLibraryOriginalImageUrl,
   buildProductLibraryQuery,
   buildProductLibraryThumbnailUrl,
   buildSupplierOptions,
@@ -120,13 +121,21 @@ test('供应商、分类与产品头选项按当前联动层级生成', () => {
   assert.deepEqual(buildProductHeadOptions(tree, undefined), [])
 })
 
-test('卡片封面使用 thumb 变体，缺少主图时返回空', () => {
+test('卡片封面优先使用 thumb 变体，并可回退原图', () => {
   const product = productFixture()
   assert.equal(
     buildProductLibraryThumbnailUrl(product),
     '/api/products/product-1/media/media-1/content?variant=thumb',
   )
+  assert.equal(
+    buildProductLibraryOriginalImageUrl(product),
+    '/api/products/product-1/media/media-1/content',
+  )
   assert.equal(buildProductLibraryThumbnailUrl({
+    ...product,
+    media: { ...product.media, mainImage: null },
+  }), null)
+  assert.equal(buildProductLibraryOriginalImageUrl({
     ...product,
     media: { ...product.media, mainImage: null },
   }), null)

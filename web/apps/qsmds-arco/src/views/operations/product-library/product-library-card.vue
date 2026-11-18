@@ -4,6 +4,7 @@ import type { ProductListItemViewModel } from '@/views/admin/product-management/
 import { computed, ref, watch } from 'vue'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import {
+  buildProductLibraryOriginalImageUrl,
   buildProductLibraryThumbnailUrl,
   productLibraryAliasLabel,
   productLibraryStatusLabel,
@@ -29,10 +30,17 @@ const emit = defineEmits<{
 }>()
 
 const imageFailed = ref(false)
+const useOriginalImage = ref(false)
 const thumbnailUrl = computed(() => (
   props.canReadMedia ? buildProductLibraryThumbnailUrl(props.product) : null
 ))
-const hasImage = computed(() => thumbnailUrl.value !== null && !imageFailed.value)
+const originalUrl = computed(() => (
+  props.canReadMedia ? buildProductLibraryOriginalImageUrl(props.product) : null
+))
+const displayImageUrl = computed(() => (
+  useOriginalImage.value ? originalUrl.value : thumbnailUrl.value
+))
+const hasImage = computed(() => displayImageUrl.value !== null && !imageFailed.value)
 const aliasLabel = computed(() => productLibraryAliasLabel(props.alias))
 const aliasTitle = computed(() => props.alias?.trim() ? `自定义名称：${props.alias}` : '自定义名称：使用产品名')
 const statusLabel = computed(() => productLibraryStatusLabel(props.product.status))
@@ -41,8 +49,17 @@ const statusDotClass = computed(() => (
 ))
 const initial = computed(() => Array.from(props.product.name.trim())[0] ?? '产')
 
+function onImageError(): void {
+  if (!useOriginalImage.value && originalUrl.value !== null) {
+    useOriginalImage.value = true
+    return
+  }
+  imageFailed.value = true
+}
+
 watch(() => props.product.id, () => {
   imageFailed.value = false
+  useOriginalImage.value = false
 })
 </script>
 
@@ -57,17 +74,19 @@ watch(() => props.product.id, () => {
     <div class="p-3 flex gap-3 min-w-0 sm:gap-4">
       <div class="rounded-lg bg-muted/20 shrink-0 h-28 w-28 relative overflow-hidden sm:h-40 sm:w-40">
         <img
-          v-if="hasImage && thumbnailUrl"
-          :src="thumbnailUrl"
+          v-if="hasImage && displayImageUrl"
+          :key="displayImageUrl"
+          :src="displayImageUrl"
           :alt="`${product.name}主图`"
           loading="lazy"
           decoding="async"
           class="h-full w-full object-contain"
-          @error="imageFailed = true"
+          @error="onImageError"
         >
         <div v-else class="text-muted-foreground flex flex-col gap-2 h-full w-full items-center justify-center">
-          <FaIcon name="qs-products" class="opacity-50 size-8 sm:size-10" aria-hidden="true" />
-          <span class="text-2xl font-semibold opacity-40 sm:text-3xl">{{ initial }}</span>
+          <FaIcon :name="canReadMedia ? 'qs-products' : 'i-lucide:image-off'" class="opacity-50 size-8 sm:size-10" aria-hidden="true" />
+          <span v-if="canReadMedia" class="text-2xl font-semibold opacity-40 sm:text-3xl">{{ initial }}</span>
+          <span v-else class="text-xs px-2 text-center">无图片权限</span>
         </div>
         <span
           role="status"
@@ -80,7 +99,7 @@ watch(() => props.product.id, () => {
 
       <div class="flex flex-1 flex-col gap-2 min-w-0">
         <div class="min-w-0">
-          <h3 class="qs-type-section-title leading-snug m-0 line-clamp-2">
+          <h3 class="qs-type-compact-title m-0 break-words [overflow-wrap:anywhere]">
             {{ product.name }}
           </h3>
           <FaButton

@@ -75,7 +75,7 @@ export function buildProductHeadOptions(
   return category?.productHeads.map(head => ({ value: head.id, label: head.name })) ?? []
 }
 
-/** 卡片只加载缩略图；原图在详情抽屉中读取。 */
+/** 卡片优先缩略图，缩略图失败时回退原图；原图只在回退时加载。 */
 export function buildProductLibraryThumbnailUrl(product: ProductListItemViewModel): string | null {
   const mainImage = product.media.mainImage
   if (mainImage === null) {
@@ -83,6 +83,11 @@ export function buildProductLibraryThumbnailUrl(product: ProductListItemViewMode
   }
   const url = resolveProductMediaContentUrl(product.id, mainImage)
   return url === null ? null : `${url}?variant=thumb`
+}
+
+export function buildProductLibraryOriginalImageUrl(product: ProductListItemViewModel): string | null {
+  const mainImage = product.media.mainImage
+  return mainImage === null ? null : resolveProductMediaContentUrl(product.id, mainImage)
 }
 
 export function normalizeProductLibraryAlias(value: string): string {

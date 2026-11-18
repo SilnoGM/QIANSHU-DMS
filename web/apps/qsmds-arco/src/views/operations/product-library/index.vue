@@ -494,7 +494,7 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-else-if="loading"
-          class="gap-4 grid lg:grid-cols-2"
+          class="gap-4 grid xl:grid-cols-2"
           aria-busy="true"
         >
           <div
@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
         </FaEmpty>
         <div
           v-else
-          class="gap-4 grid lg:grid-cols-2"
+          class="gap-4 grid xl:grid-cols-2"
           aria-live="polite"
         >
           <ProductLibraryCard
