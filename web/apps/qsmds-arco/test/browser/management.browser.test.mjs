@@ -1042,8 +1042,8 @@ async function verifyProductList(page, baseUrl) {
     })()`)
     assert.deepEqual(productDetailLayout, {
       fitsHorizontally: true,
-      labels: ['产品身份', '分类与产品头', '供应商', '价格资料', '产品属性（2）', '产品备注', '媒体资料', '审计信息'],
-      sectionCount: 8,
+      labels: ['产品身份', '唛头默认别名', '分类与产品头', '供应商', '价格资料', '产品属性（2）', '产品备注', '媒体资料', '审计信息'],
+      sectionCount: 9,
       singleColumn: true,
       verticallyScrollable: true,
     })
