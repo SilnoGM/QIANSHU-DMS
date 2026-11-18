@@ -69,7 +69,7 @@ watch(() => props.product.id, () => {
     class="product-library-card py-0 rounded-xl gap-0 h-full w-full shadow-sm overflow-hidden"
     content-class="p-0 flex flex-1"
   >
-    <div class="p-3 gap-3 grid grid-cols-[7rem_minmax(0,1fr)] min-w-0 sm:gap-4 sm:grid-cols-[10rem_minmax(0,1fr)] xl:grid-cols-[11rem_minmax(0,1fr)]">
+    <div class="p-3 flex-1 gap-3 grid grid-cols-[7rem_minmax(0,1fr)] min-w-0 sm:gap-4 sm:grid-cols-[10rem_minmax(0,1fr)] xl:grid-cols-[11rem_minmax(0,1fr)]">
       <div class="rounded-lg bg-muted/20 w-full aspect-square relative overflow-hidden">
         <img
           v-if="hasImage && displayImageUrl"
@@ -109,7 +109,7 @@ watch(() => props.product.id, () => {
         </div>
 
         <div class="p-2 rounded-lg bg-muted/40">
-          <dl class="m-0 gap-2 grid grid-cols-3 min-w-0">
+          <dl class="m-0 gap-2 grid grid-cols-1 min-w-0 min-[480px]:grid-cols-3">
             <div class="min-w-0">
               <dt class="qs-type-meta">
                 台币

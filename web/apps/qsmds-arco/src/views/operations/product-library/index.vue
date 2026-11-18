@@ -512,7 +512,7 @@ onBeforeUnmount(() => {
               <div class="rounded bg-muted/50 h-4 w-3/4 motion-safe:animate-pulse" />
               <div class="rounded bg-muted/50 h-3 w-1/2 motion-safe:animate-pulse" />
               <div class="p-2 rounded-lg bg-muted/40">
-                <div class="gap-2 grid grid-cols-3">
+                <div class="gap-2 grid grid-cols-1 min-[480px]:grid-cols-3">
                   <div v-for="cell in 3" :key="cell" class="flex flex-col gap-1">
                     <div class="rounded bg-muted/50 h-3 w-10 motion-safe:animate-pulse" />
                     <div class="rounded bg-muted/50 h-4 w-16 motion-safe:animate-pulse" />
