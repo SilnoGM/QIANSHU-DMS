@@ -15,6 +15,7 @@ export interface ProductUpdateLockRecord {
   readonly productHeadId: string | null
   readonly productHeadName: string | null
   readonly productNo: string
+  readonly defaultAlias: string | null
   readonly status: ProductStatusValue
   readonly supplierValue: string
   readonly sortOrder: number
@@ -33,6 +34,7 @@ export interface ProductUpdateRecordData {
   readonly name?: string
   readonly categoryId?: string | null
   readonly productHeadId?: string | null
+  readonly defaultAlias?: string | null
   readonly status?: ProductStatusValue
   readonly supplierValue?: string
   readonly sortOrder?: number
@@ -63,6 +65,7 @@ export async function readProductForUpdate(
       product."product_head_id" AS "productHeadId",
       head."name" AS "productHeadName",
       product."product_no" AS "productNo",
+      product."default_alias" AS "defaultAlias",
       product."status",
       product."supplier_value" AS "supplierValue",
       product."sort_order" AS "sortOrder",

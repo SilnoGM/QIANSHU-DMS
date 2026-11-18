@@ -30867,6 +30867,301 @@
         }
       }
     },
+    "/api/products/{productId}/default-alias": {
+      "patch": {
+        "operationId": "products_update_default_alias",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductDefaultAliasRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListItemDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "products"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PRODUCT_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PRODUCT_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/products/{productId}/media": {
       "post": {
         "operationId": "products_upload_media",
@@ -84278,6 +84573,8 @@
                 "PRODUCT_UPDATED",
                 "PRODUCT_ALIAS_UPDATED",
                 "PRODUCT_ALIAS_CLEARED",
+                "PRODUCT_DEFAULT_ALIAS_UPDATED",
+                "PRODUCT_DEFAULT_ALIAS_CLEARED",
                 "PRODUCT_CATEGORY_CREATED",
                 "PRODUCT_CATEGORY_RENAMED",
                 "PRODUCT_CATEGORY_DELETED",
@@ -116276,6 +116573,11 @@
           "productNo": {
             "type": "string"
           },
+          "defaultAlias": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 36
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -116358,6 +116660,7 @@
           "productHeadId",
           "productHeadName",
           "productNo",
+          "defaultAlias",
           "status",
           "sortOrder",
           "supplier",
@@ -116763,6 +117066,26 @@
         },
         "required": [
           "status",
+          "expectedVersion"
+        ]
+      },
+      "UpdateProductDefaultAliasRequestDto": {
+        "type": "object",
+        "properties": {
+          "defaultAlias": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 36
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "defaultAlias",
           "expectedVersion"
         ]
       },
@@ -129532,6 +129855,8 @@
               "PRODUCT_UPDATED",
               "PRODUCT_ALIAS_UPDATED",
               "PRODUCT_ALIAS_CLEARED",
+              "PRODUCT_DEFAULT_ALIAS_UPDATED",
+              "PRODUCT_DEFAULT_ALIAS_CLEARED",
               "PRODUCT_CATEGORY_CREATED",
               "PRODUCT_CATEGORY_RENAMED",
               "PRODUCT_CATEGORY_DELETED",

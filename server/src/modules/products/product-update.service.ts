@@ -51,6 +51,11 @@ import {
   type ProductUpdateRecordData,
 } from './product-update.persistence'
 import { readNextProductSortOrder } from './product-command.persistence'
+import type { UpdateProductDefaultAliasRequestDto } from './dto/product-update.dto'
+import {
+  isValidProductAlias,
+  normalizeProductAlias,
+} from '../product-aliases/product-alias.logic'
 import {
   ProductTaxonomyService,
   type ResolvedProductTaxonomyIds,
@@ -357,6 +362,73 @@ export class ProductUpdateService {
             version: current.version + 1,
             previousStatus: current.status,
             status: target.command.status,
+          },
+        })
+
+        return this.readResponse(transaction, productId)
+      })
+    }
+    catch (error) {
+      return mapUpdateError(error)
+    }
+  }
+
+  /** 默认别名影响所有出单人的唛头，只允许管理员通过 products:update 维护。 */
+  async updateDefaultAlias(
+    context: ProductUpdateContext,
+    productId: string,
+    input: UpdateProductDefaultAliasRequestDto,
+  ): Promise<ProductListItem> {
+    const trusted = validateTrustedContext(context)
+    const alias = input.defaultAlias === null
+      ? null
+      : normalizeProductAlias(input.defaultAlias)
+    if (alias !== null && !isValidProductAlias(alias)) {
+      throw productException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '默认别名不合法',
+        { defaultAlias: ['默认别名长度必须为 1 到 36 个字符，且不能包含控制字符或 ×'] },
+      )
+    }
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const current = await readProductForUpdate(transaction, productId)
+        if (current === null) {
+          throw productException(
+            HttpStatus.NOT_FOUND,
+            'PRODUCT_NOT_FOUND',
+            '产品不存在',
+          )
+        }
+        if (current.version !== input.expectedVersion) throw stateChangedError()
+        if (current.defaultAlias === alias) {
+          return this.readResponse(transaction, productId)
+        }
+
+        await updateProductRecord(transaction, {
+          productId,
+          actorUserId: trusted.actorUserId,
+          data: { defaultAlias: alias },
+        })
+        await this.audit.record(transaction, {
+          eventType: alias === null
+            ? AuditEventType.PRODUCT_DEFAULT_ALIAS_CLEARED
+            : AuditEventType.PRODUCT_DEFAULT_ALIAS_UPDATED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: trusted.actorUserId,
+          targetType: 'PRODUCT',
+          targetId: productId,
+          requestId: trusted.requestId,
+          metadata: {
+            productNo: current.productNo,
+            previousDefaultAlias: current.defaultAlias,
+            defaultAlias: alias,
+            previousVersion: current.version,
+            version: current.version + 1,
           },
         })
 

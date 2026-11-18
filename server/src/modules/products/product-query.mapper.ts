@@ -37,6 +37,7 @@ export interface ProductQueryRow {
   readonly category: ProductCategoryRow | null
   readonly productHead: ProductHeadRow | null
   readonly productNo: string
+  readonly defaultAlias: string | null
   readonly status: ProductStatusValue
   readonly supplierValue: string
   readonly sortOrder: number
@@ -86,6 +87,7 @@ export const PRODUCT_RESPONSE_SELECT = {
   category: { select: { id: true, name: true } },
   productHead: { select: { id: true, name: true } },
   productNo: true,
+  defaultAlias: true,
   status: true,
   supplierValue: true,
   sortOrder: true,
@@ -112,6 +114,7 @@ export interface ProductListItem {
   readonly productHeadId: string | null
   readonly productHeadName: string | null
   readonly productNo: string
+  readonly defaultAlias: string | null
   readonly status: ProductStatusValue
   readonly supplier: ProductSupplier | null
   readonly sortOrder: number
@@ -152,6 +155,7 @@ export function mapProductListItem(
     productHeadId: row.productHead?.id ?? null,
     productHeadName: row.productHead?.name ?? null,
     productNo: row.productNo,
+    defaultAlias: row.defaultAlias,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),
     sortOrder: row.sortOrder,

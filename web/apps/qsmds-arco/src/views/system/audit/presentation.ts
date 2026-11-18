@@ -64,6 +64,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PRODUCT_UPDATED: '产品已更新',
   PRODUCT_ALIAS_UPDATED: '产品别名已更新',
   PRODUCT_ALIAS_CLEARED: '产品别名已清除',
+  PRODUCT_DEFAULT_ALIAS_UPDATED: '产品默认别名已更新',
+  PRODUCT_DEFAULT_ALIAS_CLEARED: '产品默认别名已清除',
   PRODUCT_CATEGORY_CREATED: '产品分类已创建',
   PRODUCT_CATEGORY_RENAMED: '产品分类已重命名',
   PRODUCT_CATEGORY_DELETED: '产品分类已删除',
