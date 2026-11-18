@@ -97,6 +97,30 @@ describe('sales order create fingerprint', () => {
     }))).not.toBe(baseline)
   })
 
+  it('keeps the v2 fingerprint stable when a catalog remark is absent and changes when present', () => {
+    const catalogPayload = (line: Record<string, unknown>) => payload({
+      lines: [{
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        actualUnitPriceAmount: '10',
+        quantity: 2,
+        ...line,
+      }],
+    })
+
+    // 省略与 null 都不进入序列化，保证部署窗口内旧客户端的在途重试指纹不变。
+    const baseline = calculateSalesOrderCreateFingerprint(
+      ACTOR_ID,
+      catalogPayload({ description: null }),
+    )
+    expect(calculateSalesOrderCreateFingerprint(ACTOR_ID, catalogPayload({})))
+      .toBe(baseline)
+    expect(calculateSalesOrderCreateFingerprint(
+      ACTOR_ID,
+      catalogPayload({ description: '货件需加固' }),
+    )).not.toBe(baseline)
+  })
+
   it('hashes idempotency keys before persistence', () => {
     const key = '123e4567-e89b-42d3-a456-426614174000'
     const hash = hashSalesOrderIdempotencyKey(key)

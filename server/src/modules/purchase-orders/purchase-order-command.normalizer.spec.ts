@@ -117,6 +117,24 @@ describe('normalizePurchaseOrderCreateCommand', () => {
     })
   })
 
+  it('accepts an optional catalog remark and keeps absence distinct from an explicit clear', () => {
+    const withRemark = linkedInput()
+    const withRemarkLines = withRemark.lines as Array<Record<string, unknown>>
+    withRemarkLines[0] = { ...withRemarkLines[0], description: '  货件需加固  ' }
+    expect(normalizePurchaseOrderCreateCommand(withRemark, TODAY).lines[0])
+      .toMatchObject({ lineType: 'CATALOG', description: '货件需加固' })
+
+    const cleared = linkedInput()
+    const clearedLines = cleared.lines as Array<Record<string, unknown>>
+    clearedLines[0] = { ...clearedLines[0], description: '   ' }
+    expect(normalizePurchaseOrderCreateCommand(cleared, TODAY).lines[0]?.description)
+      .toBeNull()
+
+    // 未提供时保持 undefined，由创建依赖服务回退销售明细快照。
+    expect(normalizePurchaseOrderCreateCommand(linkedInput(), TODAY).lines[0]?.description)
+      .toBeUndefined()
+  })
+
   it('normalizes an independent stock CUSTOM line without a sales source', () => {
     const normalized = normalizePurchaseOrderCreateCommand(stockInput(), TODAY)
     expect(normalized).toMatchObject({

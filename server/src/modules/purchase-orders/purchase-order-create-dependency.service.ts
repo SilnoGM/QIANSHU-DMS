@@ -465,7 +465,9 @@ export class PurchaseOrderCreateDependencyService {
       productAttributesSnapshot: normalizeAttributes(
         source?.productAttributesSnapshot ?? product.attributes,
       ),
-      descriptionSnapshot: source?.descriptionSnapshot ?? null,
+      descriptionSnapshot: line.description === undefined
+        ? (source?.descriptionSnapshot ?? null)
+        : line.description,
       referencePurchaseUnitPriceAmount,
       actualPurchaseUnitPriceAmount: line.actualPurchaseUnitPriceAmount,
       quantity: line.quantity,

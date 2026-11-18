@@ -524,6 +524,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
       lineType: 'CATALOG',
       productId: catalogOption.id,
       sourceSalesOrderLineId: sourceCatalogLine.id,
+      description: '采购备注',
       actualPurchaseUnitPriceAmount: '10.00',
       quantity: 2,
     }],

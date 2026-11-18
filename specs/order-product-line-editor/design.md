@@ -467,10 +467,10 @@ lineActualSubtotal = actualUnitPriceAmount × quantity
 
 ### 9.4 DTO 与详情映射
 
-- 数据库产品仍只提交 `lineType/productId/actualUnitPriceAmount/quantity`。
+- 数据库产品提交 `lineType/productId/description/actualUnitPriceAmount/quantity`；`description` 是选填行备注，空白归一为 `null`，随明细写入销售行快照。
 - 临时产品仍提交 `lineType/name/description/actualUnitPriceAmount/quantity`。
 - `productNo`、标准价和 `mainImage` 仅用于当前 Web 会话显示，不进入创建 DTO。
-- Server 保存时继续从可信产品记录生成编号、名称、属性和标准价快照。
+- Server 保存时继续从可信产品记录生成编号、名称、属性和标准价快照；行备注属于本单录入值，不从产品档案继承。
 - `QsSalesOrderDesc` 和最终核对页继续读取现有销售表单映射；主图不扩大为订单持久化字段。
 
 ## 10. 组件库展示

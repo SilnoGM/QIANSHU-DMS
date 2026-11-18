@@ -136,7 +136,7 @@ purchaseTotalAmount = depositDueAmount + balanceDueAmount
 | `productNoSnapshot` | `varchar(64)?` | 产品编号快照 |
 | `productNameSnapshot` | `varchar(128)` | 非空白 |
 | `productAttributesSnapshot` | `jsonb` | 必须为数组 |
-| `descriptionSnapshot` | `varchar(1000)?` | 说明快照 |
+| `descriptionSnapshot` | `varchar(1000)?` | 行备注快照；`CATALOG` 未提交时回退销售行说明 |
 | `referencePurchaseUnitPriceAmount` | `decimal(30,4)` | 页面“采购定价” |
 | `actualPurchaseUnitPriceAmount` | `decimal(30,4)` | 页面“本单采购价” |
 | `quantity` | `integer` | 正整数 |
@@ -147,6 +147,7 @@ purchaseTotalAmount = depositDueAmount + balanceDueAmount
 
 - `CATALOG`：`productId`、产品编号快照和两个价格均非空。
 - `CUSTOM`：`productId`、产品编号快照为空；两个价格非空且完全相等。
+- `CATALOG` 行备注由采购侧提交；字段缺省时回退所引销售行的说明快照，显式 `null` 表示采购侧清空，不再回退。
 - `lineTotalAmount = actualPurchaseUnitPriceAmount * quantity`。
 - `(purchaseOrderId, lineNumber)` 唯一。
 - `sourceSalesOrderLineId` 建普通索引，不建唯一索引。

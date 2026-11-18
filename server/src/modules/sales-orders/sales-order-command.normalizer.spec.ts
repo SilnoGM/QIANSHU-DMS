@@ -112,6 +112,35 @@ describe('normalizeSalesOrderCreateCommand', () => {
     expect(Object.isFrozen(normalized.lines)).toBe(true)
   })
 
+  it('accepts an optional catalog line remark and normalizes blanks to null', () => {
+    const withRemark = validInput()
+    const lines = withRemark.lines as Array<Record<string, unknown>>
+    lines[0] = { ...lines[0], description: '  货件需加固  ' }
+    expect(normalizeSalesOrderCreateCommand(withRemark, TODAY).lines[0])
+      .toMatchObject({ lineType: 'CATALOG', description: '货件需加固' })
+
+    const blank = validInput()
+    const blankLines = blank.lines as Array<Record<string, unknown>>
+    blankLines[0] = { ...blankLines[0], description: '   ' }
+    expect(normalizeSalesOrderCreateCommand(blank, TODAY).lines[0])
+      .toMatchObject({ description: null })
+
+    expect(normalizeSalesOrderCreateCommand(validInput(), TODAY).lines[0])
+      .toMatchObject({ description: null })
+  })
+
+  it('rejects a catalog line remark beyond the description limit', () => {
+    const input = validInput()
+    const lines = input.lines as Array<Record<string, unknown>>
+    lines[0] = { ...lines[0], description: 'x'.repeat(1001) }
+
+    const error = captureApiException(() => (
+      normalizeSalesOrderCreateCommand(input, TODAY)
+    ))
+    expect(error).toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(Object.keys(error.fieldErrors ?? {})).toEqual(['lines.0.description'])
+  })
+
   it.each([
     ['0', '0.00'],
     ['1', '1.00'],

@@ -578,6 +578,7 @@ export class SalesOrderCommandService {
       productNoSnapshot: product.productNo,
       productNameSnapshot: product.name,
       productAttributesSnapshot: product.attributes,
+      descriptionSnapshot: line.description,
       standardUnitPriceAmount: product.standardUnitPriceAmount,
       actualUnitPriceAmount: line.actualUnitPriceAmount,
       quantity: line.quantity,

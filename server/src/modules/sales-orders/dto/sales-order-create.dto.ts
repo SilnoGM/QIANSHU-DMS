@@ -82,8 +82,13 @@ export class SalesOrderLineInputDto {
   @IsUnicodeCodePointLength(1, 128)
   name?: string
 
-  @ApiProperty({ type: 'string', maxLength: 1000, nullable: true, required: false })
-  @ValidateIf((item: SalesOrderLineInputDto) => item.lineType === 'CUSTOM')
+  @ApiProperty({
+    type: 'string',
+    maxLength: 1000,
+    nullable: true,
+    required: false,
+    description: '行备注，选填；数据库产品行与临时产品行都可提交',
+  })
   @IsOptional()
   @IsString()
   @IsUnicodeCodePointLength(1, 1000)

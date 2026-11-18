@@ -623,6 +623,7 @@ function validateLine(
       dto = {
         lineType: 'CATALOG',
         productId: line.productId,
+        description: optionalText(line.description),
         actualUnitPriceAmount: formatAmountUnitsForPrecision(
           amountUnits(price),
           precision,

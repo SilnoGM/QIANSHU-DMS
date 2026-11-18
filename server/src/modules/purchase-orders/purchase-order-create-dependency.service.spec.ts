@@ -59,6 +59,27 @@ function stockCommand() {
   }, '2026-08-27')
 }
 
+function stockCatalogCommand(line: Record<string, unknown> = {}) {
+  return normalizePurchaseOrderCreateCommand({
+    parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }],
+    purchaseType: 'STOCK',
+    productMode: 'CATALOG',
+    supplierValue: 'SUPPLIER_A',
+    orderDate: '2026-08-27',
+    expectedShippingMarkResolution: 'a'.repeat(64),
+    lines: [{
+      lineType: 'CATALOG',
+      productId: PRODUCT_ID,
+      actualPurchaseUnitPriceAmount: '10',
+      quantity: 2,
+      ...line,
+    }],
+    purchaseTotalAmount: '20',
+    depositDueAmount: '0',
+    balanceDueAmount: '20',
+  }, '2026-08-27')
+}
+
 function setup() {
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
@@ -167,6 +188,59 @@ describe('PurchaseOrderCreateDependencyService', () => {
       fixture.transaction,
       { dictionaryCode: 'service_provider.supplier', value: 'SUPPLIER_A' },
     )
+  })
+
+  it('prefers a purchase-side catalog remark over the inherited sales snapshot', async () => {
+    const fixture = setup()
+    const resolved = await fixture.service.requireDependencies(
+      fixture.transaction as unknown as Prisma.TransactionClient,
+      linkedCommand({ description: ' 采购侧补充 ' }),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )
+
+    expect(resolved.lines).toMatchObject([{ descriptionSnapshot: '采购侧补充' }])
+  })
+
+  it('treats an explicit null catalog remark as cleared and keeps inheriting when omitted', async () => {
+    // 新客户端总是提交备注字段，显式 null 表示用户清空；旧客户端省略时继续继承销售快照。
+    const clearedFixture = setup()
+    const cleared = await clearedFixture.service.requireDependencies(
+      clearedFixture.transaction as unknown as Prisma.TransactionClient,
+      linkedCommand({ description: null }),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )
+    expect(cleared.lines).toMatchObject([{ descriptionSnapshot: null }])
+
+    const legacyFixture = setup()
+    const inherited = await legacyFixture.service.requireDependencies(
+      legacyFixture.transaction as unknown as Prisma.TransactionClient,
+      linkedCommand(),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )
+    expect(inherited.lines).toMatchObject([{ descriptionSnapshot: '销售行说明' }])
+  })
+
+  it('keeps an independent STOCK catalog remark and defaults it to null when omitted', async () => {
+    const withRemark = setup()
+    const resolved = await withRemark.service.requireDependencies(
+      withRemark.transaction as unknown as Prisma.TransactionClient,
+      stockCatalogCommand({ description: ' 备货行说明 ' }),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )
+    expect(resolved.lines).toMatchObject([{ descriptionSnapshot: '备货行说明' }])
+
+    const withoutRemark = setup()
+    const fallback = await withoutRemark.service.requireDependencies(
+      withoutRemark.transaction as unknown as Prisma.TransactionClient,
+      stockCatalogCommand(),
+      ACTOR_ID,
+      { lockSalesLines: true },
+    )
+    expect(fallback.lines).toMatchObject([{ descriptionSnapshot: null }])
   })
 
   it('persists the linked CUSTOM purchase snapshot while keeping the sales source', async () => {

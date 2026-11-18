@@ -118487,7 +118487,8 @@
           "description": {
             "type": "string",
             "maxLength": 1000,
-            "nullable": true
+            "nullable": true,
+            "description": "行备注，选填；数据库产品行与临时产品行都可提交"
           },
           "actualUnitPriceAmount": {
             "type": "string",
@@ -123675,7 +123676,8 @@
           "description": {
             "type": "string",
             "maxLength": 1000,
-            "nullable": true
+            "nullable": true,
+            "description": "行备注，选填；数据库产品行与临时产品行都可提交"
           },
           "referencePurchaseUnitPriceAmount": {
             "type": "string",

@@ -669,8 +669,9 @@ export function buildPurchaseOrderCreateRequest(
         totalUnits += actualPrice.units * BigInt(quantity)
         requestLines.push({
           actualPurchaseUnitPriceAmount: actualPrice.normalized,
-          // 数据库产品的名称、属性和行说明都由服务端依据产品档案及销售来源生成可信快照；
-          // 客户端只提交身份、真实采购价和数量，避免把编辑态展示字段带入创建契约。
+          // 数据库产品的名称与属性仍由服务端依据销售来源（或产品档案）生成可信快照；
+          // 行备注属于采购侧录入值，必须随行提交，空值显式传 null 表示清空。
+          description: normalizeOptionalText(line.description),
           lineType: 'CATALOG',
           productId: line.productId,
           ...(source.purchaseType === 'SALES_LINKED'
