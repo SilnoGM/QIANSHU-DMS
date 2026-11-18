@@ -54,7 +54,7 @@ test('卡片是左侧图片、右侧产品名/自定义别名/价格区的横向
   assert.match(card, /标准售价/u)
   assert.match(card, /台币/u)
   assert.match(card, /马币/u)
-  assert.match(card, /采购成本/u)
+  assert.match(card, /采购成本（人民币）/u)
   assert.match(card, /ring-2 ring-background/u)
   assert.match(card, /暂无图片/u)
   assert.match(card, /无图片权限/u)

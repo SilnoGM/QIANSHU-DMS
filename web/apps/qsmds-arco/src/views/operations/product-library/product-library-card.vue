@@ -144,7 +144,7 @@ watch(() => props.product.id, () => {
             </div>
             <div class="pt-2 border-t border-border/60 flex gap-3 min-w-0 items-baseline justify-between">
               <dt class="qs-type-meta">
-                采购成本
+                采购成本（人民币）
               </dt>
               <dd class="m-0 min-w-0">
                 <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
