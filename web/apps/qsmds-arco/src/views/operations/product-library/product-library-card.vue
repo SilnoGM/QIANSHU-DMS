@@ -135,11 +135,11 @@ watch(() => props.product.id, () => {
               </dt>
               <dd class="m-0 text-right min-w-0">
                 <span class="qs-type-meta block">台币</span>
-                <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+                <AmountDisplay class="!text-[15px]" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
               </dd>
               <dd class="m-0 text-right min-w-0">
                 <span class="qs-type-meta block">马币</span>
-                <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+                <AmountDisplay class="!text-[15px]" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
               </dd>
             </div>
             <div class="pt-2 border-t border-border/60 flex gap-3 min-w-0 items-baseline justify-between">
