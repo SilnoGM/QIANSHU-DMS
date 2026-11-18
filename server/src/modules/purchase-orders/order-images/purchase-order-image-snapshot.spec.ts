@@ -34,7 +34,7 @@ describe('purchase order image snapshot', () => {
       items: [{ purchaseOrderLineId: 'line-1', lineNumber: 1, quantity: 2 }],
     })
     expect(result.shippingMarkText).toBe('TEST/20260915-0001')
-    expect(result.templateVersion).toBe('6')
+    expect(result.templateVersion).toBe('7')
     expect(result.purchaseTotalAmount).toBe('1234.5600')
     expect(JSON.parse(JSON.stringify(result))).toEqual(result)
     const changed = { ...input, amounts: { ...input.amounts, purchaseTotalAmount: '9007199254740993.1234' } }

@@ -15,6 +15,9 @@ export const SHIPPING_MARK_LABEL_MAX_LENGTH = 500
 /** STOCK 采购单没有销售单，固定标记放在括号内。 */
 export const STOCK_SHIPPING_MARK_SUFFIX = '公司囤货采购'
 
+/** 贴标提示只输出一次，位于采购备注段；复制文案、采购单图片和通知文本共用同一句。 */
+export const SHIPPING_MARK_PASTE_HINT = '请将上述货件唛头贴到对应的包装箱 / 货物上'
+
 export interface ShippingMarkLabelProduct {
   readonly lineNumber: number
   readonly productId: string | null
