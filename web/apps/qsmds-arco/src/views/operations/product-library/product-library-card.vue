@@ -135,7 +135,7 @@ watch(() => props.product.id, () => {
                   台币标准价
                 </dt>
                 <dd class="m-0 mt-0.5">
-                  <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
+                  <AmountDisplay :currencies="currencies" :currency="product.twdSalePrice.currency" :value="product.twdSalePrice.amount" :show-code="false" />
                 </dd>
               </div>
               <div class="min-w-0">
@@ -143,7 +143,7 @@ watch(() => props.product.id, () => {
                   马币标准价
                 </dt>
                 <dd class="m-0 mt-0.5">
-                  <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
+                  <AmountDisplay :currencies="currencies" :currency="product.myrSalePrice.currency" :value="product.myrSalePrice.amount" :show-code="false" />
                 </dd>
               </div>
             </div>
@@ -152,7 +152,7 @@ watch(() => props.product.id, () => {
                 采购成本
               </dt>
               <dd class="m-0 min-w-0">
-                <AmountDisplay class="!text-xs" :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
+                <AmountDisplay :currencies="currencies" :currency="product.purchaseCost.currency" :value="product.purchaseCost.amount" :show-code="false" />
               </dd>
             </div>
           </dl>
