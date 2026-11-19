@@ -35,6 +35,8 @@ export interface NormalizedProductCreateCommand {
   readonly purchaseCost: NormalizedProductCreateMoney
   readonly attributes: readonly NormalizedProductCreateAttribute[]
   readonly remark: string | null
+  /** 创建接口不开放该字段，恒为 false；编辑链路复用它承载产品级唛头排除标记。 */
+  readonly excludeFromShippingMark: boolean
 }
 
 function validationFailure(field: string, message = '字段校验失败'): never {
@@ -166,6 +168,17 @@ function normalizeAttributes(value: unknown): readonly NormalizedProductCreateAt
   }))
 }
 
+/** 创建请求没有该字段；编辑链路必须显式提交布尔值。 */
+function normalizeExcludeFromShippingMark(value: unknown): boolean {
+  if (value === undefined) {
+    return false
+  }
+  if (typeof value !== 'boolean') {
+    return validationFailure('excludeFromShippingMark')
+  }
+  return value
+}
+
 /**
  * 创建输入的唯一纯规范化边界。它不读取数据库、不调用发号，并在返回前完成
  * 深复制与冻结，避免调用方在指纹和写入之间修改对象。
@@ -185,6 +198,7 @@ export function normalizeProductCreateCommand(
     'purchaseCost',
     'attributes',
     'remark',
+    'excludeFromShippingMark',
   ])
 
   const status = record.status ?? 'ACTIVE'
@@ -211,6 +225,9 @@ export function normalizeProductCreateCommand(
     remark: record.remark === undefined
       ? null
       : normalizeOptionalText(record.remark, 'remark', 512),
+    excludeFromShippingMark: normalizeExcludeFromShippingMark(
+      record.excludeFromShippingMark,
+    ),
   })
 }
 

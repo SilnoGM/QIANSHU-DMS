@@ -18,6 +18,7 @@ function createRow(
     productHead: { id: 'head-1', name: '精华' },
     productNo: 'P202608120001',
     defaultAlias: null,
+    excludeFromShippingMark: false,
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,
@@ -80,6 +81,7 @@ describe('mapProductListItem', () => {
       productHeadName: '精华',
       productNo: 'P202608120001',
       defaultAlias: null,
+      excludeFromShippingMark: false,
       status: 'INACTIVE',
       supplier: {
         value: 'SUPPLIER_A',
@@ -117,6 +119,19 @@ describe('mapProductListItem', () => {
       dictionaryCode: 'service_provider.supplier',
       value: 'SUPPLIER_A',
     }, EMPTY_MEDIA).remark).toBe('需加宽机身到 1.2 米')
+  })
+
+  it('passes the shipping mark exclusion flag through unchanged', () => {
+    expect(mapProductListItem(createRow({ excludeFromShippingMark: true }), {
+      known: true,
+      dictionaryCode: 'service_provider.supplier',
+      value: 'SUPPLIER_A',
+      label: '供应商 A',
+      tone: DictionaryTone.DEFAULT,
+      typeEnabled: true,
+      itemEnabled: true,
+      effectiveEnabled: true,
+    }, EMPTY_MEDIA).excludeFromShippingMark).toBe(true)
   })
 
   it('maps disabled and unknown supplier history without changing raw values', () => {    expect(mapProductListItem(createRow(), {

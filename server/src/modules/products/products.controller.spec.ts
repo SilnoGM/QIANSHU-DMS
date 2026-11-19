@@ -564,6 +564,7 @@ describe('ProductsController OpenAPI contract', () => {
       'purchaseCost',
       'attributes',
       'remark',
+      'excludeFromShippingMark',
       'expectedVersion',
     ])
 

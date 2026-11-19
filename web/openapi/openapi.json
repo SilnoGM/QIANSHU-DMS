@@ -117051,6 +117051,10 @@
             "nullable": true,
             "maxLength": 36
           },
+          "excludeFromShippingMark": {
+            "type": "boolean",
+            "description": "为 true 时该产品不进入货件唛头后缀"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -117134,6 +117138,7 @@
           "productHeadName",
           "productNo",
           "defaultAlias",
+          "excludeFromShippingMark",
           "status",
           "sortOrder",
           "supplier",
@@ -117614,6 +117619,10 @@
             "type": "string",
             "nullable": true,
             "maxLength": 512
+          },
+          "excludeFromShippingMark": {
+            "type": "boolean",
+            "description": "为 true 时该产品的采购行不进入货件唛头后缀"
           },
           "expectedVersion": {
             "type": "integer",

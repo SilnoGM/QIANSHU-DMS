@@ -16,6 +16,7 @@ const current = {
   purchaseCost: { amount: '5.50', currency: 'CNY' },
   attributes: [{ title: '颜色', value: '红色' }],
   remark: null,
+  excludeFromShippingMark: false,
 }
 
 describe('product update normalizer', () => {
@@ -63,6 +64,31 @@ describe('product update normalizer', () => {
       changedFields: ['name'],
       command: { name: 'DTO 产品', status: ProductStatus.INACTIVE },
     })
+  })
+
+  it('treats the shipping mark exclusion flag as a standalone valid patch', () => {
+    const patch = normalizeProductUpdatePatch({
+      excludeFromShippingMark: true,
+      expectedVersion: 5,
+    })
+
+    expect(patch).toEqual({
+      excludeFromShippingMark: true,
+      expectedVersion: 5,
+    })
+    expect(buildProductUpdateTarget(current, patch)).toMatchObject({
+      changedFields: ['excludeFromShippingMark'],
+      command: { excludeFromShippingMark: true },
+    })
+  })
+
+  it('keeps an unchanged shipping mark exclusion flag out of changedFields', () => {
+    const patch = normalizeProductUpdatePatch({
+      excludeFromShippingMark: false,
+      expectedVersion: 5,
+    })
+
+    expect(buildProductUpdateTarget(current, patch).changedFields).toEqual([])
   })
 
   it.each([

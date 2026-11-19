@@ -16,6 +16,7 @@ export interface ProductUpdateLockRecord {
   readonly productHeadName: string | null
   readonly productNo: string
   readonly defaultAlias: string | null
+  readonly excludeFromShippingMark: boolean
   readonly status: ProductStatusValue
   readonly supplierValue: string
   readonly sortOrder: number
@@ -35,6 +36,7 @@ export interface ProductUpdateRecordData {
   readonly categoryId?: string | null
   readonly productHeadId?: string | null
   readonly defaultAlias?: string | null
+  readonly excludeFromShippingMark?: boolean
   readonly status?: ProductStatusValue
   readonly supplierValue?: string
   readonly sortOrder?: number
@@ -66,6 +68,7 @@ export async function readProductForUpdate(
       head."name" AS "productHeadName",
       product."product_no" AS "productNo",
       product."default_alias" AS "defaultAlias",
+      product."exclude_from_shipping_mark" AS "excludeFromShippingMark",
       product."status",
       product."supplier_value" AS "supplierValue",
       product."sort_order" AS "sortOrder",

@@ -205,6 +205,7 @@ function toCurrentProduct(row: ProductUpdateLockRecord): ProductUpdateCurrent {
     },
     attributes: row.attributes,
     remark: row.remark,
+    excludeFromShippingMark: row.excludeFromShippingMark,
   }
 }
 
@@ -241,6 +242,9 @@ function buildUpdateData(
   }
   if (changed.has('attributes')) data.attributes = command.attributes
   if (changed.has('remark')) data.remark = command.remark
+  if (changed.has('excludeFromShippingMark')) {
+    data.excludeFromShippingMark = command.excludeFromShippingMark
+  }
 
   return data
 }

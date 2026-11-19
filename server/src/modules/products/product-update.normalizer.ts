@@ -19,6 +19,7 @@ const MUTABLE_FIELDS = [
   'purchaseCost',
   'attributes',
   'remark',
+  'excludeFromShippingMark',
 ] as const
 
 type ProductMutableField = typeof MUTABLE_FIELDS[number]
@@ -34,6 +35,7 @@ export interface ProductUpdateCurrent {
   readonly purchaseCost: Readonly<{ amount: string | null; currency: string }>
   readonly attributes: unknown
   readonly remark: string | null
+  readonly excludeFromShippingMark: boolean
 }
 
 export interface NormalizedProductUpdatePatch {
@@ -48,6 +50,7 @@ export interface NormalizedProductUpdatePatch {
   readonly purchaseCost?: unknown
   readonly attributes?: unknown
   readonly remark?: unknown
+  readonly excludeFromShippingMark?: unknown
 }
 
 export interface ProductUpdateTarget {
