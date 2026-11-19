@@ -291,7 +291,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档" />
+  <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档">
+    <FaButton @click="preferencesOpen = true">
+      <FaIcon name="i-lucide:settings-2" aria-hidden="true" />
+      接收设置
+    </FaButton>
+  </FaPageHeader>
   <FaPageMain>
     <div class="flex flex-wrap gap-2 items-center justify-between">
       <div class="flex-wrap gap-3 hidden items-center md:flex">
@@ -317,9 +322,6 @@ onMounted(async () => {
       <div class="flex gap-2 items-center md:ml-auto">
         <FaButton variant="outline" size="sm" class="min-h-11 md:hidden" @click="filtersOpen = true">
           筛选
-        </FaButton>
-        <FaButton variant="outline" size="sm" class="min-h-11" @click="preferencesOpen = true">
-          接收设置
         </FaButton>
         <FaButton variant="outline" size="sm" class="min-h-11" :disabled="store.unreadTotal === 0" @click="readAll">
           全部已读
