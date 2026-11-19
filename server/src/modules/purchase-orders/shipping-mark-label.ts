@@ -31,12 +31,34 @@ export interface ShippingMarkLabelSource {
   readonly products: readonly ShippingMarkLabelProduct[]
   readonly aliases: ReadonlyMap<string, string>
   readonly defaultAliases: ReadonlyMap<string, string>
+  /**
+   * 产品级排除集合：命中即不进入唛头后缀。目录行以产品标记为唯一真相源；
+   * 自定义行没有产品记录，只能按名称兜底（见 SUPPLEMENT_PRICE_NAME）。
+   */
+  readonly excludedProductIds: ReadonlySet<string>
 }
 
 interface AliasEntry {
   readonly lineNumber: number
   readonly name: string
   quantity: number
+}
+
+/** 自定义产品行没有 products 记录，按补差价占位名称兜底排除。 */
+const SUPPLEMENT_PRICE_NAME = /补差价|補差價/u
+
+function isSupplementPriceName(value: string): boolean {
+  return SUPPLEMENT_PRICE_NAME.test(normalizeShippingMarkLabel(value))
+}
+
+function isExcludedProduct(
+  product: ShippingMarkLabelProduct,
+  excludedProductIds: ReadonlySet<string>,
+): boolean {
+  if (product.productId === null) {
+    return isSupplementPriceName(product.productName)
+  }
+  return excludedProductIds.has(product.productId)
 }
 
 function productNameOf(
@@ -58,17 +80,22 @@ function productNameOf(
 /**
  * 目录产品在同一货件内按 productId 聚合数量；自定义产品每行独立，
  * 因此同名自定义行可以同时出现。排序始终取第一次出现的采购行号。
+ * 被排除的产品整行跳过，不参与数量聚合并让出截断预算。
  */
 function buildAliasEntries(
   products: readonly ShippingMarkLabelProduct[],
   aliases: ReadonlyMap<string, string>,
   defaultAliases: ReadonlyMap<string, string>,
+  excludedProductIds: ReadonlySet<string>,
 ): readonly AliasEntry[] {
   const catalog = new Map<string, AliasEntry>()
   const custom: AliasEntry[] = []
   for (const product of products) {
     if (!Number.isSafeInteger(product.lineNumber) || product.lineNumber < 1
       || !Number.isSafeInteger(product.quantity) || product.quantity < 1) {
+      continue
+    }
+    if (isExcludedProduct(product, excludedProductIds)) {
       continue
     }
     const name = productNameOf(product, aliases, defaultAliases)
@@ -145,14 +172,24 @@ export function buildShippingMarkSuffix(
   if (purchaseType === 'STOCK') {
     const items = source === null
       ? []
-      : buildAliasEntries(source.products, new Map(), source.defaultAliases)
+      : buildAliasEntries(
+          source.products,
+          new Map(),
+          source.defaultAliases,
+          source.excludedProductIds,
+        )
     return `${joinAliasItems(items.map(aliasItem))}（${STOCK_SHIPPING_MARK_SUFFIX}）`
   }
   if (source === null) {
     return ''
   }
   const block = joinAliasItems(
-    buildAliasEntries(source.products, source.aliases, source.defaultAliases).map(aliasItem),
+    buildAliasEntries(
+      source.products,
+      source.aliases,
+      source.defaultAliases,
+      source.excludedProductIds,
+    ).map(aliasItem),
   )
   return `${block}${buildParenthetical(source)}`
 }

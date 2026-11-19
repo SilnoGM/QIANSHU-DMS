@@ -26,6 +26,7 @@ import {
   type StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
 import { buildShippingMarkSuffix } from './shipping-mark-label'
+import { resolveExcludedProductIds } from './product-shipping-mark-exclusion'
 import {
   formatPurchaseOrderAmountUnits,
   normalizePurchaseOrderSnapshotAmount,
@@ -996,6 +997,10 @@ export class PurchaseOrderQueryService {
       catalogProductIds,
       transaction ?? this.prisma,
     )
+    const excludedProductIds = await resolveExcludedProductIds(
+      transaction ?? this.prisma,
+      catalogProductIds,
+    )
     return {
       ...summary,
       paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
@@ -1024,6 +1029,7 @@ export class PurchaseOrderQueryService {
               products,
               aliases: aliasesByProduct,
               defaultAliases: defaultAliasesByProduct,
+              excludedProductIds,
             }),
           }),
           shippedAt: part.shippedAt?.toISOString() ?? null,

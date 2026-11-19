@@ -24,8 +24,16 @@ function source(
   issuerPrefix: string | null = '李华',
   customerName: string | null = '赖文寿',
   defaultAliases: ReadonlyMap<string, string> = new Map(),
+  excludedProductIds: ReadonlySet<string> = new Set(),
 ): ShippingMarkLabelSource {
-  return { issuerPrefix, customerName, products, aliases, defaultAliases }
+  return {
+    issuerPrefix,
+    customerName,
+    products,
+    aliases,
+    defaultAliases,
+    excludedProductIds,
+  }
 }
 
 describe('shipping mark label', () => {
@@ -176,5 +184,49 @@ describe('shipping mark label', () => {
     expect(formatShippingMark('QSM-20261116-0001', '（公司囤货采购）'))
       .toBe('【QSM-20261116-0001】（公司囤货采购）')
     expect(formatShippingMark('QSM-20261116-0001', '')).toBe('【QSM-20261116-0001】')
+  })
+
+  it('drops catalog products whose product-level flag excludes them from the mark', () => {
+    const products = [
+      product(1, 'a', '破碎机', 2),
+      product(2, 'b', '❗️补差价', 1),
+      product(3, 'c', '木桌', 3),
+    ]
+    const excluded = new Set(['b'])
+
+    expect(buildShippingMarkSuffix(
+      'SALES_LINKED',
+      source(products, new Map(), '李华', '赖文寿', new Map(), excluded),
+    )).toBe('破碎机×2+木桌×3（李华-赖文寿）')
+    expect(buildShippingMarkSuffix(
+      'STOCK',
+      source(products, new Map(), null, null, new Map(), excluded),
+    )).toBe('破碎机×2+木桌×3（公司囤货采购）')
+  })
+
+  it('keeps the bracket suffix when every product in the shipment is excluded', () => {
+    expect(buildShippingMarkSuffix(
+      'SALES_LINKED',
+      source([product(1, 'b', '❗️补差价')], new Map(), '李华', '赖文寿', new Map(), new Set(['b'])),
+    )).toBe('（李华-赖文寿）')
+    expect(buildShippingMarkSuffix(
+      'STOCK',
+      source([product(1, 'b', '❗️补差价')], new Map(), null, null, new Map(), new Set(['b'])),
+    )).toBe('（公司囤货采购）')
+  })
+
+  it('falls back to the name only for custom lines because they have no product record', () => {
+    const products = [
+      product(1, null, ' ❗️补差价 ', 2),
+      product(2, null, '定制架', 1),
+    ]
+    expect(buildShippingMarkSuffix('SALES_LINKED', source(products)))
+      .toBe('定制架（李华-赖文寿）')
+  })
+
+  it('never applies the name fallback to a catalog product with the flag turned off', () => {
+    const products = [product(1, 'b', '❗️补差价', 1)]
+    expect(buildShippingMarkSuffix('SALES_LINKED', source(products)))
+      .toBe('❗️补差价（李华-赖文寿）')
   })
 })
