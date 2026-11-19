@@ -79,7 +79,7 @@ export class NotificationPreferenceService {
   }
 
   private async buildView(userId: string): Promise<NotificationPreferenceListDto> {
-    const [policies, settings, templates, mutes] = await Promise.all([
+    const [policies, settings, templates, mutes, binding] = await Promise.all([
       this.prisma.notificationChannelPolicy.findMany({
         select: {
           eventType: true,
@@ -99,6 +99,16 @@ export class NotificationPreferenceService {
       this.prisma.notificationUserMute.findMany({
         where: { userId },
         select: { eventType: true, channel: true },
+      }),
+      // 与发布/派发时的绑定判定保持一致：已验证、公司号启用且不是待绑定占位号。
+      this.prisma.assistantBinding.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+          verifiedAt: { not: null },
+          account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
+        },
+        select: { id: true },
       }),
     ])
 
@@ -121,6 +131,7 @@ export class NotificationPreferenceService {
         channel,
         enabled: channelEnabled.get(channel) === true,
       })),
+      assistantBound: binding !== null,
       events: NOTIFICATION_EVENT_TYPES.map(eventType => ({
         eventType,
         label: NOTIFICATION_EVENT_LABELS[eventType],

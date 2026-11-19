@@ -130353,6 +130353,9 @@
               "$ref": "#/components/schemas/NotificationPreferenceChannelSettingDto"
             }
           },
+          "assistantBound": {
+            "type": "boolean"
+          },
           "events": {
             "type": "array",
             "items": {
@@ -130362,6 +130365,7 @@
         },
         "required": [
           "channels",
+          "assistantBound",
           "events"
         ]
       },

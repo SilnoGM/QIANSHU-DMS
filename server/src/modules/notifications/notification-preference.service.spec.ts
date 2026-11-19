@@ -20,6 +20,7 @@ function createPrisma(options: {
   readonly settings?: ReadonlyArray<{ readonly channel: 'IN_APP' | 'ASSISTANT', readonly enabled: boolean }>
   readonly templates?: readonly TemplateFixture[]
   readonly mutes?: ReadonlyArray<{ readonly eventType: string, readonly channel: 'IN_APP' | 'ASSISTANT' }>
+  readonly assistantBound?: boolean
   readonly upsert?: jest.Mock
   readonly deleteMany?: jest.Mock
 } = {}) {
@@ -44,6 +45,9 @@ function createPrisma(options: {
       findMany: jest.fn().mockResolvedValue(options.mutes ?? []),
       upsert,
       deleteMany,
+    },
+    assistantBinding: {
+      findFirst: jest.fn().mockResolvedValue(options.assistantBound === true ? { id: 'binding-1' } : null),
     },
   } as unknown as PrismaService
   return { prisma, upsert, deleteMany }
@@ -82,6 +86,15 @@ describe('NotificationPreferenceService', () => {
       { channel: 'IN_APP', enabled: true },
       { channel: 'ASSISTANT', enabled: false },
     ])
+    expect(view.assistantBound).toBe(false)
+  })
+
+  it('reports whether the user has a verified assistant binding', async () => {
+    const { prisma } = createPrisma({ assistantBound: true })
+
+    const view = await new NotificationPreferenceService(prisma).list('user-1')
+
+    expect(view.assistantBound).toBe(true)
   })
 
   it('distinguishes unconfigured, disabled and template-missing channels', async () => {

@@ -190,6 +190,10 @@ test('个人通知中心提供接收设置抽屉并调用自助接口', () => {
   assert.match(drawerSource, /top-0/u)
   assert.match(drawerSource, /hiddenChannelLabels/u)
   assert.match(drawerSource, /enabledPreferenceChannels/u)
+  // 未绑定小助理时给出明确状态，避免开关显示为已开启却收不到消息。
+  assert.match(drawerSource, /assistantBound/u)
+  assert.match(drawerSource, /未绑定/u)
+  assert.match(drawerSource, /assistantHint/u)
   // 个人设置只依赖登录态，不能引用管理端权限。
   assert.doesNotMatch(drawerSource, /notification-policy:update/u)
   assert.doesNotMatch(drawerSource, /notification-template:update/u)

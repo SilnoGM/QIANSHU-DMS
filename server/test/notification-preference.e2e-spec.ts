@@ -111,6 +111,7 @@ describe('Notification preference API with PostgreSQL', () => {
       expect.objectContaining({ channel: 'IN_APP', enabled: true }),
       expect.objectContaining({ channel: 'ASSISTANT', enabled: false }),
     ]))
+    expect(initial.body.assistantBound).toBe(false)
     expect(initialEvent?.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ channel: 'IN_APP', available: true, muted: false, unavailableReason: null }),
       expect.objectContaining({ channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' }),

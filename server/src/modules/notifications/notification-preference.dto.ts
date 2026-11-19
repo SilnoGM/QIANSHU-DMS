@@ -56,6 +56,8 @@ export class NotificationPreferenceChannelSettingDto {
 export class NotificationPreferenceListDto {
   @ApiProperty({ type: () => [NotificationPreferenceChannelSettingDto] })
   channels!: NotificationPreferenceChannelSettingDto[]
+  /** 当前登录人是否已有可用的小助理绑定；未绑定时微信提醒不会送达。 */
+  @ApiProperty() assistantBound!: boolean
   @ApiProperty({ type: () => [NotificationPreferenceEventDto] })
   events!: NotificationPreferenceEventDto[]
 }

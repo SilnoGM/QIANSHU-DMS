@@ -53,6 +53,7 @@ const keyword = ref('')
 const scope = ref<'all' | 'closed'>('all')
 const restoringAll = ref(false)
 const savedVisible = ref(false)
+const assistantBound = ref(true)
 let savedTimer: ReturnType<typeof setTimeout> | undefined
 
 const visibleChannels = computed(() => enabledPreferenceChannels(channelSettings.value))
@@ -62,6 +63,14 @@ const hiddenChannelLabels = computed(() =>
     .map(channel => PREFERENCE_CHANNEL_LABELS[channel]),
 )
 const filtered = computed(() => keyword.value.trim().length > 0 || scope.value !== 'all')
+const assistantHint = computed(() => {
+  if (!visibleChannels.value.includes('ASSISTANT')) {
+    return ''
+  }
+  return assistantBound.value
+    ? '千树小助理需先由管理员完成微信绑定。'
+    : '你尚未绑定千树小助理，开启后需管理员完成绑定才会送达。'
+})
 const groups = computed(() => buildPreferenceGroups(events.value, {
   visibleChannels: visibleChannels.value,
   keyword: keyword.value,
@@ -134,6 +143,7 @@ async function load(): Promise<void> {
     const data = (await notificationsApi.preferences.list(new AbortController().signal)).data
     events.value = data.events
     channelSettings.value = data.channels
+    assistantBound.value = data.assistantBound
   }
   catch (failure) {
     error.value = failureMessage(failure)
@@ -242,7 +252,7 @@ async function restoreAll(): Promise<void> {
 
       <div v-else class="flex flex-col gap-3">
         <p class="qs-type-meta text-muted-foreground m-0">
-          开关打开表示接收该渠道提醒；关闭后不会再收到对应事件。千树小助理需先由管理员完成微信绑定。
+          开关打开表示接收该渠道提醒；关闭后不会再收到对应事件。{{ assistantHint }}
         </p>
 
         <div
@@ -282,8 +292,16 @@ async function restoreAll(): Promise<void> {
             :class="gridClass"
           >
             <span>事件</span>
-            <span v-for="channel in visibleChannels" :key="channel" class="text-center">
+            <span
+              v-for="channel in visibleChannels"
+              :key="channel"
+              class="text-center flex flex-col gap-0.5 items-center"
+            >
               {{ PREFERENCE_CHANNEL_LABELS[channel] }}
+              <span
+                v-if="channel === 'ASSISTANT' && !assistantBound"
+                class="text-[10px] leading-none px-1 py-0.5 rounded bg-muted"
+              >未绑定</span>
             </span>
           </div>
         </div>
