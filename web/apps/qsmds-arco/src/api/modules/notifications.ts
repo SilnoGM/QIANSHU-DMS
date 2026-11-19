@@ -32,6 +32,8 @@ import type {
   NotificationInboxReadAllResultDto,
   NotificationInboxUnreadCountDto,
   NotificationOverviewDto,
+  NotificationPreferenceListDto,
+  NotificationPreferenceUpdateResultDto,
   NotificationRecordDetailDto,
   NotificationRecordOptionsDto,
   NotificationRecordPageDto,
@@ -114,6 +116,16 @@ export function createNotificationsApi(client: AxiosInstance) {
         client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'archive'), {}, { errorPresentation: 'local', retry: false }),
       unarchive: (id: string) =>
         client.post<NotificationInboxDetailDto>(path('notifications', 'me', 'inbox', id, 'unarchive'), {}, { errorPresentation: 'local', retry: false }),
+    },
+    preferences: {
+      list: (signal: AbortSignal) =>
+        client.get<NotificationPreferenceListDto>('notifications/me/preferences', { errorPresentation: 'local', signal }),
+      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT', muted: boolean) =>
+        client.put<NotificationPreferenceUpdateResultDto>(
+          path('notifications', 'me', 'preferences', eventType, channel),
+          { muted },
+          { errorPresentation: 'local', retry: false },
+        ),
     },
     assistant: {
       channel: {

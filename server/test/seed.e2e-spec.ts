@@ -46,7 +46,7 @@ const expectedDictionaries: ReadonlyArray<readonly [string, readonly string[]]> 
 ]
 const expectedRoles: ReadonlyArray<readonly [string, number]> = [
   ['finance_staff', 29],
-  ['operations_staff', 31],
+  ['operations_staff', 32],
   ['purchasing_staff', 16],
 ]
 const expectedRolePermissionCodes: ReadonlyArray<

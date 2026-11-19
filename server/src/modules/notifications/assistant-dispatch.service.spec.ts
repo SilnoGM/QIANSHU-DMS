@@ -76,6 +76,7 @@ function deliveryPrisma(options: {
       update: jest.fn(),
     },
     notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(null) },
+    notificationUserMute: { findFirst: jest.fn().mockResolvedValue(null) },
     assistantAccount: {
       findUnique: jest.fn().mockResolvedValue({
         appId: 'wx-app',
@@ -171,6 +172,7 @@ describe('AssistantDispatchService', () => {
           }),
           update: jest.fn(),
         },
+        notificationUserMute: { findFirst: jest.fn().mockResolvedValue(null) },
         notificationChannelPolicy: {
           findUnique: jest.fn().mockResolvedValue({
             quietHours: { end: '09:00', start: '22:00', timezone: 'Asia/Shanghai' },
@@ -326,6 +328,24 @@ describe('AssistantDispatchService', () => {
         status: 'FAILED',
       }),
     }))
+  })
+
+  it('skips a queued delivery when the recipient muted the event after publish', async () => {
+    const prisma = deliveryPrisma({})
+    prisma.notificationUserMute = { findFirst: jest.fn().mockResolvedValue({ id: 'mute-1' }) }
+    const transport = new FakeAssistantTransport()
+
+    await runDelivery(prisma, transport, claimedDelivery())
+
+    expect(prisma.notificationUserMute.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-1', eventType: 'SALES_RECEIPT_REVIEW_PENDING', channel: 'ASSISTANT' },
+      select: { id: true },
+    })
+    expect(transport.calls).toEqual([])
+    expect(prisma.assistantDelivery.update).toHaveBeenCalledWith({
+      where: { id: 'delivery-1' },
+      data: expect.objectContaining({ status: 'SKIPPED', failureCode: 'USER_MUTED' }),
+    })
   })
 
   describe('media attachments', () => {

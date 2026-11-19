@@ -1551,6 +1551,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "apps/qsmds-arco/src/views/notifications/components/NotificationPreferenceDrawer.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
@@ -3132,6 +3133,15 @@
     ]
   },
   {
+    "name": "i-lucide:pencil-line",
+    "label": "i-lucide:pencil-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/packaging-payments/amount-modal.vue"
+    ]
+  },
+  {
     "name": "i-lucide:percent",
     "label": "i-lucide:percent",
     "category": "通用图标",
@@ -3297,6 +3307,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
       "apps/qsmds-arco/src/views/admin/supplier-payment-profiles/index.vue",
+      "apps/qsmds-arco/src/views/operations/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.vue",
@@ -3508,6 +3519,15 @@
     ]
   },
   {
+    "name": "i-lucide:settings-2",
+    "label": "i-lucide:settings-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/notifications/index.vue"
+    ]
+  },
+  {
     "name": "i-lucide:shield-alert",
     "label": "i-lucide:shield-alert",
     "category": "通用图标",
@@ -3530,6 +3550,7 @@
       "apps/qsmds-arco/src/views/operations/network-ads/static-nodes/index.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/all.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
+      "apps/qsmds-arco/src/views/operations/packaging-payments/index.vue",
       "apps/qsmds-arco/src/views/operations/product-library/index.vue",
       "apps/qsmds-arco/src/views/operations/product-library/product-library-detail-drawer.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",

@@ -11,6 +11,7 @@ import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import NotificationPreferenceDrawer from './components/NotificationPreferenceDrawer.vue'
 
 defineOptions({ name: 'NotificationCenter' })
 
@@ -29,6 +30,7 @@ const status = ref<NotificationInboxStatus>('all')
 const domain = ref<'all' | NotificationInboxDomain>('all')
 
 const detailOpen = ref(false)
+const preferencesOpen = ref(false)
 const detailLoading = ref(false)
 const detail = ref<NotificationInboxDetailDto | null>(null)
 const filtersOpen = ref(false)
@@ -289,7 +291,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档" />
+  <FaPageHeader title="通知中心" description="站内通知、业务提醒与已读归档">
+    <FaButton @click="preferencesOpen = true">
+      <FaIcon name="i-lucide:settings-2" aria-hidden="true" />
+      接收设置
+    </FaButton>
+  </FaPageHeader>
   <FaPageMain>
     <div class="flex flex-wrap gap-2 items-center justify-between">
       <div class="flex-wrap gap-3 hidden items-center md:flex">
@@ -483,4 +490,6 @@ onMounted(async () => {
       </div>
     </FaDrawer>
   </FaPageMain>
+
+  <NotificationPreferenceDrawer v-model="preferencesOpen" />
 </template>

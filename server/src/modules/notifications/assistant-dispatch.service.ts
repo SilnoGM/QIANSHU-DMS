@@ -247,6 +247,26 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       await this.refreshNotificationStatus(notification.id)
       return
     }
+    // 静默时段会把 NORMAL 交付推迟到次日，只在发布期检查关闭会让排队消息绕过用户设置；
+    // 派发前再确认一次，且放在静默判断之前，避免无意义地占用队列。
+    if (delivery.recipient_user_id !== null) {
+      const mute = await this.prisma.notificationUserMute.findFirst({
+        where: {
+          userId: delivery.recipient_user_id,
+          eventType: notification.eventType,
+          channel: 'ASSISTANT',
+        },
+        select: { id: true },
+      })
+      if (mute !== null) {
+        await this.markDelivery(delivery.id, 'SKIPPED', {
+          failureCode: 'USER_MUTED',
+          failureMessage: '员工已关闭该事件提醒',
+        })
+        await this.refreshNotificationStatus(notification.id)
+        return
+      }
+    }
     if (await this.deferForQuietHours(delivery, notification, defaultQuietHours)) {
       await this.refreshNotificationStatus(notification.id)
       return

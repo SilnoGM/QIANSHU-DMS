@@ -7,9 +7,15 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import PackagingProof from './packaging-proof.vue'
 
-defineProps<{ record: PackagingCostRequestDto }>()
+defineProps<{ record: PackagingCostRequestDto, includePayment?: boolean, showOwner?: boolean }>()
 const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
+// 三态配色与桌面端、历史弹窗保持一致；已取消不能再沿用待付款的中性色。
+const statusClass: Record<PackagingCostRequestDto['status'], string> = {
+  PENDING_PAYMENT: 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300',
+  PAID: 'text-primary border-primary/30 bg-primary/10 dark:text-emerald-300',
+  CANCELLED: 'text-muted-foreground border-border bg-muted/30',
+}
 </script>
 
 <template>
@@ -19,7 +25,7 @@ const currencyCatalog = useCurrencyCatalog()
         <QsCopyableText v-if="record.shipmentNo" :label="t('packagingPayment.shipmentNo')" :text="record.shipmentNo" />
         <template v-else>—</template>
       </span>
-      <FaTag variant="outline" class="qs-type-status-tag shrink-0" :class="record.status === 'PAID' ? 'text-primary border-primary/30 bg-primary/10' : 'text-muted-foreground'">
+      <FaTag variant="outline" class="qs-type-status-tag shrink-0" :class="statusClass[record.status]">
         {{ t(`packagingPayment.status.${record.status}`) }}
       </FaTag>
     </div>
@@ -47,7 +53,7 @@ const currencyCatalog = useCurrencyCatalog()
           {{ t(`packagingPayment.vendor.${record.packagingVendor}`) }}
         </dd>
       </div>
-      <div>
+      <div v-if="showOwner !== false">
         <dt class="qs-type-meta text-muted-foreground">
           {{ t('packagingPayment.owner') }}
         </dt>
@@ -73,6 +79,14 @@ const currencyCatalog = useCurrencyCatalog()
           <span class="text-muted-foreground"><DateTimeDisplay :value="record.paidAt" /></span>
         </dd>
       </div>
+      <div v-if="record.status === 'PAID' && record.paymentReceipt?.remark">
+        <dt class="qs-type-meta text-muted-foreground">
+          {{ t('packagingPayment.paymentRemark') }}
+        </dt>
+        <dd class="m-0 mt-1 whitespace-pre-wrap break-words">
+          {{ record.paymentReceipt.remark }}
+        </dd>
+      </div>
       <div v-if="record.remark">
         <dt class="qs-type-meta text-muted-foreground">
           {{ t('packagingPayment.remark') }}
@@ -82,6 +96,6 @@ const currencyCatalog = useCurrencyCatalog()
         </dd>
       </div>
     </dl>
-    <PackagingProof :record="record" />
+    <PackagingProof :record="record" :include-payment="includePayment" />
   </article>
 </template>

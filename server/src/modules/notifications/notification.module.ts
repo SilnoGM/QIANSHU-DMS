@@ -10,6 +10,8 @@ import { NotificationAdminService } from './notification-admin.service'
 import { NotificationInboxController } from './notification-inbox.controller'
 import { NotificationInboxService } from './notification-inbox.service'
 import { NotificationMediaController } from './notification-media.controller'
+import { NotificationPreferenceController } from './notification-preference.controller'
+import { NotificationPreferenceService } from './notification-preference.service'
 import { AssistantDispatchService } from './assistant-dispatch.service'
 import {
   AssistantMediaDeliveryService,
@@ -33,12 +35,13 @@ import { SystemNotificationService } from './system-notification.service'
 @Global()
 @Module({
   imports: [AuthModule, MediaModule, NumberingModule],
-  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController],
+  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController, NotificationPreferenceController],
   providers: [
     SystemNotificationService,
     AssistantAdminService,
     NotificationAdminService,
     NotificationInboxService,
+    NotificationPreferenceService,
     AssistantSendGateService,
     AssistantMediaUrlService,
     AssistantMediaRateLimiter,

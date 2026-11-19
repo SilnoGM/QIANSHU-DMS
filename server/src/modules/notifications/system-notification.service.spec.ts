@@ -266,6 +266,7 @@ describe('SystemNotificationService.publish', () => {
         linkUrlTemplate: null,
       })) },
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      notificationUserMute: { findMany: jest.fn().mockResolvedValue([]) },
       notificationInboxItem: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(1),
@@ -355,6 +356,7 @@ describe('SystemNotificationService.publish', () => {
         linkUrlTemplate: null,
       })) },
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+      notificationUserMute: { findMany: jest.fn().mockResolvedValue([]) },
       notificationInboxItem: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(1),
@@ -432,6 +434,7 @@ describe('SystemNotificationService.publish', () => {
         mediaAsset: { findMany: jest.fn().mockResolvedValue(options.assets ?? [readyImage(FIRST_ASSET), readyImage(SECOND_ASSET)]) },
         notificationMedia: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
         $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }]),
+        notificationUserMute: { findMany: jest.fn().mockResolvedValue([]) },
         assistantBinding: { findMany: jest.fn().mockResolvedValue([{ userId: 'user-1', accountId: 'account-1' }]) },
         assistantDelivery: {
           createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -581,6 +584,173 @@ describe('SystemNotificationService.publish', () => {
         ],
       })
       expect(transaction.assistantDeliveryMedia.createMany).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('SystemNotificationService.publish personal mutes', () => {
+  function inAppTransaction(options: {
+    readonly notificationId: string
+    readonly recipientIds: readonly string[]
+    readonly mutedUserIds: readonly string[]
+    readonly inboxCount: number
+  }) {
+    return {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: options.notificationId }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: {
+        findMany: jest.fn().mockResolvedValue([assistantPolicy({
+          channel: 'IN_APP',
+          targetMode: 'USERS',
+          targetConfig: { userIds: [...options.recipientIds] },
+          ttlSeconds: null,
+        })]),
+      },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: {
+        findUnique: jest.fn().mockResolvedValue(template({
+          channel: 'IN_APP',
+          titleTemplate: '采购单 {{orderNo}} 待审核',
+          bodyTemplate: '采购单 {{orderNo}} 待审核',
+          linkUrlTemplate: null,
+        })),
+      },
+      $queryRaw: jest.fn().mockResolvedValue(options.recipientIds.map(id => ({ id }))),
+      notificationUserMute: {
+        findMany: jest.fn().mockResolvedValue(options.mutedUserIds.map(userId => ({ userId }))),
+      },
+      notificationInboxItem: {
+        createMany: jest.fn().mockResolvedValue({ count: options.inboxCount }),
+        count: jest.fn().mockResolvedValue(options.inboxCount),
+      },
+      assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
+    }
+  }
+
+  it('filters muted recipients out of in-app inbox items', async () => {
+    const transaction = inAppTransaction({
+      notificationId: 'n-mute-partial',
+      recipientIds: ['user-1', 'user-2'],
+      mutedUserIds: ['user-2'],
+      inboxCount: 1,
+    })
+
+    const result = await createService({} as PrismaService)
+      .publish(command, { transaction: transaction as never })
+
+    expect(transaction.notificationUserMute.findMany).toHaveBeenCalledWith({
+      where: { userId: { in: ['user-1', 'user-2'] }, eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' },
+      select: { userId: true },
+    })
+    expect(transaction.notificationInboxItem.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ userId: 'user-1' })],
+      skipDuplicates: true,
+    })
+    expect(result.channels[0]).toMatchObject({
+      channel: 'IN_APP',
+      status: 'CREATED',
+      recipientCount: 1,
+      skippedCount: 1,
+    })
+  })
+
+  it('marks the notification skipped instead of failed when every recipient muted the channel', async () => {
+    const transaction = inAppTransaction({
+      notificationId: 'n-mute-all',
+      recipientIds: ['user-1'],
+      mutedUserIds: ['user-1'],
+      inboxCount: 0,
+    })
+
+    const result = await createService({} as PrismaService)
+      .publish(command, { transaction: transaction as never })
+
+    expect(transaction.notificationInboxItem.createMany).not.toHaveBeenCalled()
+    expect(result.channels[0]).toMatchObject({
+      channel: 'IN_APP',
+      status: 'SKIPPED',
+      skipReason: 'USER_MUTED',
+    })
+    expect(transaction.notification.update).toHaveBeenCalledWith({
+      where: { id: 'n-mute-all' },
+      data: { status: 'SKIPPED', completedAt: expect.any(Date) },
+    })
+  })
+
+  it('stays skipped when one channel is muted and another is unavailable', async () => {
+    const transaction = inAppTransaction({
+      notificationId: 'n-mute-mixed',
+      recipientIds: ['user-1'],
+      mutedUserIds: ['user-1'],
+      inboxCount: 0,
+    })
+    transaction.notificationChannelPolicy.findMany.mockResolvedValue([
+      assistantPolicy({
+        channel: 'IN_APP',
+        targetMode: 'USERS',
+        targetConfig: { userIds: ['user-1'] },
+        ttlSeconds: null,
+      }),
+      assistantPolicy({ targetMode: 'USERS', targetConfig: { userIds: ['user-1'] } }),
+    ])
+    transaction.notificationChannelSettings.findUnique = jest.fn()
+      .mockResolvedValueOnce({ enabled: true })
+      .mockResolvedValueOnce({ enabled: false })
+
+    const result = await createService({} as PrismaService)
+      .publish(command, { transaction: transaction as never })
+
+    expect(result.channels).toEqual([
+      expect.objectContaining({ channel: 'IN_APP', status: 'SKIPPED', skipReason: 'USER_MUTED' }),
+      expect.objectContaining({ channel: 'ASSISTANT', status: 'SKIPPED', skipReason: 'CHANNEL_DISABLED' }),
+    ])
+    expect(transaction.notification.update).toHaveBeenCalledWith({
+      where: { id: 'n-mute-mixed' },
+      data: { status: 'SKIPPED', completedAt: expect.any(Date) },
+    })
+  })
+
+  it('does not create assistant deliveries for muted recipients', async () => {
+    const transaction = {
+      notification: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'n-mute-assistant' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      notificationChannelPolicy: {
+        findMany: jest.fn().mockResolvedValue([assistantPolicy({
+          targetMode: 'USERS',
+          targetConfig: { userIds: ['user-1', 'user-2'] },
+        })]),
+      },
+      notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
+      notificationTemplate: { findUnique: jest.fn().mockResolvedValue(template()) },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'user-1' }, { id: 'user-2' }]),
+      notificationUserMute: { findMany: jest.fn().mockResolvedValue([{ userId: 'user-2' }]) },
+      assistantBinding: {
+        findMany: jest.fn().mockResolvedValue([{ userId: 'user-1', accountId: 'account-1' }]),
+      },
+      assistantDelivery: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+      },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+    }
+
+    const result = await createService({} as PrismaService)
+      .publish(command, { transaction: transaction as never })
+
+    expect(transaction.assistantDelivery.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ recipientUserId: 'user-1', status: 'PENDING' })],
+    })
+    expect(result.channels[0]).toMatchObject({
+      channel: 'ASSISTANT',
+      status: 'PENDING',
+      recipientCount: 1,
+      skippedCount: 1,
     })
   })
 })

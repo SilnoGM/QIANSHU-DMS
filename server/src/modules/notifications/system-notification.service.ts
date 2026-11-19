@@ -330,11 +330,18 @@ export class SystemNotificationService {
       where: { notificationId: notification.id, status: 'PENDING' },
     })
     const inboxTotal = await transaction.notificationInboxItem.count({ where: { notificationId: notification.id } })
+    // 全员关闭时投递与收件箱计数都是 0，按常规规则会被误判为 FAILED；
+    // 只有「所有渠道都跳过、且其中至少一个是用户主动关闭」才归为 SKIPPED，
+    // 其余全跳过（模板缺失、目标不可用等）仍保留 FAILED 以暴露配置问题。
+    const allChannelsSkipped = channelResults.length > 0
+      && channelResults.every(result => result.status === 'SKIPPED')
+    const mutedByUser = channelResults.some(result => result.skipReason === 'USER_MUTED')
     const status = pending > 0
       ? 'PENDING'
       : total > 0
         ? inboxTotal > 0 ? 'PARTIAL' : 'SKIPPED'
-        : inboxTotal > 0 ? 'COMPLETED' : 'FAILED'
+        : allChannelsSkipped && mutedByUser ? 'SKIPPED'
+          : inboxTotal > 0 ? 'COMPLETED' : 'FAILED'
     if (status === 'PENDING') {
       await transaction.notification.update({
         where: { id: notification.id },
@@ -437,10 +444,22 @@ export class SystemNotificationService {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到站内收件人' })
       return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
     }
-    const userIds = await this.resolveUsers(transaction, target)
-    if (userIds.length === 0) {
+    const resolvedUserIds = await this.resolveUsers(transaction, target)
+    if (resolvedUserIds.length === 0) {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到站内收件人' })
       return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+    }
+    const { allowed: userIds, muted } = await this.filterMutedUsers(
+      transaction,
+      resolvedUserIds,
+      input.command.eventType,
+      'IN_APP',
+    )
+    if (muted > 0) {
+      input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的站内提醒` })
+    }
+    if (userIds.length === 0) {
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
     }
 
     await transaction.notificationInboxItem.createMany({
@@ -457,7 +476,7 @@ export class SystemNotificationService {
       })),
       skipDuplicates: true,
     })
-    return { channel: 'IN_APP', status: 'CREATED', recipientCount: userIds.length, skippedCount: 0 }
+    return { channel: 'IN_APP', status: 'CREATED', recipientCount: userIds.length, skippedCount: muted }
   }
 
   /**
@@ -700,10 +719,23 @@ export class SystemNotificationService {
     const target = input.policy.targetMode === 'COMMAND_TARGET'
       ? input.command.target
       : this.targetFromPolicy(input.policy)
-    const userIds = target === null ? [] : await this.resolveUsers(tx, target)
-    if (userIds.length === 0) {
+    const resolvedUserIds = target === null ? [] : await this.resolveUsers(tx, target)
+    if (resolvedUserIds.length === 0) {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到收件人' })
       return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+    }
+    // 用户关闭优先于绑定检查：关闭者不计入 NOT_BOUND，也不再生成投递行。
+    const { allowed: userIds, muted } = await this.filterMutedUsers(
+      tx,
+      resolvedUserIds,
+      input.command.eventType,
+      'ASSISTANT',
+    )
+    if (muted > 0) {
+      input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的小助理提醒` })
+    }
+    if (userIds.length === 0) {
+      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
     }
 
     const bindings = await tx.assistantBinding.findMany({
@@ -744,9 +776,33 @@ export class SystemNotificationService {
     await this.createDeliveryMedia(tx, deliveries, input.media)
     if (skipped === userIds.length) {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都未完成绑定' })
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: skipped, skipReason: 'NOT_BOUND' }
+      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: muted + skipped, skipReason: 'NOT_BOUND' }
     }
-    return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: userIds.length, skippedCount: skipped }
+    return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: userIds.length, skippedCount: muted + skipped }
+  }
+
+  /**
+   * 个人关闭记录是稀疏表：只查询与本次收件人相交的关闭行。
+   * 必须在发布事务内读取，避免用户刚关闭却仍收到本条通知。
+   */
+  private async filterMutedUsers(
+    transaction: Transaction,
+    userIds: readonly string[],
+    eventType: string,
+    channel: NotificationChannel,
+  ): Promise<{ readonly allowed: string[], readonly muted: number }> {
+    if (userIds.length === 0) {
+      return { allowed: [], muted: 0 }
+    }
+    const rows = await transaction.notificationUserMute.findMany({
+      where: { userId: { in: [...userIds] }, eventType, channel },
+      select: { userId: true },
+    })
+    const mutedUserIds = new Set(rows.map(row => row.userId))
+    return {
+      allowed: userIds.filter(userId => !mutedUserIds.has(userId)),
+      muted: mutedUserIds.size,
+    }
   }
 
   private targetFromPolicy(policy: {
