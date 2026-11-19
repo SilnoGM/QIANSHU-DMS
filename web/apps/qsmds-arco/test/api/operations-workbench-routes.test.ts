@@ -7,7 +7,7 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('仓储运输接入到仓、海运柜次与货物寄仓业务页', () => {
+test('仓储运输接入到仓、木架付款、海运柜次与货物寄仓业务页', () => {
   const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
   assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
   assert.equal(warehouseRoute?.meta?.title, '仓储运输')
@@ -15,6 +15,7 @@ test('仓储运输接入到仓、海运柜次与货物寄仓业务页', () => {
   assert.deepEqual(warehouseRoute?.redirect, { name: 'qsOperationsWarehouseArrivals' })
   assert.deepEqual(warehouseRoute?.children?.map(route => ({ name: route.name, path: route.path, title: route.meta?.title })), [
     { name: 'qsOperationsWarehouseArrivals', path: 'warehouse-arrivals', title: '到仓货件' },
+    { name: 'qsOperationsWarehousePackagingPayments', path: 'packaging-payments', title: '木架付款' },
     { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
     { name: 'qsOperationsOceanContainersAll', path: 'ocean-containers/all', title: '全部海运柜次' },
     { name: 'qsOperationsGoodsStorage', path: 'goods-storage', title: '货物寄仓' },
@@ -22,17 +23,31 @@ test('仓储运输接入到仓、海运柜次与货物寄仓业务页', () => {
   const arrivals = warehouseRoute?.children?.[0]
   assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
   assert.equal(arrivals?.meta?.auth, 'purchase-orders:read')
-  const ocean = warehouseRoute?.children?.[1]
+  // 木架付款排在到仓货件之后：装柜后货件离开到仓视图，付款状态必须在这里仍然可见。
+  const packagingPayments = warehouseRoute?.children?.[1]
+  assert.match(String(packagingPayments?.component), /operations\/packaging-payments\/index\.vue/u)
+  assert.equal(packagingPayments?.meta?.auth, 'packaging-costs:read')
+  const ocean = warehouseRoute?.children?.[2]
   assert.match(String(ocean?.component), /operations\/ocean-containers\/index\.vue/u)
   assert.equal(ocean?.meta?.auth, 'sales-orders:read')
-  const oceanAll = warehouseRoute?.children?.[2]
+  const oceanAll = warehouseRoute?.children?.[3]
   assert.match(String(oceanAll?.component), /operations\/ocean-containers\/all\.vue/u)
   assert.equal(oceanAll?.meta?.auth, 'sales-orders:read')
   assert.equal(oceanAll?.meta?.menu, false)
   assert.equal(oceanAll?.meta?.activeMenu, '/qs-operations/warehouse-transport/ocean-containers')
-  const storage = warehouseRoute?.children?.[3]
+  const storage = warehouseRoute?.children?.[4]
   assert.match(String(storage?.component), /operations\/goods-storage\/index\.vue/u)
   assert.equal(storage?.meta?.auth, 'shipment-storage:read')
+
+  // 只持有提报权限的运营看不到付款状态页；读权限才放开菜单。
+  const canSeePackagingPayments = (permissions: string[]) => filterAccessibleMenus(
+    operationsWorkbenchRoutes,
+    value => matchesAuthorization(permissions, value),
+    () => true,
+  ).flatMap(route => route.children ?? []).some(route => route.name === 'qsOperationsWarehousePackagingPayments')
+  assert.equal(canSeePackagingPayments([]), false)
+  assert.equal(canSeePackagingPayments(['packaging-costs:create']), false)
+  assert.equal(canSeePackagingPayments(['packaging-costs:read']), true)
 
   const canSeeOcean = (permissions: string[]) => filterAccessibleMenus(
     operationsWorkbenchRoutes,

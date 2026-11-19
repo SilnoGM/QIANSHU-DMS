@@ -1,6 +1,10 @@
 {
   "packagingPayment": {
     "intro": "查看仓储包装费用提报，确认付款金额并记录付款状态。",
+    "listTitle": "木架付款",
+    "listIntro": "查看本人打木架费用提报的付款状态；待付款可修改金额，付款由财务确认。",
+    "tabAll": "全部",
+    "fieldStatus": "状态",
     "status": {
       "PENDING_PAYMENT": "待付款",
       "PAID": "已付款",
@@ -22,11 +26,13 @@
     "imagesTitle": "截图凭证",
     "images": {
       "PACKAGING": "包装完成截图",
-      "QUOTATION": "报价截图"
+      "QUOTATION": "报价截图",
+      "PAYMENT": "付款截图"
     },
     "imageShort": {
       "PACKAGING": "包装完成",
-      "QUOTATION": "报价"
+      "QUOTATION": "报价",
+      "PAYMENT": "付款"
     },
     "vendorLabel": "包装厂商",
     "vendor": {
@@ -36,12 +42,29 @@
     "search": "搜索货件编号、唛头、采购或销售订单编号",
     "empty": "暂无打木架费用提报",
     "emptyDescription": {
+      "ALL": "本人提报的打木架费用会显示在这里，包含已装柜货件。",
       "PENDING_PAYMENT": "仓储提交的包装费用将显示在这里，等待确认付款。",
-      "PAID": "确认付款后的费用记录将显示在这里。"
+      "PAID": "确认付款后的费用记录将显示在这里。",
+      "CANCELLED": "被纠正流程取消的提报会显示在这里。"
     },
     "noPermission": "暂无打木架付款查看权限",
     "refresh": "刷新",
     "retry": "重新加载",
+    "changeAmount": "改金额",
+    "copyRequest": "复制申请",
+    "copySuccess": "已复制付款申请，可粘贴发送给财务",
+    "copyFailed": "复制失败，请检查浏览器剪贴板权限后重试",
+    "amountModal": {
+      "title": "修改提报金额",
+      "description": "仅待付款可修改；保存后财务需要按新金额付款。",
+      "original": "原提报金额",
+      "newAmount": "新金额（人民币）",
+      "invalidAmount": "请输入大于 0 且最多两位小数的金额",
+      "reloadHint": "保存结果未知或提报已被付款，请先重新加载最新状态再修改。",
+      "reload": "重新加载",
+      "save": "保存金额",
+      "saved": "金额已更新"
+    },
     "pay": "付款",
     "payTitle": "打木架付款",
     "paymentAmount": "付款金额（人民币）",

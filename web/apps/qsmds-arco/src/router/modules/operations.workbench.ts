@@ -131,6 +131,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals', auth: 'purchase-orders:read', keepAlive: true },
       },
       {
+        // 装柜后货件离开到仓视图，木架提报的付款状态必须在这里独立可查。
+        path: 'packaging-payments',
+        name: 'qsOperationsWarehousePackagingPayments',
+        component: () => import('@/views/operations/packaging-payments/index.vue'),
+        meta: { title: '木架付款', icon: 'qs-packaging-payments', auth: 'packaging-costs:read', keepAlive: true },
+      },
+      {
         path: 'ocean-containers',
         name: 'qsOperationsOceanContainers',
         component: () => import('@/views/operations/ocean-containers/index.vue'),
