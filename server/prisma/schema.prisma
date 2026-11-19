@@ -815,6 +815,7 @@ model User {
   assistantBindingsVerified         AssistantBinding[]            @relation("AssistantBindingVerifiedBy")
   assistantDeliveries               AssistantDelivery[]           @relation("AssistantDeliveryRecipient")
   notificationInboxItems            NotificationInboxItem[]       @relation("NotificationInboxItemUser")
+  notificationMutes                 NotificationUserMute[]        @relation("NotificationUserMuteUser")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -3588,6 +3589,21 @@ model NotificationChannelSettings {
   updatedBy User? @relation("NotificationChannelSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("notification_channel_settings")
+}
+
+/// 个人级通知关闭：稀疏表，只存「不想收」的事件×渠道，删行即恢复。
+/// 发布与派发两处都会读取；默认没有记录＝全部接收。
+model NotificationUserMute {
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  eventType String              @map("event_type") @db.VarChar(64)
+  channel   NotificationChannel
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation("NotificationUserMuteUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([userId, eventType, channel], map: "notification_user_mutes_user_event_channel_key")
+  @@map("notification_user_mutes")
 }
 
 /// 千树小助理的公司号（GeWe 执行节点）。

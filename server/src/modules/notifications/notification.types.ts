@@ -1345,6 +1345,7 @@ export interface SystemNotificationPublishOptions {
 export type NotificationSkipReason =
   | 'NOT_BOUND'
   | 'USER_DISABLED'
+  | 'USER_MUTED'
   | 'NO_RECIPIENT'
   | 'TARGET_DISABLED'
   | 'CHANNEL_DISABLED'
@@ -1358,6 +1359,7 @@ export type NotificationPublishWarningCode =
   | 'TEMPLATE_VARIABLE_MISSING'
   | 'SENSITIVE_VARIABLE_MASKED'
   | 'NO_RECIPIENT'
+  | 'USER_MUTED'
   | 'DUPLICATE_IGNORED'
   | 'MEDIA_ATTACHMENT_BLOCKED'
 
