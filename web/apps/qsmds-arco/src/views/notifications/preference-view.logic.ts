@@ -1,4 +1,4 @@
-import type { NotificationPreferenceEventDto } from '@/api/generated/types.gen'
+import type { NotificationPreferenceChannelDto, NotificationPreferenceEventDto } from '@/api/generated/types.gen'
 
 export const PREFERENCE_DOMAIN_ORDER = [
   'sales',
@@ -25,6 +25,39 @@ const DOMAIN_LABELS: Record<string, string> = {
 export const PREFERENCE_CHANNEL_LABELS: Record<'IN_APP' | 'ASSISTANT', string> = {
   IN_APP: '站内通知',
   ASSISTANT: '千树小助理',
+}
+
+export const PREFERENCE_CHANNEL_ORDER = ['IN_APP', 'ASSISTANT'] as const
+
+export type PreferenceChannel = (typeof PREFERENCE_CHANNEL_ORDER)[number]
+
+export interface PreferenceCell {
+  readonly channel: PreferenceChannel
+  readonly dto: NotificationPreferenceChannelDto | null
+}
+
+/** 固定按站内 → 小助理的顺序取单元格，缺失渠道返回 null 以保留列对齐。 */
+export function preferenceCells(event: NotificationPreferenceEventDto): PreferenceCell[] {
+  return PREFERENCE_CHANNEL_ORDER.map(channel => ({
+    channel,
+    dto: event.channels.find(item => item.channel === channel) ?? null,
+  }))
+}
+
+/** 统计当前已关闭的渠道数；只统计可投递且确实存在关闭记录的单元格。 */
+export function countMutedChannels(
+  events: readonly NotificationPreferenceEventDto[],
+  channels: readonly PreferenceChannel[] = PREFERENCE_CHANNEL_ORDER,
+): number {
+  let total = 0
+  for (const event of events) {
+    for (const cell of preferenceCells(event)) {
+      if (channels.includes(cell.channel) && cell.dto?.available === true && cell.dto.muted) {
+        total += 1
+      }
+    }
+  }
+  return total
 }
 
 const UNAVAILABLE_LABELS: Record<string, string> = {

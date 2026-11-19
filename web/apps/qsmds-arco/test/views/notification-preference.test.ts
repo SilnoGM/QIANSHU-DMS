@@ -7,7 +7,9 @@ import test from 'node:test'
 
 import {
   buildPreferenceGroups,
+  countMutedChannels,
   PREFERENCE_CHANNEL_LABELS,
+  preferenceCells,
   preferenceUnavailableLabel,
 } from '../../src/views/notifications/preference-view.logic'
 
@@ -81,14 +83,49 @@ test('渠道与不可设置原因使用中文文案', () => {
   assert.equal(preferenceUnavailableLabel(null), '')
 })
 
+test('接收设置单元格固定按站内、小助理排序并保留缺失列', () => {
+  const cells = preferenceCells(preferenceEvent('ASSISTANT_ACCOUNT_OFFLINE', 'system', [
+    { channel: 'ASSISTANT', available: true },
+  ]))
+
+  assert.deepEqual(cells.map(cell => cell.channel), ['IN_APP', 'ASSISTANT'])
+  assert.equal(cells[0]?.dto, null)
+  assert.equal(cells[1]?.dto?.available, true)
+})
+
+test('已关闭汇总只统计可投递且确实关闭的渠道', () => {
+  const events = [
+    preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
+      { channel: 'IN_APP', available: true, muted: true },
+      { channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' },
+    ]),
+    preferenceEvent('SALES_ORDER_COMPLETED', 'sales', [
+      { channel: 'IN_APP', available: true, muted: false },
+      { channel: 'ASSISTANT', available: true, muted: true },
+    ]),
+  ]
+
+  assert.equal(countMutedChannels(events), 2)
+  assert.equal(countMutedChannels(events, ['IN_APP']), 1)
+})
+
 test('个人通知中心提供接收设置抽屉并调用自助接口', () => {
   assert.match(pageSource, /接收设置/u)
   assert.match(pageSource, /NotificationPreferenceDrawer/u)
   assert.match(pageSource, /preferencesOpen/u)
   assert.match(drawerSource, /notificationsApi\.preferences\.list/u)
   assert.match(drawerSource, /notificationsApi\.preferences\.update/u)
-  assert.match(drawerSource, /channel\.available/u)
+  assert.match(drawerSource, /cell\.dto\?\.available/u)
   assert.match(drawerSource, /开关打开表示接收/u)
+  // 错误态只展示错误框，不再渲染正常内容。
+  assert.match(drawerSource, /v-if="error === null"/u)
+  // 每个开关独立保存，不能因一个请求锁住全部开关。
+  assert.match(drawerSource, /pendingKeys/u)
+  assert.doesNotMatch(drawerSource, /pendingKey !== null/u)
+  // 三列表头与可读标签。
+  assert.match(drawerSource, /grid-cols-\[minmax\(0,1fr\)_5\.5rem_5\.5rem\]/u)
+  assert.match(drawerSource, /aria-label/u)
+  assert.match(drawerSource, /已关闭 \{\{ mutedCount \}\} 项/u)
   // 个人设置只依赖登录态，不能引用管理端权限。
   assert.doesNotMatch(drawerSource, /notification-policy:update/u)
   assert.doesNotMatch(drawerSource, /notification-template:update/u)
