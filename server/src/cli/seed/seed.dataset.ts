@@ -158,6 +158,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
       'machine-viewings:create',
       'machine-viewings:read',
       'packaging-costs:create',
+      'packaging-costs:read',
       'product-aliases:manage',
       'product-media:read',
       'products:read',
