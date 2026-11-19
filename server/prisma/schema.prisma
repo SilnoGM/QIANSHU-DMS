@@ -1102,6 +1102,8 @@ model Product {
   purchaseCostCurrency String        @default("CNY") @map("purchase_cost_currency") @db.Char(3)
   attributes           Json          @default("[]") @db.JsonB
   remark               String?       @db.VarChar(512)
+  /// 为 true 时该产品的采购行不进入货件唛头后缀；不影响金额、数量与货件构成。
+  excludeFromShippingMark Boolean    @default(false) @map("exclude_from_shipping_mark")
   createdByUserId      String?       @map("created_by_user_id") @db.Uuid
   updatedByUserId      String?       @map("updated_by_user_id") @db.Uuid
   version              Int           @default(1)
