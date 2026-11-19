@@ -21,6 +21,7 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     productHeadName: '旱地履带',
     createdAt: '2026-08-13T01:00:00.000Z',
     createdBy: null,
+    excludeFromShippingMark: false,
     id: '11111111-1111-4111-8111-111111111111',
     media: {
       images: [],
@@ -60,6 +61,7 @@ test('详情转换为编辑模型并保留未知历史供应商与稳定属性 k
   assert.deepEqual(model, {
     attributes: [{ key: 'row-1', title: '颜色', value: '红色' }],
     categoryName: '微耕机',
+    excludeFromShippingMark: false,
     myrSalePriceAmount: null,
     name: '原产品',
     productHeadName: '旱地履带',
@@ -95,8 +97,39 @@ test('只提交规范化后真实变化字段和 expectedVersion', () => {
   })
 })
 
-test('备注变化只提交 remark，清空提交 null 并可对账', () => {
+test('只切换唛头排除标记时单独提交该字段并可对账', () => {
   const source = product()
+  const model = createProductEditFormModel(source, () => 'row-1')
+  model.excludeFromShippingMark = true
+
+  const result = buildProductUpdateRequest(model, source, precisions)
+  assert.deepEqual(result, {
+    request: {
+      excludeFromShippingMark: true,
+      expectedVersion: 3,
+    },
+    valid: true,
+  })
+  assert.equal(reconcileProductUpdateResult(result.request, {
+    ...source,
+    excludeFromShippingMark: true,
+    version: 4,
+  }), 'success')
+  assert.equal(reconcileProductUpdateResult(result.request, {
+    ...source,
+    excludeFromShippingMark: false,
+    version: 4,
+  }), 'unknown')
+})
+
+test('未改动的唛头排除标记不制造 PATCH', () => {
+  const source = product({ excludeFromShippingMark: true })
+  const model = createProductEditFormModel(source, () => 'row-1')
+
+  assert.equal(hasProductEditChanges(model, source, precisions), false)
+})
+
+test('备注变化只提交 remark，清空提交 null 并可对账', () => {  const source = product()
   const model = createProductEditFormModel(source, () => 'row-1')
   model.remark = ' 需加宽机身到 1.2 米 '
 

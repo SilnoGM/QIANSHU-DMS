@@ -469,6 +469,21 @@ defineExpose<ProductFormExpose>({
           @update:model-value="updateModel({ remark: typeof $event === 'string' ? $event : '' })"
         />
       </FaFormItem>
+
+      <FaFormItem
+        v-if="mode === 'edit'"
+        name="excludeFromShippingMark"
+        label="不参与唛头拼接"
+        description="开启后该产品不进入货件唛头后缀，但仍计入金额、数量与货件构成；适用于补差价这类不出实物的占位产品。"
+      >
+        <FaSwitch
+          :model-value="modelValue.excludeFromShippingMark"
+          :disabled="submitLocked"
+          :aria-label="modelValue.excludeFromShippingMark ? '不参与唛头拼接' : '参与唛头拼接'"
+          class="my-3 relative before:absolute before:-inset-3"
+          @update:model-value="$event => updateModel({ excludeFromShippingMark: $event === true })"
+        />
+      </FaFormItem>
     </FaCard>
 
     <FaCard

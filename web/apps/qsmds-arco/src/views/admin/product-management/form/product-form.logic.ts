@@ -14,6 +14,7 @@ export interface ProductAttributeRow {
 export interface ProductFormModel {
   attributes: ProductAttributeRow[]
   categoryName: string | null
+  excludeFromShippingMark: boolean
   myrSalePriceAmount: string | null
   name: string
   productHeadName: string | null
@@ -122,6 +123,7 @@ export function createProductFormModel(): ProductFormModel {
   return {
     attributes: [],
     categoryName: null,
+    excludeFromShippingMark: false,
     myrSalePriceAmount: null,
     name: '',
     productHeadName: null,

@@ -55,6 +55,7 @@ test('默认 model 符合创建契约，属性 row key 稳定且 dirty 比较不
   assert.deepEqual(model, {
     attributes: [],
     categoryName: null,
+    excludeFromShippingMark: false,
     myrSalePriceAmount: null,
     name: '',
     productHeadName: null,
