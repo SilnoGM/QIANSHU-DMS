@@ -1,0 +1,95 @@
+import type { NotificationPreferenceEventDto } from '../../src/api/generated/types.gen'
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+// eslint-disable-next-line test/no-import-node-test -- 页面源码契约与纯函数测试使用 Node.js 内置 runner。
+import test from 'node:test'
+
+import {
+  buildPreferenceGroups,
+  PREFERENCE_CHANNEL_LABELS,
+  preferenceUnavailableLabel,
+} from '../../src/views/notifications/preference-view.logic'
+
+const pageSource = readFileSync(
+  new URL('../../src/views/notifications/index.vue', import.meta.url),
+  'utf8',
+)
+const drawerSource = readFileSync(
+  new URL('../../src/views/notifications/components/NotificationPreferenceDrawer.vue', import.meta.url),
+  'utf8',
+)
+
+function preferenceEvent(
+  eventType: string,
+  domain: NotificationPreferenceEventDto['domain'],
+  channels: Array<{
+    channel: 'IN_APP' | 'ASSISTANT'
+    available: boolean
+    muted?: boolean
+    unavailableReason?: string | null
+  }>,
+): NotificationPreferenceEventDto {
+  return {
+    eventType,
+    label: eventType,
+    domain,
+    channels: channels.map(channel => ({
+      muted: false,
+      unavailableReason: null,
+      ...channel,
+    })),
+  }
+}
+
+test('接收设置只保留至少一个渠道可调整的事件', () => {
+  const groups = buildPreferenceGroups([
+    preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
+      { channel: 'IN_APP', available: true },
+      { channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' },
+    ]),
+    preferenceEvent('SALES_ORDER_SUBMITTED', 'sales', [
+      { channel: 'IN_APP', available: false, unavailableReason: 'TEMPLATE_MISSING' },
+      { channel: 'ASSISTANT', available: false, unavailableReason: 'NOT_CONFIGURED' },
+    ]),
+    preferenceEvent('ASSISTANT_ACCOUNT_OFFLINE', 'system', [
+      { channel: 'IN_APP', available: true },
+    ]),
+  ])
+
+  assert.deepEqual(groups.map(group => group.domain), ['purchase', 'system'])
+  assert.deepEqual(groups.map(group => group.label), ['采购', '系统'])
+  assert.equal(groups[0]?.events[0]?.channels[1]?.unavailableReason, 'CHANNEL_DISABLED')
+})
+
+test('接收设置按固定业务域顺序分组', () => {
+  const groups = buildPreferenceGroups([
+    preferenceEvent('SHIPMENT_ARRIVED', 'shipment', [{ channel: 'IN_APP', available: true }]),
+    preferenceEvent('SALES_ORDER_COMPLETED', 'sales', [{ channel: 'IN_APP', available: true }]),
+    preferenceEvent('PURCHASE_ORDER_COMPLETED', 'purchase', [{ channel: 'IN_APP', available: true }]),
+  ])
+
+  assert.deepEqual(groups.map(group => group.domain), ['sales', 'purchase', 'shipment'])
+})
+
+test('渠道与不可设置原因使用中文文案', () => {
+  assert.equal(PREFERENCE_CHANNEL_LABELS.IN_APP, '站内通知')
+  assert.equal(PREFERENCE_CHANNEL_LABELS.ASSISTANT, '千树小助理')
+  assert.equal(preferenceUnavailableLabel('GROUP_TARGET'), '仅发送到群')
+  assert.equal(preferenceUnavailableLabel('CHANNEL_DISABLED'), '渠道未启用')
+  assert.equal(preferenceUnavailableLabel('UNKNOWN'), '不可设置')
+  assert.equal(preferenceUnavailableLabel(null), '')
+})
+
+test('个人通知中心提供接收设置抽屉并调用自助接口', () => {
+  assert.match(pageSource, /接收设置/u)
+  assert.match(pageSource, /NotificationPreferenceDrawer/u)
+  assert.match(pageSource, /preferencesOpen/u)
+  assert.match(drawerSource, /notificationsApi\.preferences\.list/u)
+  assert.match(drawerSource, /notificationsApi\.preferences\.update/u)
+  assert.match(drawerSource, /channel\.available/u)
+  assert.match(drawerSource, /开关打开表示接收/u)
+  // 个人设置只依赖登录态，不能引用管理端权限。
+  assert.doesNotMatch(drawerSource, /notification-policy:update/u)
+  assert.doesNotMatch(drawerSource, /notification-template:update/u)
+})

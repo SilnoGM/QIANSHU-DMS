@@ -11,6 +11,7 @@ import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import NotificationPreferenceDrawer from './components/NotificationPreferenceDrawer.vue'
 
 defineOptions({ name: 'NotificationCenter' })
 
@@ -29,6 +30,7 @@ const status = ref<NotificationInboxStatus>('all')
 const domain = ref<'all' | NotificationInboxDomain>('all')
 
 const detailOpen = ref(false)
+const preferencesOpen = ref(false)
 const detailLoading = ref(false)
 const detail = ref<NotificationInboxDetailDto | null>(null)
 const filtersOpen = ref(false)
@@ -316,6 +318,9 @@ onMounted(async () => {
         <FaButton variant="outline" size="sm" class="min-h-11 md:hidden" @click="filtersOpen = true">
           筛选
         </FaButton>
+        <FaButton variant="outline" size="sm" class="min-h-11" @click="preferencesOpen = true">
+          接收设置
+        </FaButton>
         <FaButton variant="outline" size="sm" class="min-h-11" :disabled="store.unreadTotal === 0" @click="readAll">
           全部已读
         </FaButton>
@@ -483,4 +488,6 @@ onMounted(async () => {
       </div>
     </FaDrawer>
   </FaPageMain>
+
+  <NotificationPreferenceDrawer v-model="preferencesOpen" />
 </template>
