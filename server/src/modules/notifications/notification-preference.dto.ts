@@ -48,7 +48,14 @@ export class NotificationPreferenceEventDto {
   channels!: NotificationPreferenceChannelDto[]
 }
 
+export class NotificationPreferenceChannelSettingDto {
+  @ApiProperty({ enum: NOTIFICATION_PREFERENCE_CHANNELS }) channel!: NotificationPreferenceChannel
+  @ApiProperty() enabled!: boolean
+}
+
 export class NotificationPreferenceListDto {
+  @ApiProperty({ type: () => [NotificationPreferenceChannelSettingDto] })
+  channels!: NotificationPreferenceChannelSettingDto[]
   @ApiProperty({ type: () => [NotificationPreferenceEventDto] })
   events!: NotificationPreferenceEventDto[]
 }

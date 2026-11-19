@@ -130261,6 +130261,25 @@
           "linkUrl"
         ]
       },
+      "NotificationPreferenceChannelSettingDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "IN_APP",
+              "ASSISTANT"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel",
+          "enabled"
+        ]
+      },
       "NotificationPreferenceChannelDto": {
         "type": "object",
         "properties": {
@@ -130328,6 +130347,12 @@
       "NotificationPreferenceListDto": {
         "type": "object",
         "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationPreferenceChannelSettingDto"
+            }
+          },
           "events": {
             "type": "array",
             "items": {
@@ -130336,6 +130361,7 @@
           }
         },
         "required": [
+          "channels",
           "events"
         ]
       },

@@ -74,16 +74,36 @@ export interface PreferenceGroup {
   readonly events: NotificationPreferenceEventDto[]
 }
 
+export interface BuildPreferenceGroupsOptions {
+  readonly visibleChannels?: readonly PreferenceChannel[]
+  readonly keyword?: string
+  readonly closedOnly?: boolean
+}
+
 /**
  * 个人设置只展示「至少有一个渠道可调整」的事件；
  * 管理员尚未配置的事件没有可关闭的投递，不应出现在用户侧。
  */
 export function buildPreferenceGroups(
   events: readonly NotificationPreferenceEventDto[],
+  options: BuildPreferenceGroupsOptions = {},
 ): PreferenceGroup[] {
+  const visibleChannels = options.visibleChannels ?? PREFERENCE_CHANNEL_ORDER
+  const keyword = options.keyword?.trim().toLocaleLowerCase() ?? ''
   const grouped = new Map<string, NotificationPreferenceEventDto[]>()
   for (const event of events) {
-    if (!event.channels.some(channel => channel.available)) {
+    const cells = visiblePreferenceCells(event, visibleChannels)
+    if (!cells.some(cell => cell.dto?.available === true)) {
+      continue
+    }
+    if (options.closedOnly === true && !cells.some(cell => cell.dto?.available === true && cell.dto.muted)) {
+      continue
+    }
+    if (
+      keyword.length > 0
+      && !event.label.toLocaleLowerCase().includes(keyword)
+      && !event.eventType.toLocaleLowerCase().includes(keyword)
+    ) {
       continue
     }
     const list = grouped.get(event.domain)
@@ -101,6 +121,25 @@ export function buildPreferenceGroups(
       ? []
       : [{ domain, label: DOMAIN_LABELS[domain] ?? domain, events: list }]
   })
+}
+
+/** 只保留当前启用的渠道列；缺失渠道配置时退回展示全部列。 */
+export function enabledPreferenceChannels(
+  settings: ReadonlyArray<{ readonly channel: PreferenceChannel, readonly enabled: boolean }> | undefined,
+): PreferenceChannel[] {
+  if (settings === undefined || settings.length === 0) {
+    return [...PREFERENCE_CHANNEL_ORDER]
+  }
+  return PREFERENCE_CHANNEL_ORDER.filter(channel =>
+    settings.some(setting => setting.channel === channel && setting.enabled),
+  )
+}
+
+export function visiblePreferenceCells(
+  event: NotificationPreferenceEventDto,
+  channels: readonly PreferenceChannel[],
+): PreferenceCell[] {
+  return preferenceCells(event).filter(cell => channels.includes(cell.channel))
 }
 
 export function preferenceUnavailableLabel(reason: string | null): string {

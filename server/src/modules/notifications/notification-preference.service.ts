@@ -116,6 +116,11 @@ export class NotificationPreferenceService {
     )
 
     return {
+      // 渠道级开关决定整列是否存在；前端据此收起不可用渠道，而不是逐行提示。
+      channels: CHANNELS.map(channel => ({
+        channel,
+        enabled: channelEnabled.get(channel) === true,
+      })),
       events: NOTIFICATION_EVENT_TYPES.map(eventType => ({
         eventType,
         label: NOTIFICATION_EVENT_LABELS[eventType],

@@ -107,6 +107,10 @@ describe('Notification preference API with PostgreSQL', () => {
       .expect(200)
 
     const initialEvent = readEvent(initial.body)
+    expect(initial.body.channels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ channel: 'IN_APP', enabled: true }),
+      expect.objectContaining({ channel: 'ASSISTANT', enabled: false }),
+    ]))
     expect(initialEvent?.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ channel: 'IN_APP', available: true, muted: false, unavailableReason: null }),
       expect.objectContaining({ channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' }),

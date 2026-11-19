@@ -78,6 +78,10 @@ describe('NotificationPreferenceService', () => {
       { channel: 'IN_APP', available: true, muted: true, unavailableReason: null },
       { channel: 'ASSISTANT', available: false, muted: false, unavailableReason: 'CHANNEL_DISABLED' },
     ])
+    expect(view.channels).toEqual([
+      { channel: 'IN_APP', enabled: true },
+      { channel: 'ASSISTANT', enabled: false },
+    ])
   })
 
   it('distinguishes unconfigured, disabled and template-missing channels', async () => {
