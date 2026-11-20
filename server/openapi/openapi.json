@@ -125463,6 +125463,61 @@
           "changedAt"
         ]
       },
+      "PurchaseOrderAmountRevisionLineChangeDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "productName": {
+            "type": "string"
+          },
+          "productNo": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "oldUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "newUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "oldLineTotalAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          },
+          "newLineTotalAmount": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d{2}$",
+            "description": "两位小数的人民币金额"
+          }
+        },
+        "required": [
+          "lineId",
+          "lineNumber",
+          "productName",
+          "productNo",
+          "quantity",
+          "oldUnitPriceAmount",
+          "newUnitPriceAmount",
+          "oldLineTotalAmount",
+          "newLineTotalAmount"
+        ]
+      },
       "PurchaseOrderAmountRevisionDto": {
         "type": "object",
         "properties": {
@@ -125494,6 +125549,12 @@
           "newBalanceDueAmount": {
             "type": "string"
           },
+          "lineChanges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderAmountRevisionLineChangeDto"
+            }
+          },
           "reason": {
             "type": "string"
           },
@@ -125515,6 +125576,7 @@
           "newPurchaseTotalAmount",
           "newDepositDueAmount",
           "newBalanceDueAmount",
+          "lineChanges",
           "reason",
           "changedBy",
           "changedAt"

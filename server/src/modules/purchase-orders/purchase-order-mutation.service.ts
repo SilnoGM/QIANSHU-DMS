@@ -1180,7 +1180,8 @@ export class PurchaseOrderMutationService {
 
   /**
    * 审核后金额修订：只改实际单价和定金，数量与采购行身份保持冻结。
-   * 已付款必须先由采购付款记录作废；应付金额的受控更新由数据库触发器再次校验。
+   * 定金已付时锁定定金、差额只进尾款；尾款或其他付款存在时仍必须先作废。
+   * 行间调价即使订单金额不变也会写入行级快照；应付金额的受控更新由数据库触发器再次校验。
    */
   async reviseAmount(
     context: PurchaseOrderMutationContext,
@@ -1260,21 +1261,50 @@ export class PurchaseOrderMutationService {
           '只有已确认或已完成的采购订单可以修改金额',
         )
       }
-      const activePaymentCount = await transaction.purchaseOrderPayment.count({
+      const activePayments = await transaction.purchaseOrderPayment.findMany({
         where: { purchaseOrderId, voidedAt: null },
+        select: { paymentType: true, amount: true },
       })
-      if (activePaymentCount > 0) {
+      let paidDepositUnits = 0n
+      let paidNonDepositUnits = 0n
+      for (const payment of activePayments) {
+        const units = parsePurchaseOrderAmountUnits(fixed2(payment.amount))
+        if (payment.paymentType === 'DEPOSIT') {
+          paidDepositUnits += units
+        }
+        else {
+          paidNonDepositUnits += units
+        }
+      }
+      // 尾款或其他付款一旦存在，修订金额就会破坏已付事实与约定金额的对应关系；
+      // 唯一可行路径是先作废付款，再重新定价。
+      if (paidNonDepositUnits > 0n) {
         return payableFailure(
           'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',
-          '该采购单仍有有效付款，请先作废付款后再修改金额',
+          '该采购单已有尾款或其他有效付款，请先在采购付款中作废后再修改金额',
           409,
         )
       }
+      const depositPaid = paidDepositUnits > 0n
+      const lockedDepositAmount = fixed2(order.depositDueAmount)
+      if (depositPaid && depositDueAmount !== lockedDepositAmount) {
+        return purchaseOrderRuleFailure(
+          'PURCHASE_ORDER_AMOUNT_INVALID',
+          '定金已支付，不能修改定金；本次只能调整尾款',
+          'depositDueAmount',
+        )
+      }
+      const effectiveDepositAmount = depositPaid
+        ? lockedDepositAmount
+        : depositDueAmount
       const lines = await transaction.purchaseOrderLine.findMany({
         where: { purchaseOrderId },
         select: {
           id: true,
+          lineNumber: true,
           lineType: true,
+          productNameSnapshot: true,
+          productNoSnapshot: true,
           quantity: true,
           actualPurchaseUnitPriceAmount: true,
           lineTotalAmount: true,
@@ -1309,43 +1339,48 @@ export class PurchaseOrderMutationService {
       )
       const purchaseTotalAmount = lineSubtotalAmount
       if (
-        parsePurchaseOrderAmountUnits(depositDueAmount)
+        parsePurchaseOrderAmountUnits(effectiveDepositAmount)
         > parsePurchaseOrderAmountUnits(purchaseTotalAmount)
       ) {
         return purchaseOrderRuleFailure(
           'PURCHASE_ORDER_AMOUNT_INVALID',
-          '定金不能超过采购总价',
-          'depositDueAmount',
+          depositPaid
+            ? `新采购总价不能低于当前定金 ${effectiveDepositAmount} CNY；如需降低到更低金额，请先在采购付款中作废定金付款`
+            : '定金不能超过采购总价',
+          depositPaid ? 'lines' : 'depositDueAmount',
         )
       }
       const balanceDueAmount = formatPurchaseOrderAmountUnits(
         parsePurchaseOrderAmountUnits(purchaseTotalAmount)
-        - parsePurchaseOrderAmountUnits(depositDueAmount),
+        - parsePurchaseOrderAmountUnits(effectiveDepositAmount),
       )
-      const sameLines = newLineAmounts.every((item) => {
-        return item.actualUnitPriceAmount
-          === fixed2(item.line.actualPurchaseUnitPriceAmount)
-          && item.lineTotalAmount === fixed2(item.line.lineTotalAmount)
+      const lineChanges = newLineAmounts.flatMap((item) => {
+        const currentActual = fixed2(item.line.actualPurchaseUnitPriceAmount)
+        const currentTotal = fixed2(item.line.lineTotalAmount)
+        if (
+          currentActual === item.actualUnitPriceAmount
+          && currentTotal === item.lineTotalAmount
+        ) {
+          return []
+        }
+        return [{
+          lineId: item.line.id,
+          lineNumber: item.line.lineNumber,
+          productName: item.line.productNameSnapshot,
+          productNo: item.line.productNoSnapshot,
+          quantity: item.line.quantity,
+          oldUnitPriceAmount: currentActual,
+          newUnitPriceAmount: item.actualUnitPriceAmount,
+          oldLineTotalAmount: currentTotal,
+          newLineTotalAmount: item.lineTotalAmount,
+        }]
       })
-      if (
-        sameLines
-        && depositDueAmount === fixed2(order.depositDueAmount)
-      ) {
+      const depositChanged = effectiveDepositAmount
+        !== fixed2(order.depositDueAmount)
+      if (lineChanges.length === 0 && !depositChanged) {
         return purchaseOrderRuleFailure(
           'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
           '采购金额没有变化，无需修订',
-        )
-      }
-      if (
-        purchaseTotalAmount === fixed2(order.purchaseTotalAmount)
-        && depositDueAmount === fixed2(order.depositDueAmount)
-        && balanceDueAmount === fixed2(order.balanceDueAmount)
-      ) {
-        // 现有修订表只保存订单级四个金额；行间调价但总额、定金和尾款
-        // 完全不变时没有可持久化的差异，明确拒绝而不是静默丢弃历史。
-        return purchaseOrderRuleFailure(
-          'PURCHASE_ORDER_AMOUNT_REVISION_UNCHANGED',
-          '行间调价但订单总额、定金和尾款未变化，当前修订记录无法保存；请调整总额或定金',
         )
       }
       const payables = await transaction.purchaseOrderPayable.findMany({
@@ -1386,8 +1421,9 @@ export class PurchaseOrderMutationService {
           oldBalanceDueAmount: fixed2(order.balanceDueAmount),
           newLineSubtotalAmount: lineSubtotalAmount,
           newPurchaseTotalAmount: purchaseTotalAmount,
-          newDepositDueAmount: depositDueAmount,
+          newDepositDueAmount: effectiveDepositAmount,
           newBalanceDueAmount: balanceDueAmount,
+          lineChanges,
           reason,
           changedByUserId: trusted.actorUserId,
         },
@@ -1415,9 +1451,12 @@ export class PurchaseOrderMutationService {
           },
         })
       }
+      const totalPaidAmount = formatPurchaseOrderAmountUnits(
+        paidDepositUnits + paidNonDepositUnits,
+      )
       const newPaymentStatus = derivePurchaseOrderPaymentStatus(
         purchaseTotalAmount,
-        '0.00',
+        totalPaidAmount,
       )
       const newOrderStatus = derivePurchaseOrderStatus({
         orderStatus: order.orderStatus,
@@ -1429,21 +1468,32 @@ export class PurchaseOrderMutationService {
         data: {
           lineSubtotalAmount,
           purchaseTotalAmount,
-          depositDueAmount,
+          depositDueAmount: effectiveDepositAmount,
           balanceDueAmount,
           paymentStatus: newPaymentStatus,
           orderStatus: newOrderStatus,
           version: { increment: 1 },
         },
       })
-      await transaction.purchaseOrderPayable.update({
-        where: { id: depositPayable.id },
-        data: { dueAmount: depositDueAmount, version: { increment: 1 } },
-      })
-      await transaction.purchaseOrderPayable.update({
-        where: { id: balancePayable.id },
-        data: { dueAmount: balanceDueAmount, version: { increment: 1 } },
-      })
+      // 金额未变化的阶段不递增版本：行间调价保持总额时不应让财务页面无谓失效。
+      if (
+        !depositPaid
+        && fixed2(depositPayable.dueAmount) !== effectiveDepositAmount
+      ) {
+        await transaction.purchaseOrderPayable.update({
+          where: { id: depositPayable.id },
+          data: {
+            dueAmount: effectiveDepositAmount,
+            version: { increment: 1 },
+          },
+        })
+      }
+      if (fixed2(balancePayable.dueAmount) !== balanceDueAmount) {
+        await transaction.purchaseOrderPayable.update({
+          where: { id: balancePayable.id },
+          data: { dueAmount: balanceDueAmount, version: { increment: 1 } },
+        })
+      }
       if (newPaymentStatus !== order.paymentStatus) {
         await transaction.purchaseOrderStatusHistory.create({
           data: {
@@ -1470,10 +1520,11 @@ export class PurchaseOrderMutationService {
           oldTotal: fixed2(order.purchaseTotalAmount),
           newTotal: purchaseTotalAmount,
           oldDeposit: fixed2(order.depositDueAmount),
-          newDeposit: depositDueAmount,
+          newDeposit: effectiveDepositAmount,
           oldBalance: fixed2(order.balanceDueAmount),
           newBalance: balanceDueAmount,
           lineCount: newLineAmounts.length,
+          lineChangeCount: lineChanges.length,
           reasonProvided: true,
         },
       })

@@ -2074,6 +2074,8 @@ model PurchaseOrderAmountRevision {
   newPurchaseTotalAmount Decimal  @map("new_purchase_total_amount") @db.Decimal(30, 4)
   newDepositDueAmount    Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 4)
   newBalanceDueAmount    Decimal  @map("new_balance_due_amount") @db.Decimal(30, 4)
+  // 行间调价可能不改变订单四个金额；行级快照独立保存，供变更记录展示与审计追溯。
+  lineChanges            Json     @default("[]") @map("line_changes") @db.JsonB
   reason                String   @db.VarChar(500)
   changedByUserId        String   @map("changed_by_user_id") @db.Uuid
   changedAt             DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)

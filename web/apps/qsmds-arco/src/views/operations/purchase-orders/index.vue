@@ -48,6 +48,7 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsPurchaseOrderAmountRevisionModal from '@/components/business/QsPurchaseOrderAmountRevisionModal/index.vue'
 import QsPurchaseStartModal from '@/components/business/QsPurchaseStartModal/index.vue'
 import { buildPurchaseStartRouteQuery } from '@/components/business/QsPurchaseStartModal/logic'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
@@ -113,6 +114,7 @@ const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const canUpdate = computed(() => auth('purchase-orders:update'))
 const canCancel = computed(() => auth('purchase-orders:update') || auth('purchase-orders:review'))
+const canReviseAmount = computed(() => auth('purchase-orders:price-revision'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
@@ -163,6 +165,9 @@ const listError = ref('')
 const requestId = ref<string>()
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | { readonly id: string } | null>(null)
+const detailDrawerRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailDrawer>>('detailDrawerRef')
+const amountRevisionVisible = ref(false)
+const amountRevisionOrderId = ref<string | null>(null)
 const cancelModalVisible = ref(false)
 const cancelOrderId = ref<string | null>(null)
 const recordsModalVisible = ref(false)
@@ -198,21 +203,23 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-// 详情始终可达；双权限时桌面收进更多菜单，移动端保持行内，避免操作列过宽。
+// 详情始终可达；有改价权限或双操作权限时桌面收进更多菜单，移动端保持行内。
+const showActionMenu = computed(() => (
+  (canUpdate.value && canCancel.value) || canReviseAmount.value
+))
 const actionColumnWidth = computed(() => {
   if (props.viewMode === 'all') {
     const actions: ActionWidthSpec[] = []
-    if (canUpdate.value && canCancel.value) {
-      actions.push(
-        { chars: 2, kind: 'text' },
-        { chars: 2, kind: 'text' },
-        { kind: 'icon' },
-      )
+    if (canUpdate.value) {
+      actions.push({ chars: 2, kind: 'text' })
     }
-    else if (canUpdate.value || canCancel.value) {
-      actions.push({ chars: 2, kind: 'text' }, { chars: 2, kind: 'text' })
+    if (canCancel.value) {
+      actions.push({ chars: 2, kind: 'text' })
     }
-    else {
+    if (showActionMenu.value) {
+      actions.push({ kind: 'icon' })
+    }
+    if (actions.length === 0) {
       actions.push({ chars: 2, kind: 'text' })
     }
     return resolveActionColumnWidth(actions)
@@ -618,8 +625,37 @@ function handlePurchaseOrderCancelled(): void {
   refreshOrdersAndCounts()
 }
 
+function canReviseOrder(order: PurchaseOrderListItemDto): boolean {
+  return canReviseAmount.value
+    && (order.orderStatus === 'CONFIRMED' || order.orderStatus === 'COMPLETED')
+}
+
+function openAmountRevision(orderId: string): void {
+  amountRevisionOrderId.value = orderId
+  amountRevisionVisible.value = true
+}
+
+function handleAmountRevisionUpdated(detail: PurchaseOrderDetailDto): void {
+  handleDetailUpdated(detail)
+  // 从详情抽屉改价时，抽屉内的旧快照必须重取，避免继续用旧金额作后续操作依据。
+  if (detailVisible.value) {
+    void detailDrawerRef.value?.reload()
+  }
+}
+
 function detailMenuItems(order: PurchaseOrderListItemDto): ActionMenuItem[][] {
-  return [[{ label: '详情', handle: () => openPurchaseOrderDetail(order) }]]
+  const items: ActionMenuItem[] = [{
+    label: '详情',
+    handle: () => openPurchaseOrderDetail(order),
+  }]
+  if (canReviseOrder(order)) {
+    items.push({
+      label: '修改金额',
+      icon: 'i-lucide:badge-dollar-sign',
+      handle: () => openAmountRevision(order.id),
+    })
+  }
+  return [items]
 }
 
 function currentPendingTask(): PurchaseOrderPendingTask {
@@ -1098,7 +1134,7 @@ onBeforeUnmount(() => {
                 </span>
               </FaTooltip>
               <FaButton
-                v-if="!(canUpdate && canCancel)"
+                v-if="!showActionMenu"
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -1109,7 +1145,7 @@ onBeforeUnmount(() => {
                 详情
               </FaButton>
               <FaButton
-                v-if="canUpdate && canCancel"
+                v-if="showActionMenu"
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -1120,7 +1156,7 @@ onBeforeUnmount(() => {
                 详情
               </FaButton>
               <FaDropdown
-                v-if="canUpdate && canCancel"
+                v-if="showActionMenu"
                 :items="detailMenuItems(row)"
                 align="end"
               >
@@ -1727,10 +1763,19 @@ onBeforeUnmount(() => {
     />
 
     <PurchaseOrderDetailDrawer
+      ref="detailDrawerRef"
       v-model="detailVisible"
       :order="selectedOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
+      @revise-amount="openAmountRevision"
+    />
+
+    <QsPurchaseOrderAmountRevisionModal
+      v-model="amountRevisionVisible"
+      :order-id="amountRevisionOrderId"
+      :currencies="currencyCatalog.currencies.value"
+      @updated="handleAmountRevisionUpdated"
     />
 
     <PurchaseOrderCancelModal

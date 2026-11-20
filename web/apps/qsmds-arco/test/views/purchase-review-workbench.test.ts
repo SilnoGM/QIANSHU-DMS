@@ -38,7 +38,7 @@ test('已通过详情允许审核人员修改金额，但继续不提供付款�
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
   assert.match(source, /:can-revise-amount="canReviseAmount"/u)
   assert.match(source, /@revise-amount="openAmountRevision"/u)
-  assert.match(source, /<PurchaseAmountRevisionModal/u)
+  assert.match(source, /<QsPurchaseOrderAmountRevisionModal/u)
   assert.match(source, /@updated="handleAmountRevisionUpdated"/u)
   assert.doesNotMatch(source, /recordPayment|voidPayment/u)
 })

@@ -95,6 +95,7 @@ export const PURCHASE_ORDER_PERMISSION_CODES = [
   'purchase-orders:create',
   'purchase-orders:create-stock',
   'purchase-orders:review',
+  'purchase-orders:price-revision',
   'purchase-orders:update',
   'purchase-orders:payment',
   'purchase-orders:document',

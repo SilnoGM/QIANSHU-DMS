@@ -144,4 +144,41 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
     await rejectConstraint(() => client.query('DELETE FROM purchase_order_amount_revisions WHERE purchase_order_id = $1', [orderId]),
       'purchase_order_amount_revision_immutable_check')
   })
+
+  it('allows line-only amount revisions only with a line snapshot', async () => {
+    // changed = true 时同时改变订单金额，让 changed_check 通过，才能单独验证 JSON 类型约束。
+    const insert = (lineChanges: string, changed = false) => client.query(
+      changed
+        ? `INSERT INTO purchase_order_amount_revisions (
+            purchase_order_id, old_line_subtotal_amount, old_purchase_total_amount, old_deposit_due_amount, old_balance_due_amount,
+            new_line_subtotal_amount, new_purchase_total_amount, new_deposit_due_amount, new_balance_due_amount,
+            line_changes, reason, changed_by_user_id
+          ) VALUES ($1, 100, 100, 30, 70, 90, 90, 30, 60, $2::jsonb, 'Changed terms', $3)`
+        : `INSERT INTO purchase_order_amount_revisions (
+            purchase_order_id, old_line_subtotal_amount, old_purchase_total_amount, old_deposit_due_amount, old_balance_due_amount,
+            new_line_subtotal_amount, new_purchase_total_amount, new_deposit_due_amount, new_balance_due_amount,
+            line_changes, reason, changed_by_user_id
+          ) VALUES ($1, 100, 100, 30, 70, 100, 100, 30, 70, $2::jsonb, 'Line-only repricing', $3)`,
+      [orderId, lineChanges, actorId],
+    )
+    await rejectConstraint(() => insert('[]'), 'purchase_order_amount_revisions_changed_check')
+    await rejectConstraint(() => insert('{}', true), 'purchase_order_amount_revisions_line_changes_check')
+    await insert(JSON.stringify([{
+      lineId: randomUUID(),
+      lineNumber: 1,
+      productName: 'Records Product',
+      productNo: null,
+      quantity: 1,
+      oldUnitPriceAmount: '100.00',
+      newUnitPriceAmount: '120.00',
+      oldLineTotalAmount: '100.00',
+      newLineTotalAmount: '120.00',
+    }]))
+    const stored = await client.query(`SELECT jsonb_array_length(line_changes) AS count
+      FROM purchase_order_amount_revisions
+      WHERE purchase_order_id = $1
+      ORDER BY changed_at DESC, id DESC
+      LIMIT 1`, [orderId])
+    expect(stored.rows).toEqual([{ count: 1 }])
+  })
 })

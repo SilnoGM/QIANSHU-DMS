@@ -21,6 +21,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'detailUpdated': [detail: PurchaseOrderDetailDto]
+  'reviseAmount': [orderId: string]
   'update:modelValue': [value: boolean]
 }>()
 
@@ -43,6 +44,11 @@ const drawerVisible = computed({
 })
 const canReceiveWarehouse = computed(() => auth('purchase-orders:update') && !!detail.value && eligibleWarehouseParts(detail.value).length > 0)
 const canAttachDocument = computed(() => auth('purchase-orders:document') && detail.value !== null && detail.value.orderStatus !== 'PENDING_REVIEW')
+const canReviseAmount = computed(() => (
+  auth('purchase-orders:price-revision')
+  && detail.value !== null
+  && (detail.value.orderStatus === 'CONFIRMED' || detail.value.orderStatus === 'COMPLETED')
+))
 const canRework = computed(() => {
   const order = detail.value
   return auth('purchase-orders:create')
@@ -155,6 +161,8 @@ onBeforeUnmount(() => {
   cancelDetailRequest()
   detailActionsRef.value?.cancelPendingRequests()
 })
+
+defineExpose({ reload: loadDetail })
 </script>
 
 <template>
@@ -169,8 +177,10 @@ onBeforeUnmount(() => {
     :busy="actionLocked"
     :can-attach-document="canAttachDocument"
     :can-receive-warehouse="canReceiveWarehouse"
+    :can-revise-amount="canReviseAmount"
     :can-rework="canRework"
     @receive-warehouse="detailActionsRef?.openWarehouseDialog()"
+    @revise-amount="emit('reviseAmount', detail?.id ?? '')"
     @rework="reworkRejectedOrder"
     @reload="loadDetail"
     @attach-document="documentModalVisible = canAttachDocument && !actionLocked"

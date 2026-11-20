@@ -104,6 +104,7 @@ describe('permission constants', () => {
       'purchase-orders:create',
       'purchase-orders:create-stock',
       'purchase-orders:review',
+      'purchase-orders:price-revision',
       'purchase-orders:update',
       'purchase-orders:payment',
       'purchase-orders:document',
@@ -162,7 +163,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 130)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 131)
   })
 })
 

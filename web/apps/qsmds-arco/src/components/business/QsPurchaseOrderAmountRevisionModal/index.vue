@@ -1,33 +1,43 @@
 <script setup lang="ts">
-import type { PurchaseAmountRevisionPreview } from './amount-revision.logic'
-import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
-import type { CurrencyDescriptor } from '@/components/base/currency'
+import type { PurchaseOrderDetailDto } from '../../../api/generated/types.gen'
+import type { CurrencyDescriptor } from '../../base/currency'
+import type { PurchaseAmountRevisionPreview } from './logic'
 
-import purchaseOrdersApi from '@/api/modules/purchase-orders'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
-import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
-import MoneyInput from '@/components/base/MoneyInput/index.vue'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
-import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
+import purchaseOrdersApi from '../../../api/modules/purchase-orders'
+import { getPurchaseOrderApiFailure } from '../../../views/operations/purchase-orders/purchase-order-list.logic'
+import AmountDisplay from '../../base/AmountDisplay/index.vue'
+import DateTimeDisplay from '../../base/DateTimeDisplay/index.vue'
+import MoneyInput from '../../base/MoneyInput/index.vue'
+import {
+  normalizeMoneyString,
+  sumMoneyValues,
+} from '../../base/MoneyInput/logic'
+import { useQsToast } from '../../base/QsToast/useQsToast'
+import QsGenericModal from '../QsGenericModal/index.vue'
 import {
   buildPurchaseAmountRevisionRequest,
   calculatePurchaseAmountRevisionPreview,
   PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX,
-} from './amount-revision.logic'
+} from './logic'
 
-defineOptions({ name: 'PurchaseAmountRevisionModal' })
+defineOptions({ name: 'QsPurchaseOrderAmountRevisionModal' })
 
 const props = withDefaults(defineProps<{
   currencies: readonly CurrencyDescriptor[]
-  detail: PurchaseOrderDetailDto | null
+  detail?: PurchaseOrderDetailDto | null
   modelValue: boolean
-}>(), {})
+  orderId?: string | null
+}>(), {
+  detail: null,
+  orderId: null,
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'updated': [detail: PurchaseOrderDetailDto]
 }>()
+
+const MONEY_OPTIONS = { precision: 2 } as const
 
 const { t } = useI18n()
 const toast = useQsToast()
@@ -38,35 +48,63 @@ const reason = ref('')
 const localError = ref('')
 const failure = ref<null | string>(null)
 const submitting = ref(false)
+const fetchedDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const loading = ref(false)
+const loadError = ref('')
 let controller: AbortController | null = null
+let loadController: AbortController | null = null
 
 const visible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
+const activeDetail = computed(() => props.detail ?? fetchedDetail.value)
 const activePayments = computed(() => (
-  props.detail?.payments.filter(payment => payment.voidedAt === null) ?? []
+  activeDetail.value?.payments.filter(payment => payment.voidedAt === null) ?? []
 ))
-const hasActivePayments = computed(() => activePayments.value.length > 0)
+const blockingPayments = computed(() => (
+  activePayments.value.filter(payment => payment.paymentType !== 'DEPOSIT')
+))
+const hasBlockingPayments = computed(() => blockingPayments.value.length > 0)
+const depositLocked = computed(() => (
+  activePayments.value.some(payment => payment.paymentType === 'DEPOSIT')
+))
+const paidDepositAmount = computed(() => sumMoneyValues(
+  activePayments.value
+    .filter(payment => payment.paymentType === 'DEPOSIT')
+    .map(payment => payment.amount),
+  MONEY_OPTIONS,
+))
+const effectiveDeposit = computed<string | null>(() => {
+  const detail = activeDetail.value
+  if (detail === null) {
+    return null
+  }
+  return depositLocked.value
+    ? normalizeMoneyString(detail.amounts.depositDueAmount, MONEY_OPTIONS)
+    : deposit.value
+})
 const shipped = computed(() => (
-  props.detail?.fulfillmentStatus === 'SHIPPED'
-  || props.detail?.fulfillmentStatus === 'SIGNED'
+  activeDetail.value?.fulfillmentStatus === 'SHIPPED'
+  || activeDetail.value?.fulfillmentStatus === 'SIGNED'
 ))
 interface PreviewState {
   readonly error: string
   readonly value: PurchaseAmountRevisionPreview | null
 }
 const previewState = computed<PreviewState>(() => {
-  if (props.detail === null) {
+  const detail = activeDetail.value
+  if (detail === null) {
     return { error: '', value: null }
   }
   try {
     return {
       error: '',
       value: calculatePurchaseAmountRevisionPreview(
-        props.detail,
+        detail,
         linePrices,
-        deposit.value,
+        effectiveDeposit.value,
+        { depositLocked: depositLocked.value },
       ),
     }
   }
@@ -74,17 +112,29 @@ const previewState = computed<PreviewState>(() => {
     return {
       error: error instanceof RangeError
         ? error.message
-        : '采购金额信息无效，请检查后重试',
+        : t('purchaseOrderAmountRevision.invalid'),
       value: null,
     }
   }
 })
 const preview = computed(() => previewState.value.value)
 const previewError = computed(() => previewState.value.error)
+const orderAmountsChanged = computed(() => {
+  const detail = activeDetail.value
+  const current = preview.value
+  if (detail === null || current === null) {
+    return false
+  }
+  return current.purchaseTotalAmount
+    !== normalizeMoneyString(detail.amounts.purchaseTotalAmount, MONEY_OPTIONS)
+    || current.depositDueAmount
+    !== normalizeMoneyString(detail.amounts.depositDueAmount, MONEY_OPTIONS)
+})
 const canSubmit = computed(() => (
-  props.detail !== null
+  activeDetail.value !== null
+  && !loading.value
   && !submitting.value
-  && !hasActivePayments.value
+  && !hasBlockingPayments.value
   && preview.value !== null
   && preview.value.changed
   && reason.value.trim().length > 0
@@ -92,28 +142,84 @@ const canSubmit = computed(() => (
 ))
 
 function resetForm(): void {
-  for (const line of props.detail?.lines ?? []) {
+  const detail = activeDetail.value
+  for (const line of detail?.lines ?? []) {
     linePrices[line.id] = line.actualPurchaseUnitPriceAmount
   }
-  deposit.value = props.detail?.amounts.depositDueAmount ?? null
+  deposit.value = detail?.amounts.depositDueAmount ?? null
   reason.value = ''
   localError.value = ''
   failure.value = null
   submitting.value = false
 }
 
-watch(
-  [() => props.modelValue, () => props.detail?.id],
-  ([open]) => {
-    if (open) {
-      resetForm()
+function cancelLoad(): void {
+  loadController?.abort()
+  loadController = null
+  loading.value = false
+}
+
+/** 全部采购列表只有摘要，弹窗按订单号自行取详情；审核页直接传入详情。 */
+async function loadDetail(): Promise<void> {
+  const orderId = props.orderId
+  if (orderId === null || props.detail !== null) {
+    return
+  }
+  cancelLoad()
+  const request = new AbortController()
+  loadController = request
+  loading.value = true
+  loadError.value = ''
+  fetchedDetail.value = null
+  try {
+    const response = await purchaseOrdersApi.getById(orderId, request.signal)
+    if (!request.signal.aborted && props.modelValue && props.orderId === orderId) {
+      fetchedDetail.value = response.data
     }
-    else {
-      controller?.abort()
-      controller = null
+  }
+  catch (error) {
+    if (!request.signal.aborted) {
+      loadError.value = getPurchaseOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (loadController === request) {
+      loadController = null
+      loading.value = false
+    }
+  }
+}
+
+watch(
+  [() => props.modelValue, () => props.orderId, () => props.detail],
+  ([open, orderId, detail]) => {
+    if (!open) {
+      cancelLoad()
+      cancelSubmit()
+      return
+    }
+    if (detail === null && orderId !== null) {
+      void loadDetail()
     }
   },
+  { immediate: true },
 )
+
+watch(
+  () => activeDetail.value,
+  (detail) => {
+    if (props.modelValue && detail !== null) {
+      resetForm()
+    }
+  },
+  { immediate: true },
+)
+
+function cancelSubmit(): void {
+  controller?.abort()
+  controller = null
+  submitting.value = false
+}
 
 function updateVisible(value: boolean): void {
   if (!value && submitting.value) {
@@ -123,18 +229,19 @@ function updateVisible(value: boolean): void {
 }
 
 async function submit(): Promise<void> {
-  const detail = props.detail
+  const detail = activeDetail.value
   if (detail === null || !canSubmit.value) {
     return
   }
   const result = buildPurchaseAmountRevisionRequest(
     detail,
     linePrices,
-    deposit.value,
+    effectiveDeposit.value,
     reason.value,
+    { depositLocked: depositLocked.value },
   )
   if (!result.valid || result.request === undefined) {
-    localError.value = result.fieldError ?? '采购金额信息无效，请检查后重试'
+    localError.value = result.fieldError ?? t('purchaseOrderAmountRevision.invalid')
     return
   }
   localError.value = ''
@@ -151,7 +258,8 @@ async function submit(): Promise<void> {
     if (request.signal.aborted) {
       return
     }
-    toast.success(t('purchaseReview.amountRevision.success'))
+    fetchedDetail.value = response.data
+    toast.success(t('purchaseOrderAmountRevision.success'))
     emit('updated', response.data)
     visible.value = false
   }
@@ -172,38 +280,41 @@ async function submit(): Promise<void> {
 <template>
   <QsGenericModal
     :model-value="modelValue"
-    :title="t('purchaseReview.amountRevision.title')"
-    :description="detail ? `${detail.orderNo} · ${t('purchaseReview.amountRevision.description')}` : undefined"
+    :title="t('purchaseOrderAmountRevision.title')"
+    :description="activeDetail ? `${activeDetail.orderNo} · ${t('purchaseOrderAmountRevision.description')}` : undefined"
     size="lg"
     :z-index="PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX"
     :closable="!submitting"
     :dismiss-on-escape="!submitting"
     :dismiss-on-overlay="!submitting"
     :submitting="submitting"
+    :loading="loading"
+    :error="loadError || null"
+    :error-title="t('purchaseOrderAmountRevision.loadFailed')"
     @update:model-value="updateVisible"
   >
     <FaAlert
       v-if="failure"
       variant="destructive"
       icon="i-lucide:circle-alert"
-      :title="t('purchaseReview.amountRevision.failed')"
+      :title="t('purchaseOrderAmountRevision.failed')"
       :description="failure"
       class="mb-4"
       role="alert"
     />
     <FaAlert
-      v-if="hasActivePayments"
+      v-if="hasBlockingPayments"
       variant="destructive"
       icon="i-lucide:shield-alert"
-      :title="t('purchaseReview.amountRevision.hasPaymentsTitle')"
+      :title="t('purchaseOrderAmountRevision.hasPaymentsTitle')"
       class="mb-4"
       role="alert"
     >
       <template #description>
         <div class="gap-2 grid">
-          <span>{{ t('purchaseReview.amountRevision.hasPayments', { count: activePayments.length }) }}</span>
+          <span>{{ t('purchaseOrderAmountRevision.hasPayments', { count: blockingPayments.length }) }}</span>
           <ul class="m-0 pl-5">
-            <li v-for="payment in activePayments" :key="payment.id">
+            <li v-for="payment in blockingPayments" :key="payment.id">
               {{ t(`purchasePayment.types.${payment.paymentType}`) }} · {{ payment.amount }} CNY ·
               <DateTimeDisplay :value="payment.paidAt" />
             </li>
@@ -212,43 +323,53 @@ async function submit(): Promise<void> {
       </template>
     </FaAlert>
     <FaAlert
+      v-else-if="depositLocked"
+      icon="i-lucide:lock"
+      :title="t('purchaseOrderAmountRevision.depositLockedTitle')"
+      class="mb-4"
+    >
+      <template #description>
+        {{ t('purchaseOrderAmountRevision.depositLocked', { amount: paidDepositAmount }) }}
+      </template>
+    </FaAlert>
+    <FaAlert
       v-if="shipped"
       icon="i-lucide:info"
-      :title="t('purchaseReview.amountRevision.shippedTitle')"
-      :description="t('purchaseReview.amountRevision.shipped')"
+      :title="t('purchaseOrderAmountRevision.shippedTitle')"
+      :description="t('purchaseOrderAmountRevision.shipped')"
       class="mb-4"
     />
 
-    <template v-if="detail">
+    <template v-if="activeDetail">
       <section aria-labelledby="purchase-amount-revision-lines" class="border border-border/70 bg-card">
         <header class="p-4 border-b border-border/70">
           <h2 id="purchase-amount-revision-lines" class="text-sm font-semibold m-0">
-            {{ t('purchaseReview.amountRevision.lines') }}
+            {{ t('purchaseOrderAmountRevision.lines') }}
           </h2>
           <p class="qs-type-meta m-0 mt-1">
-            {{ t('purchaseReview.amountRevision.linesHint') }}
+            {{ t('purchaseOrderAmountRevision.linesHint') }}
           </p>
         </header>
         <div class="divide-border/70 divide-y">
           <div
-            v-for="line in detail.lines"
+            v-for="line in activeDetail.lines"
             :key="line.id"
             class="p-4 gap-3 grid sm:grid-cols-[minmax(0,1fr)_4rem_8rem_9rem_8rem] sm:items-end"
           >
             <div class="min-w-0">
               <p class="qs-type-compact-label m-0">
-                {{ t('purchaseReview.amountRevision.product') }}
+                {{ t('purchaseOrderAmountRevision.product') }}
               </p>
               <p class="m-0 mt-1 break-words">
                 {{ line.productName }}
               </p>
               <p class="qs-type-meta text-muted-foreground m-0">
-                {{ line.productNo ?? t('purchaseReview.amountRevision.temporaryProduct') }}
+                {{ line.productNo ?? t('purchaseOrderAmountRevision.temporaryProduct') }}
               </p>
             </div>
             <div>
               <p class="qs-type-compact-label m-0">
-                {{ t('purchaseReview.amountRevision.quantity') }}
+                {{ t('purchaseOrderAmountRevision.quantity') }}
               </p>
               <p class="m-0 mt-1 tabular-nums">
                 {{ line.quantity }}
@@ -256,7 +377,7 @@ async function submit(): Promise<void> {
             </div>
             <div>
               <p class="qs-type-compact-label m-0">
-                {{ t('purchaseReview.amountRevision.currentPrice') }}
+                {{ t('purchaseOrderAmountRevision.currentPrice') }}
               </p>
               <p class="m-0 mt-1">
                 <AmountDisplay
@@ -268,20 +389,20 @@ async function submit(): Promise<void> {
             </div>
             <div>
               <p class="qs-type-compact-label mb-1">
-                {{ t('purchaseReview.amountRevision.newPrice') }}
+                {{ t('purchaseOrderAmountRevision.newPrice') }}
               </p>
               <MoneyInput
                 v-model="linePrices[line.id]"
                 v-model:currency="currency"
                 :currencies="currencies"
                 :currency-selectable="false"
-                :disabled="submitting || hasActivePayments"
+                :disabled="submitting || hasBlockingPayments"
                 placeholder="0.00"
               />
             </div>
             <div>
               <p class="qs-type-compact-label m-0">
-                {{ t('purchaseReview.amountRevision.lineTotal') }}
+                {{ t('purchaseOrderAmountRevision.lineTotal') }}
               </p>
               <p class="m-0 mt-1">
                 <AmountDisplay
@@ -299,11 +420,11 @@ async function submit(): Promise<void> {
         <dl class="m-0 gap-4 grid sm:grid-cols-2">
           <div>
             <dt class="qs-type-compact-label mb-1">
-              {{ t('purchaseReview.amountRevision.purchaseTotal') }}
+              {{ t('purchaseOrderAmountRevision.purchaseTotal') }}
             </dt>
             <dd class="m-0">
               <AmountDisplay
-                :value="preview?.purchaseTotalAmount ?? detail.amounts.purchaseTotalAmount"
+                :value="preview?.purchaseTotalAmount ?? activeDetail.amounts.purchaseTotalAmount"
                 currency="CNY"
                 :currencies="currencies"
                 class="qs-type-data-emphasis"
@@ -312,11 +433,11 @@ async function submit(): Promise<void> {
           </div>
           <div>
             <dt class="qs-type-compact-label mb-1">
-              {{ t('purchaseReview.amountRevision.balance') }}
+              {{ t('purchaseOrderAmountRevision.balance') }}
             </dt>
             <dd class="m-0">
               <AmountDisplay
-                :value="preview?.balanceDueAmount ?? detail.amounts.balanceDueAmount"
+                :value="preview?.balanceDueAmount ?? activeDetail.amounts.balanceDueAmount"
                 currency="CNY"
                 :currencies="currencies"
                 class="qs-type-data-emphasis"
@@ -325,23 +446,31 @@ async function submit(): Promise<void> {
           </div>
           <div class="sm:col-span-2">
             <p class="qs-type-compact-label mb-1">
-              {{ t('purchaseReview.amountRevision.deposit') }}
+              {{ t('purchaseOrderAmountRevision.deposit') }}
             </p>
             <MoneyInput
               v-model="deposit"
               v-model:currency="currency"
               :currencies="currencies"
               :currency-selectable="false"
-              :disabled="submitting || hasActivePayments"
+              :disabled="submitting || hasBlockingPayments || depositLocked"
               placeholder="0.00"
             />
             <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ t('purchaseReview.amountRevision.depositHint') }}
+              {{ depositLocked
+                ? t('purchaseOrderAmountRevision.depositLockedHint')
+                : t('purchaseOrderAmountRevision.depositHint') }}
             </p>
           </div>
         </dl>
       </section>
 
+      <p
+        v-if="preview && preview.changedLineCount > 0 && !orderAmountsChanged"
+        class="qs-type-meta text-muted-foreground m-0 mt-2"
+      >
+        {{ t('purchaseOrderAmountRevision.lineOnlyHint') }}
+      </p>
       <p v-if="previewError" class="text-xs text-destructive m-0 mt-2">
         {{ previewError }}
       </p>
@@ -350,18 +479,18 @@ async function submit(): Promise<void> {
       </p>
 
       <label class="qs-type-compact-label mb-1 mt-4 block" for="purchase-amount-revision-reason">
-        {{ t('purchaseReview.amountRevision.reason') }}
+        {{ t('purchaseOrderAmountRevision.reason') }}
       </label>
       <FaTextarea
         id="purchase-amount-revision-reason"
         v-model="reason"
         :disabled="submitting"
         :maxlength="500"
-        :placeholder="t('purchaseReview.amountRevision.reasonPlaceholder')"
+        :placeholder="t('purchaseOrderAmountRevision.reasonPlaceholder')"
         input-class="min-h-24"
       />
       <p class="qs-type-meta text-muted-foreground m-0 mt-2">
-        {{ t('purchaseReview.amountRevision.note') }}
+        {{ t('purchaseOrderAmountRevision.note') }}
       </p>
     </template>
 
@@ -372,7 +501,7 @@ async function submit(): Promise<void> {
         :disabled="submitting"
         @click="updateVisible(false)"
       >
-        {{ t('purchaseReview.amountRevision.cancel') }}
+        {{ t('purchaseOrderAmountRevision.cancel') }}
       </FaButton>
       <FaButton
         type="button"
@@ -380,7 +509,7 @@ async function submit(): Promise<void> {
         :disabled="!canSubmit"
         @click="submit"
       >
-        {{ t('purchaseReview.amountRevision.confirm') }}
+        {{ t('purchaseOrderAmountRevision.confirm') }}
       </FaButton>
     </template>
   </QsGenericModal>

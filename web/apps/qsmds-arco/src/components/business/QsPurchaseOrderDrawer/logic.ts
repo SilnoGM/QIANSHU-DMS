@@ -31,6 +31,18 @@ export function revisionAmounts(revision: PurchaseOrderAmountRevisionDto) {
   ]
 }
 
+/** 行间调价时订单四个金额可以完全不变，历史展示必须依赖行级快照说明改了什么。 */
+export function revisionLineChanges(revision: PurchaseOrderAmountRevisionDto) {
+  return revision.lineChanges
+}
+
+export function revisionHasOrderAmountChanges(revision: PurchaseOrderAmountRevisionDto): boolean {
+  return revision.oldLineSubtotalAmount !== revision.newLineSubtotalAmount
+    || revision.oldPurchaseTotalAmount !== revision.newPurchaseTotalAmount
+    || revision.oldDepositDueAmount !== revision.newDepositDueAmount
+    || revision.oldBalanceDueAmount !== revision.newBalanceDueAmount
+}
+
 /** 详情已携带同单授权主图，按采购行 ID 匹配，避免旧列表图片或同名产品串图。 */
 export function getPurchaseProductImages(detail: Pick<PurchaseOrderDetailDto, 'lineSummary'>): Map<string, string | undefined> {
   return new Map(detail.lineSummary.previews.map(preview => [preview.lineId, preview.mainImage?.contentUrl]))
