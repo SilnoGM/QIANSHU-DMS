@@ -46,6 +46,11 @@ import { findReceiptSourcePage } from '../../workbenches/sales-receipts/order-re
 import { freezeReceiptSubmission, isReceiptResultUnknown } from '../../workbenches/sales-receipts/submission.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
+  buildSalesOrderPaymentTermsRequest,
+  salesOrderPaymentTermsBalance,
+  salesOrderPaymentTermsDraftChanged,
+} from './sales-order-payment-terms.logic'
+import {
   buildSalesOrderDeliveryReceiptRequest,
   buildSalesOrderPaymentRequest,
   countPendingReceiptRequests,
@@ -129,10 +134,17 @@ const paymentRemark = ref('')
 const paymentVoucher = shallowRef<UploadedVoucher | null>(null)
 const deliveryReceipt = shallowRef<UploadedVoucher | null>(null)
 const deliveryReceiptRemark = ref('')
+const paymentTermsEditing = ref(false)
+const paymentTermsDeposit = ref<string | null>(null)
+const paymentTermsReason = ref('')
+const paymentTermsErrors = shallowRef<Record<string, string>>({})
+const paymentTermsError = ref('')
+const paymentTermsSubmitting = ref(false)
 const paymentFileInputRef = useTemplateRef<HTMLInputElement>('paymentFileInputRef')
 const receiptFileInputRef = useTemplateRef<HTMLInputElement>('receiptFileInputRef')
 let requestVersion = 0
 let detailAbortController: AbortController | null = null
+let paymentTermsAbortController: AbortController | null = null
 let actionAbortController: AbortController | null = null
 const paymentMethodCatalog = useDictionaryCatalog('payment.method')
 
@@ -180,8 +192,32 @@ const changeTabs = computed(() => [
 const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
+/**
+ * 收款约定只允许已确认订单修改，并且属于“记录”视图的收款语境；
+ * 它与客户/出单信息不是同一套资格，因此不放进订单编辑弹窗。
+ */
+const canEditPaymentTerms = computed(() => (
+  modalState.value.view === 'records'
+  && props.kind === 'payments'
+  && auth('sales-orders:update')
+  && detail.value?.orderStatus === 'CONFIRMED'
+))
+const paymentTermsBalance = computed(() => detail.value === null
+  ? null
+  : salesOrderPaymentTermsBalance(
+      detail.value.amounts.agreedTotalAmount,
+      paymentTermsDeposit.value,
+    ))
+const paymentTermsChanged = computed(() => detail.value === null
+  ? false
+  : salesOrderPaymentTermsDraftChanged(detail.value.amounts.depositDueAmount, {
+      depositDueAmount: paymentTermsDeposit.value,
+      reason: paymentTermsReason.value,
+    }))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
-const paymentLocked = computed(() => actionLocked.value || receiptUnknown.value)
+const paymentLocked = computed(() => (
+  actionLocked.value || receiptUnknown.value || paymentTermsSubmitting.value
+))
 const {
   handlers: paymentDropHandlers,
   isDragging: paymentDragging,
@@ -393,6 +429,7 @@ function resetReceiptForm(): void {
 }
 
 function openPaymentModal(): void {
+  cancelPaymentTermsEdit()
   cancelSourceRequest()
   if (!canRecordPayment.value || detail.value === null) {
     return
@@ -815,6 +852,86 @@ function cancelActionRequest(): void {
   actionUploading.value = false
 }
 
+function cancelPaymentTermsEdit(): void {
+  paymentTermsAbortController?.abort()
+  paymentTermsAbortController = null
+  paymentTermsEditing.value = false
+  paymentTermsDeposit.value = null
+  paymentTermsReason.value = ''
+  paymentTermsErrors.value = {}
+  paymentTermsError.value = ''
+  paymentTermsSubmitting.value = false
+}
+
+function startPaymentTermsEdit(): void {
+  const current = detail.value
+  if (current === null || !canEditPaymentTerms.value) {
+    return
+  }
+  paymentTermsEditing.value = true
+  paymentTermsDeposit.value = current.amounts.depositDueAmount
+  paymentTermsReason.value = ''
+  paymentTermsErrors.value = {}
+  paymentTermsError.value = ''
+}
+
+/**
+ * 约定总价由产品明细决定，这里只调整定金与尾款分配；尾款随定金变化实时重算，
+ * 保存后服务端会写金额变更记录并重算付款状态。
+ */
+async function submitPaymentTerms(): Promise<void> {
+  const current = detail.value
+  const orderId = props.order?.id
+  if (current === null || orderId === undefined || paymentTermsSubmitting.value) {
+    return
+  }
+  const built = buildSalesOrderPaymentTermsRequest({
+    agreedTotalAmount: current.amounts.agreedTotalAmount,
+    currentDepositDueAmount: current.amounts.depositDueAmount,
+    draft: {
+      depositDueAmount: paymentTermsDeposit.value,
+      reason: paymentTermsReason.value,
+    },
+  })
+  if (!built.valid) {
+    paymentTermsErrors.value = { ...built.fieldErrors }
+    return
+  }
+  paymentTermsErrors.value = {}
+  paymentTermsError.value = ''
+  const controller = new AbortController()
+  paymentTermsAbortController = controller
+  paymentTermsSubmitting.value = true
+  try {
+    const response = await salesOrdersApi.updatePaymentTerms(
+      orderId,
+      built.request,
+      controller.signal,
+    )
+    if (controller.signal.aborted) {
+      return
+    }
+    detail.value = response.data
+    emit('detailUpdated', response.data)
+    toast.success('收款约定已更新')
+    cancelPaymentTermsEdit()
+  }
+  catch (error) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
+      return
+    }
+    const failure = getSalesOrderApiFailure(error)
+    paymentTermsError.value = failure.message
+    paymentTermsErrors.value = { ...paymentTermsErrors.value, ...failure.fieldErrors }
+  }
+  finally {
+    if (paymentTermsAbortController === controller) {
+      paymentTermsAbortController = null
+    }
+    paymentTermsSubmitting.value = false
+  }
+}
+
 /** 每次打开都读取最新详情，避免列表计数和弹窗记录在状态变更后出现时间差。 */
 async function loadDetail(): Promise<void> {
   const orderId = props.order?.id
@@ -871,6 +988,7 @@ watch(
       cancelSourceRequest()
       cancelDetailRequest()
       cancelActionRequest()
+      cancelPaymentTermsEdit()
       resetPaymentForm()
       resetReceiptForm()
       detail.value = null
@@ -879,6 +997,7 @@ watch(
       return
     }
     modalState.value = resolveSalesOrderModalInitialState(props.initialAction)
+    cancelPaymentTermsEdit()
     if (modalState.value.view === 'create-payment') {
       resetPaymentForm()
     }
@@ -901,6 +1020,7 @@ watch(() => accountStore.authEpoch, () => {
   cancelSourceRequest()
   cancelDetailRequest()
   cancelActionRequest()
+  cancelPaymentTermsEdit()
   resetPaymentForm()
   legacyVoidId.value = null
   legacyVoidReason.value = ''
@@ -913,6 +1033,7 @@ onBeforeUnmount(() => {
   cancelSourceRequest()
   cancelDetailRequest()
   cancelActionRequest()
+  cancelPaymentTermsEdit()
   releaseUploadedVoucher(paymentVoucher.value)
   releaseUploadedVoucher(deliveryReceipt.value)
 })
@@ -935,14 +1056,25 @@ onBeforeUnmount(() => {
     </template>
 
     <template #header-extra>
-      <FaButton
-        v-if="modalState.view === 'records' && kind === 'payments' && canRecordPayment"
-        type="button"
-        size="sm"
-        @click="openPaymentModal"
-      >
-        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('salesReceipt.create') }}
-      </FaButton>
+      <div class="flex flex-wrap gap-2 items-center">
+        <FaButton
+          v-if="modalState.view === 'records' && kind === 'payments' && canEditPaymentTerms && !paymentTermsEditing"
+          type="button"
+          size="sm"
+          variant="outline"
+          @click="startPaymentTermsEdit"
+        >
+          <FaIcon name="i-lucide:badge-dollar-sign" aria-hidden="true" />修改收款约定
+        </FaButton>
+        <FaButton
+          v-if="modalState.view === 'records' && kind === 'payments' && canRecordPayment"
+          type="button"
+          size="sm"
+          @click="openPaymentModal"
+        >
+          <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('salesReceipt.create') }}
+        </FaButton>
+      </div>
     </template>
 
     <template #error-actions>
@@ -953,6 +1085,92 @@ onBeforeUnmount(() => {
 
     <template v-if="detail && modalState.view === 'records'">
       <section v-if="kind === 'payments'" aria-label="订单收款" class="flex flex-col gap-4">
+        <section
+          v-if="paymentTermsEditing"
+          aria-label="修改收款约定"
+          class="p-4 border border-primary/25 rounded-xl bg-primary/[0.035] space-y-4"
+        >
+          <div class="min-w-0">
+            <h3 class="qs-type-component-title m-0">
+              修改收款约定
+            </h3>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+              约定总价等于产品明细小计，不在此处修改；这里只调整定金与尾款的分配，保存后写入金额变更记录并重算付款状态。
+            </p>
+          </div>
+          <div class="gap-4 grid sm:grid-cols-3">
+            <div class="min-w-0">
+              <span class="qs-type-meta text-muted-foreground block">约定总价（只读）</span>
+              <AmountDisplay
+                :value="detail.amounts.agreedTotalAmount"
+                :currency="detail.currencyCode"
+                :currencies="currencies"
+                class="mt-1"
+              />
+            </div>
+            <div class="min-w-0">
+              <span class="qs-type-meta text-muted-foreground block">约定定金</span>
+              <MoneyInput
+                v-model="paymentTermsDeposit"
+                class="mt-1"
+                :currency="detail.currencyCode"
+                :currencies="paymentCurrencies"
+                :currency-selectable="false"
+                :disabled="paymentTermsSubmitting"
+                min="0"
+                @update:model-value="delete paymentTermsErrors.depositDueAmount"
+              />
+              <p v-if="paymentTermsErrors.depositDueAmount" class="text-xs text-destructive m-0 mt-1" role="alert">
+                {{ paymentTermsErrors.depositDueAmount }}
+              </p>
+            </div>
+            <div class="min-w-0">
+              <span class="qs-type-meta text-muted-foreground block">约定尾款（自动）</span>
+              <AmountDisplay
+                v-if="paymentTermsBalance !== null"
+                :value="paymentTermsBalance"
+                :currency="detail.currencyCode"
+                :currencies="currencies"
+                class="mt-1"
+              />
+              <span v-else class="qs-type-body-medium text-muted-foreground mt-1 block">—</span>
+            </div>
+          </div>
+          <div class="min-w-0">
+            <label for="sales-order-payment-terms-reason" class="text-sm font-medium block">修改原因（必填）</label>
+            <FaTextarea
+              id="sales-order-payment-terms-reason"
+              v-model="paymentTermsReason"
+              maxlength="500"
+              input-class="min-h-16"
+              class="mt-1.5 w-full"
+              :disabled="paymentTermsSubmitting"
+              @update:model-value="delete paymentTermsErrors.reason"
+            />
+            <p v-if="paymentTermsErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ paymentTermsErrors.reason }}
+            </p>
+          </div>
+          <FaAlert v-if="paymentTermsError" variant="destructive" :title="paymentTermsError" />
+          <div class="flex flex-wrap gap-2 justify-end">
+            <FaButton
+              type="button"
+              variant="outline"
+              :disabled="paymentTermsSubmitting"
+              @click="cancelPaymentTermsEdit"
+            >
+              取消
+            </FaButton>
+            <FaButton
+              type="button"
+              :loading="paymentTermsSubmitting"
+              :disabled="paymentTermsSubmitting || !paymentTermsChanged"
+              @click="submitPaymentTerms"
+            >
+              保存收款约定
+            </FaButton>
+          </div>
+        </section>
         <dl class="m-0 p-4 border border-border rounded-xl bg-muted/15 gap-4 grid sm:grid-cols-3">
           <div>
             <dt class="qs-type-meta mb-2">
