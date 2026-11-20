@@ -334,7 +334,7 @@ watch(
 
 <template>
   <QsGenericModal
-    v-model="visible"
+    :model-value="visible"
     :title="title"
     description="客户信息、出单信息与产品修改集中在此维护；三个页签各自独立保存。"
     size="xl"
