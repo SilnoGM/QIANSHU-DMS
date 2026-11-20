@@ -78,8 +78,8 @@ let productSubmitAbortController: AbortController | null = null
 let requestVersion = 0
 
 const tabs = [
-  { value: 'info', label: '订单信息', icon: 'i-lucide:file-pen-line' },
-  { value: 'products', label: '产品', icon: 'i-lucide:package' },
+  { value: 'info', label: '订单信息' },
+  { value: 'products', label: '产品' },
 ]
 
 const visible = computed({
@@ -193,6 +193,10 @@ function setVisible(value: boolean): void {
 function handleRegionChange(change: RegionSelectorChange): void {
   infoForm.value.region = { ...change.value }
   delete infoErrors.value['customer.cityId']
+}
+
+function handleTabChange(value: string): void {
+  activeTab.value = value === 'products' ? 'products' : 'info'
 }
 
 async function submitInfo(): Promise<void> {
@@ -468,218 +472,219 @@ watch(
         订单 {{ context.orderNo }} · 版本 v{{ context.version }}（每次保存递增，其他页面需刷新后再改）
       </p>
 
-      <FaTabs v-model="activeTab" :list="tabs" list-class="h-auto min-h-11 w-full" content-class="mt-4 min-w-0">
-        <template #info>
-          <div class="space-y-4">
-            <section aria-label="客户信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
-              <div class="min-w-0">
-                <label for="sales-order-edit-customer-name" class="text-sm font-medium block">客户姓名（最多 24 字）</label>
-                <FaInput
-                  id="sales-order-edit-customer-name"
-                  v-model="infoForm.name"
-                  maxlength="24"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors['customer.name']"
-                />
-                <p v-if="infoErrors['customer.name']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.name'] }}
-                </p>
-              </div>
-              <div class="min-w-0">
-                <label for="sales-order-edit-customer-phone" class="text-sm font-medium block">客户电话</label>
-                <FaInput
-                  id="sales-order-edit-customer-phone"
-                  v-model="infoForm.phone"
-                  maxlength="64"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors['customer.phone']"
-                />
-                <p v-if="infoErrors['customer.phone']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.phone'] }}
-                </p>
-              </div>
-              <div class="min-w-0">
-                <label for="sales-order-edit-customer-fb" class="text-sm font-medium block">客户FB名称（选填）</label>
-                <FaInput
-                  id="sales-order-edit-customer-fb"
-                  v-model="infoForm.fbName"
-                  maxlength="128"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors['customer.fbName']"
-                />
-                <p v-if="infoErrors['customer.fbName']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.fbName'] }}
-                </p>
-              </div>
-              <div class="min-w-0">
-                <label for="sales-order-edit-customer-line" class="text-sm font-medium block">客户LINE名称（选填）</label>
-                <FaInput
-                  id="sales-order-edit-customer-line"
-                  v-model="infoForm.lineName"
-                  maxlength="128"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors['customer.lineName']"
-                />
-                <p v-if="infoErrors['customer.lineName']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.lineName'] }}
-                </p>
-              </div>
-              <div class="min-w-0 md:col-span-2">
-                <span class="text-sm font-medium block">三级地区</span>
-                <QsRegionSelector
-                  v-model="infoForm.region"
-                  class="mt-1.5"
-                  name="customerCityId"
-                  required
-                  :disabled="infoSubmitting"
-                  @change="handleRegionChange"
-                />
-                <p v-if="infoErrors['customer.cityId']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.cityId'] }}
-                </p>
-              </div>
-              <div class="min-w-0 md:col-span-2">
-                <label for="sales-order-edit-customer-address" class="text-sm font-medium block">详细地址</label>
-                <FaTextarea
-                  id="sales-order-edit-customer-address"
-                  v-model="infoForm.addressDetail"
-                  maxlength="1000"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors['customer.addressDetail']"
-                />
-                <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-                  保存时会移除全部空白，并按三级地区重新拼接完整地址；请勿重复填写已选地区。
-                </p>
-                <p v-if="infoErrors['customer.addressDetail']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors['customer.addressDetail'] }}
-                </p>
-              </div>
-            </section>
-
-            <section aria-label="出单信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
-              <div class="min-w-0">
-                <span class="text-sm font-medium block">出单日期</span>
-                <QsDateTimeField
-                  v-model="infoForm.orderDate"
-                  class="mt-1.5 w-full"
-                  precision="date"
-                  disable-future
-                  :disabled="infoSubmitting"
-                  aria-label="出单日期"
-                  @change="delete infoErrors.orderDate"
-                />
-                <p v-if="infoErrors.orderDate" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors.orderDate }}
-                </p>
-              </div>
-              <div class="min-w-0">
-                <span class="text-sm font-medium block">当前订单</span>
-                <p class="qs-type-body-medium m-0 mt-1.5">
-                  {{ context.orderNo }} · v{{ context.version }}
-                </p>
-              </div>
-              <div class="min-w-0 md:col-span-2">
-                <label for="sales-order-edit-sales-remark" class="text-sm font-medium block">订单备注（留空即清空）</label>
-                <FaTextarea
-                  id="sales-order-edit-sales-remark"
-                  v-model="infoForm.remark"
-                  maxlength="1000"
-                  input-class="min-h-20"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors.remark"
-                />
-                <p v-if="infoErrors.remark" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors.remark }}
-                </p>
-              </div>
-              <p class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
-                修改出单日期只影响列表的日期筛选与展示，不会改变已生成的凭证、对账与通知；定金与尾款拆分暂未提供页面入口，产品总额下降时系统会自动下调定金并要求确认。
-              </p>
-            </section>
-
-            <section aria-label="修改原因" class="p-4 border border-border rounded-lg space-y-3">
-              <div class="min-w-0">
-                <label for="sales-order-edit-info-reason" class="text-sm font-medium block">修改原因（必填，进入变更记录与审计）</label>
-                <FaTextarea
-                  id="sales-order-edit-info-reason"
-                  v-model="infoForm.reason"
-                  maxlength="500"
-                  input-class="min-h-16"
-                  class="mt-1.5 w-full"
-                  :disabled="infoSubmitting"
-                  @update:model-value="delete infoErrors.reason"
-                />
-                <p v-if="infoErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ infoErrors.reason }}
-                </p>
-              </div>
-              <p class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
-                客户姓名会同步出现在采购唛头、对账单与后续通知；已打印标签与已生成的凭证标题不会改变。
-              </p>
-            </section>
-
-            <FaAlert
-              v-if="infoActionError"
-              variant="destructive"
-              :title="infoActionError"
-            >
-              <template v-if="infoConflict" #description>
-                <FaButton variant="outline" @click="loadContext">
-                  重新加载最新数据
-                </FaButton>
-              </template>
-            </FaAlert>
-          </div>
-        </template>
-
-        <template #products>
-          <div class="space-y-4">
-            <FaAlert
-              v-if="productBlockedReason"
-              variant="default"
-              icon="i-lucide:info"
-              :description="productBlockedReason"
+      <QsStatusSwitchToolbar
+        :model-value="activeTab"
+        :items="tabs"
+        aria-label="订单编辑页签"
+        stretch
+        @update:model-value="handleTabChange"
+      />
+      <div v-if="activeTab === 'info'" class="mt-4 min-w-0 space-y-4">
+        <section aria-label="客户信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
+          <div class="min-w-0">
+            <label for="sales-order-edit-customer-name" class="text-sm font-medium block">客户姓名（最多 24 字）</label>
+            <FaInput
+              id="sales-order-edit-customer-name"
+              v-model="infoForm.name"
+              maxlength="24"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors['customer.name']"
             />
-            <template v-else>
-              <div v-if="productLoading" role="status" class="space-y-4">
-                <span class="sr-only">正在加载产品编辑数据</span>
-                <div v-for="n in 3" :key="n" class="rounded-lg bg-muted h-24 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
-              </div>
-              <FaAlert
-                v-else-if="productError"
-                variant="destructive"
-                :title="productError"
-              >
-                <template #description>
-                  <FaButton variant="outline" @click="loadProductContext(true)">
-                    重新加载产品数据
-                  </FaButton>
-                </template>
-              </FaAlert>
-              <QsSalesOrderProductsEditorPanel
-                v-else
-                :context="productContext"
-                :lines="productLines"
-                :reason="productReason"
-                :currencies="currencies"
-                :load-products="loadProductProducts"
-                :submitting="productSubmitting"
-                :show-cancel="false"
-                @confirm="submitProduct"
-                @validation-error="toast.warning($event)"
-                @update:lines="productLines = $event"
-                @update:reason="productReason = $event"
-              />
-            </template>
+            <p v-if="infoErrors['customer.name']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.name'] }}
+            </p>
           </div>
+          <div class="min-w-0">
+            <label for="sales-order-edit-customer-phone" class="text-sm font-medium block">客户电话</label>
+            <FaInput
+              id="sales-order-edit-customer-phone"
+              v-model="infoForm.phone"
+              maxlength="64"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors['customer.phone']"
+            />
+            <p v-if="infoErrors['customer.phone']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.phone'] }}
+            </p>
+          </div>
+          <div class="min-w-0">
+            <label for="sales-order-edit-customer-fb" class="text-sm font-medium block">客户FB名称（选填）</label>
+            <FaInput
+              id="sales-order-edit-customer-fb"
+              v-model="infoForm.fbName"
+              maxlength="128"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors['customer.fbName']"
+            />
+            <p v-if="infoErrors['customer.fbName']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.fbName'] }}
+            </p>
+          </div>
+          <div class="min-w-0">
+            <label for="sales-order-edit-customer-line" class="text-sm font-medium block">客户LINE名称（选填）</label>
+            <FaInput
+              id="sales-order-edit-customer-line"
+              v-model="infoForm.lineName"
+              maxlength="128"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors['customer.lineName']"
+            />
+            <p v-if="infoErrors['customer.lineName']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.lineName'] }}
+            </p>
+          </div>
+          <div class="min-w-0 md:col-span-2">
+            <span class="text-sm font-medium block">三级地区</span>
+            <QsRegionSelector
+              v-model="infoForm.region"
+              class="mt-1.5"
+              name="customerCityId"
+              required
+              :disabled="infoSubmitting"
+              @change="handleRegionChange"
+            />
+            <p v-if="infoErrors['customer.cityId']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.cityId'] }}
+            </p>
+          </div>
+          <div class="min-w-0 md:col-span-2">
+            <label for="sales-order-edit-customer-address" class="text-sm font-medium block">详细地址</label>
+            <FaTextarea
+              id="sales-order-edit-customer-address"
+              v-model="infoForm.addressDetail"
+              maxlength="1000"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors['customer.addressDetail']"
+            />
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+              保存时会移除全部空白，并按三级地区重新拼接完整地址；请勿重复填写已选地区。
+            </p>
+            <p v-if="infoErrors['customer.addressDetail']" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors['customer.addressDetail'] }}
+            </p>
+          </div>
+        </section>
+
+        <section aria-label="出单信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
+          <div class="min-w-0">
+            <span class="text-sm font-medium block">出单日期</span>
+            <QsDateTimeField
+              v-model="infoForm.orderDate"
+              class="mt-1.5 w-full"
+              precision="date"
+              disable-future
+              :disabled="infoSubmitting"
+              aria-label="出单日期"
+              @change="delete infoErrors.orderDate"
+            />
+            <p v-if="infoErrors.orderDate" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors.orderDate }}
+            </p>
+          </div>
+          <div class="min-w-0">
+            <span class="text-sm font-medium block">当前订单</span>
+            <p class="qs-type-body-medium m-0 mt-1.5">
+              {{ context.orderNo }} · v{{ context.version }}
+            </p>
+          </div>
+          <div class="min-w-0 md:col-span-2">
+            <label for="sales-order-edit-sales-remark" class="text-sm font-medium block">订单备注（留空即清空）</label>
+            <FaTextarea
+              id="sales-order-edit-sales-remark"
+              v-model="infoForm.remark"
+              maxlength="1000"
+              input-class="min-h-20"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors.remark"
+            />
+            <p v-if="infoErrors.remark" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors.remark }}
+            </p>
+          </div>
+          <p class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
+            修改出单日期只影响列表的日期筛选与展示，不会改变已生成的凭证、对账与通知；定金与尾款拆分暂未提供页面入口，产品总额下降时系统会自动下调定金并要求确认。
+          </p>
+        </section>
+
+        <section aria-label="修改原因" class="p-4 border border-border rounded-lg space-y-3">
+          <div class="min-w-0">
+            <label for="sales-order-edit-info-reason" class="text-sm font-medium block">修改原因（必填，进入变更记录与审计）</label>
+            <FaTextarea
+              id="sales-order-edit-info-reason"
+              v-model="infoForm.reason"
+              maxlength="500"
+              input-class="min-h-16"
+              class="mt-1.5 w-full"
+              :disabled="infoSubmitting"
+              @update:model-value="delete infoErrors.reason"
+            />
+            <p v-if="infoErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
+              {{ infoErrors.reason }}
+            </p>
+          </div>
+          <p class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+            客户姓名会同步出现在采购唛头、对账单与后续通知；已打印标签与已生成的凭证标题不会改变。
+          </p>
+        </section>
+
+        <FaAlert
+          v-if="infoActionError"
+          variant="destructive"
+          :title="infoActionError"
+        >
+          <template v-if="infoConflict" #description>
+            <FaButton variant="outline" @click="loadContext">
+              重新加载最新数据
+            </FaButton>
+          </template>
+        </FaAlert>
+      </div>
+
+      <div v-else class="mt-4 min-w-0 space-y-4">
+        <FaAlert
+          v-if="productBlockedReason"
+          variant="default"
+          icon="i-lucide:info"
+          :description="productBlockedReason"
+        />
+        <template v-else>
+          <div v-if="productLoading" role="status" class="space-y-4">
+            <span class="sr-only">正在加载产品编辑数据</span>
+            <div v-for="n in 3" :key="n" class="rounded-lg bg-muted h-24 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
+          </div>
+          <FaAlert
+            v-else-if="productError"
+            variant="destructive"
+            :title="productError"
+          >
+            <template #description>
+              <FaButton variant="outline" @click="loadProductContext(true)">
+                重新加载产品数据
+              </FaButton>
+            </template>
+          </FaAlert>
+          <QsSalesOrderProductsEditorPanel
+            v-else
+            :context="productContext"
+            :lines="productLines"
+            :reason="productReason"
+            :currencies="currencies"
+            :load-products="loadProductProducts"
+            :submitting="productSubmitting"
+            :show-cancel="false"
+            @confirm="submitProduct"
+            @validation-error="toast.warning($event)"
+            @update:lines="productLines = $event"
+            @update:reason="productReason = $event"
+          />
         </template>
-      </FaTabs>
+      </div>
     </div>
 
     <template #footer>

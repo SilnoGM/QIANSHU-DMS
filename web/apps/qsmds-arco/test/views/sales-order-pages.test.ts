@@ -375,6 +375,10 @@ test('全部销售订单通过统一编辑弹窗提供订单信息与产品修�
   // 编辑弹窗使用与产品编辑器一致的大尺寸，产品行与价格对照表才有足够宽度。
   assert.match(modalSource, /size="3xl"/u)
   assert.match(modalSource, /sm:!max-w-\[90rem\]/u)
+  // 页签改用铺满宽度的状态切换组件，不再使用 FaTabs。
+  assert.match(modalSource, /<QsStatusSwitchToolbar/u)
+  assert.match(modalSource, /stretch/u)
+  assert.doesNotMatch(modalSource, /<FaTabs/u)
 
   // 产品上下文、选项与保存都收敛到编辑弹窗，并复用同一份面板与复核流程。
   assert.match(modalSource, /QsSalesOrderProductsEditorPanel/u)
