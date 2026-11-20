@@ -470,9 +470,14 @@ watch(
         :description="historyRiskHint"
       />
       <div class="space-y-6">
-        <p class="qs-type-meta text-muted-foreground m-0">
-          订单 {{ context.orderNo }} · 版本 v{{ context.version }}（每次保存递增，其他页面需刷新后再改）
-        </p>
+        <div class="px-3 py-2.5 rounded-lg bg-muted/30">
+          <p class="qs-type-body-medium m-0">
+            订单 {{ context.orderNo }} · 版本 v{{ context.version }}
+          </p>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            每次保存都会递增版本；其他页面需刷新后再改。
+          </p>
+        </div>
         <QsStatusSwitchToolbar
           :model-value="activeTab"
           :items="tabs"
