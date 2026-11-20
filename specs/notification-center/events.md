@@ -293,7 +293,9 @@
 | 幂等键 | `sales-order-submitted:${salesOrderId}` |
 | 附件来源 | `salesOrder.issuanceVoucher`（出单凭证），发布时先 `activate` 后入队 |
 
-变量：`orderNo`、`orderId`、`customerName`（敏感）、`customerFbName`、`customerLineName`、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`issuerName`。客户 FB/LINE 名称均为选填，未填写时发布为空字符串。
+变量：`orderNo`、`orderId`、`customerName`（敏感）、`customerFbName`、`customerLineName`、`orderDate`、`agreedTotalAmount`（敏感）、`currencyCode`、`lineCount`、`salesProducts`、`issuerName`。客户 FB/LINE 名称均为选填，未填写时发布为空字符串。
+
+`salesProducts` 与货件唛头后缀共用同一产品名口径：个人别名（销售单出单人）> 产品默认别名 > 产品名快照；目录行按产品聚合数量（大于 1 时 `名×数量`），自定义行独立，`+` 连接并按首次出现行号排序；不含补差价（目录行看 `exclude_from_shipping_mark`，自定义行按名称兜底）；整块超过 438 字按整项截断并以 `…` 收尾。整单产品全被排除时为空字符串，因此模板变量必须声明为非必填。
 
 注意：
 

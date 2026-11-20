@@ -368,7 +368,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   ADVERTISING_RECHARGE_PAID: ['rechargeNo', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_REJECTED: ['rechargeNo', 'reason', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_VOIDED: ['rechargeNo', 'reason', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
-  SALES_ORDER_SUBMITTED: ['orderNo', 'orderId', 'customerName', 'customerFbName', 'customerLineName', 'orderDate', 'agreedTotalAmount', 'currencyCode', 'lineCount', 'issuerName'],
+  SALES_ORDER_SUBMITTED: ['orderNo', 'orderId', 'customerName', 'customerFbName', 'customerLineName', 'orderDate', 'agreedTotalAmount', 'currencyCode', 'lineCount', 'salesProducts', 'issuerName'],
   SALES_ORDER_COMPLETED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
   PURCHASE_ORDER_COMPLETED: ['orderNo', 'vendorName', 'occurredAt', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
   SHIPMENT_SIGNED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
@@ -791,6 +791,16 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     example: 'wangxm',
     sensitive: false,
     maxLength: 128,
+    required: false,
+  },
+  salesProducts: {
+    name: 'salesProducts',
+    label: '销售产品',
+    description: '销售单产品名块，按唛头后缀口径拼接：个人别名优先于产品默认别名与产品名快照，数量大于 1 时附 ×数量，用 + 连接，不含补差价。',
+    example: '木桌×2+靠椅',
+    sensitive: false,
+    // 与 shipping-mark-label 的别名块预算一致；业务侧已按 438 整项截断。
+    maxLength: 438,
     required: false,
   },
   requestCount: {
