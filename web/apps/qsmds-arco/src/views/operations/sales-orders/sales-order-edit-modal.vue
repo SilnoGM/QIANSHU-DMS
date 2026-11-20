@@ -462,25 +462,26 @@ watch(
       </FaButton>
     </template>
 
-    <div v-if="context" class="space-y-4">
+    <div v-if="context" class="space-y-5">
       <FaAlert
         v-if="historyRiskHint"
         variant="default"
         icon="i-lucide:info"
         :description="historyRiskHint"
       />
-      <p class="qs-type-meta text-muted-foreground m-0">
-        订单 {{ context.orderNo }} · 版本 v{{ context.version }}（每次保存递增，其他页面需刷新后再改）
-      </p>
-
-      <QsStatusSwitchToolbar
-        :model-value="activeTab"
-        :items="tabs"
-        aria-label="订单编辑页签"
-        stretch
-        @update:model-value="handleTabChange"
-      />
-      <div v-if="activeTab === 'info'" class="mt-4 min-w-0 space-y-4">
+      <div class="space-y-6">
+        <p class="qs-type-meta text-muted-foreground m-0">
+          订单 {{ context.orderNo }} · 版本 v{{ context.version }}（每次保存递增，其他页面需刷新后再改）
+        </p>
+        <QsStatusSwitchToolbar
+          :model-value="activeTab"
+          :items="tabs"
+          aria-label="订单编辑页签"
+          stretch
+          @update:model-value="handleTabChange"
+        />
+      </div>
+      <div v-if="activeTab === 'info'" class="min-w-0 space-y-4">
         <section aria-label="客户信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
           <div class="min-w-0">
             <label for="sales-order-edit-customer-name" class="text-sm font-medium block">客户姓名（最多 24 字）</label>
@@ -647,7 +648,7 @@ watch(
         </FaAlert>
       </div>
 
-      <div v-else class="mt-4 min-w-0 space-y-4">
+      <div v-else class="min-w-0 space-y-4">
         <FaAlert
           v-if="productBlockedReason"
           variant="default"
