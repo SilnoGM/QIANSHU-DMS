@@ -436,13 +436,14 @@ watch(
   <QsGenericModal
     :model-value="visible"
     :title="title"
-    description="客户信息与出单信息一次保存；产品修改仍在独立的产品页签中复核后提交。"
-    size="xl"
+    description="客户与出单信息一次保存；产品修改在产品页签内复核后提交。"
+    size="3xl"
+    class="sm:!max-w-[90rem] sm:!w-[calc(100%-3rem)]"
     :loading="loading"
     :error="loadError"
-    :submitting="infoSubmitting"
-    :dismiss-on-overlay="!infoSubmitting"
-    :dismiss-on-escape="!infoSubmitting"
+    :submitting="infoSubmitting || productSubmitting"
+    :dismiss-on-overlay="!infoSubmitting && !productSubmitting"
+    :dismiss-on-escape="!infoSubmitting && !productSubmitting"
     @update:model-value="setVisible"
   >
     <template #header-leading>

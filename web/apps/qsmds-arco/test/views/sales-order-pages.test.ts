@@ -372,6 +372,10 @@ test('全部销售订单通过统一编辑弹窗提供订单信息与产品修�
   assert.doesNotMatch(source, /QsSalesOrderProductsEditorModal/u)
   assert.doesNotMatch(source, /productEditContext/u)
 
+  // 编辑弹窗使用与产品编辑器一致的大尺寸，产品行与价格对照表才有足够宽度。
+  assert.match(modalSource, /size="3xl"/u)
+  assert.match(modalSource, /sm:!max-w-\[90rem\]/u)
+
   // 产品上下文、选项与保存都收敛到编辑弹窗，并复用同一份面板与复核流程。
   assert.match(modalSource, /QsSalesOrderProductsEditorPanel/u)
   assert.match(modalSource, /salesOrdersApi\.productEditContext/u)
