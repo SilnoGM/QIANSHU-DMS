@@ -37542,6 +37542,840 @@
         }
       }
     },
+    "/api/sales-orders/{salesOrderId}/edit-context": {
+      "get": {
+        "operationId": "sales_orders_get_edit_context",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderEditContextDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/sales-orders/{salesOrderId}/customer": {
+      "patch": {
+        "operationId": "sales_orders_update_customer",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrderCustomerUpdateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderEditContextDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "retry": false,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SALES_ORDER_EDIT_VERSION_CONFLICT"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "ADDRESS_DETAIL_CONTAINS_SELECTED_REGION",
+                "SALES_ORDER_REGION_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/sales-orders/{salesOrderId}/sales-info": {
+      "patch": {
+        "operationId": "sales_orders_update_sales_info",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrderSalesInfoUpdateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderEditContextDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "retry": false,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SALES_ORDER_EDIT_VERSION_CONFLICT"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/sales-orders/{salesOrderId}/product-edit-options": {
       "get": {
         "operationId": "sales_orders_get_product_edit_options",
@@ -85088,6 +85922,8 @@
                 "SALES_ORDER_DOCUMENT_DETACHED",
                 "SALES_ORDER_PRODUCT_APPENDED",
                 "SALES_ORDER_PRODUCTS_CHANGED",
+                "SALES_ORDER_CUSTOMER_UPDATED",
+                "SALES_ORDER_SALES_INFO_UPDATED",
                 "PURCHASE_ORDER_CREATED",
                 "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
                 "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
@@ -119108,6 +119944,255 @@
           "amounts"
         ]
       },
+      "SalesOrderRegionSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name"
+        ]
+      },
+      "SalesOrderCustomerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "fbName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lineName": {
+            "type": "string",
+            "nullable": true
+          },
+          "countryRegion": {
+            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
+          },
+          "provinceState": {
+            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
+          },
+          "city": {
+            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
+          },
+          "addressDetail": {
+            "type": "string"
+          },
+          "fullAddress": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "fbName",
+          "lineName",
+          "countryRegion",
+          "provinceState",
+          "city",
+          "addressDetail",
+          "fullAddress"
+        ]
+      },
+      "SalesOrderEditSalesInfoDto": {
+        "type": "object",
+        "properties": {
+          "orderDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "orderDate",
+          "remark"
+        ]
+      },
+      "SalesOrderEditContextDto": {
+        "type": "object",
+        "properties": {
+          "salesOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "orderStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
+              "CANCELLED",
+              "TERMINATED"
+            ]
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PREPARING",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
+              "SIGNED"
+            ]
+          },
+          "paymentStatus": {
+            "type": "string",
+            "enum": [
+              "UNPAID",
+              "PARTIALLY_PAID",
+              "PAID"
+            ]
+          },
+          "customer": {
+            "$ref": "#/components/schemas/SalesOrderCustomerDto"
+          },
+          "salesInfo": {
+            "$ref": "#/components/schemas/SalesOrderEditSalesInfoDto"
+          }
+        },
+        "required": [
+          "salesOrderId",
+          "orderNo",
+          "version",
+          "orderStatus",
+          "fulfillmentStatus",
+          "paymentStatus",
+          "customer",
+          "salesInfo"
+        ]
+      },
+      "SalesOrderCustomerInputDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "countryRegionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provinceStateId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cityId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "addressDetail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "fbName": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true,
+            "description": "客户 Facebook 名称，选填"
+          },
+          "lineName": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true,
+            "description": "客户 LINE 名称，选填"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "countryRegionId",
+          "provinceStateId",
+          "cityId",
+          "addressDetail"
+        ]
+      },
+      "SalesOrderCustomerUpdateRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "customer": {
+            "$ref": "#/components/schemas/SalesOrderCustomerInputDto"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason",
+          "customer"
+        ]
+      },
+      "SalesOrderSalesInfoUpdateRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "orderDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true,
+            "description": "订单备注；显式传 null 表示清空"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "reason",
+          "orderDate"
+        ]
+      },
       "SalesOrderDocumentUploadRequestDto": {
         "type": "object",
         "properties": {
@@ -119164,58 +120249,6 @@
           "mimeType",
           "sizeBytes",
           "originalFilename"
-        ]
-      },
-      "SalesOrderCustomerInputDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 24
-          },
-          "phone": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
-          "countryRegionId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "provinceStateId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "cityId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "addressDetail": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 1000
-          },
-          "fbName": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true,
-            "description": "客户 Facebook 名称，选填"
-          },
-          "lineName": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true,
-            "description": "客户 LINE 名称，选填"
-          }
-        },
-        "required": [
-          "name",
-          "phone",
-          "countryRegionId",
-          "provinceStateId",
-          "cityId",
-          "addressDetail"
         ]
       },
       "SalesOrderIssuanceVoucherInputDto": {
@@ -119286,71 +120319,6 @@
           "balanceDueAmount",
           "issuanceVoucher",
           "remark"
-        ]
-      },
-      "SalesOrderRegionSnapshotDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "code": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "code",
-          "name"
-        ]
-      },
-      "SalesOrderCustomerDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "phone": {
-            "type": "string"
-          },
-          "fbName": {
-            "type": "string",
-            "nullable": true
-          },
-          "lineName": {
-            "type": "string",
-            "nullable": true
-          },
-          "countryRegion": {
-            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
-          },
-          "provinceState": {
-            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
-          },
-          "city": {
-            "$ref": "#/components/schemas/SalesOrderRegionSnapshotDto"
-          },
-          "addressDetail": {
-            "type": "string"
-          },
-          "fullAddress": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "phone",
-          "fbName",
-          "lineName",
-          "countryRegion",
-          "provinceState",
-          "city",
-          "addressDetail",
-          "fullAddress"
         ]
       },
       "SalesOrderAmountsDto": {
@@ -119674,7 +120642,9 @@
             "enum": [
               "ORDER",
               "FULFILLMENT",
-              "PAYMENT"
+              "PAYMENT",
+              "CUSTOMER",
+              "SALES_INFO"
             ]
           },
           "fromStatus": {
@@ -130523,6 +131493,8 @@
               "SALES_ORDER_DOCUMENT_DETACHED",
               "SALES_ORDER_PRODUCT_APPENDED",
               "SALES_ORDER_PRODUCTS_CHANGED",
+              "SALES_ORDER_CUSTOMER_UPDATED",
+              "SALES_ORDER_SALES_INFO_UPDATED",
               "PURCHASE_ORDER_CREATED",
               "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
               "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",

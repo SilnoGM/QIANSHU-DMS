@@ -595,3 +595,41 @@ export class SalesOrderProductsUpdateResultDto {
   @ApiProperty({ type: () => SalesOrderProductEditAmountsDto })
   readonly amounts!: SalesOrderProductEditAmountsDto
 }
+
+export class SalesOrderEditSalesInfoDto {
+  @ApiProperty({ type: 'string', format: 'date' })
+  readonly orderDate!: string
+
+  @ApiProperty({ type: 'string', nullable: true })
+  readonly remark!: string | null
+}
+
+/**
+ * 编辑弹窗的统一读取模型：客户页签与销售信息页签共用，只要求 `sales-orders:update`。
+ * 产品页签仍通过独立的 `product-edit-context` 懒加载，避免把产品资格带进本接口。
+ */
+export class SalesOrderEditContextDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly salesOrderId!: string
+
+  @ApiProperty({ type: 'string' })
+  readonly orderNo!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly version!: number
+
+  @ApiProperty({ enum: SalesOrderStatus })
+  readonly orderStatus!: SalesOrderStatus
+
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus })
+  readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
+
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+
+  @ApiProperty({ type: () => SalesOrderCustomerDto })
+  readonly customer!: SalesOrderCustomerDto
+
+  @ApiProperty({ type: () => SalesOrderEditSalesInfoDto })
+  readonly salesInfo!: SalesOrderEditSalesInfoDto
+}

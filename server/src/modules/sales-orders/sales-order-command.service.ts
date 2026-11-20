@@ -24,6 +24,7 @@ import { noopSystemNotifications } from '../notifications/noop-system-notificati
 import { SystemNotificationService } from '../notifications/system-notification.service'
 import { normalizeSalesOrderAddress } from './domain/sales-order-address'
 import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
+import { requireSalesOrderRegionPath } from './domain/sales-order-region'
 import {
   isCanonicalSalesOrderActorId,
   normalizeSalesOrderCreateCommand,
@@ -174,33 +175,6 @@ function mapNumberingError(error: unknown): never {
 function normalizeAttributes(value: unknown): Prisma.InputJsonValue {
   if (!Array.isArray(value)) throw stateChangedError()
   return value as Prisma.InputJsonValue
-}
-
-function requireRegionPath(
-  rows: readonly RegionSnapshot[],
-  command: NormalizedSalesOrderCreateCommand,
-): Pick<
-  EffectiveCreateDependencies,
-  'countryRegion' | 'provinceState' | 'city'
-> {
-  const byId = new Map(rows.map(row => [row.id, row]))
-  const countryRegion = byId.get(command.customer.countryRegionId)
-  const provinceState = byId.get(command.customer.provinceStateId)
-  const city = byId.get(command.customer.cityId)
-  if (
-    countryRegion?.level !== 'COUNTRY_REGION'
-    || countryRegion.parentId !== null
-    || provinceState?.level !== 'PROVINCE_STATE'
-    || provinceState.parentId !== countryRegion.id
-    || city?.level !== 'CITY'
-    || city.parentId !== provinceState.id
-  ) {
-    throw dependencyError(
-      'SALES_ORDER_REGION_UNAVAILABLE',
-      '所选客户地区当前不可用或层级无效',
-    )
-  }
-  return { countryRegion, provinceState, city }
 }
 
 function standardPriceFor(
@@ -479,7 +453,11 @@ export class SalesOrderCommandService {
         parentId: true,
       },
     })
-    const regionPath = requireRegionPath(regionRows, command)
+    const regionPath = requireSalesOrderRegionPath(regionRows, {
+      countryRegionId: command.customer.countryRegionId,
+      provinceStateId: command.customer.provinceStateId,
+      cityId: command.customer.cityId,
+    })
     // 在读到稳定 UUID 后再次做地址规则，确保重复地区不会进入发号阶段。
     normalizeSalesOrderAddress({
       countryRegionName: regionPath.countryRegion.name,

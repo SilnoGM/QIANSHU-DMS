@@ -577,6 +577,48 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
+  it('publishes the non-retrying customer and sales-info edit operations', () => {
+    const context: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/{salesOrderId}/edit-context'
+    ]?.get
+    expect(context).toMatchObject({ operationId: 'sales_orders_get_edit_context' })
+    expect(context?.security).toEqual([{ sessionCookie: [] }])
+    expect(context?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      resourceLocator: true,
+    })
+    expect(context?.['x-qianshu-contract']).not.toMatchObject({ csrf: true })
+
+    const customer = document.paths[
+      '/api/sales-orders/{salesOrderId}/customer'
+    ]?.patch
+    const salesInfo = document.paths[
+      '/api/sales-orders/{salesOrderId}/sales-info'
+    ]?.patch
+    expect(customer).toMatchObject({ operationId: 'sales_orders_update_customer' })
+    expect(salesInfo).toMatchObject({ operationId: 'sales_orders_update_sales_info' })
+
+    for (const operation of [customer, salesInfo] as readonly (ContractOperation | undefined)[]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.responses).toHaveProperty('200')
+      expect(operation?.requestBody).toBeDefined()
+      expect(operation?.['x-qianshu-contract']).toMatchObject({
+        authorization: true,
+        csrf: true,
+        conflict: true,
+        privateNoStore: true,
+        resourceLocator: true,
+        validation: true,
+        retry: false,
+      })
+      expect(JSON.stringify(readOperationContract(operation)))
+        .toContain('SALES_ORDER_EDIT_VERSION_CONFLICT')
+    }
+    expect(JSON.stringify(readOperationContract(customer)))
+      .toContain('ADDRESS_DETAIL_CONTAINS_SELECTED_REGION')
+  })
+
   it('publishes the dedicated receipt operation and removes general document writes', () => {
     expect(document.paths['/api/sales-orders/{salesOrderId}/delivery-receipts']?.post)
       .toMatchObject({ operationId: 'sales_orders_submit_delivery_receipt' })
