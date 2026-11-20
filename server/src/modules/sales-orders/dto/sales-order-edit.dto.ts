@@ -17,10 +17,10 @@ import { SalesOrderCustomerInputDto } from './sales-order-create.dto'
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 /**
- * 客户信息与出单信息都可以在订单任何状态下修改，因此两个请求体只约束可信版本号、
- * 修改原因与字段形状；业务闸门由服务端按字段实际变化决定，不由 DTO 预先限定状态。
+ * 客户信息与出单信息共用一次原子保存：两段都可全状态修改，因此不按状态拆分请求，
+ * 也不允许只提交其中一段。服务端按字段实际变化决定写哪些列、历史与审计。
  */
-export class SalesOrderCustomerUpdateRequestDto {
+export class SalesOrderInfoUpdateRequestDto {
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 2_147_483_647 })
   @IsInt()
   @Min(1)
@@ -37,19 +37,6 @@ export class SalesOrderCustomerUpdateRequestDto {
   @ValidateNested()
   @Type(() => SalesOrderCustomerInputDto)
   customer!: SalesOrderCustomerInputDto
-}
-
-export class SalesOrderSalesInfoUpdateRequestDto {
-  @ApiProperty({ type: 'integer', minimum: 1, maximum: 2_147_483_647 })
-  @IsInt()
-  @Min(1)
-  @Max(2_147_483_647)
-  expectedVersion!: number
-
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 500 })
-  @IsString()
-  @IsUnicodeCodePointLength(1, 500)
-  reason!: string
 
   @ApiProperty({ type: 'string', format: 'date' })
   @IsString()

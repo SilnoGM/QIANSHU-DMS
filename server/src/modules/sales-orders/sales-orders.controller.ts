@@ -34,10 +34,7 @@ import {
   SalesOrderTemporaryDocumentDto,
 } from './dto/sales-order-document.dto'
 import { CreateSalesOrderRequestDto } from './dto/sales-order-create.dto'
-import {
-  SalesOrderCustomerUpdateRequestDto,
-  SalesOrderSalesInfoUpdateRequestDto,
-} from './dto/sales-order-edit.dto'
+import { SalesOrderInfoUpdateRequestDto } from './dto/sales-order-edit.dto'
 import {
   SalesOrderFulfillmentStatusRequestDto,
   SalesOrderPaymentRequestDto,
@@ -331,14 +328,14 @@ export class SalesOrdersController {
   }
 
   /**
-   * 客户信息与出单信息按业务决定允许在订单任何状态下修改；版本冲突与地区、地址
-   * 规则由服务端统一判定，客户端只提交完整字段与修改原因。
+   * 客户信息与出单信息按业务决定允许在订单任何状态下修改，并且共用一次原子保存；
+   * 版本冲突与地区、地址规则由服务端统一判定，客户端只提交完整字段与修改原因。
    */
-  @Patch(':salesOrderId/customer')
+  @Patch(':salesOrderId/info')
   @RequirePermissions('sales-orders:update')
   @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderEditContextDto })
   @ApiApplicationContract({
-    operationId: 'sales_orders_update_customer',
+    operationId: 'sales_orders_update_info',
     session: 'required', authorization: true, csrf: true, badRequest: true,
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     retry: false,
@@ -353,45 +350,15 @@ export class SalesOrdersController {
       ] },
     ],
   })
-  updateCustomer(
+  updateInfo(
     @Param() params: SalesOrderIdParamDto,
-    @Body() dto: SalesOrderCustomerUpdateRequestDto,
+    @Body() dto: SalesOrderInfoUpdateRequestDto,
     @Req() request: object,
   ): Promise<SalesOrderEditView> {
     if (this.edit === undefined) {
       throw new Error('SalesOrderEditService is not configured')
     }
-    return this.edit.updateCustomer(
-      mutationContext(request),
-      params.salesOrderId,
-      dto,
-    )
-  }
-
-  @Patch(':salesOrderId/sales-info')
-  @RequirePermissions('sales-orders:update')
-  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderEditContextDto })
-  @ApiApplicationContract({
-    operationId: 'sales_orders_update_sales_info',
-    session: 'required', authorization: true, csrf: true, badRequest: true,
-    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
-    retry: false,
-    errors: [
-      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
-      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
-      { status: 409, codes: ['SALES_ORDER_EDIT_VERSION_CONFLICT'] },
-      { status: 422, codes: ['VALIDATION_FAILED'] },
-    ],
-  })
-  updateSalesInfo(
-    @Param() params: SalesOrderIdParamDto,
-    @Body() dto: SalesOrderSalesInfoUpdateRequestDto,
-    @Req() request: object,
-  ): Promise<SalesOrderEditView> {
-    if (this.edit === undefined) {
-      throw new Error('SalesOrderEditService is not configured')
-    }
-    return this.edit.updateSalesInfo(
+    return this.edit.updateInfo(
       mutationContext(request),
       params.salesOrderId,
       dto,

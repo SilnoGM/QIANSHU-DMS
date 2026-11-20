@@ -577,7 +577,7 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
-  it('publishes the non-retrying customer and sales-info edit operations', () => {
+  it('publishes one non-retrying order-info edit operation and removes the split writes', () => {
     const context: ContractOperation | undefined = document.paths[
       '/api/sales-orders/{salesOrderId}/edit-context'
     ]?.get
@@ -590,33 +590,29 @@ describe('SalesOrdersController product options OpenAPI', () => {
     })
     expect(context?.['x-qianshu-contract']).not.toMatchObject({ csrf: true })
 
-    const customer = document.paths[
-      '/api/sales-orders/{salesOrderId}/customer'
+    const info: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/{salesOrderId}/info'
     ]?.patch
-    const salesInfo = document.paths[
-      '/api/sales-orders/{salesOrderId}/sales-info'
-    ]?.patch
-    expect(customer).toMatchObject({ operationId: 'sales_orders_update_customer' })
-    expect(salesInfo).toMatchObject({ operationId: 'sales_orders_update_sales_info' })
+    expect(info).toMatchObject({ operationId: 'sales_orders_update_info' })
+    expect(info?.security).toEqual([{ sessionCookie: [] }])
+    expect(info?.responses).toHaveProperty('200')
+    expect(info?.requestBody).toBeDefined()
+    expect(info?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      csrf: true,
+      conflict: true,
+      privateNoStore: true,
+      resourceLocator: true,
+      validation: true,
+      retry: false,
+    })
+    const contract = JSON.stringify(readOperationContract(info))
+    expect(contract).toContain('SALES_ORDER_EDIT_VERSION_CONFLICT')
+    expect(contract).toContain('ADDRESS_DETAIL_CONTAINS_SELECTED_REGION')
+    expect(contract).toContain('SALES_ORDER_REGION_UNAVAILABLE')
 
-    for (const operation of [customer, salesInfo] as readonly (ContractOperation | undefined)[]) {
-      expect(operation?.security).toEqual([{ sessionCookie: [] }])
-      expect(operation?.responses).toHaveProperty('200')
-      expect(operation?.requestBody).toBeDefined()
-      expect(operation?.['x-qianshu-contract']).toMatchObject({
-        authorization: true,
-        csrf: true,
-        conflict: true,
-        privateNoStore: true,
-        resourceLocator: true,
-        validation: true,
-        retry: false,
-      })
-      expect(JSON.stringify(readOperationContract(operation)))
-        .toContain('SALES_ORDER_EDIT_VERSION_CONFLICT')
-    }
-    expect(JSON.stringify(readOperationContract(customer)))
-      .toContain('ADDRESS_DETAIL_CONTAINS_SELECTED_REGION')
+    expect(document.paths['/api/sales-orders/{salesOrderId}/customer']).toBeUndefined()
+    expect(document.paths['/api/sales-orders/{salesOrderId}/sales-info']).toBeUndefined()
   })
 
   it('publishes the dedicated receipt operation and removes general document writes', () => {

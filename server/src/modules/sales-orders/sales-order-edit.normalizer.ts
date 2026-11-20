@@ -15,17 +15,12 @@ export interface NormalizedSalesOrderCustomerInput {
   readonly addressDetail: string
 }
 
-export interface NormalizedSalesOrderCustomerUpdateCommand {
-  readonly expectedVersion: number
-  readonly reason: string
-  readonly customer: NormalizedSalesOrderCustomerInput
-}
-
-export interface NormalizedSalesOrderSalesInfoUpdateCommand {
+export interface NormalizedSalesOrderInfoUpdateCommand {
   readonly expectedVersion: number
   readonly reason: string
   readonly orderDate: string
   readonly remark: string | null
+  readonly customer: NormalizedSalesOrderCustomerInput
 }
 
 function requireRecord(
@@ -75,12 +70,16 @@ function requireText(value: unknown, field: string, maximum: number): string {
 
 /** 选填字段：缺省、null、纯空白都视为未填写。 */
 function optionalText(value: unknown, field: string, maximum: number): string | null {
-  if (value === undefined || value === null) return null
+  if (value === undefined || value === null) {
+    return null
+  }
   if (typeof value !== 'string') {
     return salesOrderValidationFailure(field)
   }
   const normalized = value.trim().normalize('NFKC')
-  if (normalized.length === 0) return null
+  if (normalized.length === 0) {
+    return null
+  }
   if ([...normalized].length > maximum) {
     return salesOrderValidationFailure(field)
   }
@@ -117,35 +116,28 @@ function requireOrderDate(value: unknown, businessToday: string): string {
   return value
 }
 
-export function normalizeSalesOrderCustomerUpdateCommand(
-  input: unknown,
-): NormalizedSalesOrderCustomerUpdateCommand {
-  const body = requireRecord(input, 'body')
-  const customer = requireRecord(body.customer, 'customer')
+function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
+  const customer = requireRecord(value, 'customer')
   return {
-    expectedVersion: requireVersion(body.expectedVersion),
-    reason: requireReason(body.reason),
-    customer: {
-      name: requireText(customer.name, 'customer.name', 24),
-      phone: requireText(customer.phone, 'customer.phone', 64),
-      fbName: optionalText(customer.fbName, 'customer.fbName', 128),
-      lineName: optionalText(customer.lineName, 'customer.lineName', 128),
-      countryRegionId: requireUuid(customer.countryRegionId, 'customer.countryRegionId'),
-      provinceStateId: requireUuid(customer.provinceStateId, 'customer.provinceStateId'),
-      cityId: requireUuid(customer.cityId, 'customer.cityId'),
-      addressDetail: requireText(customer.addressDetail, 'customer.addressDetail', 1000),
-    },
+    name: requireText(customer.name, 'customer.name', 24),
+    phone: requireText(customer.phone, 'customer.phone', 64),
+    fbName: optionalText(customer.fbName, 'customer.fbName', 128),
+    lineName: optionalText(customer.lineName, 'customer.lineName', 128),
+    countryRegionId: requireUuid(customer.countryRegionId, 'customer.countryRegionId'),
+    provinceStateId: requireUuid(customer.provinceStateId, 'customer.provinceStateId'),
+    cityId: requireUuid(customer.cityId, 'customer.cityId'),
+    addressDetail: requireText(customer.addressDetail, 'customer.addressDetail', 1000),
   }
 }
 
 /**
- * 出单信息采用全量提交：备注必须显式出现，显式 `null` 才表示清空；
- * 缺省字段会被拒绝，避免“没传”被误判成“清空”。
+ * 备注必须显式出现，显式 `null` 才表示清空；缺省字段会被拒绝，
+ * 避免“没传”被误判成“清空”。
  */
-export function normalizeSalesOrderSalesInfoUpdateCommand(
+export function normalizeSalesOrderInfoUpdateCommand(
   input: unknown,
   businessToday: string,
-): NormalizedSalesOrderSalesInfoUpdateCommand {
+): NormalizedSalesOrderInfoUpdateCommand {
   const body = requireRecord(input, 'body')
   if (!Object.hasOwn(body, 'remark')) {
     return salesOrderValidationFailure('remark')
@@ -158,5 +150,6 @@ export function normalizeSalesOrderSalesInfoUpdateCommand(
     reason: requireReason(body.reason),
     orderDate: requireOrderDate(body.orderDate, businessToday),
     remark,
+    customer: normalizeCustomer(body.customer),
   }
 }

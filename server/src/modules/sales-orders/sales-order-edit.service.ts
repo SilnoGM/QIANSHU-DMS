@@ -23,9 +23,8 @@ import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
 import { normalizeSalesOrderAddress } from './domain/sales-order-address'
 import { requireSalesOrderRegionPath } from './domain/sales-order-region'
 import {
-  normalizeSalesOrderCustomerUpdateCommand,
-  normalizeSalesOrderSalesInfoUpdateCommand,
-  type NormalizedSalesOrderCustomerUpdateCommand,
+  normalizeSalesOrderInfoUpdateCommand,
+  type NormalizedSalesOrderCustomerInput,
 } from './sales-order-edit.normalizer'
 
 const UUID_PATTERN
@@ -246,11 +245,11 @@ function customerSnapshotOf(row: SalesOrderEditRow): EffectiveCustomerSnapshot {
 
 function regionChanged(
   snapshot: EffectiveCustomerSnapshot,
-  command: NormalizedSalesOrderCustomerUpdateCommand,
+  customer: NormalizedSalesOrderCustomerInput,
 ): boolean {
-  return snapshot.countryRegion.id !== command.customer.countryRegionId
-    || snapshot.provinceState.id !== command.customer.provinceStateId
-    || snapshot.city.id !== command.customer.cityId
+  return snapshot.countryRegion.id !== customer.countryRegionId
+    || snapshot.provinceState.id !== customer.provinceStateId
+    || snapshot.city.id !== customer.cityId
 }
 
 function buildCustomerReason(
@@ -300,6 +299,37 @@ function changedFieldKeys(
   return keys
 }
 
+interface SalesInfoChangeSet {
+  readonly dateChanged: boolean
+  readonly remarkChanged: boolean
+  readonly changes: readonly string[]
+  readonly changedFields: readonly string[]
+}
+
+function salesInfoChangeSet(
+  beforeOrderDate: string,
+  afterOrderDate: string,
+  beforeRemark: string | null,
+  afterRemark: string | null,
+): SalesInfoChangeSet {
+  const dateChanged = beforeOrderDate !== afterOrderDate
+  const remarkChanged = beforeRemark !== afterRemark
+  const changes: string[] = []
+  if (dateChanged) {
+    changes.push(`出单日期：${beforeOrderDate} → ${afterOrderDate}`)
+  }
+  if (remarkChanged) changes.push('订单备注：已修改')
+  return {
+    dateChanged,
+    remarkChanged,
+    changes,
+    changedFields: [
+      ...(dateChanged ? ['orderDate'] : []),
+      ...(remarkChanged ? ['remark'] : []),
+    ],
+  }
+}
+
 @Injectable()
 export class SalesOrderEditService {
   private readonly dependencies: SalesOrderEditServiceDependencies
@@ -335,14 +365,21 @@ export class SalesOrderEditService {
     return mapContext(row)
   }
 
-  async updateCustomer(
+  /**
+   * 客户信息与出单信息一次原子保存：任一字段校验失败都不会写入；两段都没有实际
+   * 变化时整体 no-op，不写历史、不写审计、不递增版本。
+   */
+  async updateInfo(
     context: SalesOrderEditContext,
     rawSalesOrderId: unknown,
     input: unknown,
   ): Promise<SalesOrderEditView> {
     const trusted = validateContext(context)
     const salesOrderId = validateSalesOrderId(rawSalesOrderId)
-    const command = normalizeSalesOrderCustomerUpdateCommand(input)
+    const command = normalizeSalesOrderInfoUpdateCommand(
+      input,
+      this.dependencies.businessToday(),
+    )
 
     try {
       return await this.prisma.$transaction(async (transaction) => {
@@ -358,7 +395,7 @@ export class SalesOrderEditService {
         const effective = await this.resolveCustomerRegion(
           transaction,
           before,
-          command,
+          command.customer,
         )
         const address = normalizeSalesOrderAddress({
           countryRegionName: effective.countryRegion.name,
@@ -377,54 +414,97 @@ export class SalesOrderEditService {
           addressDetail: address.addressDetail,
           fullAddress: address.fullAddress,
         }
-        const changes = buildCustomerReason(before, after)
-        if (changes.length === 0) return mapContext(row)
+        const customerChanges = buildCustomerReason(before, after)
+        const salesInfo = salesInfoChangeSet(
+          isoDateOf(row.orderDate),
+          command.orderDate,
+          row.remark,
+          command.remark,
+        )
+        if (customerChanges.length === 0 && salesInfo.changes.length === 0) {
+          return mapContext(row)
+        }
 
         const version = row.version + 1
-        await transaction.salesOrder.update({
-          where: { id: salesOrderId },
-          data: {
-            customerName: after.name,
-            customerPhone: after.phone,
-            customerFbName: after.fbName,
-            customerLineName: after.lineName,
-            customerCountryRegionId: after.countryRegion.id,
-            customerProvinceStateId: after.provinceState.id,
-            customerCityId: after.city.id,
-            customerCountryRegionCodeSnapshot: after.countryRegion.code,
-            customerProvinceStateCodeSnapshot: after.provinceState.code,
-            customerCityCodeSnapshot: after.city.code,
-            customerCountryRegionNameSnapshot: after.countryRegion.name,
-            customerProvinceStateNameSnapshot: after.provinceState.name,
-            customerCityNameSnapshot: after.city.name,
-            customerAddressDetail: after.addressDetail,
-            customerFullAddressSnapshot: after.fullAddress,
-            version: { increment: 1 },
-          },
-        })
-        await transaction.salesOrderStatusHistory.create({ data: {
-          salesOrderId,
-          dimension: 'CUSTOMER',
-          fromStatus: 'BEFORE',
-          toStatus: 'AFTER',
-          reason: truncateReason(changes.join('；')),
-          changedByUserId: trusted.actorUserId,
-        } })
-        await this.audit.record(transaction, {
-          eventType: AuditEventType.SALES_ORDER_CUSTOMER_UPDATED,
-          outcome: AuditOutcome.SUCCESS,
-          actorType: AuditActorType.USER,
-          actorUserId: trusted.actorUserId,
-          targetType: 'SALES_ORDER',
-          targetId: salesOrderId,
-          requestId: trusted.requestId,
-          metadata: {
-            changedFields: changedFieldKeys(before, after).join(','),
-            previousVersion: row.version,
-            version,
-            reason: command.reason,
-          },
-        })
+        const data: Prisma.SalesOrderUpdateInput = {
+          version: { increment: 1 },
+          ...(customerChanges.length === 0
+            ? {}
+            : {
+                customerName: after.name,
+                customerPhone: after.phone,
+                customerFbName: after.fbName,
+                customerLineName: after.lineName,
+                customerCountryRegionId: after.countryRegion.id,
+                customerProvinceStateId: after.provinceState.id,
+                customerCityId: after.city.id,
+                customerCountryRegionCodeSnapshot: after.countryRegion.code,
+                customerProvinceStateCodeSnapshot: after.provinceState.code,
+                customerCityCodeSnapshot: after.city.code,
+                customerCountryRegionNameSnapshot: after.countryRegion.name,
+                customerProvinceStateNameSnapshot: after.provinceState.name,
+                customerCityNameSnapshot: after.city.name,
+                customerAddressDetail: after.addressDetail,
+                customerFullAddressSnapshot: after.fullAddress,
+              }),
+          ...(salesInfo.dateChanged
+            ? { orderDate: new Date(`${command.orderDate}T00:00:00.000Z`) }
+            : {}),
+          ...(salesInfo.remarkChanged ? { remark: command.remark } : {}),
+        }
+        await transaction.salesOrder.update({ where: { id: salesOrderId }, data })
+
+        if (customerChanges.length > 0) {
+          await transaction.salesOrderStatusHistory.create({ data: {
+            salesOrderId,
+            dimension: 'CUSTOMER',
+            fromStatus: 'BEFORE',
+            toStatus: 'AFTER',
+            reason: truncateReason(customerChanges.join('；')),
+            changedByUserId: trusted.actorUserId,
+          } })
+          await this.audit.record(transaction, {
+            eventType: AuditEventType.SALES_ORDER_CUSTOMER_UPDATED,
+            outcome: AuditOutcome.SUCCESS,
+            actorType: AuditActorType.USER,
+            actorUserId: trusted.actorUserId,
+            targetType: 'SALES_ORDER',
+            targetId: salesOrderId,
+            requestId: trusted.requestId,
+            metadata: {
+              changedFields: changedFieldKeys(before, after).join(','),
+              previousVersion: row.version,
+              version,
+              reason: command.reason,
+            },
+          })
+        }
+        if (salesInfo.changes.length > 0) {
+          await transaction.salesOrderStatusHistory.create({ data: {
+            salesOrderId,
+            dimension: 'SALES_INFO',
+            fromStatus: 'BEFORE',
+            toStatus: 'AFTER',
+            reason: truncateReason(salesInfo.changes.join('；')),
+            changedByUserId: trusted.actorUserId,
+          } })
+          await this.audit.record(transaction, {
+            eventType: AuditEventType.SALES_ORDER_SALES_INFO_UPDATED,
+            outcome: AuditOutcome.SUCCESS,
+            actorType: AuditActorType.USER,
+            actorUserId: trusted.actorUserId,
+            targetType: 'SALES_ORDER',
+            targetId: salesOrderId,
+            requestId: trusted.requestId,
+            metadata: {
+              changedFields: salesInfo.changedFields.join(','),
+              previousVersion: row.version,
+              version,
+              reason: command.reason,
+            },
+          })
+        }
+
         return {
           ...mapContext(row),
           version,
@@ -439,86 +519,6 @@ export class SalesOrderEditService {
             addressDetail: after.addressDetail,
             fullAddress: after.fullAddress,
           },
-        }
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
-    }
-    catch (caught) {
-      if (isConcurrentConflict(caught)) throw versionConflict()
-      throw caught
-    }
-  }
-
-  async updateSalesInfo(
-    context: SalesOrderEditContext,
-    rawSalesOrderId: unknown,
-    input: unknown,
-  ): Promise<SalesOrderEditView> {
-    const trusted = validateContext(context)
-    const salesOrderId = validateSalesOrderId(rawSalesOrderId)
-    const command = normalizeSalesOrderSalesInfoUpdateCommand(
-      input,
-      this.dependencies.businessToday(),
-    )
-
-    try {
-      return await this.prisma.$transaction(async (transaction) => {
-        await applyTransactionTimeouts(transaction)
-        const row = await this.lockAccessibleOrder(
-          transaction,
-          salesOrderId,
-          trusted.actorUserId,
-        )
-        if (row.version !== command.expectedVersion) throw versionConflict()
-
-        const beforeOrderDate = isoDateOf(row.orderDate)
-        const dateChanged = beforeOrderDate !== command.orderDate
-        const remarkChanged = row.remark !== command.remark
-        if (!dateChanged && !remarkChanged) return mapContext(row)
-
-        const changes: string[] = []
-        if (dateChanged) {
-          changes.push(`出单日期：${beforeOrderDate} → ${command.orderDate}`)
-        }
-        if (remarkChanged) changes.push('订单备注：已修改')
-
-        const version = row.version + 1
-        await transaction.salesOrder.update({
-          where: { id: salesOrderId },
-          data: {
-            orderDate: new Date(`${command.orderDate}T00:00:00.000Z`),
-            remark: command.remark,
-            version: { increment: 1 },
-          },
-        })
-        await transaction.salesOrderStatusHistory.create({ data: {
-          salesOrderId,
-          dimension: 'SALES_INFO',
-          fromStatus: 'BEFORE',
-          toStatus: 'AFTER',
-          reason: truncateReason(changes.join('；')),
-          changedByUserId: trusted.actorUserId,
-        } })
-        await this.audit.record(transaction, {
-          eventType: AuditEventType.SALES_ORDER_SALES_INFO_UPDATED,
-          outcome: AuditOutcome.SUCCESS,
-          actorType: AuditActorType.USER,
-          actorUserId: trusted.actorUserId,
-          targetType: 'SALES_ORDER',
-          targetId: salesOrderId,
-          requestId: trusted.requestId,
-          metadata: {
-            changedFields: [
-              ...(dateChanged ? ['orderDate'] : []),
-              ...(remarkChanged ? ['remark'] : []),
-            ].join(','),
-            previousVersion: row.version,
-            version,
-            reason: command.reason,
-          },
-        })
-        return {
-          ...mapContext(row),
-          version,
           salesInfo: { orderDate: command.orderDate, remark: command.remark },
         }
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
@@ -570,13 +570,13 @@ export class SalesOrderEditService {
   private async resolveCustomerRegion(
     transaction: Prisma.TransactionClient,
     before: EffectiveCustomerSnapshot,
-    command: NormalizedSalesOrderCustomerUpdateCommand,
+    customer: NormalizedSalesOrderCustomerInput,
   ): Promise<{
     readonly countryRegion: SalesOrderEditCustomerRegion
     readonly provinceState: SalesOrderEditCustomerRegion
     readonly city: SalesOrderEditCustomerRegion
   }> {
-    if (!regionChanged(before, command)) {
+    if (!regionChanged(before, customer)) {
       return {
         countryRegion: before.countryRegion,
         provinceState: before.provinceState,
@@ -586,18 +586,18 @@ export class SalesOrderEditService {
     const rows = await transaction.region.findMany({
       where: {
         id: { in: [
-          command.customer.countryRegionId,
-          command.customer.provinceStateId,
-          command.customer.cityId,
+          customer.countryRegionId,
+          customer.provinceStateId,
+          customer.cityId,
         ] },
         enabled: true,
       },
       select: { id: true, code: true, name: true, level: true, parentId: true },
     })
     const path = requireSalesOrderRegionPath(rows, {
-      countryRegionId: command.customer.countryRegionId,
-      provinceStateId: command.customer.provinceStateId,
-      cityId: command.customer.cityId,
+      countryRegionId: customer.countryRegionId,
+      provinceStateId: customer.provinceStateId,
+      cityId: customer.cityId,
     })
     return {
       countryRegion: path.countryRegion,

@@ -3,10 +3,7 @@ import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
 import { createValidationException } from '../../../infrastructure/http/validation-exception.factory'
-import {
-  SalesOrderCustomerUpdateRequestDto,
-  SalesOrderSalesInfoUpdateRequestDto,
-} from './sales-order-edit.dto'
+import { SalesOrderInfoUpdateRequestDto } from './sales-order-edit.dto'
 
 const uuid = (suffix: string) => `00000000-0000-4000-8000-0000000000${suffix}`
 
@@ -27,73 +24,59 @@ const dtoPipe = new ValidationPipe({
   exceptionFactory: createValidationException,
 })
 
-async function validateDto<T extends object>(type: new () => T, payload: unknown): Promise<string[]> {
-  const errors = await validate(plainToInstance(type, payload), {
+async function validateDto(payload: unknown): Promise<string[]> {
+  const errors = await validate(plainToInstance(SalesOrderInfoUpdateRequestDto, payload), {
     whitelist: true,
     forbidNonWhitelisted: true,
   })
   return errors.map(error => error.property)
 }
 
-describe('SalesOrderCustomerUpdateRequestDto', () => {
-  it('accepts a complete customer update payload', async () => {
-    await expect(validateDto(SalesOrderCustomerUpdateRequestDto, {
-      expectedVersion: 3,
-      reason: '客户更正姓名',
-      customer: VALID_CUSTOMER,
-    })).resolves.toEqual([])
+function payload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    expectedVersion: 3,
+    reason: '客户与出单信息核对',
+    customer: VALID_CUSTOMER,
+    orderDate: '2026-11-20',
+    remark: null,
+    ...overrides,
+  }
+}
+
+describe('SalesOrderInfoUpdateRequestDto', () => {
+  it('accepts a complete customer and sales-info payload', async () => {
+    await expect(validateDto(payload())).resolves.toEqual([])
+  })
+
+  it('accepts an explicit null remark to clear the field', async () => {
+    await expect(validateDto(payload({ remark: null }))).resolves.toEqual([])
   })
 
   it('rejects a customer name longer than 24 code points', async () => {
-    await expect(validateDto(SalesOrderCustomerUpdateRequestDto, {
-      expectedVersion: 3,
-      reason: '客户更正姓名',
+    await expect(validateDto(payload({
       customer: { ...VALID_CUSTOMER, name: '客'.repeat(25) },
-    })).resolves.toContain('customer')
+    }))).resolves.toContain('customer')
   })
 
   it('rejects a reason longer than 500 code points', async () => {
-    await expect(validateDto(SalesOrderCustomerUpdateRequestDto, {
-      expectedVersion: 3,
-      reason: '因'.repeat(501),
-      customer: VALID_CUSTOMER,
-    })).resolves.toContain('reason')
-  })
-
-  it('rejects a version below 1', async () => {
-    await expect(validateDto(SalesOrderCustomerUpdateRequestDto, {
-      expectedVersion: 0,
-      reason: '客户更正姓名',
-      customer: VALID_CUSTOMER,
-    })).resolves.toContain('expectedVersion')
-  })
-})
-
-describe('SalesOrderSalesInfoUpdateRequestDto', () => {
-  it('accepts a null remark to clear the field', async () => {
-    await expect(validateDto(SalesOrderSalesInfoUpdateRequestDto, {
-      expectedVersion: 3,
-      reason: '核对出单日期',
-      orderDate: '2026-11-20',
-      remark: null,
-    })).resolves.toEqual([])
+    await expect(validateDto(payload({ reason: '因'.repeat(501) }))).resolves.toContain('reason')
   })
 
   it('rejects a non-date orderDate', async () => {
-    await expect(validateDto(SalesOrderSalesInfoUpdateRequestDto, {
-      expectedVersion: 3,
-      reason: '核对出单日期',
-      orderDate: '2026/11/20',
-      remark: null,
-    })).resolves.toContain('orderDate')
+    await expect(validateDto(payload({ orderDate: '2026/11/20' }))).resolves.toContain('orderDate')
+  })
+
+  it('rejects a version below 1', async () => {
+    await expect(validateDto(payload({ expectedVersion: 0 }))).resolves.toContain('expectedVersion')
   })
 
   it('passes the global validation pipe with an optional remark omitted', async () => {
-    const result: unknown = await dtoPipe.transform({
-      expectedVersion: 3,
-      reason: '核对出单日期',
-      orderDate: '2026-11-20',
-    }, { type: 'body', metatype: SalesOrderSalesInfoUpdateRequestDto })
-    expect(result).toBeInstanceOf(SalesOrderSalesInfoUpdateRequestDto)
+    const withoutRemark = payload()
+    delete withoutRemark.remark
+    const result: unknown = await dtoPipe.transform(withoutRemark, {
+      type: 'body',
+      metatype: SalesOrderInfoUpdateRequestDto,
+    })
+    expect(result).toBeInstanceOf(SalesOrderInfoUpdateRequestDto)
   })
 })
