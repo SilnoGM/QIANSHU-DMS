@@ -21,6 +21,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 import { createSalesOrderProductEditLines, reconcileSalesOrderProductEditLines } from '@/components/business/QsSalesOrderProductsEditorModal/logic'
 import QsSalesOrderProductsEditorPanel from '@/components/business/QsSalesOrderProductsEditorModal/Panel.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
   buildSalesOrderInfoUpdatePayload,
