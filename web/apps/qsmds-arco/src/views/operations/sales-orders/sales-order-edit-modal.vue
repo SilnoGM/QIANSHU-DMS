@@ -13,13 +13,10 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
-  buildSalesOrderCustomerUpdatePayload,
-  buildSalesOrderSalesInfoUpdatePayload,
-  createSalesOrderCustomerDraft,
-  createSalesOrderSalesInfoDraft,
-  salesOrderCustomerDraftChanged,
+  buildSalesOrderInfoUpdatePayload,
+  createSalesOrderInfoDraft,
+  salesOrderInfoDraftChanged,
   salesOrderProductEditUnavailableReason,
-  salesOrderSalesInfoDraftChanged,
 } from './sales-order-edit.logic'
 
 defineOptions({ name: 'SalesOrderEditModal' })
@@ -31,21 +28,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'openProducts': []
-  'saved': [kind: 'customer' | 'salesInfo']
+  'saved': []
   'update:modelValue': [value: boolean]
 }>()
 
-interface CustomerFormState {
+interface InfoFormState {
   name: string
   phone: string
   fbName: string
   lineName: string
   region: RegionSelectorValue
   addressDetail: string
-  reason: string
-}
-
-interface SalesInfoFormState {
   orderDate: string
   remark: string
   reason: string
@@ -55,25 +48,18 @@ const toast = useQsToast()
 const context = shallowRef<SalesOrderEditContextDto | null>(null)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
-const activeTab = ref<SalesOrderEditTab>('customer')
-const customerForm = ref<CustomerFormState>(emptyCustomerForm())
-const customerErrors = ref<Record<string, string>>({})
-const customerActionError = ref<string | null>(null)
-const customerSubmitting = ref(false)
-const customerConflict = ref(false)
-const salesForm = ref<SalesInfoFormState>(emptySalesForm())
-const salesErrors = ref<Record<string, string>>({})
-const salesActionError = ref<string | null>(null)
-const salesSubmitting = ref(false)
-const salesConflict = ref(false)
+const activeTab = ref<SalesOrderEditTab>('info')
+const infoForm = ref<InfoFormState>(emptyInfoForm())
+const infoErrors = ref<Record<string, string>>({})
+const infoActionError = ref<string | null>(null)
+const infoSubmitting = ref(false)
+const infoConflict = ref(false)
 let loadController: AbortController | null = null
-let customerController: AbortController | null = null
-let salesController: AbortController | null = null
+let infoController: AbortController | null = null
 let requestVersion = 0
 
 const tabs = [
-  { value: 'customer', label: '客户信息', icon: 'i-lucide:user-round' },
-  { value: 'salesInfo', label: '销售信息', icon: 'i-lucide:clipboard-list' },
+  { value: 'info', label: '订单信息', icon: 'i-lucide:file-pen-line' },
   { value: 'products', label: '产品', icon: 'i-lucide:package' },
 ]
 
@@ -84,10 +70,8 @@ const visible = computed({
 const title = computed(() => props.order === null
   ? '编辑销售订单'
   : `编辑销售订单 · ${props.order.orderNo}`)
-const customerChanged = computed(() => context.value !== null
-  && salesOrderCustomerDraftChanged(context.value, customerForm.value))
-const salesInfoChanged = computed(() => context.value !== null
-  && salesOrderSalesInfoDraftChanged(context.value, salesForm.value))
+const infoChanged = computed(() => context.value !== null
+  && salesOrderInfoDraftChanged(context.value, infoForm.value))
 const productBlockedReason = computed(() => context.value === null
   ? null
   : salesOrderProductEditUnavailableReason({
@@ -108,7 +92,7 @@ const historyRiskHint = computed(() => {
   return null
 })
 
-function emptyCustomerForm(): CustomerFormState {
+function emptyInfoForm(): InfoFormState {
   return {
     name: '',
     phone: '',
@@ -116,40 +100,29 @@ function emptyCustomerForm(): CustomerFormState {
     lineName: '',
     region: { countryRegionId: null, provinceStateId: null, cityId: null },
     addressDetail: '',
+    orderDate: '',
+    remark: '',
     reason: '',
   }
-}
-
-function emptySalesForm(): SalesInfoFormState {
-  return { orderDate: '', remark: '', reason: '' }
 }
 
 function applyContext(next: SalesOrderEditContextDto): void {
   context.value = next
-  customerForm.value = {
-    ...createSalesOrderCustomerDraft(next),
+  infoForm.value = {
+    ...createSalesOrderInfoDraft(next),
     reason: '',
   }
-  salesForm.value = {
-    ...createSalesOrderSalesInfoDraft(next),
-    reason: '',
-  }
-  customerErrors.value = {}
-  salesErrors.value = {}
-  customerActionError.value = null
-  salesActionError.value = null
-  customerConflict.value = false
-  salesConflict.value = false
+  infoErrors.value = {}
+  infoActionError.value = null
+  infoConflict.value = false
 }
 
 function cancelRequests(): void {
   requestVersion += 1
   loadController?.abort()
-  customerController?.abort()
-  salesController?.abort()
+  infoController?.abort()
   loadController = null
-  customerController = null
-  salesController = null
+  infoController = null
 }
 
 async function loadContext(): Promise<void> {
@@ -172,7 +145,7 @@ async function loadContext(): Promise<void> {
     applyContext(response.data)
   }
   catch (error) {
-    if (controller.signal.aborted || isSalesOrderApiAbort(error)) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
       return
     }
     loadError.value = getSalesOrderApiFailure(error).message
@@ -187,54 +160,42 @@ async function loadContext(): Promise<void> {
   }
 }
 
-function isSalesOrderApiAbort(error: unknown): boolean {
-  return isSalesOrderAbortError(error)
-}
-
-function applyServerFieldErrors(
-  target: Record<string, string>,
-  fieldErrors: Readonly<Record<string, string>>,
-): void {
-  Object.assign(target, fieldErrors)
-}
-
 function setVisible(value: boolean): void {
   if (!value) {
     cancelRequests()
     loading.value = false
     loadError.value = null
     context.value = null
-    customerSubmitting.value = false
-    salesSubmitting.value = false
+    infoSubmitting.value = false
   }
   visible.value = value
 }
 
 function handleRegionChange(change: RegionSelectorChange): void {
-  customerForm.value.region = { ...change.value }
-  delete customerErrors.value['customer.cityId']
+  infoForm.value.region = { ...change.value }
+  delete infoErrors.value['customer.cityId']
 }
 
-async function submitCustomer(): Promise<void> {
+async function submitInfo(): Promise<void> {
   const current = context.value
   const order = props.order
-  if (current === null || order === null || customerSubmitting.value) {
+  if (current === null || order === null || infoSubmitting.value) {
     return
   }
-  const built = buildSalesOrderCustomerUpdatePayload(current, customerForm.value)
+  const built = buildSalesOrderInfoUpdatePayload(current, infoForm.value)
   if (!built.valid) {
-    customerErrors.value = { ...built.fieldErrors }
+    infoErrors.value = { ...built.fieldErrors }
     return
   }
-  customerErrors.value = {}
-  customerActionError.value = null
-  customerConflict.value = false
+  infoErrors.value = {}
+  infoActionError.value = null
+  infoConflict.value = false
   const controller = new AbortController()
-  customerController = controller
-  customerSubmitting.value = true
+  infoController = controller
+  infoSubmitting.value = true
   const authEpochBefore = useAppAccountStore().authEpoch
   try {
-    const response = await salesOrdersApi.updateCustomer(order.id, built.request, controller.signal)
+    const response = await salesOrdersApi.updateInfo(order.id, built.request, controller.signal)
     if (controller.signal.aborted || props.order?.id !== order.id) {
       return
     }
@@ -242,70 +203,23 @@ async function submitCustomer(): Promise<void> {
       return
     }
     applyContext(response.data)
-    toast.success('客户信息已保存')
-    emit('saved', 'customer')
+    toast.success('订单信息已保存')
+    emit('saved')
   }
   catch (error) {
-    if (controller.signal.aborted || isSalesOrderApiAbort(error)) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
       return
     }
     const failure = getSalesOrderApiFailure(error)
-    customerActionError.value = failure.message
-    customerConflict.value = failure.code === 'SALES_ORDER_EDIT_VERSION_CONFLICT'
-    applyServerFieldErrors(customerErrors.value, failure.fieldErrors)
+    infoActionError.value = failure.message
+    infoConflict.value = failure.code === 'SALES_ORDER_EDIT_VERSION_CONFLICT'
+    Object.assign(infoErrors.value, failure.fieldErrors)
   }
   finally {
-    if (customerController === controller) {
-      customerController = null
+    if (infoController === controller) {
+      infoController = null
     }
-    customerSubmitting.value = false
-  }
-}
-
-async function submitSalesInfo(): Promise<void> {
-  const current = context.value
-  const order = props.order
-  if (current === null || order === null || salesSubmitting.value) {
-    return
-  }
-  const built = buildSalesOrderSalesInfoUpdatePayload(current, salesForm.value)
-  if (!built.valid) {
-    salesErrors.value = { ...built.fieldErrors }
-    return
-  }
-  salesErrors.value = {}
-  salesActionError.value = null
-  salesConflict.value = false
-  const controller = new AbortController()
-  salesController = controller
-  salesSubmitting.value = true
-  const authEpochBefore = useAppAccountStore().authEpoch
-  try {
-    const response = await salesOrdersApi.updateSalesInfo(order.id, built.request, controller.signal)
-    if (controller.signal.aborted || props.order?.id !== order.id) {
-      return
-    }
-    if (useAppAccountStore().authEpoch !== authEpochBefore) {
-      return
-    }
-    applyContext(response.data)
-    toast.success('出单信息已保存')
-    emit('saved', 'salesInfo')
-  }
-  catch (error) {
-    if (controller.signal.aborted || isSalesOrderApiAbort(error)) {
-      return
-    }
-    const failure = getSalesOrderApiFailure(error)
-    salesActionError.value = failure.message
-    salesConflict.value = failure.code === 'SALES_ORDER_EDIT_VERSION_CONFLICT'
-    applyServerFieldErrors(salesErrors.value, failure.fieldErrors)
-  }
-  finally {
-    if (salesController === controller) {
-      salesController = null
-    }
-    salesSubmitting.value = false
+    infoSubmitting.value = false
   }
 }
 
@@ -325,7 +239,7 @@ watch(
       context.value = null
       return
     }
-    activeTab.value = 'customer'
+    activeTab.value = 'info'
     void loadContext()
   },
   { immediate: true },
@@ -336,13 +250,13 @@ watch(
   <QsGenericModal
     :model-value="visible"
     :title="title"
-    description="客户信息、出单信息与产品修改集中在此维护；三个页签各自独立保存。"
+    description="客户信息与出单信息一次保存；产品修改仍在独立的产品页签中复核后提交。"
     size="xl"
     :loading="loading"
     :error="loadError"
-    :submitting="customerSubmitting || salesSubmitting"
-    :dismiss-on-overlay="!customerSubmitting && !salesSubmitting"
-    :dismiss-on-escape="!customerSubmitting && !salesSubmitting"
+    :submitting="infoSubmitting"
+    :dismiss-on-overlay="!infoSubmitting"
+    :dismiss-on-escape="!infoSubmitting"
     @update:model-value="setVisible"
   >
     <template #header-leading>
@@ -368,145 +282,112 @@ watch(
       </p>
 
       <FaTabs v-model="activeTab" :list="tabs" list-class="h-auto min-h-11 w-full" content-class="mt-4 min-w-0">
-        <template #customer>
+        <template #info>
           <div class="space-y-4">
-            <section class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
+            <section aria-label="客户信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
               <div class="min-w-0">
                 <label for="sales-order-edit-customer-name" class="text-sm font-medium block">客户姓名（最多 24 字）</label>
                 <FaInput
                   id="sales-order-edit-customer-name"
-                  v-model="customerForm.name"
+                  v-model="infoForm.name"
                   maxlength="24"
                   class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors['customer.name']"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors['customer.name']"
                 />
-                <p v-if="customerErrors['customer.name']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.name'] }}
+                <p v-if="infoErrors['customer.name']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.name'] }}
                 </p>
               </div>
               <div class="min-w-0">
                 <label for="sales-order-edit-customer-phone" class="text-sm font-medium block">客户电话</label>
                 <FaInput
                   id="sales-order-edit-customer-phone"
-                  v-model="customerForm.phone"
+                  v-model="infoForm.phone"
                   maxlength="64"
                   class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors['customer.phone']"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors['customer.phone']"
                 />
-                <p v-if="customerErrors['customer.phone']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.phone'] }}
+                <p v-if="infoErrors['customer.phone']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.phone'] }}
                 </p>
               </div>
               <div class="min-w-0">
                 <label for="sales-order-edit-customer-fb" class="text-sm font-medium block">客户FB名称（选填）</label>
                 <FaInput
                   id="sales-order-edit-customer-fb"
-                  v-model="customerForm.fbName"
+                  v-model="infoForm.fbName"
                   maxlength="128"
                   class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors['customer.fbName']"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors['customer.fbName']"
                 />
-                <p v-if="customerErrors['customer.fbName']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.fbName'] }}
+                <p v-if="infoErrors['customer.fbName']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.fbName'] }}
                 </p>
               </div>
               <div class="min-w-0">
                 <label for="sales-order-edit-customer-line" class="text-sm font-medium block">客户LINE名称（选填）</label>
                 <FaInput
                   id="sales-order-edit-customer-line"
-                  v-model="customerForm.lineName"
+                  v-model="infoForm.lineName"
                   maxlength="128"
                   class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors['customer.lineName']"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors['customer.lineName']"
                 />
-                <p v-if="customerErrors['customer.lineName']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.lineName'] }}
+                <p v-if="infoErrors['customer.lineName']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.lineName'] }}
                 </p>
               </div>
               <div class="min-w-0 md:col-span-2">
                 <span class="text-sm font-medium block">三级地区</span>
                 <QsRegionSelector
-                  v-model="customerForm.region"
+                  v-model="infoForm.region"
                   class="mt-1.5"
                   name="customerCityId"
                   required
-                  :disabled="customerSubmitting"
+                  :disabled="infoSubmitting"
                   @change="handleRegionChange"
                 />
-                <p v-if="customerErrors['customer.cityId']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.cityId'] }}
+                <p v-if="infoErrors['customer.cityId']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.cityId'] }}
                 </p>
               </div>
               <div class="min-w-0 md:col-span-2">
                 <label for="sales-order-edit-customer-address" class="text-sm font-medium block">详细地址</label>
                 <FaTextarea
                   id="sales-order-edit-customer-address"
-                  v-model="customerForm.addressDetail"
+                  v-model="infoForm.addressDetail"
                   maxlength="1000"
                   class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors['customer.addressDetail']"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors['customer.addressDetail']"
                 />
                 <p class="qs-type-meta text-muted-foreground m-0 mt-1">
                   保存时会移除全部空白，并按三级地区重新拼接完整地址；请勿重复填写已选地区。
                 </p>
-                <p v-if="customerErrors['customer.addressDetail']" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors['customer.addressDetail'] }}
+                <p v-if="infoErrors['customer.addressDetail']" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors['customer.addressDetail'] }}
                 </p>
               </div>
-              <div class="min-w-0 md:col-span-2">
-                <label for="sales-order-edit-customer-reason" class="text-sm font-medium block">修改原因（必填，进入变更记录与审计）</label>
-                <FaTextarea
-                  id="sales-order-edit-customer-reason"
-                  v-model="customerForm.reason"
-                  maxlength="500"
-                  input-class="min-h-16"
-                  class="mt-1.5 w-full"
-                  :disabled="customerSubmitting"
-                  @update:model-value="delete customerErrors.reason"
-                />
-                <p v-if="customerErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ customerErrors.reason }}
-                </p>
-              </div>
-              <p class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 md:col-span-2">
-                客户姓名会同步出现在采购唛头、对账单与后续通知；已打印标签与已生成的凭证标题不会改变。
-              </p>
             </section>
-            <FaAlert
-              v-if="customerActionError"
-              variant="destructive"
-              :title="customerActionError"
-            >
-              <template v-if="customerConflict" #description>
-                <FaButton variant="outline" @click="loadContext">
-                  重新加载最新数据
-                </FaButton>
-              </template>
-            </FaAlert>
-          </div>
-        </template>
 
-        <template #salesInfo>
-          <div class="space-y-4">
-            <section class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
+            <section aria-label="出单信息" class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-2">
               <div class="min-w-0">
                 <span class="text-sm font-medium block">出单日期</span>
                 <QsDateTimeField
-                  v-model="salesForm.orderDate"
+                  v-model="infoForm.orderDate"
                   class="mt-1.5 w-full"
                   precision="date"
                   disable-future
-                  :disabled="salesSubmitting"
+                  :disabled="infoSubmitting"
                   aria-label="出单日期"
-                  @change="delete salesErrors.orderDate"
+                  @change="delete infoErrors.orderDate"
                 />
-                <p v-if="salesErrors.orderDate" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ salesErrors.orderDate }}
+                <p v-if="infoErrors.orderDate" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors.orderDate }}
                 </p>
               </div>
               <div class="min-w-0">
@@ -519,42 +400,49 @@ watch(
                 <label for="sales-order-edit-sales-remark" class="text-sm font-medium block">订单备注（留空即清空）</label>
                 <FaTextarea
                   id="sales-order-edit-sales-remark"
-                  v-model="salesForm.remark"
+                  v-model="infoForm.remark"
                   maxlength="1000"
                   input-class="min-h-20"
                   class="mt-1.5 w-full"
-                  :disabled="salesSubmitting"
-                  @update:model-value="delete salesErrors.remark"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors.remark"
                 />
-                <p v-if="salesErrors.remark" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ salesErrors.remark }}
-                </p>
-              </div>
-              <div class="min-w-0 md:col-span-2">
-                <label for="sales-order-edit-sales-reason" class="text-sm font-medium block">修改原因（必填，进入变更记录与审计）</label>
-                <FaTextarea
-                  id="sales-order-edit-sales-reason"
-                  v-model="salesForm.reason"
-                  maxlength="500"
-                  input-class="min-h-16"
-                  class="mt-1.5 w-full"
-                  :disabled="salesSubmitting"
-                  @update:model-value="delete salesErrors.reason"
-                />
-                <p v-if="salesErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
-                  {{ salesErrors.reason }}
+                <p v-if="infoErrors.remark" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors.remark }}
                 </p>
               </div>
               <p class="qs-type-meta text-muted-foreground m-0 md:col-span-2">
-                修改出单日期只影响列表的日期筛选与展示，不会改变已生成的凭证、对账与通知；定金与尾款拆分仍通过收款记录维护。
+                修改出单日期只影响列表的日期筛选与展示，不会改变已生成的凭证、对账与通知；定金与尾款拆分暂未提供页面入口，产品总额下降时系统会自动下调定金并要求确认。
               </p>
             </section>
+
+            <section aria-label="修改原因" class="p-4 border border-border rounded-lg space-y-3">
+              <div class="min-w-0">
+                <label for="sales-order-edit-info-reason" class="text-sm font-medium block">修改原因（必填，进入变更记录与审计）</label>
+                <FaTextarea
+                  id="sales-order-edit-info-reason"
+                  v-model="infoForm.reason"
+                  maxlength="500"
+                  input-class="min-h-16"
+                  class="mt-1.5 w-full"
+                  :disabled="infoSubmitting"
+                  @update:model-value="delete infoErrors.reason"
+                />
+                <p v-if="infoErrors.reason" class="text-xs text-destructive m-0 mt-1" role="alert">
+                  {{ infoErrors.reason }}
+                </p>
+              </div>
+              <p class="qs-type-meta text-amber-700 m-0 dark:text-amber-300">
+                客户姓名会同步出现在采购唛头、对账单与后续通知；已打印标签与已生成的凭证标题不会改变。
+              </p>
+            </section>
+
             <FaAlert
-              v-if="salesActionError"
+              v-if="infoActionError"
               variant="destructive"
-              :title="salesActionError"
+              :title="infoActionError"
             >
-              <template v-if="salesConflict" #description>
+              <template v-if="infoConflict" #description>
                 <FaButton variant="outline" @click="loadContext">
                   重新加载最新数据
                 </FaButton>
@@ -576,7 +464,7 @@ watch(
               </div>
               <FaButton
                 type="button"
-                :disabled="productBlockedReason !== null || customerSubmitting || salesSubmitting"
+                :disabled="productBlockedReason !== null || infoSubmitting"
                 @click="openProducts"
               >
                 <FaIcon name="i-lucide:list-restart" class="size-4" aria-hidden="true" />
@@ -597,30 +485,20 @@ watch(
           type="button"
           variant="outline"
           class="min-h-11 sm:min-h-9"
-          :disabled="customerSubmitting || salesSubmitting"
+          :disabled="infoSubmitting"
           @click="setVisible(false)"
         >
           关闭
         </FaButton>
         <FaButton
-          v-if="activeTab === 'customer'"
+          v-if="activeTab === 'info'"
           type="button"
           class="min-h-11 sm:min-h-9"
-          :loading="customerSubmitting"
-          :disabled="customerSubmitting || loading || context === null || !customerChanged"
-          @click="submitCustomer"
+          :loading="infoSubmitting"
+          :disabled="infoSubmitting || loading || context === null || !infoChanged"
+          @click="submitInfo"
         >
-          保存客户信息
-        </FaButton>
-        <FaButton
-          v-else-if="activeTab === 'salesInfo'"
-          type="button"
-          class="min-h-11 sm:min-h-9"
-          :loading="salesSubmitting"
-          :disabled="salesSubmitting || loading || context === null || !salesInfoChanged"
-          @click="submitSalesInfo"
-        >
-          保存出单信息
+          保存订单信息
         </FaButton>
       </div>
     </template>

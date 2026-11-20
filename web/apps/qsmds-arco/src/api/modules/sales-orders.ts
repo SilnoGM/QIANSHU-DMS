@@ -5,7 +5,6 @@ import type {
   PurchaseCorrectionContextDto,
   PurchaseCorrectionRequestDto,
   PurchaseCorrectionResultDto,
-  SalesOrderCustomerUpdateRequestDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
   SalesOrderEditContextDto,
@@ -18,9 +17,9 @@ import type {
   SalesOrderPendingPurchaseProductsDto,
   SalesOrderProductEditContextDto,
   SalesOrderProductOptionsDto,
+  SalesOrderInfoUpdateRequestDto,
   SalesOrderProductsUpdateRequestDto,
   SalesOrderProductsUpdateResultDto,
-  SalesOrderSalesInfoUpdateRequestDto,
   SalesOrdersGetProductEditOptionsData,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
@@ -95,23 +94,14 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}/edit-context`,
         { errorPresentation: 'local', signal },
       ),
-    updateCustomer: (
+    updateInfo: (
       salesOrderId: string,
-      data: SalesOrderCustomerUpdateRequestDto,
+      data: SalesOrderInfoUpdateRequestDto,
       signal: AbortSignal,
     ) => client.patch<SalesOrderEditContextDto>(
-      `sales-orders/${encodeURIComponent(salesOrderId)}/customer`,
+      `sales-orders/${encodeURIComponent(salesOrderId)}/info`,
       data,
-      // 客户信息携带版本号但没有幂等键；网络结果未知时禁止自动重放。
-      { errorPresentation: 'local', retry: false, signal },
-    ),
-    updateSalesInfo: (
-      salesOrderId: string,
-      data: SalesOrderSalesInfoUpdateRequestDto,
-      signal: AbortSignal,
-    ) => client.patch<SalesOrderEditContextDto>(
-      `sales-orders/${encodeURIComponent(salesOrderId)}/sales-info`,
-      data,
+      // 订单信息一次原子保存并携带版本号，但没有幂等键；网络结果未知时禁止自动重放。
       { errorPresentation: 'local', retry: false, signal },
     ),
     factoryShipmentContext: (salesOrderId: string, signal: AbortSignal) =>

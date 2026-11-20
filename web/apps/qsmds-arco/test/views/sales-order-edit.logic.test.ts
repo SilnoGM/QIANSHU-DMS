@@ -4,13 +4,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  buildSalesOrderCustomerUpdatePayload,
-  buildSalesOrderSalesInfoUpdatePayload,
-  createSalesOrderCustomerDraft,
-  createSalesOrderSalesInfoDraft,
-  salesOrderCustomerDraftChanged,
+  buildSalesOrderInfoUpdatePayload,
+  createSalesOrderInfoDraft,
+  salesOrderInfoDraftChanged,
   salesOrderProductEditUnavailableReason,
-  salesOrderSalesInfoDraftChanged,
 } from '../../src/views/operations/sales-orders/sales-order-edit.logic'
 
 function contextOf(overrides: Partial<SalesOrderEditContextDto> = {}): SalesOrderEditContextDto {
@@ -37,26 +34,29 @@ function contextOf(overrides: Partial<SalesOrderEditContextDto> = {}): SalesOrde
   }
 }
 
-test('客户草稿回填三级地区与社交名称', () => {
-  const draft = createSalesOrderCustomerDraft(contextOf({
+test('订单信息草稿同时回填客户、三级地区与出单信息', () => {
+  const draft = createSalesOrderInfoDraft(contextOf({
     customer: { ...contextOf().customer, fbName: '小明', lineName: 'ming' },
   }))
   assert.equal(draft.region.countryRegionId, 'region-country')
   assert.equal(draft.region.cityId, 'region-city')
   assert.equal(draft.fbName, '小明')
   assert.equal(draft.lineName, 'ming')
+  assert.equal(draft.orderDate, '2026-11-01')
+  assert.equal(draft.remark, '客户自提')
   assert.equal(draft.reason, '')
 })
 
-test('客户保存提交完整字段、版本号与归一化后的原因', () => {
+test('一次保存同时提交客户与出单信息，并归一化原因与空白社交名称', () => {
   const context = contextOf()
   const draft = {
-    ...createSalesOrderCustomerDraft(context),
+    ...createSalesOrderInfoDraft(context),
     phone: '  0933000111 ',
     fbName: '   ',
+    orderDate: '2026-11-20',
     reason: '  客户更正电话 ',
   }
-  const built = buildSalesOrderCustomerUpdatePayload(context, draft)
+  const built = buildSalesOrderInfoUpdatePayload(context, draft)
   assert.equal(built.valid, true)
   if (!built.valid) {
     return
@@ -65,47 +65,13 @@ test('客户保存提交完整字段、版本号与归一化后的原因', () =>
   assert.equal(built.request.reason, '客户更正电话')
   assert.equal(built.request.customer.phone, '0933000111')
   assert.equal(built.request.customer.fbName, null)
+  assert.equal(built.request.orderDate, '2026-11-20')
 })
 
-test('客户姓名超过 24 字与缺少地区返回字段错误', () => {
+test('清空备注提交 null，非法日期与超长姓名整体拦下', () => {
   const context = contextOf()
-  const longName = buildSalesOrderCustomerUpdatePayload(context, {
-    ...createSalesOrderCustomerDraft(context),
-    name: '客'.repeat(25),
-    reason: '改名',
-  })
-  assert.equal(longName.valid, false)
-  if (!longName.valid) {
-    assert.ok(longName.fieldErrors['customer.name'])
-  }
-
-  const noRegion = buildSalesOrderCustomerUpdatePayload(context, {
-    ...createSalesOrderCustomerDraft(context),
-    region: { countryRegionId: null, provinceStateId: null, cityId: null },
-    reason: '改名',
-  })
-  assert.equal(noRegion.valid, false)
-  if (!noRegion.valid) {
-    assert.ok(noRegion.fieldErrors['customer.cityId'])
-  }
-})
-
-test('修改原因必填', () => {
-  const context = contextOf()
-  const built = buildSalesOrderCustomerUpdatePayload(context, {
-    ...createSalesOrderCustomerDraft(context),
-    reason: '   ',
-  })
-  assert.equal(built.valid, false)
-  if (!built.valid) {
-    assert.equal(built.fieldErrors.reason, '请填写本次修改原因')
-  }
-})
-
-test('出单信息把空备注提交为 null，并拒绝未来日期格式', () => {
-  const context = contextOf()
-  const cleared = buildSalesOrderSalesInfoUpdatePayload(context, {
-    ...createSalesOrderSalesInfoDraft(context),
+  const cleared = buildSalesOrderInfoUpdatePayload(context, {
+    ...createSalesOrderInfoDraft(context),
     remark: '   ',
     reason: '清空备注',
   })
@@ -114,36 +80,44 @@ test('出单信息把空备注提交为 null，并拒绝未来日期格式', () 
     assert.equal(cleared.request.remark, null)
   }
 
-  const invalidDate = buildSalesOrderSalesInfoUpdatePayload(context, {
-    ...createSalesOrderSalesInfoDraft(context),
-    orderDate: '2026/11/01',
-    reason: '改日期',
+  const invalid = buildSalesOrderInfoUpdatePayload(context, {
+    ...createSalesOrderInfoDraft(context),
+    name: '客'.repeat(25),
+    orderDate: '2026/11/20',
+    region: { countryRegionId: null, provinceStateId: null, cityId: null },
+    reason: '改名',
   })
-  assert.equal(invalidDate.valid, false)
-  if (!invalidDate.valid) {
-    assert.ok(invalidDate.fieldErrors.orderDate)
+  assert.equal(invalid.valid, false)
+  if (!invalid.valid) {
+    assert.ok(invalid.fieldErrors['customer.name'])
+    assert.ok(invalid.fieldErrors.orderDate)
+    assert.ok(invalid.fieldErrors['customer.cityId'])
   }
 })
 
-test('草稿变化检测只比较业务字段，不把原因计入', () => {
+test('修改原因必填', () => {
   const context = contextOf()
-  const customer = createSalesOrderCustomerDraft(context)
-  assert.equal(salesOrderCustomerDraftChanged(context, customer), false)
+  const built = buildSalesOrderInfoUpdatePayload(context, {
+    ...createSalesOrderInfoDraft(context),
+    reason: '   ',
+  })
+  assert.equal(built.valid, false)
+  if (!built.valid) {
+    assert.equal(built.fieldErrors.reason, '请填写本次修改原因')
+  }
+})
+
+test('变更检测覆盖客户与出单信息两类字段，不把原因计入', () => {
+  const context = contextOf()
+  const draft = createSalesOrderInfoDraft(context)
+  assert.equal(salesOrderInfoDraftChanged(context, draft), false)
   assert.equal(
-    salesOrderCustomerDraftChanged(context, { ...customer, reason: '只写了原因' }),
+    salesOrderInfoDraftChanged(context, { ...draft, reason: '只写了原因' }),
     false,
   )
-  assert.equal(
-    salesOrderCustomerDraftChanged(context, { ...customer, phone: '0999' }),
-    true,
-  )
-
-  const salesInfo = createSalesOrderSalesInfoDraft(context)
-  assert.equal(salesOrderSalesInfoDraftChanged(context, salesInfo), false)
-  assert.equal(
-    salesOrderSalesInfoDraftChanged(context, { ...salesInfo, remark: '新备注' }),
-    true,
-  )
+  assert.equal(salesOrderInfoDraftChanged(context, { ...draft, phone: '0999' }), true)
+  assert.equal(salesOrderInfoDraftChanged(context, { ...draft, orderDate: '2026-11-20' }), true)
+  assert.equal(salesOrderInfoDraftChanged(context, { ...draft, remark: '新备注' }), true)
 })
 
 test('产品资格沿用已确认加海运前口径', () => {

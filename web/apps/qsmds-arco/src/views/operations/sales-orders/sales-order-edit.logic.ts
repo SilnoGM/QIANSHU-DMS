@@ -1,23 +1,18 @@
 import type {
-  SalesOrderCustomerUpdateRequestDto,
   SalesOrderEditContextDto,
-  SalesOrderSalesInfoUpdateRequestDto,
+  SalesOrderInfoUpdateRequestDto,
 } from '@/api/generated/types.gen'
 import type { RegionSelectorValue } from '@/components/business/QsRegionSelector/types'
 
-export type SalesOrderEditTab = 'customer' | 'salesInfo' | 'products'
+export type SalesOrderEditTab = 'info' | 'products'
 
-export interface SalesOrderCustomerDraft {
+export interface SalesOrderInfoDraft {
   readonly name: string
   readonly phone: string
   readonly fbName: string
   readonly lineName: string
   readonly region: RegionSelectorValue
   readonly addressDetail: string
-  readonly reason: string
-}
-
-export interface SalesOrderSalesInfoDraft {
   readonly orderDate: string
   readonly remark: string
   readonly reason: string
@@ -48,9 +43,9 @@ function codePointLength(value: string): number {
   return [...value].length
 }
 
-export function createSalesOrderCustomerDraft(
+export function createSalesOrderInfoDraft(
   context: SalesOrderEditContextDto,
-): SalesOrderCustomerDraft {
+): SalesOrderInfoDraft {
   return {
     name: context.customer.name,
     phone: context.customer.phone,
@@ -62,14 +57,6 @@ export function createSalesOrderCustomerDraft(
       cityId: context.customer.city.id,
     },
     addressDetail: context.customer.addressDetail,
-    reason: '',
-  }
-}
-
-export function createSalesOrderSalesInfoDraft(
-  context: SalesOrderEditContextDto,
-): SalesOrderSalesInfoDraft {
-  return {
     orderDate: context.salesInfo.orderDate,
     remark: context.salesInfo.remark ?? '',
     reason: '',
@@ -103,14 +90,17 @@ function validateOptionalSocialName(
   return normalized
 }
 
-export function buildSalesOrderCustomerUpdatePayload(
+/** 客户信息与出单信息合成一次请求；任一字段不合法都会整体拦下。 */
+export function buildSalesOrderInfoUpdatePayload(
   context: SalesOrderEditContextDto,
-  draft: SalesOrderCustomerDraft,
-): SalesOrderEditBuildResult<SalesOrderCustomerUpdateRequestDto> {
+  draft: SalesOrderInfoDraft,
+): SalesOrderEditBuildResult<SalesOrderInfoUpdateRequestDto> {
   const fieldErrors: Record<string, string> = {}
   const name = draft.name.trim()
   const phone = draft.phone.trim()
   const addressDetail = draft.addressDetail.trim()
+  const orderDate = draft.orderDate.trim()
+  const remark = draft.remark.trim()
   const reason = validateReason(draft.reason, fieldErrors)
   const fbName = validateOptionalSocialName(draft.fbName, 'fbName', '客户FB名称', fieldErrors)
   const lineName = validateOptionalSocialName(draft.lineName, 'lineName', '客户LINE名称', fieldErrors)
@@ -133,6 +123,12 @@ export function buildSalesOrderCustomerUpdatePayload(
   else if (codePointLength(addressDetail) > CODE_POINT_LIMITS.addressDetail) {
     fieldErrors['customer.addressDetail'] = `详细地址不能超过 ${CODE_POINT_LIMITS.addressDetail} 个字符`
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(orderDate)) {
+    fieldErrors.orderDate = '请选择出单日期'
+  }
+  if (codePointLength(remark) > CODE_POINT_LIMITS.remark) {
+    fieldErrors.remark = `订单备注不能超过 ${CODE_POINT_LIMITS.remark} 个字符`
+  }
   const { countryRegionId, provinceStateId, cityId } = draft.region
   if (countryRegionId === null || provinceStateId === null || cityId === null) {
     fieldErrors['customer.cityId'] = '请选择完整的三级地区'
@@ -147,6 +143,9 @@ export function buildSalesOrderCustomerUpdatePayload(
     request: {
       expectedVersion: context.version,
       reason,
+      orderDate,
+      // 服务端把空串视为非法；清空备注必须显式提交 null。
+      remark: remark.length === 0 ? null : remark,
       customer: {
         name,
         phone,
@@ -161,40 +160,9 @@ export function buildSalesOrderCustomerUpdatePayload(
   }
 }
 
-export function buildSalesOrderSalesInfoUpdatePayload(
+export function salesOrderInfoDraftChanged(
   context: SalesOrderEditContextDto,
-  draft: SalesOrderSalesInfoDraft,
-): SalesOrderEditBuildResult<SalesOrderSalesInfoUpdateRequestDto> {
-  const fieldErrors: Record<string, string> = {}
-  const orderDate = draft.orderDate.trim()
-  const reason = validateReason(draft.reason, fieldErrors)
-  const remark = draft.remark.trim()
-
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(orderDate)) {
-    fieldErrors.orderDate = '请选择出单日期'
-  }
-  if (codePointLength(remark) > CODE_POINT_LIMITS.remark) {
-    fieldErrors.remark = `订单备注不能超过 ${CODE_POINT_LIMITS.remark} 个字符`
-  }
-
-  if (Object.keys(fieldErrors).length > 0) {
-    return { valid: false, fieldErrors }
-  }
-  return {
-    valid: true,
-    request: {
-      expectedVersion: context.version,
-      reason,
-      orderDate,
-      // 服务端把空串视为非法；清空备注必须显式提交 null。
-      remark: remark.length === 0 ? null : remark,
-    },
-  }
-}
-
-export function salesOrderCustomerDraftChanged(
-  context: SalesOrderEditContextDto,
-  draft: SalesOrderCustomerDraft,
+  draft: SalesOrderInfoDraft,
 ): boolean {
   return draft.name.trim() !== context.customer.name
     || draft.phone.trim() !== context.customer.phone
@@ -204,13 +172,7 @@ export function salesOrderCustomerDraftChanged(
     || draft.region.provinceStateId !== context.customer.provinceState.id
     || draft.region.cityId !== context.customer.city.id
     || draft.addressDetail.trim() !== context.customer.addressDetail
-}
-
-export function salesOrderSalesInfoDraftChanged(
-  context: SalesOrderEditContextDto,
-  draft: SalesOrderSalesInfoDraft,
-): boolean {
-  return draft.orderDate.trim() !== context.salesInfo.orderDate
+    || draft.orderDate.trim() !== context.salesInfo.orderDate
     || (draft.remark.trim() || null) !== context.salesInfo.remark
 }
 
