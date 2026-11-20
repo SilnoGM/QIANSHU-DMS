@@ -375,3 +375,53 @@ test('待采购产品查询使用订单级只读接口并传递取消信号', as
     config: { errorPresentation: 'local', signal },
   }])
 })
+
+test('编辑上下文与客户、出单信息保存固定使用订单级接口并禁止自动重放', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const customerRequest = {
+    expectedVersion: 3,
+    reason: '客户更正电话',
+    customer: {
+      name: '王小明',
+      phone: '0912345678',
+      countryRegionId: 'region-country',
+      provinceStateId: 'region-province',
+      cityId: 'region-city',
+      addressDetail: '中正一路100号',
+      fbName: null,
+      lineName: null,
+    },
+  }
+  const salesInfoRequest = {
+    expectedVersion: 4,
+    reason: '核对出单日期',
+    orderDate: '2026-11-20',
+    remark: null,
+  }
+
+  await api.editContext('order/1', controller.signal)
+  await api.updateCustomer('order/1', customerRequest, controller.signal)
+  await api.updateSalesInfo('order/1', salesInfoRequest, controller.signal)
+
+  assert.deepEqual(calls, [
+    {
+      method: 'get',
+      url: 'sales-orders/order%2F1/edit-context',
+      config: { errorPresentation: 'local', signal: controller.signal },
+    },
+    {
+      method: 'patch',
+      url: 'sales-orders/order%2F1/customer',
+      data: customerRequest,
+      config: { errorPresentation: 'local', retry: false, signal: controller.signal },
+    },
+    {
+      method: 'patch',
+      url: 'sales-orders/order%2F1/sales-info',
+      data: salesInfoRequest,
+      config: { errorPresentation: 'local', retry: false, signal: controller.signal },
+    },
+  ])
+})

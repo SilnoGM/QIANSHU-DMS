@@ -5,8 +5,10 @@ import type {
   PurchaseCorrectionContextDto,
   PurchaseCorrectionRequestDto,
   PurchaseCorrectionResultDto,
+  SalesOrderCustomerUpdateRequestDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
+  SalesOrderEditContextDto,
   SalesOrderFactoryShipmentContextDto,
   SalesOrderFactoryShipmentRequestDto,
   SalesOrderIssuerOptionsDto,
@@ -18,6 +20,7 @@ import type {
   SalesOrderProductOptionsDto,
   SalesOrderProductsUpdateRequestDto,
   SalesOrderProductsUpdateResultDto,
+  SalesOrderSalesInfoUpdateRequestDto,
   SalesOrdersGetProductEditOptionsData,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
@@ -87,6 +90,30 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,
         { errorPresentation: 'local', signal },
       ),
+    editContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderEditContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/edit-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    updateCustomer: (
+      salesOrderId: string,
+      data: SalesOrderCustomerUpdateRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderEditContextDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/customer`,
+      data,
+      // 客户信息携带版本号但没有幂等键；网络结果未知时禁止自动重放。
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    updateSalesInfo: (
+      salesOrderId: string,
+      data: SalesOrderSalesInfoUpdateRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderEditContextDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/sales-info`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     factoryShipmentContext: (salesOrderId: string, signal: AbortSignal) =>
       client.get<SalesOrderFactoryShipmentContextDto>(
         `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipment-context`,

@@ -169,7 +169,7 @@ const activeDocuments = computed(() => detail.value?.documents.filter(
 ) ?? [])
 const changeTabs = computed(() => [
   {
-    label: `状态变更（${detail.value?.statusHistory.length ?? 0}）`,
+    label: `变更记录（${detail.value?.statusHistory.length ?? 0}）`,
     value: 'status',
   },
   {
@@ -292,7 +292,13 @@ function linkedPayment(document: SalesOrderDocumentDto): SalesOrderPaymentDto | 
 }
 
 function statusDimensionLabel(value: SalesOrderStatusHistoryDto['dimension']): string {
-  return { ORDER: '订单状态', FULFILLMENT: '订单进度', PAYMENT: '付款状态' }[value]
+  return {
+    ORDER: '订单状态',
+    FULFILLMENT: '订单进度',
+    PAYMENT: '付款状态',
+    CUSTOMER: '客户信息',
+    SALES_INFO: '出单信息',
+  }[value] ?? '变更记录'
 }
 
 function statusValueLabel(value: string): string {
@@ -311,6 +317,8 @@ function statusValueLabel(value: string): string {
     UNPAID: '未付款',
     PARTIALLY_PAID: '部分付款',
     PAID: '已付清',
+    BEFORE: '修改前',
+    AFTER: '修改后',
   }[value] ?? value
 }
 
@@ -1243,8 +1251,8 @@ onBeforeUnmount(() => {
             <FaEmpty
               v-if="detail.statusHistory.length === 0"
               icon="i-lucide:history"
-              title="暂无状态变更"
-              description="订单状态、订单进度和付款状态尚无变更记录。"
+              title="暂无变更记录"
+              description="订单状态、进度、付款、客户信息与出单信息尚无变更记录。"
               class="py-10"
             />
             <ul v-else class="m-0 p-0 list-none border-y border-border divide-border divide-y">

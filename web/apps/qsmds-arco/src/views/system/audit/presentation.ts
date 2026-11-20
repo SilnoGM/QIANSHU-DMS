@@ -114,6 +114,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
   SALES_ORDER_PRODUCT_APPENDED: '销售订单产品已追加',
   SALES_ORDER_PRODUCTS_CHANGED: '销售订单产品已修改',
+  SALES_ORDER_CUSTOMER_UPDATED: '销售订单客户信息已修改',
+  SALES_ORDER_SALES_INFO_UPDATED: '销售订单出单信息已修改',
   PACKAGING_COST_SUBMITTED: '打木架费用已提报',
   PACKAGING_COST_PAID: '打木架费用已付款',
   PACKAGING_COST_AMOUNT_UPDATED: '打木架费用金额已修改',

@@ -363,10 +363,8 @@ test('全部销售订单以销售权限和海运前状态提供唯一的修改�
   assert.match(source, /const canUpdateProducts = computed\(\(\) => auth\('sales-orders:update'\)\)/u)
   assert.match(source, /function salesOrderProductEditBlockedReason\(order: SalesOrderListItemDto\)/u)
   assert.match(source, /props\.viewMode === 'all'/u)
-  assert.match(source, /PRODUCT_EDIT_FULFILLMENT_STATUSES/u)
-  for (const status of ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED']) {
-    assert.match(source, new RegExp(`'${status}'`, 'u'))
-  }
+  // 产品资格矩阵下沉到 sales-order-edit.logic，页面只消费共享判定。
+  assert.match(source, /salesOrderProductEditUnavailableReason\(order\)/u)
   assert.match(source, /v-if="canUpdateProducts"[\s\S]*?编辑/u)
   assert.match(source, /salesOrderProductEditBlockedReason\(order\)/u)
   assert.match(source, /salesOrdersApi\.productEditContext/u)
@@ -433,7 +431,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(documentsSource, /documentTypeTagClass\(document\.documentType\)/u)
   assert.doesNotMatch(documentsSource, /未关联收款记录/u)
   assert.match(source, /<FaTabs/u)
-  assert.match(source, /状态变更（\$\{detail\.value\?\.statusHistory\.length \?\? 0\}）/u)
+  assert.match(source, /变更记录（\$\{detail\.value\?\.statusHistory\.length \?\? 0\}）/u)
   assert.match(source, /金额变更（\$\{detail\.value\?\.amountRevisions\.length \?\? 0\}）/u)
   assert.match(source, /#status/u)
   assert.match(source, /#amount/u)

@@ -21,6 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'closed': []
   'correctPurchase': []
+  'edit': []
   'update:modelValue': [value: boolean]
 }>()
 
@@ -154,8 +155,10 @@ onBeforeUnmount(cancelDetailRequest)
     :error="loadError"
     :termination-hint="terminationHint"
     :can-correct-purchase="canCorrectPurchase"
+    :can-edit="auth('sales-orders:update')"
     @reload="loadDetail"
     @correct-purchase="emit('correctPurchase')"
+    @edit="emit('edit')"
     @closed="emit('closed')"
   />
 </template>

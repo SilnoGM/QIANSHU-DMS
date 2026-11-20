@@ -88,6 +88,8 @@ import SalesOrderCancelModal from './sales-order-cancel-modal.vue'
 import { getSalesOrderCancelBlockedReason } from './sales-order-cancel.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
+import SalesOrderEditModal from './sales-order-edit-modal.vue'
+import { salesOrderProductEditUnavailableReason } from './sales-order-edit.logic'
 import {
   buildSalesOrderStatusCountsQuery,
   formatSalesFactoryShipmentSuccess,
@@ -202,6 +204,8 @@ const terminateModalVisible = ref(false)
 const terminateOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const correctionModalVisible = ref(false)
 const correctionOrder = shallowRef<SalesOrderListItemDto | null>(null)
+const editModalVisible = ref(false)
+const editOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditVisible = ref(false)
 const purchaseStartVisible = ref(false)
 const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
@@ -647,13 +651,6 @@ function detailMenuItems(order: SalesOrderListItemDto): ActionMenuItem[][] {
   return [items]
 }
 
-const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
-  'PENDING',
-  'PREPARING',
-  'LAND_TRANSIT',
-  'WAREHOUSE_ARRIVED',
-])
-
 function salesOrderProductEditBlockedReason(order: SalesOrderListItemDto): string | null {
   if (props.viewMode !== 'all') {
     return '待办视图不提供修改产品入口'
@@ -661,12 +658,33 @@ function salesOrderProductEditBlockedReason(order: SalesOrderListItemDto): strin
   if (!canUpdateProducts.value) {
     return '当前账号无权修改销售订单产品'
   }
-  if (order.orderStatus !== 'CONFIRMED') {
-    return '只有已确认订单可以修改产品'
+  return salesOrderProductEditUnavailableReason(order)
+}
+
+/** 行内“编辑”打开统一编辑弹窗；产品编辑仍由弹窗内的产品页签进入。 */
+function openSalesOrderEdit(order: SalesOrderListItemDto): void {
+  editOrder.value = { ...order }
+  editModalVisible.value = true
+}
+
+function handleEditOpenProducts(): void {
+  const order = editOrder.value
+  editModalVisible.value = false
+  if (order !== null) {
+    openProductEdit(order)
   }
-  return PRODUCT_EDIT_FULFILLMENT_STATUSES.has(order.fulfillmentStatus)
-    ? null
-    : '订单已进入海运或已签收，不能修改产品'
+}
+
+function handleSalesOrderEditSaved(): void {
+  scheduleQueryRefresh(true)
+}
+
+function handleSalesOrderEditFromDrawer(): void {
+  const order = detailOrder.value
+  detailVisible.value = false
+  if (order !== null) {
+    openSalesOrderEdit(order)
+  }
 }
 
 function copyProductEditContext(
@@ -1634,7 +1652,7 @@ onBeforeUnmount(() => {
                 size="sm"
                 class="min-h-11 sm:min-h-8"
                 :aria-label="`${row.orderNo}：编辑`"
-                @click="openProductEdit(row)"
+                @click="openSalesOrderEdit(row)"
               >
                 编辑
               </FaButton>
@@ -2469,7 +2487,15 @@ onBeforeUnmount(() => {
       :order="detailOrder"
       :currencies="currencyCatalog.currencies.value"
       @correct-purchase="openPurchaseCorrection"
+      @edit="handleSalesOrderEditFromDrawer"
       @closed="handleSalesOrderDetailClosed"
+    />
+
+    <SalesOrderEditModal
+      v-model="editModalVisible"
+      :order="editOrder"
+      @open-products="handleEditOpenProducts"
+      @saved="handleSalesOrderEditSaved"
     />
 
     <PurchaseCorrectionModal
