@@ -1266,7 +1266,7 @@
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
       "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue",
-      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/Panel.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/operations/goods-storage/index.vue",
@@ -1324,7 +1324,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/Panel.vue",
       "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
@@ -2725,8 +2725,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderProductsEditorModalShowcase.vue",
-      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
-      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-edit-modal.vue"
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue"
     ]
   },
   {
@@ -3539,7 +3538,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/Panel.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-configuration-drawer.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/index.vue",
@@ -3892,7 +3891,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/components/business/QsProxyNodeCard/index.vue",
       "apps/qsmds-arco/src/components/business/QsReleaseNotesContent/index.vue",
-      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/Panel.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue",

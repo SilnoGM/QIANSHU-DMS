@@ -353,28 +353,37 @@ test('销售订单编号列使用点击复制文本并按文本宽度收紧', as
   assert.doesNotMatch(source, /<CopyCellButton label="订单编号"/u)
 })
 
-test('全部销售订单以销售权限和海运前状态提供唯一的修改产品入口', async () => {
-  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
-  const submitStart = source.indexOf('async function submitProductEdit')
-  const submitEnd = source.indexOf('\nfunction ', submitStart)
-  const submitSource = source.slice(submitStart, submitEnd)
+test('全部销售订单通过统一编辑弹窗提供订单信息与产品修改入口', async () => {
+  const [source, modalSource, panelSource] = await Promise.all([
+    readFile(new URL('index.vue', ROOT), 'utf8'),
+    readFile(new URL('sales-order-edit-modal.vue', ROOT), 'utf8'),
+    readFile(
+      new URL('../../src/components/business/QsSalesOrderProductsEditorModal/Panel.vue', import.meta.url),
+      'utf8',
+    ),
+  ])
 
-  assert.match(source, /import QsSalesOrderProductsEditorModal/u)
+  assert.match(source, /import SalesOrderEditModal/u)
   assert.match(source, /const canUpdateProducts = computed\(\(\) => auth\('sales-orders:update'\)\)/u)
-  assert.match(source, /function salesOrderProductEditBlockedReason\(order: SalesOrderListItemDto\)/u)
-  assert.match(source, /props\.viewMode === 'all'/u)
-  // 产品资格矩阵下沉到 sales-order-edit.logic，页面只消费共享判定。
-  assert.match(source, /salesOrderProductEditUnavailableReason\(order\)/u)
   assert.match(source, /v-if="canUpdateProducts"[\s\S]*?编辑/u)
-  assert.match(source, /salesOrderProductEditBlockedReason\(order\)/u)
-  assert.match(source, /salesOrdersApi\.productEditContext/u)
-  assert.match(source, /salesOrdersApi\.productEditOptions/u)
-  assert.match(source, /salesOrdersApi\.updateProducts/u)
-  assert.match(source, /retry: false|updateProducts/u)
-  assert.match(source, /toast\.success\('销售订单产品已更新'\)/u)
-  assert.match(source, /scheduleQueryRefresh\(true\)/u)
-  assert.ok(submitStart >= 0 && submitEnd > submitStart)
-  assert.doesNotMatch(submitSource, /operationsPurchaseOrderCreate|router\.push/u)
+  assert.match(source, /@click="openSalesOrderEdit\(row\)"/u)
+  assert.match(source, /@saved="handleSalesOrderEditSaved"/u)
+  // 产品编辑已内嵌进统一弹窗，列表页不再挂载独立的产品弹窗。
+  assert.doesNotMatch(source, /QsSalesOrderProductsEditorModal/u)
+  assert.doesNotMatch(source, /productEditContext/u)
+
+  // 产品上下文、选项与保存都收敛到编辑弹窗，并复用同一份面板与复核流程。
+  assert.match(modalSource, /QsSalesOrderProductsEditorPanel/u)
+  assert.match(modalSource, /salesOrdersApi\.productEditContext/u)
+  assert.match(modalSource, /salesOrdersApi\.productEditOptions/u)
+  assert.match(modalSource, /salesOrdersApi\.updateProducts/u)
+  assert.match(modalSource, /toast\.success\('销售订单产品已更新'\)/u)
+  assert.match(modalSource, /tab === 'products'/u)
+  assert.match(modalSource, /productLoaded/u)
+  assert.match(modalSource, /emit\('saved'\)/u)
+  assert.match(panelSource, /检查并确认修改/u)
+  assert.match(panelSource, /确认调整定金并保存/u)
+  assert.match(panelSource, /quantity-minimum-reached/u)
 })
 
 test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {

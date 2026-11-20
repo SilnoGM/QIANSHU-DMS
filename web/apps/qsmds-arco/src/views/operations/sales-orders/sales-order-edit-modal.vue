@@ -3,14 +3,24 @@ import type { SalesOrderEditTab } from './sales-order-edit.logic'
 import type {
   SalesOrderEditContextDto,
   SalesOrderListItemDto,
+  SalesOrderProductEditContextDto,
 } from '@/api/generated/types.gen'
+import type { CurrencyDescriptor } from '@/components/base/currency'
+import type { OrderProductLineModel } from '@/components/business/QsOrderProductLineEditor/types'
+import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import type { RegionSelectorChange, RegionSelectorValue } from '@/components/business/QsRegionSelector/types'
+import type {
+  SalesOrderProductEditIntent,
+  SalesOrderProductEditModalContext,
+} from '@/components/business/QsSalesOrderProductsEditorModal/types'
 
 import salesOrdersApi from '@/api/modules/sales-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateTimeField from '@/components/business/QsDateTimeField/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
+import { createSalesOrderProductEditLines, reconcileSalesOrderProductEditLines } from '@/components/business/QsSalesOrderProductsEditorModal/logic'
+import QsSalesOrderProductsEditorPanel from '@/components/business/QsSalesOrderProductsEditorModal/Panel.vue'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
   buildSalesOrderInfoUpdatePayload,
@@ -24,10 +34,10 @@ defineOptions({ name: 'SalesOrderEditModal' })
 const props = defineProps<{
   modelValue: boolean
   order: SalesOrderListItemDto | null
+  currencies: readonly CurrencyDescriptor[]
 }>()
 
 const emit = defineEmits<{
-  'openProducts': []
   'saved': []
   'update:modelValue': [value: boolean]
 }>()
@@ -54,8 +64,17 @@ const infoErrors = ref<Record<string, string>>({})
 const infoActionError = ref<string | null>(null)
 const infoSubmitting = ref(false)
 const infoConflict = ref(false)
+const productContext = shallowRef<SalesOrderProductEditModalContext | null>(null)
+const productLines = ref<readonly OrderProductLineModel[]>([])
+const productReason = ref('客户调整产品')
+const productLoading = ref(false)
+const productSubmitting = ref(false)
+const productError = ref<string | null>(null)
+let productLoaded = false
 let loadController: AbortController | null = null
 let infoController: AbortController | null = null
+let productAbortController: AbortController | null = null
+let productSubmitAbortController: AbortController | null = null
 let requestVersion = 0
 
 const tabs = [
@@ -223,23 +242,190 @@ async function submitInfo(): Promise<void> {
   }
 }
 
-function openProducts(): void {
-  if (productBlockedReason.value !== null) {
-    toast.info(productBlockedReason.value)
+function resetProductState(): void {
+  productAbortController?.abort()
+  productSubmitAbortController?.abort()
+  productAbortController = null
+  productSubmitAbortController = null
+  productContext.value = null
+  productLines.value = []
+  productReason.value = '客户调整产品'
+  productLoading.value = false
+  productSubmitting.value = false
+  productError.value = null
+  productLoaded = false
+}
+
+function copyProductContext(
+  context: SalesOrderProductEditContextDto,
+): SalesOrderProductEditModalContext {
+  return {
+    ...context,
+    salesOrder: { ...context.salesOrder },
+    amounts: { ...context.amounts },
+    existingLines: context.existingLines.map(line => ({
+      ...line,
+      mainImage: line.mainImage ?? null,
+    })),
+  }
+}
+
+/** 产品上下文首次切到产品页签时才加载；非海运前订单由资格判断提前拦住，不会产生 422。 */
+async function loadProductContext(preserveDraft = false): Promise<void> {
+  const orderId = props.order?.id
+  if (orderId === undefined || productBlockedReason.value !== null) {
     return
   }
-  emit('openProducts')
+  productAbortController?.abort()
+  const controller = new AbortController()
+  productAbortController = controller
+  productLoading.value = true
+  productError.value = null
+  const previousContext = productContext.value
+  const previousLines = productLines.value
+  try {
+    const response = await salesOrdersApi.productEditContext(orderId, controller.signal)
+    if (controller.signal.aborted || props.order?.id !== orderId) {
+      return
+    }
+    const nextContext = copyProductContext(response.data)
+    productContext.value = nextContext
+    productLines.value = preserveDraft && previousContext !== null
+      ? reconcileSalesOrderProductEditLines({
+          previousContext,
+          nextContext,
+          previousLines,
+        })
+      : createSalesOrderProductEditLines(nextContext)
+    productLoaded = true
+  }
+  catch (error) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
+      return
+    }
+    const failure = getSalesOrderApiFailure(error)
+    productError.value = failure.requestId === undefined
+      ? failure.message
+      : `${failure.message}（requestId: ${failure.requestId}）`
+  }
+  finally {
+    if (productAbortController === controller) {
+      productAbortController = null
+      productLoading.value = false
+    }
+  }
 }
+
+const loadProductProducts: ProductPageLoader = async (query, signal) => {
+  const orderId = props.order?.id
+  if (orderId === undefined || query.currencyCode === 'CNY') {
+    return {
+      items: [],
+      categories: [],
+      unclassifiedCount: 0,
+      page: query.page,
+      pageSize: query.pageSize,
+      total: 0,
+    }
+  }
+  const response = await salesOrdersApi.productEditOptions(orderId, {
+    ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
+    supplierValue: query.supplierValue,
+    ...(query.categoryName === undefined ? {} : { categoryName: query.categoryName }),
+    ...(query.productHeadName === undefined ? {} : { productHeadName: query.productHeadName }),
+    ...(query.unclassified === true ? { unclassified: true } : {}),
+    page: query.page,
+    pageSize: query.pageSize,
+  }, signal)
+  return {
+    ...response.data,
+    items: response.data.items.map(item => ({
+      ...item,
+      mainImage: item.mainImage ?? null,
+    })),
+  }
+}
+
+/**
+ * 产品保存会改变金额、付款与履约状态：这里只同步壳层上下文里的版本与状态，
+ * 保留订单信息页签未保存的草稿，再重拉产品上下文让面板回到最新基线。
+ */
+async function submitProduct(intent: SalesOrderProductEditIntent): Promise<void> {
+  const orderId = props.order?.id
+  if (orderId === undefined || productSubmitting.value) {
+    return
+  }
+  productSubmitAbortController?.abort()
+  const controller = new AbortController()
+  productSubmitAbortController = controller
+  productSubmitting.value = true
+  productError.value = null
+  try {
+    const response = await salesOrdersApi.updateProducts(orderId, {
+      expectedVersion: intent.expectedVersion,
+      reason: intent.reason,
+      confirmDepositReduction: intent.confirmDepositReduction,
+      existingLines: intent.existingLines.map(line => ({ ...line })),
+      newLines: intent.newLines.map(line => ({ ...line })),
+    }, controller.signal)
+    if (controller.signal.aborted || props.order?.id !== orderId) {
+      return
+    }
+    const current = context.value
+    if (current !== null) {
+      context.value = {
+        ...current,
+        version: response.data.version,
+        fulfillmentStatus: response.data.fulfillmentStatus,
+        paymentStatus: response.data.paymentStatus,
+      }
+    }
+    toast.success('销售订单产品已更新')
+    emit('saved')
+    await loadProductContext()
+  }
+  catch (error) {
+    if (controller.signal.aborted || isSalesOrderAbortError(error)) {
+      return
+    }
+    const failure = getSalesOrderApiFailure(error)
+    productError.value = failure.requestId === undefined
+      ? failure.message
+      : `${failure.message}（requestId: ${failure.requestId}）`
+  }
+  finally {
+    if (productSubmitAbortController === controller) {
+      productSubmitAbortController = null
+    }
+    productSubmitting.value = false
+  }
+}
+
+// 上下文与页签都可能后到：用户在订单上下文加载完成前切到产品页签时，
+// 等上下文到达后再补一次懒加载，避免页签停在空白。
+watch([activeTab, () => context.value], ([tab]) => {
+  if (
+    tab === 'products'
+    && context.value !== null
+    && productBlockedReason.value === null
+    && !productLoaded
+    && !productLoading.value
+  ) {
+    void loadProductContext()
+  }
+})
 
 watch(
   () => [props.modelValue, props.order?.id] as const,
   ([open]) => {
     if (!open) {
       cancelRequests()
+      resetProductState()
       context.value = null
       return
     }
     activeTab.value = 'info'
+    resetProductState()
     void loadContext()
   },
   { immediate: true },
@@ -452,29 +638,45 @@ watch(
         </template>
 
         <template #products>
-          <section class="p-4 border border-border rounded-lg space-y-3">
-            <div class="flex flex-wrap gap-2 items-center justify-between">
-              <div class="min-w-0">
-                <p class="qs-type-component-title m-0">
-                  产品与金额修改
-                </p>
-                <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-                  产品修改会同时重算金额、付款状态与采购覆盖，并通过独立的复核弹窗确认。
-                </p>
+          <div class="space-y-4">
+            <FaAlert
+              v-if="productBlockedReason"
+              variant="default"
+              icon="i-lucide:info"
+              :description="productBlockedReason"
+            />
+            <template v-else>
+              <div v-if="productLoading" role="status" class="space-y-4">
+                <span class="sr-only">正在加载产品编辑数据</span>
+                <div v-for="n in 3" :key="n" class="rounded-lg bg-muted h-24 animate-pulse motion-reduce:animate-none" aria-hidden="true" />
               </div>
-              <FaButton
-                type="button"
-                :disabled="productBlockedReason !== null || infoSubmitting"
-                @click="openProducts"
+              <FaAlert
+                v-else-if="productError"
+                variant="destructive"
+                :title="productError"
               >
-                <FaIcon name="i-lucide:list-restart" class="size-4" aria-hidden="true" />
-                打开产品编辑器
-              </FaButton>
-            </div>
-            <p v-if="productBlockedReason" class="qs-type-meta text-muted-foreground m-0" role="status">
-              {{ productBlockedReason }}
-            </p>
-          </section>
+                <template #description>
+                  <FaButton variant="outline" @click="loadProductContext(true)">
+                    重新加载产品数据
+                  </FaButton>
+                </template>
+              </FaAlert>
+              <QsSalesOrderProductsEditorPanel
+                v-else
+                :context="productContext"
+                :lines="productLines"
+                :reason="productReason"
+                :currencies="currencies"
+                :load-products="loadProductProducts"
+                :submitting="productSubmitting"
+                :show-cancel="false"
+                @confirm="submitProduct"
+                @validation-error="toast.warning($event)"
+                @update:lines="productLines = $event"
+                @update:reason="productReason = $event"
+              />
+            </template>
+          </div>
         </template>
       </FaTabs>
     </div>
