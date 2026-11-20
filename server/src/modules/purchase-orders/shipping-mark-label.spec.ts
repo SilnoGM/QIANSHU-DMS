@@ -1,4 +1,5 @@
 import {
+  buildShippingMarkProductBlock,
   buildShippingMarkSuffix,
   formatShippingMark,
   normalizeShippingMarkLabel,
@@ -228,5 +229,37 @@ describe('shipping mark label', () => {
     const products = [product(1, 'b', '❗️补差价', 1)]
     expect(buildShippingMarkSuffix('SALES_LINKED', source(products)))
       .toBe('❗️补差价（李华-赖文寿）')
+  })
+
+  it('builds the product name block without the issuer and customer parenthetical', () => {
+    expect(buildShippingMarkProductBlock({
+      products: [product(1, 'a', '木桌', 2), product(2, 'b', '椅子', 1)],
+      aliases: new Map([['b', '靠椅']]),
+      defaultAliases: new Map(),
+      excludedProductIds: new Set(),
+    })).toBe('木桌×2+靠椅')
+  })
+
+  it('applies the same exclusion and alias rules to the standalone product name block', () => {
+    expect(buildShippingMarkProductBlock({
+      products: [
+        product(1, 'a', '木桌', 2),
+        product(2, 'b', '❗️补差价', 1),
+        product(3, null, '补差价-运费', 1),
+        product(4, null, '定制架', 1),
+      ],
+      aliases: new Map(),
+      defaultAliases: new Map([['a', '默认木桌']]),
+      excludedProductIds: new Set(['b']),
+    })).toBe('默认木桌×2+定制架')
+  })
+
+  it('returns an empty product name block when every product is excluded', () => {
+    expect(buildShippingMarkProductBlock({
+      products: [product(1, 'b', '❗️补差价', 1)],
+      aliases: new Map(),
+      defaultAliases: new Map(),
+      excludedProductIds: new Set(['b']),
+    })).toBe('')
   })
 })
