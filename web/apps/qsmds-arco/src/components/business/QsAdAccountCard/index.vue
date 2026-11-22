@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { AdAccountDto } from '@/api/generated/types.gen'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import dayjs from '@/utils/dayjs'
 
 /**
@@ -72,8 +73,6 @@ const daysTone = computed(() => {
 
 const balanceText = computed(() => `$${props.account.availableBalance ?? '—'}`)
 
-const balanceTone = computed(() => (props.account.lowBalance || exhausted.value ? 'text-destructive' : 'text-foreground'))
-
 const spendPercent = computed(() => {
   const cap = Number(props.account.spendCap)
   const spent = Number(props.account.amountSpent)
@@ -85,16 +84,45 @@ const spendPercent = computed(() => {
   return Math.min(100, Math.max(0, Math.round((spent / cap) * 100)))
 })
 
-/** 与进度条同源的告警分档：耗尽优先，其次按消耗比例。 */
+/**
+ * 单一风险分档，余额文字与进度条共用同一来源，避免两处颜色不一致。
+ * 余额低于阈值本身就是停投前兆，因此与「已耗尽 / ≥95%」同级按危险处理。
+ */
+const riskLevel = computed<'danger' | 'warning' | 'healthy'>(() => {
+  if (exhausted.value || props.account.lowBalance || spendPercent.value >= 95) {
+    return 'danger'
+  }
+
+  return spendPercent.value >= 80 ? 'warning' : 'healthy'
+})
+
 const progressTone = computed(() => {
-  if (exhausted.value || spendPercent.value >= 95) {
+  if (riskLevel.value === 'danger') {
     return 'bg-destructive'
   }
 
-  return spendPercent.value >= 80 ? 'bg-warning' : 'bg-primary'
+  return riskLevel.value === 'warning' ? 'bg-warning' : 'bg-primary'
 })
 
-const assigneeName = computed(() => props.account.assignedUser?.displayName ?? '未绑定')
+/** 与进度条同色；无花费上限账户没有口径，保持中性灰。 */
+const balanceTone = computed(() => {
+  if (props.account.availableBalance === null) {
+    return 'text-muted-foreground'
+  }
+
+  if (riskLevel.value === 'danger') {
+    return 'text-destructive'
+  }
+
+  return riskLevel.value === 'warning' ? 'text-warning' : 'text-primary'
+})
+
+const isAssigned = computed(() => props.account.assignedUser !== null)
+const assignLabel = computed(() => (isAssigned.value ? '改绑' : '绑定'))
+/** 与静态代理卡片一致：已绑定用天蓝链接色，未绑定用品牌色。 */
+const assignToneClass = computed(() => (
+  isAssigned.value ? 'text-sky-600 dark:text-sky-400' : 'text-primary'
+))
 
 function formatTime(value: string): string {
   return dayjs(value).format('MM-DD HH:mm')
@@ -140,18 +168,33 @@ function formatTime(value: string): string {
         </div>
       </div>
 
-      <div class="flex shrink-0 gap-2 items-center">
-        <span v-if="mode === 'management'" class="text-xs text-muted-foreground">
-          绑定：{{ assigneeName }}
-        </span>
-        <template v-if="mode === 'management'">
-          <FaButton size="sm" variant="secondary" @click="$emit('assign')">
-            {{ account.assignedUser ? '改绑' : '绑定' }}
-          </FaButton>
-          <FaButton v-if="account.assignedUser" size="sm" variant="ghost" @click="$emit('release')">
-            解绑
-          </FaButton>
-        </template>
+      <div v-if="mode === 'management'" class="flex shrink-0 flex-wrap gap-2 items-center">
+        <span v-if="isAssigned" class="text-xs text-muted-foreground">已绑定</span>
+        <QsPersonDisplay
+          v-if="account.assignedUser"
+          :display-name="account.assignedUser.displayName"
+          size="sm"
+        />
+
+        <button
+          type="button"
+          class="qs-ad-account-card__link inline-flex gap-1 items-center"
+          :class="assignToneClass"
+          @click="$emit('assign')"
+        >
+          <FaIcon name="i-lucide:link" class="size-3.5" aria-hidden="true" />
+          {{ assignLabel }}
+        </button>
+
+        <button
+          v-if="isAssigned"
+          type="button"
+          class="qs-ad-account-card__link text-destructive inline-flex gap-1 items-center"
+          @click="$emit('release')"
+        >
+          <FaIcon name="i-lucide:unlink" class="size-3.5" aria-hidden="true" />
+          解绑
+        </button>
       </div>
     </div>
 
@@ -210,3 +253,24 @@ function formatTime(value: string): string {
     </div>
   </FaCard>
 </template>
+
+<style scoped>
+/* 与静态代理卡片的操作链接同款：去按钮装饰、悬浮下划线，靠文字色表达语义。 */
+.qs-ad-account-card__link {
+  padding: 0;
+  font: inherit;
+  font-weight: var(--qs-type-weight-medium, 500);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.qs-ad-account-card__link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.qs-ad-account-card__link:disabled {
+  color: oklch(var(--muted-foreground));
+  cursor: not-allowed;
+}
+</style>
