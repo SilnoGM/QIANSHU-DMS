@@ -74,6 +74,7 @@
   "salesReceipt.progress.voucherSent": "發送水單",
   "salesReceipt.progress.confirmed": "確認收到",
   "salesReceipt.progress.posted": "核對入帳",
+  "salesReceipt.progress.rejected": "駁回",
   "salesReceipt.target.USER": "用戶帳戶",
   "salesReceipt.target.COMPANY": "公司帳戶",
   "salesReceipt.previous": "上一頁",

@@ -74,6 +74,7 @@
   "salesReceipt.progress.voucherSent": "Voucher sent",
   "salesReceipt.progress.confirmed": "Receipt confirmed",
   "salesReceipt.progress.posted": "Posted",
+  "salesReceipt.progress.rejected": "Rejected",
   "salesReceipt.target.USER": "User account",
   "salesReceipt.target.COMPANY": "Company account",
   "salesReceipt.previous": "Previous",

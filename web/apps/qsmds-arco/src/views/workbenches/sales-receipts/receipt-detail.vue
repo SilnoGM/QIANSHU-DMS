@@ -80,7 +80,8 @@ const progressSteps = computed<ReceiptProgressStep[]>(() => {
     { id: 'submitted', label: t('salesReceipt.progress.submitted'), person: item.submittedBy, at: item.submittedAt },
     { id: 'voucherSent', label: t('salesReceipt.progress.voucherSent'), person: item.voucherSentBy, at: item.voucherSentAt },
     { id: 'confirmed', label: t('salesReceipt.progress.confirmed'), person: item.confirmedBy, at: item.confirmedAt },
-    { id: 'posted', label: t('salesReceipt.progress.posted'), person: item.reviewedBy, at: item.reviewedAt },
+    // 驳回发生在哪一步都会写 reviewed_*，标签必须区分「入账」与「驳回」，避免把驳回人显示成入账人。
+    { id: 'posted', label: t(item.status === 'REJECTED' ? 'salesReceipt.progress.rejected' : 'salesReceipt.progress.posted'), person: item.reviewedBy, at: item.reviewedAt },
   ]
 })
 const visible = computed({ get: () => props.requestId !== null, set: (value) => {
