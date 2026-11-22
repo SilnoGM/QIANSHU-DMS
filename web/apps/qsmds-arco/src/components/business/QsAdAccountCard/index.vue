@@ -147,9 +147,12 @@ const assignToneClass = computed(() => (
   isAssigned.value ? 'text-sky-600 dark:text-sky-400' : 'text-primary'
 ))
 
-/** 点击户名一次性复制账户名与编号，投手转手到群里时不用再拼。 */
+/**
+ * 点击户名一次性复制账户名与编号，投手转手到群里时不用再拼。
+ * 首行只放户名（不加前缀），便于直接粘进对话；编号行保留标签。
+ */
 const accountCopyText = computed(() => [
-  `广告账户：${props.account.accountName}`,
+  props.account.accountName,
   `广告账户编号：${props.account.accountId}`,
 ].join('\n'))
 
