@@ -101,6 +101,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PROXY_NODE_ASSIGNED: '静态节点已绑定',
   PROXY_NODE_RELEASED: '静态节点已解绑',
   SALES_RECEIPT_SUBMITTED: '销售收款申请已提交',
+  SALES_RECEIPT_VOUCHER_SENT: '表外水单已发送到财务群',
+  SALES_RECEIPT_CONFIRMED: '销售收款已确认到账',
   SALES_RECEIPT_APPROVED: '销售收款审核已通过',
   SALES_RECEIPT_REJECTED: '销售收款申请已驳回',
   SALES_ORDER_CREATED: '销售订单已创建',

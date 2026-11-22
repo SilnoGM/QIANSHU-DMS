@@ -18,6 +18,7 @@ import type {
   SalesOrderStatusHistoryDto,
   SalesOrderTemporaryDocumentDto,
   SalesReceiptRequestDetailDto,
+  SalesReceiptStatusCountsDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useFileDrop } from '@fantastic-admin/components'
@@ -86,7 +87,7 @@ const receiptRequests = shallowRef<SalesReceiptRequestDetailDto[]>([])
 const receiptPage = ref(1)
 const activeReceiptTab = ref<'payments' | 'requests'>('payments')
 const receiptFilter = ref<SalesReceiptRequestDetailDto['status'] | 'ALL'>('ALL')
-const receiptCounts = ref({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
+const receiptCounts = ref<SalesReceiptStatusCountsDto>({ PENDING_REVIEW: 0, PENDING_CONFIRM: 0, PENDING_POSTING: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
 const focusedReceiptId = ref<string | null>(null)
 const focusedPaymentId = ref<string | null>(null)
 const paymentRecordsRef = ref<HTMLElement | null>(null)
@@ -109,12 +110,14 @@ const pendingReceiptCount = computed(() => countPendingReceiptRequests(receiptCo
 const totalReceiptCount = computed(() => countTotalReceiptRequests(receiptCounts.value))
 const receiptTabItems = computed(() => [
   { label: `实际收款（有效：${validPaymentCount.value}/${totalPaymentCount.value}）`, value: 'payments' },
-  { label: `收款申请（待审：${pendingReceiptCount.value}/${totalReceiptCount.value}）`, value: 'requests' },
+  { label: `收款申请（处理中：${pendingReceiptCount.value}/${totalReceiptCount.value}）`, value: 'requests' },
 ])
 const receiptFilterItems = computed(() => [
   { count: totalReceiptCount.value, label: '全部', value: 'ALL' },
-  { count: pendingReceiptCount.value, label: '待审核', value: 'PENDING_REVIEW' },
-  { count: receiptCounts.value.APPROVED, label: '已通过', value: 'APPROVED' },
+  { count: receiptCounts.value.PENDING_REVIEW, label: '待发群', value: 'PENDING_REVIEW' },
+  { count: receiptCounts.value.PENDING_CONFIRM, label: '待确认', value: 'PENDING_CONFIRM' },
+  { count: receiptCounts.value.PENDING_POSTING, label: '待入账', value: 'PENDING_POSTING' },
+  { count: receiptCounts.value.APPROVED, label: '已完成', value: 'APPROVED' },
   { count: receiptCounts.value.REJECTED, label: '已驳回', value: 'REJECTED' },
 ])
 const loading = ref(false)
@@ -782,7 +785,7 @@ function handleReceiptTab(value: string | number): void {
 }
 
 async function filterReceiptRequests(value: string | number): Promise<void> {
-  if (!['ALL', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'].includes(String(value))) {
+  if (!['ALL', 'PENDING_REVIEW', 'PENDING_CONFIRM', 'PENDING_POSTING', 'APPROVED', 'REJECTED'].includes(String(value))) {
     return
   }
   receiptFilter.value = value as typeof receiptFilter.value

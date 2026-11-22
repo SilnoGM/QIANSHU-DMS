@@ -30,8 +30,59 @@ const error = ref('')
 const contextError = ref('')
 const reason = ref('')
 const actionSection = ref<HTMLElement | null>(null)
-const action = ref<'approve' | 'reject' | 'void' | null>(null)
+const action = ref<'send' | 'confirmReceipt' | 'approve' | 'reject' | 'void' | null>(null)
 let controller: AbortController | null = null
+/** 水单必须是图片；PDF 凭证只能驳回后重新上传，前端提前禁用并给出原因。 */
+const canSendVoucher = computed(() => detail.value?.voucher.mediaType === 'IMAGE')
+const actionIcon = computed(() => action.value === 'approve'
+  ? 'i-lucide:badge-check'
+  : action.value === 'reject'
+    ? 'i-lucide:message-square-warning'
+    : action.value === 'send'
+      ? 'i-lucide:send'
+      : action.value === 'confirmReceipt'
+        ? 'i-lucide:circle-check'
+        : 'i-lucide:undo-2')
+const actionIntro = computed(() => action.value === 'approve'
+  ? t('salesReceipt.previewIntro')
+  : action.value === 'reject'
+    ? t('salesReceipt.rejectIntro')
+    : action.value === 'send'
+      ? t('salesReceipt.sendVoucherIntro')
+      : action.value === 'confirmReceipt'
+        ? t('salesReceipt.confirmReceiptIntro')
+        : t('salesReceipt.voidIntro'))
+const actionShowsReason = computed(() => action.value === 'approve' || action.value === 'reject' || action.value === 'void')
+const actionNeedsReason = computed(() => action.value === 'reject' || action.value === 'void')
+const actionSubmitLabel = computed(() => {
+  if (action.value === 'send') return t('salesReceipt.sendVoucher')
+  if (action.value === 'confirmReceipt') return t('salesReceipt.confirmReceipt')
+  return action.value === null ? '' : t(`salesReceipt.${action.value}`)
+})
+/** 在途状态的一句话说明，让财务知道当前卡在哪一步。 */
+const statusHint = computed(() => {
+  if (detail.value?.status === 'PENDING_REVIEW') return t('salesReceipt.awaitingVoucherSend')
+  if (detail.value?.status === 'PENDING_CONFIRM') return t('salesReceipt.awaitingConfirm')
+  if (detail.value?.status === 'PENDING_POSTING') return t('salesReceipt.awaitingPosting')
+  return ''
+})
+interface ReceiptProgressStep {
+  id: string
+  label: string
+  person: SalesReceiptRequestDetailDto['submittedBy'] | null
+  at: string | null
+}
+/** 三步流转的处理进度：未发生的步骤显示占位，历史一次性审核只展示提交与入账。 */
+const progressSteps = computed<ReceiptProgressStep[]>(() => {
+  const item = detail.value
+  if (!item) return []
+  return [
+    { id: 'submitted', label: t('salesReceipt.progress.submitted'), person: item.submittedBy, at: item.submittedAt },
+    { id: 'voucherSent', label: t('salesReceipt.progress.voucherSent'), person: item.voucherSentBy, at: item.voucherSentAt },
+    { id: 'confirmed', label: t('salesReceipt.progress.confirmed'), person: item.confirmedBy, at: item.confirmedAt },
+    { id: 'posted', label: t('salesReceipt.progress.posted'), person: item.reviewedBy, at: item.reviewedAt },
+  ]
+})
 const visible = computed({ get: () => props.requestId !== null, set: (value) => {
   if (!value && !busy.value) {
     emit('close')
@@ -137,7 +188,7 @@ async function load(): Promise<void> {
     }
   }
 }
-async function prepare(next: 'approve' | 'reject' | 'void'): Promise<void> {
+async function prepare(next: 'send' | 'confirmReceipt' | 'approve' | 'reject' | 'void'): Promise<void> {
   if (!detail.value || busy.value) {
     return
   }
@@ -175,7 +226,7 @@ async function submit(): Promise<void> {
   if (!item || !operation || busy.value) {
     return
   }
-  if (operation !== 'approve' && !reason.value.trim()) {
+  if (actionNeedsReason.value && !reason.value.trim()) {
     contextError.value = t('salesReceipt.reasonRequired')
     return
   }
@@ -186,7 +237,13 @@ async function submit(): Promise<void> {
   contextError.value = ''
   const current = controller ?? new AbortController()
   try {
-    if (operation === 'approve' && context.value) {
+    if (operation === 'send') {
+      await salesReceiptsApi.sendVoucher(item.id, { expectedVersion: item.version }, current.signal)
+    }
+    else if (operation === 'confirmReceipt') {
+      await salesReceiptsApi.confirm(item.id, { expectedVersion: item.version }, current.signal)
+    }
+    else if (operation === 'approve' && context.value) {
       await salesReceiptsApi.approve(item.id, { expectedVersion: item.version, expectedContext: context.value.expectedContext, reason: reason.value.trim() || undefined }, current.signal)
     }
     else if (operation === 'reject') {
@@ -205,6 +262,7 @@ async function submit(): Promise<void> {
       emit('close')
     }
     else {
+      // 发送水单与确认收到后停留在详情，便于财务继续下一步。
       await load()
     }
   }
@@ -275,10 +333,28 @@ onBeforeUnmount(() => controller?.abort())
             </FaTag><span class="qs-type-meta">{{ detail.currencyCode }}</span>
           </div>
         </div>
-        <p v-if="detail.status === 'PENDING_REVIEW'" class="qs-type-meta m-0 flex gap-2 items-start">
-          <FaIcon name="i-lucide:info" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />{{ t('salesReceipt.pendingHint') }}
+        <p v-if="statusHint" class="qs-type-meta m-0 flex gap-2 items-start">
+          <FaIcon name="i-lucide:info" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />{{ statusHint }}
+        </p>
+        <p v-if="detail.status === 'PENDING_REVIEW' && !canSendVoucher" class="qs-type-meta text-amber-700 dark:text-amber-300 m-0 flex gap-2 items-start">
+          <FaIcon name="i-lucide:file-warning" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />{{ t('salesReceipt.voucherPdfCannotSend') }}
         </p>
       </section>
+      <ReceiptDetailSection :title="t('salesReceipt.progress')" icon="i-lucide:list-checks">
+        <ol class="m-0 p-0 list-none space-y-3">
+          <li v-for="step in progressSteps" :key="step.id" class="flex flex-wrap gap-x-4 gap-y-1 items-center justify-between">
+            <div class="flex gap-2 items-center min-w-0">
+              <FaIcon :name="step.person ? 'i-lucide:circle-check-big' : 'i-lucide:circle-dashed'" :class="step.person ? 'text-primary' : 'text-muted-foreground'" class="size-4 shrink-0" aria-hidden="true" />
+              <span class="qs-type-body">{{ step.label }}</span>
+            </div>
+            <div class="flex gap-2 items-center min-w-0 text-muted-foreground">
+              <QsPersonDisplay v-if="step.person" :display-name="step.person.name" size="sm" :avatar-url="step.person.avatarUrl" />
+              <DateTimeDisplay v-if="step.at" :value="step.at" />
+              <span v-if="!step.person && !step.at" class="qs-type-meta">—</span>
+            </div>
+          </li>
+        </ol>
+      </ReceiptDetailSection>
       <div class="gap-4 grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <ReceiptDetailSection :title="t('salesReceipt.receiptInfo')" icon="i-lucide:clipboard-list">
           <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
@@ -423,12 +499,12 @@ onBeforeUnmount(() => controller?.abort())
       </ReceiptDetailSection>
       <section v-if="action" ref="actionSection" tabindex="-1" class="p-4 border-2 border-primary/30 rounded-xl bg-background min-w-0 space-y-5 sm:p-5">
         <header class="flex gap-3 items-start">
-          <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center"><FaIcon :name="action === 'approve' ? 'i-lucide:badge-check' : action === 'reject' ? 'i-lucide:message-square-warning' : 'i-lucide:undo-2'" class="size-5" aria-hidden="true" /></span>
+          <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center"><FaIcon :name="actionIcon" class="size-5" aria-hidden="true" /></span>
           <div class="min-w-0 space-y-1">
             <h3 class="qs-type-component-title m-0">
-              {{ t(`salesReceipt.${action}`) }}
+              {{ actionSubmitLabel }}
             </h3><p class="qs-type-meta m-0">
-              {{ t(action === 'approve' ? 'salesReceipt.previewIntro' : action === 'reject' ? 'salesReceipt.rejectIntro' : 'salesReceipt.voidIntro') }}
+              {{ actionIntro }}
             </p>
           </div>
         </header>
@@ -448,9 +524,9 @@ onBeforeUnmount(() => controller?.abort())
           <FaAlert :title="t(detail.approvedPayment?.origin === 'LEGACY' ? 'salesReceipt.legacy' : 'salesReceipt.voidHint')" />
           <ReceiptPostingSummary v-if="voidPreview" :snapshot="voidPreview" reversal :currencies="currencyCatalog.currencies.value" />
         </template>
-        <FaForm :model="{ reason }" :disabled="busy" @submit="submit">
-          <FaFormItem name="reason" :label="t(action === 'approve' ? 'salesReceipt.optionalReason' : 'salesReceipt.reason')" :required="action !== 'approve'">
-            <FaTextarea v-model="reason" :maxlength="500" :rows="3" :placeholder="t(action === 'approve' ? 'salesReceipt.optionalReasonPlaceholder' : 'salesReceipt.requiredReasonPlaceholder')" :disabled="busy" :aria-label="t('salesReceipt.reason')" />
+        <FaForm v-if="actionShowsReason" :model="{ reason }" :disabled="busy" @submit="submit">
+          <FaFormItem name="reason" :label="t(actionNeedsReason ? 'salesReceipt.reason' : 'salesReceipt.optionalReason')" :required="actionNeedsReason">
+            <FaTextarea v-model="reason" :maxlength="500" :rows="3" :placeholder="t(actionNeedsReason ? 'salesReceipt.requiredReasonPlaceholder' : 'salesReceipt.optionalReasonPlaceholder')" :disabled="busy" :aria-label="t('salesReceipt.reason')" />
             <p class="qs-type-meta m-0 mt-1.5 text-right">
               {{ reason.length }} / 500
             </p>
@@ -490,7 +566,7 @@ onBeforeUnmount(() => controller?.abort())
             {{ t('salesReceipt.refreshPreview') }}
           </FaButton>
           <FaButton :loading="busy" :disabled="busy || (action === 'approve' && !context)" @click="submit">
-            {{ t(`salesReceipt.${action}`) }}
+            {{ actionSubmitLabel }}
           </FaButton>
         </template>
         <template v-else>
@@ -498,6 +574,22 @@ onBeforeUnmount(() => controller?.abort())
             {{ t('salesReceipt.close') }}
           </FaButton>
           <template v-if="detail?.status === 'PENDING_REVIEW' && canReview">
+            <FaButton v-if="canSendVoucher" :disabled="busy" @click="prepare('send')">
+              {{ t('salesReceipt.sendVoucher') }}
+            </FaButton>
+            <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
+              {{ t('salesReceipt.reject') }}
+            </FaButton>
+          </template>
+          <template v-else-if="detail?.status === 'PENDING_CONFIRM' && canReview">
+            <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
+              {{ t('salesReceipt.reject') }}
+            </FaButton>
+            <FaButton :disabled="busy" @click="prepare('confirmReceipt')">
+              {{ t('salesReceipt.confirmReceipt') }}
+            </FaButton>
+          </template>
+          <template v-else-if="detail?.status === 'PENDING_POSTING' && canReview">
             <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
               {{ t('salesReceipt.reject') }}
             </FaButton>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SalesReceiptRequestDetailDto } from '@/api/generated/types.gen'
+import type { SalesReceiptRequestDetailDto, SalesReceiptStatusCountsDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import salesReceiptsApi from '@/api/modules/sales-receipts'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -27,13 +27,13 @@ const page = ref(1)
 const pageSize = ref(20)
 const items = shallowRef<SalesReceiptRequestDetailDto[]>([])
 const total = ref(0)
-const counts = ref({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
+const counts = ref<SalesReceiptStatusCountsDto>({ PENDING_REVIEW: 0, PENDING_CONFIRM: 0, PENDING_POSTING: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
 const loading = ref(false)
 const error = ref('')
 const selectedId = ref<string | null>(null)
 let controller: AbortController | null = null
 const canRead = computed(() => auth('sales-receipts:read'))
-const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'VOIDED'] as const).map(value => ({ value, label: t(`salesReceipt.status.${value}`), count: counts.value[value] })))
+const tabs = computed(() => (['PENDING_REVIEW', 'PENDING_CONFIRM', 'PENDING_POSTING', 'APPROVED', 'REJECTED', 'VOIDED'] as const).map(value => ({ value, label: t(`salesReceipt.status.${value}`), count: counts.value[value] })))
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   key: 'currencyCode',
   label: t('salesReceipt.currency'),
@@ -72,7 +72,13 @@ function actionShortLabel(item: SalesReceiptRequestDetailDto): string {
     return '作废'
   }
   if (item.status === 'PENDING_REVIEW') {
-    return '审核'
+    return '发群'
+  }
+  if (item.status === 'PENDING_CONFIRM') {
+    return '确认'
+  }
+  if (item.status === 'PENDING_POSTING') {
+    return '入账'
   }
   return '详情'
 }
@@ -119,7 +125,7 @@ async function load(): Promise<void> {
   }
 }
 function selectTab(value: string | number): void {
-  if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'REJECTED' || value === 'VOIDED') {
+  if (value === 'PENDING_REVIEW' || value === 'PENDING_CONFIRM' || value === 'PENDING_POSTING' || value === 'APPROVED' || value === 'REJECTED' || value === 'VOIDED') {
     status.value = value
     page.value = 1
     void load()
@@ -131,7 +137,7 @@ function search(): void {
 }
 watch(() => [canRead.value, accountStore.authEpoch], () => {
   items.value = []
-  counts.value = { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 }
+  counts.value = { PENDING_REVIEW: 0, PENDING_CONFIRM: 0, PENDING_POSTING: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 }
   selectedId.value = null
   void load()
 }, { immediate: true })

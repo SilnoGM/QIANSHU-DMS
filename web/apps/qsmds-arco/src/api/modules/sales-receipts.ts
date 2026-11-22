@@ -1,5 +1,6 @@
 import type { AxiosInstance } from 'axios'
 import type {
+  SalesReceiptActionDto,
   SalesReceiptApprovalContextDto,
   SalesReceiptApproveDto,
   SalesReceiptRejectDto,
@@ -25,6 +26,8 @@ export function createSalesReceiptsApi(client: AxiosInstance) {
     orderRequests: (orderId: string, query: SalesReceiptListQuery, signal: AbortSignal) => client.get<SalesReceiptRequestPageDto>(`sales-orders/${encodeURIComponent(orderId)}/receipt-requests`, { errorPresentation: 'local', params: query, signal }),
     detail: (id: string, signal: AbortSignal) => client.get<SalesReceiptRequestDetailDto>(path(id), { errorPresentation: 'local', signal }),
     approvalContext: (id: string, signal: AbortSignal) => client.get<SalesReceiptApprovalContextDto>(`${path(id)}/approval-context`, { errorPresentation: 'local', signal }),
+    sendVoucher: (id: string, data: SalesReceiptActionDto, signal: AbortSignal) => client.post<SalesReceiptRequestDetailDto>(`${path(id)}/send-voucher`, data, { errorPresentation: 'local', retry: false, signal }),
+    confirm: (id: string, data: SalesReceiptActionDto, signal: AbortSignal) => client.post<SalesReceiptRequestDetailDto>(`${path(id)}/confirm`, data, { errorPresentation: 'local', retry: false, signal }),
     approve: (id: string, data: SalesReceiptApproveDto, signal: AbortSignal) => client.post<SalesReceiptRequestDetailDto>(`${path(id)}/approve`, data, { errorPresentation: 'local', retry: false, signal }),
     reject: (id: string, data: SalesReceiptRejectDto, signal: AbortSignal) => client.post<SalesReceiptRequestDetailDto>(`${path(id)}/reject`, data, { errorPresentation: 'local', retry: false, signal }),
   }
