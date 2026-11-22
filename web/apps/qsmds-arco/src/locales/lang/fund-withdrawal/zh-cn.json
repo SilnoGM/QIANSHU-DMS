@@ -21,6 +21,7 @@
       "replaceProof": "更换截图",
       "noProof": "暂无付款截图",
       "action": "审批操作",
+      "result": "审批结果",
       "rejectHint": "拒绝不扣款，原因会通知申请人。",
       "alreadyHandled": "该申请已处理，不能再次审批。",
       "staleTitle": "申请状态已变化",

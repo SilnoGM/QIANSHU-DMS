@@ -21,6 +21,7 @@
       "replaceProof": "更換截圖",
       "noProof": "暫無付款截圖",
       "action": "審批操作",
+      "result": "審批結果",
       "rejectHint": "拒絕不扣款，原因會通知申請人。",
       "alreadyHandled": "該申請已處理，不能再次審批。",
       "staleTitle": "申請狀態已變化",

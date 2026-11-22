@@ -21,6 +21,7 @@
       "replaceProof": "Replace screenshot",
       "noProof": "No payment screenshot",
       "action": "Review actions",
+      "result": "Review result",
       "rejectHint": "Rejection does not debit funds. The applicant is notified with the reason.",
       "alreadyHandled": "This request has been handled and cannot be reviewed again.",
       "staleTitle": "Request status changed",

@@ -135,7 +135,7 @@ test('业务上传组件均接入共享拖放能力', () => {
     'apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue',
     'apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-document-modal.vue',
     'apps/qsmds-arco/src/views/admin/product-management/list/product-batch-image-card.vue',
-    'apps/qsmds-arco/src/views/operations/personal-finance/withdrawals/fund-withdrawal-approve-modal.vue',
+    'apps/qsmds-arco/src/views/admin/fund-account-management/withdrawal-approvals/approval-page.vue',
   ]
   for (const file of cases) {
     const source = readFileSync(new URL(file, root), 'utf8')
