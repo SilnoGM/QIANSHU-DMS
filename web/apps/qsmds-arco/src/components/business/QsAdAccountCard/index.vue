@@ -68,7 +68,7 @@ const daysTone = computed(() => {
     return 'text-destructive'
   }
 
-  return days <= 3 ? 'text-warning' : 'text-foreground'
+  return days <= 3 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground'
 })
 
 const balanceText = computed(() => `$${props.account.availableBalance ?? '—'}`)
@@ -106,12 +106,17 @@ const balanceTier = computed<'danger' | 'warning' | 'healthy' | 'unknown'>(() =>
   return balance <= BALANCE_CAUTION_USD ? 'warning' : 'healthy'
 })
 
+/**
+ * 预警档用 amber 色阶：本应用主题没有定义 `warning` 色板，
+ * `bg-warning` / `text-warning` 不会生成任何样式（进度条会整条透明）。
+ * amber 是仓库既有写法（status-tag-tone、静态代理卡片），明暗模式都覆盖。
+ */
 const progressTone = computed(() => {
   switch (balanceTier.value) {
     case 'danger':
       return 'bg-destructive'
     case 'warning':
-      return 'bg-warning'
+      return 'bg-amber-500'
     case 'healthy':
       return 'bg-primary'
     default:
@@ -125,7 +130,7 @@ const balanceTone = computed(() => {
     case 'danger':
       return 'text-destructive'
     case 'warning':
-      return 'text-warning'
+      return 'text-amber-700 dark:text-amber-300'
     case 'healthy':
       return 'text-primary'
     default:
