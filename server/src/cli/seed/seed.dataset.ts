@@ -146,6 +146,7 @@ export const SEED_ROLES: readonly SeedRole[] = [
     name: '运营人员',
     description: '运营人员（销售人员）',
     permissionCodes: [
+      'ad-accounts:read',
       'advertising-recharges:create',
       'advertising-recharges:read-self',
       'data-scope:self',
@@ -223,6 +224,8 @@ export const SEED_ROLES: readonly SeedRole[] = [
     name: '采运人员',
     description: '采运人员（千树采运工作台）',
     permissionCodes: [
+      'ad-accounts:manage',
+      'ad-accounts:read',
       'container-batches:create',
       'container-batches:read',
       'container-batches:update',

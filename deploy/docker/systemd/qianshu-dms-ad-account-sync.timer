@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qianshu DMS Ad Account Sync (Docker)
+
+[Timer]
+OnCalendar=*-*-* *:0/15:00 Asia/Shanghai
+AccuracySec=1m
+Persistent=true
+Unit=qianshu-dms-ad-account-sync.service
+
+[Install]
+WantedBy=timers.target

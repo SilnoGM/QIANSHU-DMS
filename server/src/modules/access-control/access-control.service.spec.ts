@@ -139,6 +139,8 @@ describe('permission constants', () => {
       'data-scope:all',
       'proxy-nodes:read',
       'proxy-nodes:manage',
+      'ad-accounts:read',
+      'ad-accounts:manage',
       'advertising-recharges:read-self',
       'advertising-recharges:create',
       'advertising-recharges:read',
@@ -164,7 +166,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 132)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 134)
   })
 })
 

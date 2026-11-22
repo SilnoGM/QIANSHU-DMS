@@ -80,6 +80,8 @@ allowBuilds:
 | `IPFOXY_API_ID` | IPFoxy 开放接口用户 ID；与 Token 必须同时提供 | 模板保持为空 |
 | `IPFOXY_API_TOKEN` | IPFoxy 开放接口 Token；与 ID 必须同时提供，具备购买/续费权限 | 模板保持为空 |
 | `PROXY_NODE_SECRET_KEY` | 静态节点密码 AES-256-GCM 密钥；启用 IPFoxy 时必填，32-byte canonical base64url | 模板保持为空 |
+| `CHEETAHGO_APPID` | 猎豹 CheetahGo 开放平台 appid；与 secret 必须同时提供 | 模板保持为空 |
+| `CHEETAHGO_SECRET` | 猎豹 CheetahGo 开放平台 secret；与 appid 必须同时提供，缺省时广告账户同步任务跳过 | 模板保持为空 |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 

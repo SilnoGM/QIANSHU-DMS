@@ -225,6 +225,17 @@ export const PROXY_NODE_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 猎豹广告账户：运营只读本人绑定账户，采运侧维护绑定关系与手动同步。
+ *
+ * 与静态节点同理，两个权限都不进入 DataScope 判定：本人接口在 SQL 层固定按
+ * assigned_user_id 过滤，管理接口直接要求 manage。
+ */
+export const AD_ACCOUNT_PERMISSION_CODES = [
+  'ad-accounts:read',
+  'ad-accounts:manage',
+] as const
+
+/**
  * 广告账户充值：运营提交申请与读取本人记录，财务读取全部并登记付款或作废。
  *
  * 本人读取与全量读取分开授予，避免运营因提交权限顺带看到他人申请与付款凭证。
@@ -352,6 +363,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...WORKBENCH_ACCESS_PERMISSION_CODES,
   ...DATA_SCOPE_PERMISSION_CODES,
   ...PROXY_NODE_PERMISSION_CODES,
+  ...AD_ACCOUNT_PERMISSION_CODES,
   ...ADVERTISING_RECHARGE_PERMISSION_CODES,
   ...MACHINE_VIEWING_PERMISSION_CODES,
   ...NOTIFICATION_PERMISSION_CODES,

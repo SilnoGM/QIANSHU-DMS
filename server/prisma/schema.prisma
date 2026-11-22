@@ -234,6 +234,10 @@ enum AuditEventType {
   MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED
   /// 看机预约改期：日期/时段/小时变化并重新进入待通知。追加在末尾。
   MACHINE_VIEWING_APPOINTMENT_RESCHEDULED
+  /// 猎豹广告账户同步与绑定。追加在末尾与数据库枚举顺序一致。
+  AD_ACCOUNT_SYNCED
+  AD_ACCOUNT_ASSIGNED
+  AD_ACCOUNT_RELEASED
 
   @@map("audit_event_type")
 }
@@ -819,6 +823,8 @@ model User {
   shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
   proxyNodesAssigned                ProxyNode[]                     @relation("ProxyNodeAssignee")
   proxyNodesAssignedBy              ProxyNode[]                     @relation("ProxyNodeAssigner")
+  adAccountsAssigned                AdAccount[]                     @relation("AdAccountAssignee")
+  adAccountsAssignedBy              AdAccount[]                     @relation("AdAccountAssigner")
   shipmentLoadGroupsCreated         ShipmentLoadGroup[]           @relation("ShipmentLoadGroupCreatedBy")
   shipmentLoadGroupsReleased        ShipmentLoadGroup[]           @relation("ShipmentLoadGroupReleasedBy")
   purchaseChainCorrections          PurchaseChainCorrection[]     @relation("PurchaseChainCorrectionActor")
@@ -1916,6 +1922,62 @@ model ProxyNode {
   @@index([assignedUserId], map: "proxy_nodes_assigned_user_idx")
   @@index([expiresAt], map: "proxy_nodes_expires_at_idx")
   @@map("proxy_nodes")
+}
+
+/// 猎豹 CheetahGo 广告账户快照。供应商是数据源，本表是绑定关系的唯一真相源。
+/// 同步只 upsert、不删除；供应商侧本次未返回的记录标记 vendorMissing。
+/// 金额字段保持上游十进制字符串原样落库，可用余额由 spendCap - amountSpent - disabledTransferAmount 现算。
+/// 上游 currency 对自开户返回空串，业务约定这些账户按 USD 解释，故不再落币种列。
+model AdAccount {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId              String    @unique(map: "ad_accounts_account_id_key") @map("account_id") @db.VarChar(64)
+  accountName            String    @map("account_name") @db.VarChar(255)
+  companyCn              String?   @map("company_cn") @db.VarChar(255)
+  accountStatus          Int       @map("account_status")
+  accountStatusText      String?   @map("account_status_text") @db.VarChar(64)
+  /// 1 冻结 / 2 解冻；上游字段可能缺失，NULL 表示未知，不能当成解冻。
+  freeze                 Int?
+  disableReason          Int       @default(0) @map("disable_reason")
+  spendCap               Decimal   @map("spend_cap") @db.Decimal(30, 2)
+  amountSpent            Decimal   @map("amount_spent") @db.Decimal(30, 2)
+  dailySpendLimit        Decimal?  @map("daily_spend_limit") @db.Decimal(30, 2)
+  disabledTransferAmount Decimal   @default(0) @map("disabled_transfer_amount") @db.Decimal(30, 2)
+  createdTime            DateTime  @map("created_time") @db.Timestamptz(6)
+  /// 上游 update_date（猎豹侧数据刷新时间），不是本表 updatedAt。
+  vendorUpdatedAt        DateTime  @map("vendor_updated_at") @db.Timestamptz(6)
+  /// 余额预警的跃迁标记：非空表示已就当前这一轮跌穿阈值发过通知，回升到阈值以上时清空。
+  lowBalanceAlertedAt    DateTime? @map("low_balance_alerted_at") @db.Timestamptz(6)
+  assignedUserId         String?   @map("assigned_user_id") @db.Uuid
+  assignedAt             DateTime? @map("assigned_at") @db.Timestamptz(6)
+  assignedByUserId       String?   @map("assigned_by_user_id") @db.Uuid
+  vendorMissing          Boolean   @default(false) @map("vendor_missing")
+  lastSyncedAt           DateTime  @map("last_synced_at") @db.Timestamptz(6)
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assignedUser   User? @relation("AdAccountAssignee", fields: [assignedUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assignedByUser User? @relation("AdAccountAssigner", fields: [assignedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  spendDaily     AdAccountSpendDaily[]
+
+  @@index([assignedUserId], map: "ad_accounts_assigned_user_idx")
+  @@index([lowBalanceAlertedAt], map: "ad_accounts_low_balance_alert_idx")
+  @@map("ad_accounts")
+}
+
+/// 广告账户逐日消耗。用于 7 天日均与可持续天数，必须落库以便回溯，不能每次现算。
+model AdAccountSpendDaily {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adAccountId String   @map("ad_account_id") @db.Uuid
+  spendDate   DateTime @map("spend_date") @db.Date
+  spend       Decimal  @db.Decimal(18, 2)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([adAccountId, spendDate])
+  @@index([spendDate])
+  @@map("ad_account_spend_daily")
 }
 
 

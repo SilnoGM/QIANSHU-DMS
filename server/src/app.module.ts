@@ -6,6 +6,7 @@ import { validateEnvironment } from './config/env.validation'
 import appConfig from './config/app.config'
 import assistantConfig from './config/assistant.config'
 import authConfig from './config/auth.config'
+import cheetahgoConfig from './config/cheetahgo.config'
 import ipfoxyConfig from './config/ipfoxy.config'
 import mediaConfig from './config/media.config'
 import notificationMediaConfig from './config/notification-media.config'
@@ -22,7 +23,7 @@ import { PermissionGuard } from './modules/auth/guards/permission.guard'
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,
-      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, assistantConfig, notificationMediaConfig],
+      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, cheetahgoConfig, assistantConfig, notificationMediaConfig],
       validate: validateEnvironment,
     }),
     PrismaModule,

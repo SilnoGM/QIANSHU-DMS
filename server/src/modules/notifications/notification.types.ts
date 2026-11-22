@@ -49,6 +49,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
+  'AD_ACCOUNT_BALANCE_LOW',
 ] as const
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
@@ -125,6 +126,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   PROXY_NODE_EXPIRED: 'operations',
   ASSISTANT_ACCOUNT_OFFLINE: 'system',
   FUND_ACCOUNT_REVERSED: 'finance',
+  AD_ACCOUNT_BALANCE_LOW: 'operations',
 })
 
 export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
@@ -170,6 +172,7 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   PROXY_NODE_EXPIRED: '节点已过期',
   ASSISTANT_ACCOUNT_OFFLINE: '小助理离线',
   FUND_ACCOUNT_REVERSED: '资金冲账',
+  AD_ACCOUNT_BALANCE_LOW: '广告户余额预警',
 })
 
 /** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
@@ -216,6 +219,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   PROXY_NODE_EXPIRED: 'OPERATIONS',
   ASSISTANT_ACCOUNT_OFFLINE: 'SYSTEM',
   FUND_ACCOUNT_REVERSED: 'FINANCE',
+  AD_ACCOUNT_BALANCE_LOW: 'OPERATIONS',
 })
 
 /** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
@@ -262,6 +266,7 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
+  'AD_ACCOUNT_BALANCE_LOW',
 ])
 
 /** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
@@ -308,6 +313,7 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
   ASSISTANT_ACCOUNT_OFFLINE: 'system.assistant-account.offline',
   FUND_ACCOUNT_REVERSED: 'fund.account.reversed',
+  AD_ACCOUNT_BALANCE_LOW: 'operations.ad-account.balance-low',
 })
 
 /**
@@ -391,6 +397,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   PROXY_NODE_EXPIRED: ['nodeLabel', 'host', 'expiresAt', 'assignedUserName'],
   ASSISTANT_ACCOUNT_OFFLINE: ['accountName', 'occurredAt', 'reason'],
   FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
+  AD_ACCOUNT_BALANCE_LOW: ['adAccountName', 'adAccountNo', 'availableBalance', 'balanceThreshold', 'sevenDayAverage', 'expectedDays', 'companyName'],
 })
 
 /**
@@ -1316,6 +1323,51 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     sensitive: false,
     maxLength: 128,
     required: false,
+  },
+  availableBalance: {
+    name: 'availableBalance',
+    label: '可用余额',
+    description: '广告账户可用余额（USD），按花费上限减已花费金额与封户取款金额计算。',
+    example: '78.42',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  balanceThreshold: {
+    name: 'balanceThreshold',
+    label: '预警阈值',
+    description: '触发广告户余额预警的可用余额阈值（USD）。',
+    example: '30.00',
+    sensitive: false,
+    maxLength: 32,
+    required: true,
+  },
+  sevenDayAverage: {
+    name: 'sevenDayAverage',
+    label: '7 天日均消耗',
+    description: '广告账户最近 7 个完整自然日的日均消耗（USD）。',
+    example: '2.94',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  expectedDays: {
+    name: 'expectedDays',
+    label: '预计可用天数',
+    description: '按可用余额与日均消耗估算的剩余可用天数；无法估算时为「—」。',
+    example: '26',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  companyName: {
+    name: 'companyName',
+    label: '开户主体',
+    description: '广告账户所属的开户主体（营业执照名称）。',
+    example: '聊城千树文化传媒有限公司',
+    sensitive: false,
+    maxLength: 255,
+    required: true,
   },
 })
 
