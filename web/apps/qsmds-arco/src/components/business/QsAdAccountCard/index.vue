@@ -4,6 +4,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import dayjs from '@/utils/dayjs'
+import { setPendingRechargePaste } from '@/views/workbenches/network-ads/advertising-recharges/create-handoff'
 
 /**
  * 猎豹广告账户卡片（横向细长版，一行放两张）。
@@ -208,8 +209,9 @@ const router = useRouter()
 const canCreateRecharge = computed(() => auth('advertising-recharges:create'))
 
 /**
- * 先复制再跳转：目标页读 query 自动开弹窗并预填，剪贴板作为手动粘贴的备份。
- * 复制失败不阻断流程——参数里已经带了同样的文本。
+ * 先复制再跳转，并把待识别文本交给充值页（模块级一次交接，不走 URL：
+ * 布局的 RouterView 按 fullPath 做 key，清 query 会把页面重建掉）。
+ * 复制失败不阻断流程——交接里已经带了同样的文本。
  */
 async function openRechargeRequest(): Promise<void> {
   try {
@@ -224,10 +226,8 @@ async function openRechargeRequest(): Promise<void> {
     toast.error('复制失败，已在充值页自动填入')
   }
 
-  await router.push({
-    path: '/qs-operations/network-ads/advertising-recharges',
-    query: { create: '1', paste: accountCopyText.value },
-  })
+  setPendingRechargePaste(accountCopyText.value)
+  await router.push('/qs-operations/network-ads/advertising-recharges')
 }
 
 function formatTime(value: string): string {

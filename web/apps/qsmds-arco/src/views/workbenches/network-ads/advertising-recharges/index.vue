@@ -12,6 +12,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { takePendingRechargePaste } from './create-handoff'
 import CreateModal from './create-modal.vue'
 import DetailDrawer from './detail-drawer.vue'
 import {
@@ -46,9 +47,6 @@ const createError = ref('')
 const created = ref<AdvertisingRechargeDto | null>(null)
 /** 由广告户卡片「充值」跳转带入的识别文本，只用于打开新增弹窗那一次。 */
 const initialPaste = ref('')
-const createQueryHandled = ref(false)
-const route = useRoute()
-const router = useRouter()
 const detailOpen = ref(false)
 const detail = ref<AdvertisingRechargeDto | null>(null)
 let controller: AbortController | null = null
@@ -129,30 +127,18 @@ function openCreate(): void {
 }
 
 /**
- * 广告户卡片「充值」按钮带 `?create=1&paste=...` 跳过来时，自动打开新增弹窗并识别。
- * query 消费后立刻清掉：页面是 keepAlive 的，不清会导致刷新或再次激活时重复弹窗。
+ * 广告户卡片「充值」跳转时留下的一次性交接：取出即清空，所以只会触发一次。
+ * 不走路由 query——布局的 RouterView 按 fullPath 做 key，清 query 会重建整页。
  */
-function consumeCreateQuery(): void {
-  const { create, paste } = route.query
+function consumePendingCreate(): void {
+  const text = takePendingRechargePaste()
 
-  if (create !== '1') {
-    createQueryHandled.value = false
+  if (text === null || !canCreate.value) {
     return
   }
 
-  if (createQueryHandled.value) {
-    return
-  }
-
-  createQueryHandled.value = true
-
-  // 无建单权限时不落初始粘贴，避免权限后续变化后残留旧文本。
-  if (canCreate.value) {
-    initialPaste.value = typeof paste === 'string' ? paste : ''
-    openCreate()
-  }
-
-  void router.replace({ query: {} })
+  initialPaste.value = text
+  openCreate()
 }
 
 async function submitCreate(payload: AdvertisingRechargeCreatePayload): Promise<void> {
@@ -235,11 +221,11 @@ watch(createOpen, (open) => {
 
 onMounted(() => {
   active.value = true
-  consumeCreateQuery()
+  consumePendingCreate()
 })
 onActivated(() => {
   active.value = true
-  consumeCreateQuery()
+  consumePendingCreate()
 })
 onDeactivated(() => {
   active.value = false
