@@ -341,7 +341,7 @@ onBeforeUnmount(() => controller?.abort())
           <FaIcon name="i-lucide:file-warning" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />{{ t('salesReceipt.voucherPdfCannotSend') }}
         </p>
       </section>
-      <ReceiptDetailSection :title="t('salesReceipt.progress')" icon="i-lucide:list-checks">
+      <ReceiptDetailSection :title="t('salesReceipt.progressTitle')" icon="i-lucide:list-checks">
         <ol class="m-0 p-0 list-none space-y-3">
           <li v-for="step in progressSteps" :key="step.id" class="flex flex-wrap gap-x-4 gap-y-1 items-center justify-between">
             <div class="flex gap-2 items-center min-w-0">

@@ -69,7 +69,7 @@
   "salesReceipt.awaitingConfirm": "水单已发群，待财务确认到账",
   "salesReceipt.awaitingPosting": "已确认到账，待核对入账",
   "salesReceipt.voucherPdfCannotSend": "凭证为 PDF，无法作为水单图片发送；请驳回后重新上传图片。",
-  "salesReceipt.progress": "处理进度",
+  "salesReceipt.progressTitle": "处理进度",
   "salesReceipt.progress.submitted": "用户提交",
   "salesReceipt.progress.voucherSent": "发送水单",
   "salesReceipt.progress.confirmed": "确认收到",

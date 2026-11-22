@@ -69,7 +69,7 @@
   "salesReceipt.awaitingConfirm": "Voucher sent to the group, waiting for finance confirmation",
   "salesReceipt.awaitingPosting": "Funds confirmed, waiting for posting review",
   "salesReceipt.voucherPdfCannotSend": "The voucher is a PDF and cannot be sent as a voucher image. Reject the request and upload an image instead.",
-  "salesReceipt.progress": "Progress",
+  "salesReceipt.progressTitle": "Progress",
   "salesReceipt.progress.submitted": "Submitted",
   "salesReceipt.progress.voucherSent": "Voucher sent",
   "salesReceipt.progress.confirmed": "Receipt confirmed",

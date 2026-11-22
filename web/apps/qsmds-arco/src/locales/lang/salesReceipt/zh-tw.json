@@ -69,7 +69,7 @@
   "salesReceipt.awaitingConfirm": "水單已發群，待財務確認到帳",
   "salesReceipt.awaitingPosting": "已確認到帳，待核對入帳",
   "salesReceipt.voucherPdfCannotSend": "憑證為 PDF，無法作為水單圖片發送；請駁回後重新上傳圖片。",
-  "salesReceipt.progress": "處理進度",
+  "salesReceipt.progressTitle": "處理進度",
   "salesReceipt.progress.submitted": "用戶提交",
   "salesReceipt.progress.voucherSent": "發送水單",
   "salesReceipt.progress.confirmed": "確認收到",
