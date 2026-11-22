@@ -204,6 +204,48 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
       .rejects.toMatchObject({ code: 'FUND_WITHDRAWAL_IDEMPOTENCY_CONFLICT' })
   })
 
+  it('notifies the applicant with the review link instead of the reviewer permission', async () => {
+    // 模板默认由迁移清空，本用例临时建一份站内模板，验证收件人与链接变量。
+    const template = await prisma.notificationTemplate.create({
+      data: {
+        key: 'fund.withdrawal.pending',
+        channel: 'IN_APP',
+        name: '提现审核（E2E）',
+        domain: 'FINANCE',
+        titleTemplate: '提款申请已提交',
+        bodyTemplate: '单号：{{withdrawalNo}}',
+        linkUrlTemplate: '{{reviewUrl}}',
+        variables: [
+          { name: 'withdrawalNo', required: true, maxLength: 64, sensitive: false },
+          { name: 'reviewUrl', required: true, maxLength: 512, sensitive: false },
+        ],
+      },
+    })
+    try {
+      const created = await createWithdrawal('20.00')
+      const expectedPath = `/#/qs-finance/fund-accounts/withdrawal-approvals/${created.id}`
+      const notification = await prisma.notification.findFirstOrThrow({
+        where: { eventType: 'FUND_WITHDRAWAL_REVIEW_PENDING', sourceId: created.id },
+        select: { id: true, variables: true },
+      })
+      const reviewUrl = (notification.variables as { reviewUrl?: unknown }).reviewUrl
+      expect(typeof reviewUrl).toBe('string')
+      expect(reviewUrl).toContain(expectedPath)
+      const inbox = await prisma.notificationInboxItem.findMany({
+        where: { notificationId: notification.id },
+        select: { userId: true, linkUrlSnapshot: true },
+      })
+      expect(inbox).toHaveLength(1)
+      expect(inbox[0]?.userId).toBe(applicantId)
+      expect(inbox[0]?.linkUrlSnapshot).toContain(expectedPath)
+      // 审批人不再凭权限自动收到；通知改由提交人转达。
+      expect(inbox.some(item => item.userId === financeId)).toBe(false)
+    }
+    finally {
+      await prisma.notificationTemplate.delete({ where: { id: template.id } })
+    }
+  })
+
   it('rejects without posting funds', async () => {
     const created = await createWithdrawal('10.00')
     const beforeBatchCount = await prisma.fundPostingBatch.count({

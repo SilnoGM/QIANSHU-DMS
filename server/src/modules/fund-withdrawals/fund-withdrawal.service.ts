@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 
+import type { AuthConfiguration } from '../../config/auth.config'
 import { Prisma } from '../../generated/prisma/client'
 import { AuditEventType } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -35,6 +37,7 @@ import type {
   RejectFundWithdrawalDto,
 } from './fund-withdrawal.dto'
 import {
+  buildWithdrawalReviewUrl,
   hashFundWithdrawalNumberFingerprint,
   hashFundWithdrawalRequestKey,
   normalizeFundWithdrawalAmount,
@@ -56,9 +59,15 @@ export class FundWithdrawalService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService,
     private readonly dataScope: DataScopeService = dataScopeFallback(),
     private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
+
+  /** 站内链接与 CSRF 共用同一个 origin，避免测试/生产出现两套域名。 */
+  private get appOrigin(): string {
+    return this.config.getOrThrow<AuthConfiguration>('auth').appOrigin
+  }
 
   /**
    * 提交只产生 PENDING 记录，不扣款，也不做余额下限校验：账户允许负余额，
@@ -173,13 +182,15 @@ export class FundWithdrawalService {
         await this.notifications.publish({
           eventType: 'FUND_WITHDRAWAL_REVIEW_PENDING',
           source: { type: 'FUND_WITHDRAWAL_REQUEST', id: created.id },
-          target: { kind: 'PERMISSION', permissionCode: 'fund-withdrawals:review' },
+          // 提交人自己收通知并转给付款人；审批人不再按权限自动收到，审计仍记录审批动作。
+          target: { kind: 'USERS', userIds: [context.actorUserId] },
           templateKey: 'fund.withdrawal.pending',
           variables: {
             amount,
             applicantName: applicant?.displayName ?? '—',
             currencyCode: created.currency,
             occurredAt: formatNotificationDateTime(new Date()),
+            reviewUrl: buildWithdrawalReviewUrl(this.appOrigin, created.id),
             withdrawalNo: created.withdrawalNo,
           },
           dedupeKey: `fund-withdrawal-review:${created.id}`,

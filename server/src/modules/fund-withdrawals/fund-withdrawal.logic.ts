@@ -51,6 +51,17 @@ export function buildFundWithdrawalProofFilename(input: {
   return `${safeName}-提款${formatWithdrawalFilenameAmount(input.amount)}元-${date}${extension}`
 }
 
+/**
+ * 财务审批该提款申请的站内直达链接。
+ *
+ * 契约：`APP_ORIGIN` 是纯 origin（无尾斜杠、无路径），前端默认 hash 路由，因此显式拼 `/#/`。
+ * 路径必须与 `fund-account.management.ts` 的隐藏审批叶子保持一致；改路由时同步这里，
+ * 否则通知里的链接会 404 而不是被类型检查发现。
+ */
+export function buildWithdrawalReviewUrl(appOrigin: string, requestId: string): string {
+  return `${appOrigin}/#/qs-finance/fund-accounts/withdrawal-approvals/${encodeURIComponent(requestId)}`
+}
+
 /** 幂等键继续使用 UUID 契约；与开票申请保持一致。 */
 const REQUEST_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 

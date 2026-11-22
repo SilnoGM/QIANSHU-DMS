@@ -102,9 +102,14 @@ describe('NotificationAdminService', () => {
       variablesKnown: true,
       defaultTemplateKey: 'fund.withdrawal.pending',
     })
-    expect(withdrawal?.variables).toEqual(expect.arrayContaining(['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt']))
+    expect(withdrawal?.variables).toEqual(expect.arrayContaining(['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt', 'reviewUrl']))
     expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
       sensitive: true,
+    })
+    // 链接变量不脱敏，且模板渲染按声明长度截断，必须给足 URL 空间。
+    expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'reviewUrl')).toMatchObject({
+      sensitive: false,
+      maxLength: 512,
     })
     expect(withdrawal?.media).toBeNull()
     expect(result).toHaveLength(41)
