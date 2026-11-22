@@ -4,6 +4,7 @@ import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToo
 import { getApiClientFailureMessage } from '@/api/errors'
 import adAccountsApi from '@/api/modules/ad-accounts'
 import QsAdAccountCard from '@/components/business/QsAdAccountCard/index.vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAdAccountBadgeStore } from '@/store/modules/app/ad-account-badge'
