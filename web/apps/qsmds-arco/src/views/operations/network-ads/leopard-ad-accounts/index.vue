@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import type { AdAccountDto } from '@/api/generated/types.gen'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import { getApiClientFailureMessage } from '@/api/errors'
 import adAccountsApi from '@/api/modules/ad-accounts'
 import QsAdAccountCard from '@/components/business/QsAdAccountCard/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useAdAccountBadgeStore } from '@/store/modules/app/ad-account-badge'
 
 defineOptions({ name: 'QsOperationsNetworkAdsLeopardAdAccounts' })
@@ -15,15 +17,15 @@ const canRead = computed(() => auth('ad-accounts:read'))
 const rows = ref<AdAccountDto[]>([])
 const loading = ref(false)
 const error = ref('')
-const activeFilter = ref<'all' | 'low' | 'exhausted' | 'frozen'>('all')
+const activeFilter = ref('all')
 
 let controller: AbortController | null = null
 
-const filters = computed(() => [
-  { key: 'all' as const, label: '全部', count: rows.value.length },
-  { key: 'low' as const, label: '余额预警 <$30', count: rows.value.filter(row => row.lowBalance).length },
-  { key: 'exhausted' as const, label: '已耗尽', count: rows.value.filter(row => row.sustainableDays === 0).length },
-  { key: 'frozen' as const, label: '冻结', count: rows.value.filter(row => row.freeze === 1).length },
+const filters = computed<QsStatusSwitchItem[]>(() => [
+  { value: 'all', label: '全部', count: rows.value.length },
+  { value: 'low', label: '余额预警 <$30', count: rows.value.filter(row => row.lowBalance).length },
+  { value: 'exhausted', label: '已耗尽', count: rows.value.filter(row => row.sustainableDays === 0).length },
+  { value: 'frozen', label: '冻结', count: rows.value.filter(row => row.freeze === 1).length },
 ])
 
 const visibleRows = computed(() => {
@@ -88,21 +90,12 @@ onUnmounted(() => controller?.abort())
     />
 
     <template v-else>
-      <div class="mb-4 flex flex-wrap gap-2">
-        <button
-          v-for="filter in filters"
-          :key="filter.key"
-          type="button"
-          class="text-sm px-3 py-1.5 border rounded-md transition"
-          :class="activeFilter === filter.key
-            ? 'border-primary/40 bg-primary/10 text-primary'
-            : 'text-muted-foreground hover:bg-muted'"
-          @click="activeFilter = filter.key"
-        >
-          {{ filter.label }}
-          <span class="text-xs ml-1">{{ filter.count }}</span>
-        </button>
-      </div>
+      <QsStatusSwitchToolbar
+        v-model="activeFilter"
+        :items="filters"
+        aria-label="广告账户筛选"
+        class="mb-4"
+      />
 
       <div v-if="error" class="text-sm text-destructive mb-4 px-4 py-3 border border-destructive/35 rounded-md bg-destructive/10 flex gap-3 items-center">
         <span class="flex-1">{{ error }}</span>
