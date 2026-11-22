@@ -19,6 +19,10 @@ const statusMigration = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261106150000_machine_viewing_status_and_feedback/migration.sql'),
   'utf8',
 )
+const updateMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261122110000_machine_viewing_update_and_audit/migration.sql'),
+  'utf8',
+)
 const permissionConstants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -133,6 +137,36 @@ describe('machine viewing appointment database contract', () => {
     )
   })
 
+  it('adds the update permission and mutation audit events in a separate additive migration', () => {
+    expect(permissionConstants).toContain(`'machine-viewings:update'`)
+    expect(updateMigration).toContain(`'00000000-0000-4000-8000-000000002435'`)
+    expect(updateMigration).toContain(`'machine-viewings:update'`)
+    expect(updateMigration).toContain(`'更新看机预约'`)
+    expect(updateMigration).toContain('"system_only"')
+    expect(updateMigration).toMatch(
+      /role\."code" = 'system_admin'[\s\S]*?'machine-viewings:update'/u,
+    )
+    expect(updateMigration).toMatch(
+      /role\."code" IN \('operations_staff', 'purchasing_staff'\)/u,
+    )
+    expect(updateMigration).toContain('finance grant must be absent')
+
+    const auditEnum = enumBlock('AuditEventType')
+    for (const value of [
+      'MACHINE_VIEWING_APPOINTMENT_UPDATED',
+      'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED',
+    ]) {
+      expect(auditEnum).toContain(value)
+      expect(updateMigration).toContain(
+        `ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS '${value}'`,
+      )
+    }
+
+    // 只追加权限与枚举，不改表结构或存量预约。
+    expect(updateMigration).not.toContain('ALTER TABLE "machine_viewing_appointments"')
+    expect(updateMigration).not.toContain('UPDATE "machine_viewing_appointments"')
+  })
+
   it('binds every appointment to a number issued by MACHINE_VIEWING_NO', () => {
     const model = modelBlock('MachineViewingAppointment')
     expect(model).toContain('appointmentNo')
@@ -194,9 +228,11 @@ describe('machine viewing appointment database contract', () => {
     )
     expect(operationsSeed).toContain(`'machine-viewings:read'`)
     expect(operationsSeed).toContain(`'machine-viewings:create'`)
-    // 采运只读：列表可见即可，不能拿到 create 权限。
+    expect(operationsSeed).toContain(`'machine-viewings:update'`)
+    // 采运可推进状态，但不应该能新建预约。
     const purchasingSeed = seed.slice(seed.indexOf(`code: 'purchasing_staff'`))
     expect(purchasingSeed).toContain(`'machine-viewings:read'`)
+    expect(purchasingSeed).toContain(`'machine-viewings:update'`)
     expect(purchasingSeed).not.toContain(`'machine-viewings:create'`)
   })
 })

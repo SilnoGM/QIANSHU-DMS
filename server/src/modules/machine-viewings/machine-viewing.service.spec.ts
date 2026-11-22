@@ -1,8 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest 匹配器返回 any，用于断言调用参数。 */
 import { ApiException } from '../../infrastructure/http/api.exception'
 import type { AuditService } from '../audit/audit.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
-import type { CreateMachineViewingDto, MachineViewingDto } from './machine-viewing.dto'
+import type {
+  CreateMachineViewingDto,
+  MachineViewingDto,
+  UpdateMachineViewingDto,
+} from './machine-viewing.dto'
 import { MachineViewingService } from './machine-viewing.service'
 import { MachineViewingQueryService } from './machine-viewing-query.service'
 
@@ -47,16 +52,23 @@ function dto(overrides: Partial<MachineViewingDto> = {}): MachineViewingDto {
 
 function createHarness(options: {
   readonly previous?: Record<string, unknown> | null
+  readonly existing?: Record<string, unknown> | null
   readonly dto?: MachineViewingDto
+  readonly canViewAll?: boolean
 } = {}) {
   const appointment = {
     findUnique: jest.fn().mockResolvedValue(options.previous ?? null),
+    findFirst: jest.fn().mockResolvedValue(options.existing ?? null),
+    update: jest.fn().mockResolvedValue({}),
     create: jest.fn<Promise<{ id: string }>, [{ data: Record<string, unknown>, select: { id: true } }]>()
       .mockResolvedValue({ id: CREATED_ID }),
   }
   const transaction = {
     $queryRaw: jest.fn().mockResolvedValue([{}]),
     $executeRaw: jest.fn().mockResolvedValue(0),
+    userRole: {
+      findFirst: jest.fn().mockResolvedValue(options.canViewAll === true ? { userId: ACTOR } : null),
+    },
     machineViewingAppointment: appointment,
   }
   const prisma = {
@@ -227,5 +239,241 @@ describe('MachineViewingService.create', () => {
       status: 409,
     })
     expect(harness.appointment.create).not.toHaveBeenCalled()
+  })
+})
+
+const UPDATE_INPUT: UpdateMachineViewingDto = {
+  site: 'NEW_TAIPEI_LINKOU',
+  machineType: 'MINI_TILLER',
+  appointmentDate: '2026-11-20',
+  period: 'PM',
+  hour: 3,
+  customerName: '林小姐',
+  customerPhone: '0912-345-678',
+  contactPerson: '李华',
+}
+
+function existingRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: CREATED_ID,
+    appointmentNo: 'MV/20261106-0001',
+    site: 'NEW_TAIPEI_LINKOU',
+    machineType: 'MINI_TILLER',
+    appointmentDate: new Date('2026-11-20T00:00:00.000Z'),
+    period: 'PM',
+    hour: 3,
+    customerName: '陈先生',
+    customerPhone: '0912-345-678',
+    contactPerson: '李华',
+    status: 'PENDING_APPOINTMENT',
+    feedback: null,
+    ...overrides,
+  }
+}
+
+describe('MachineViewingService.update', () => {
+  it('writes normalized content and a field-level audit entry', async () => {
+    const { service, appointment, audit } = createHarness({ existing: existingRow() })
+
+    await expect(service.update({ actorUserId: ACTOR, requestId: REQUEST_ID }, CREATED_ID, UPDATE_INPUT, NOW))
+      .resolves.toEqual(dto())
+
+    expect(appointment.update).toHaveBeenCalledWith({
+      where: { id: CREATED_ID },
+      data: expect.objectContaining({
+        customerName: '林小姐',
+        appointmentDate: new Date('2026-11-20T00:00:00.000Z'),
+      }),
+    })
+    const auditInput = audit.record.mock.calls[0]?.[1]
+    expect(auditInput).toMatchObject({
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_UPDATED',
+      targetId: CREATED_ID,
+      metadata: {
+        appointmentNo: 'MV/20261106-0001',
+        changedFields: 'customerName',
+        status: 'PENDING_APPOINTMENT',
+      },
+    })
+    const metadata = auditInput?.metadata as {
+      customerName?: unknown
+      previousCustomerName?: unknown
+    } | undefined
+    expect(metadata?.customerName).toBe('林小姐')
+    expect(metadata?.previousCustomerName).toBe('陈先生')
+  })
+
+  it('returns the current row without writing when nothing changed', async () => {
+    const { service, appointment, audit, queries } = createHarness({ existing: existingRow() })
+
+    await expect(service.update(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { ...UPDATE_INPUT, customerName: '陈先生' },
+      NOW,
+    )).resolves.toEqual(dto())
+
+    expect(appointment.update).not.toHaveBeenCalled()
+    expect(audit.record).not.toHaveBeenCalled()
+    expect(queries.findById).toHaveBeenCalledWith(expect.anything(), CREATED_ID)
+  })
+
+  it('locks content edits after feedback or cancellation', async () => {
+    for (const status of ['FEEDBACK_GIVEN', 'CANCELLED']) {
+      const { service, appointment } = createHarness({ existing: existingRow({ status }) })
+      await expect(service.update({ actorUserId: ACTOR, requestId: REQUEST_ID }, CREATED_ID, UPDATE_INPUT, NOW))
+        .rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+      expect(appointment.update).not.toHaveBeenCalled()
+    }
+  })
+
+  it('returns 404 for a missing or out-of-scope appointment', async () => {
+    const { service, appointment } = createHarness({ canViewAll: false })
+    await expect(service.update({ actorUserId: ACTOR, requestId: REQUEST_ID }, CREATED_ID, UPDATE_INPUT, NOW))
+      .rejects.toMatchObject({ code: 'MACHINE_VIEWING_NOT_FOUND', status: 404 })
+    expect(appointment.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ createdByUserId: ACTOR }),
+    }))
+    expect(appointment.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid date before opening the transaction', async () => {
+    const { service, transaction } = createHarness({ existing: existingRow() })
+    await expect(service.update(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { ...UPDATE_INPUT, appointmentDate: '2026-02-31' },
+      NOW,
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_VALIDATION_FAILED', status: 422 })
+    expect(transaction.$queryRaw).not.toHaveBeenCalled()
+  })
+})
+
+describe('MachineViewingService.transition', () => {
+  it('moves PENDING_APPOINTMENT to APPOINTED and audits the status change', async () => {
+    const { service, appointment, audit } = createHarness({ existing: existingRow() })
+
+    await expect(service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'APPOINTED' },
+    )).resolves.toEqual(dto())
+
+    expect(appointment.update).toHaveBeenCalledWith({
+      where: { id: CREATED_ID },
+      data: { status: 'APPOINTED' },
+    })
+    expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED',
+      metadata: {
+        appointmentNo: 'MV/20261106-0001',
+        fromStatus: 'PENDING_APPOINTMENT',
+        toStatus: 'APPOINTED',
+      },
+    })
+  })
+
+  it('requires feedback before FEEDBACK_GIVEN and does not touch the row', async () => {
+    const { service, appointment, transaction } = createHarness({ existing: existingRow({ status: 'APPOINTED' }) })
+
+    await expect(service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'FEEDBACK_GIVEN' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_VALIDATION_FAILED', status: 422 })
+    expect(transaction.$queryRaw).not.toHaveBeenCalled()
+    expect(appointment.update).not.toHaveBeenCalled()
+  })
+
+  it('stores feedback while moving APPOINTED to FEEDBACK_GIVEN', async () => {
+    const { service, appointment, audit } = createHarness({ existing: existingRow({ status: 'APPOINTED' }) })
+
+    await service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'FEEDBACK_GIVEN', feedback: ' 客户到场，倾向年底下单。 ' },
+    )
+
+    expect(appointment.update).toHaveBeenCalledWith({
+      where: { id: CREATED_ID },
+      data: { status: 'FEEDBACK_GIVEN', feedback: '客户到场，倾向年底下单。' },
+    })
+    expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED',
+      metadata: { fromStatus: 'APPOINTED', toStatus: 'FEEDBACK_GIVEN', feedback: '客户到场，倾向年底下单。' },
+    })
+  })
+
+  it('allows editing feedback in place without changing status', async () => {
+    const { service, appointment, audit } = createHarness({
+      existing: existingRow({ status: 'FEEDBACK_GIVEN', feedback: '旧反馈' }),
+    })
+
+    await service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'FEEDBACK_GIVEN', feedback: '新反馈' },
+    )
+
+    expect(appointment.update).toHaveBeenCalledWith({
+      where: { id: CREATED_ID },
+      data: { feedback: '新反馈' },
+    })
+    expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_UPDATED',
+      metadata: { changedFields: 'feedback', status: 'FEEDBACK_GIVEN', feedback: '新反馈' },
+    })
+  })
+
+  it('cancels with an audit-only reason and rejects cancelling after feedback', async () => {
+    const cancellable = createHarness({ existing: existingRow({ status: 'APPOINTED' }) })
+    await cancellable.service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'CANCELLED', cancelReason: '客户临时有事' },
+    )
+    expect(cancellable.appointment.update).toHaveBeenCalledWith({
+      where: { id: CREATED_ID },
+      data: { status: 'CANCELLED' },
+    })
+    expect(cancellable.audit.record.mock.calls[0]?.[1]).toMatchObject({
+      metadata: { fromStatus: 'APPOINTED', toStatus: 'CANCELLED', cancelReason: '客户临时有事' },
+    })
+
+    const locked = createHarness({ existing: existingRow({ status: 'FEEDBACK_GIVEN', feedback: '已反馈' }) })
+    await expect(locked.service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'CANCELLED' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+    expect(locked.appointment.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects skipping a step and treats repeated APPOINTED as a no-op', async () => {
+    const skipping = createHarness({ existing: existingRow() })
+    await expect(skipping.service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'FEEDBACK_GIVEN', feedback: '直接反馈' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+
+    const repeated = createHarness({ existing: existingRow({ status: 'APPOINTED' }) })
+    await repeated.service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'APPOINTED' },
+    )
+    expect(repeated.appointment.update).not.toHaveBeenCalled()
+    expect(repeated.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 when the row is outside the actor scope', async () => {
+    const { service, appointment } = createHarness({ canViewAll: false })
+    await expect(service.transition(
+      { actorUserId: ACTOR, requestId: REQUEST_ID },
+      CREATED_ID,
+      { status: 'APPOINTED' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_NOT_FOUND', status: 404 })
+    expect(appointment.update).not.toHaveBeenCalled()
   })
 })

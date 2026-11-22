@@ -6,7 +6,12 @@ import { getRequestId, requestIdMiddleware } from '../../infrastructure/http/req
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { MachineViewingController } from './machine-viewing.controller'
-import type { CreateMachineViewingDto, MachineViewingDto } from './machine-viewing.dto'
+import type {
+  CreateMachineViewingDto,
+  MachineViewingDto,
+  MachineViewingStatusTransitionDto,
+  UpdateMachineViewingDto,
+} from './machine-viewing.dto'
 import type { MachineViewingQueryService } from './machine-viewing-query.service'
 import type { MachineViewingService } from './machine-viewing.service'
 
@@ -100,5 +105,52 @@ describe('MachineViewingController', () => {
     expect(permissionsOf('create')).toEqual(['machine-viewings:create'])
     expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.create))
       .toBe(HttpStatus.CREATED)
+  })
+
+  it('updates through machine-viewings:update and keeps create separate', async () => {
+    const input: UpdateMachineViewingDto = {
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      customerName: '陈先生',
+      contactPerson: '李华',
+    }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = { update: jest.fn().mockResolvedValue(RESULT) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.update({ id: RESULT.id }, input, request)).resolves.toEqual(RESULT)
+    expect(service.update).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+      input,
+    )
+    expect(permissionsOf('update')).toEqual(['machine-viewings:update'])
+  })
+
+  it('transitions status through machine-viewings:update and returns 200', async () => {
+    const input: MachineViewingStatusTransitionDto = { status: 'APPOINTED' }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = { transition: jest.fn().mockResolvedValue(RESULT) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.transition({ id: RESULT.id }, input, request)).resolves.toEqual(RESULT)
+    expect(service.transition).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+      input,
+    )
+    expect(permissionsOf('transition')).toEqual(['machine-viewings:update'])
+    expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.transition))
+      .toBe(HttpStatus.OK)
   })
 })

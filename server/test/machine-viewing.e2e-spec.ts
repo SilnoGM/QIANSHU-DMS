@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return -- Jest 匹配器与 catch 结果用于断言。 */
 import { randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
@@ -32,7 +33,17 @@ describe('machine viewing appointments against PostgreSQL', () => {
     queries = application.get(MachineViewingQueryService)
 
     const permissions = await prisma.permission.findMany({
-      where: { code: { in: ['machine-viewings:read', 'machine-viewings:create', 'data-scope:self', 'data-scope:all'] } },
+      where: {
+        code: {
+          in: [
+            'machine-viewings:read',
+            'machine-viewings:create',
+            'machine-viewings:update',
+            'data-scope:self',
+            'data-scope:all',
+          ],
+        },
+      },
       select: { id: true, code: true },
     })
     const permissionId = (code: string): string => {
@@ -49,6 +60,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
           create: [
             { permissionId: permissionId('machine-viewings:read') },
             { permissionId: permissionId('machine-viewings:create') },
+            { permissionId: permissionId('machine-viewings:update') },
             { permissionId: permissionId('data-scope:self') },
           ],
         },
@@ -62,6 +74,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
         permissions: {
           create: [
             { permissionId: permissionId('machine-viewings:read') },
+            { permissionId: permissionId('machine-viewings:update') },
             { permissionId: permissionId('data-scope:all') },
           ],
         },
@@ -226,7 +239,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
   })
 
   it('reads back a manually recorded status and feedback', async () => {
-    // 状态流转入口尚未开放，这里直接写库验证迁移与序列化链路。
+    // 旧数据可能由脚本直接写入；序列化链路仍需兼容任意已存在状态。
     const created = await service.create(
       commandContext(operationsId),
       input({ customerName: '反馈读取' }),
@@ -244,5 +257,184 @@ describe('machine viewing appointments against PostgreSQL', () => {
       status: 'FEEDBACK_GIVEN',
       feedback: '客户到场，已看过微耕机，倾向年底下单。',
     })
+  })
+
+  it('updates editable content without changing the appointment number', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '编辑前' }),
+      randomUUID(),
+      NOW,
+    )
+    const updated = await service.update(commandContext(operationsId), created.id, {
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      customerName: '编辑后',
+      contactPerson: '王五',
+    }, NOW)
+
+    expect(updated).toMatchObject({
+      id: created.id,
+      appointmentNo: created.appointmentNo,
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      hour: null,
+      customerName: '编辑后',
+      customerPhone: null,
+      contactPerson: '王五',
+      status: 'PENDING_APPOINTMENT',
+    })
+    const audit = await prisma.auditEvent.findFirst({
+      where: { eventType: 'MACHINE_VIEWING_APPOINTMENT_UPDATED', targetId: created.id },
+      orderBy: { occurredAt: 'desc' },
+    })
+    expect(audit?.metadata).toMatchObject({ changedFields: expect.stringContaining('customerName') })
+  })
+
+  it('runs the strict status flow, edits feedback in place and locks cancellation afterwards', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '状态流转' }),
+      randomUUID(),
+      NOW,
+    )
+
+    await expect(service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '跳步' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+
+    const appointed = await service.transition(commandContext(operationsId), created.id, { status: 'APPOINTED' })
+    expect(appointed.status).toBe('APPOINTED')
+
+    const fedBack = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机。' },
+    )
+    expect(fedBack).toMatchObject({ status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机。' })
+
+    const edited = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机，倾向年底下单。' },
+    )
+    expect(edited.feedback).toBe('客户到场，已看过微耕机，倾向年底下单。')
+    expect(edited.status).toBe('FEEDBACK_GIVEN')
+
+    await expect(service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'CANCELLED' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+
+    const lockedEdit = await service.update(commandContext(operationsId), created.id, {
+      site: created.site,
+      machineType: created.machineType,
+      appointmentDate: created.appointmentDate,
+      period: created.period,
+      hour: created.hour ?? undefined,
+      customerName: '改名',
+      customerPhone: created.customerPhone ?? undefined,
+      contactPerson: created.contactPerson,
+    }, NOW).catch(error => error)
+    expect(lockedEdit).toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+  })
+
+  it('cancels before feedback and records the optional reason only in audit', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '取消预约' }),
+      randomUUID(),
+      NOW,
+    )
+    const cancelled = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'CANCELLED', cancelReason: '客户临时有事' },
+    )
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', feedback: null })
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: { eventType: 'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED', targetId: created.id },
+      orderBy: { occurredAt: 'desc' },
+    })
+    expect(audit?.metadata).toMatchObject({
+      fromStatus: 'PENDING_APPOINTMENT',
+      toStatus: 'CANCELLED',
+      cancelReason: '客户临时有事',
+    })
+  })
+
+  it('scopes updates by data scope: operations cannot touch another operator row, purchasing can', async () => {
+    const created = await service.create(
+      commandContext(otherOperationsId),
+      input({ customerName: '他人预约' }),
+      randomUUID(),
+      NOW,
+    )
+    const update = {
+      site: 'NEW_TAIPEI_LINKOU' as const,
+      machineType: 'MINI_TILLER' as const,
+      appointmentDate: '2026-11-20',
+      period: 'PM' as const,
+      customerName: '被改名字',
+      contactPerson: '李华',
+    }
+
+    await expect(service.update(commandContext(operationsId), created.id, update, NOW))
+      .rejects.toMatchObject({ code: 'MACHINE_VIEWING_NOT_FOUND', status: 404 })
+
+    const updatedByPurchasing = await service.update(commandContext(purchasingId), created.id, update, NOW)
+    expect(updatedByPurchasing.customerName).toBe('被改名字')
+  })
+
+  it('filters by keyword, status, site, machine type and appointment date range', async () => {
+    const earlier = await service.create(
+      commandContext(purchasingId),
+      input({ appointmentDay: 5, customerName: '筛选甲', site: 'NEW_TAIPEI_LINKOU', machineType: 'MINI_TILLER' }),
+      randomUUID(),
+      NOW,
+    )
+    const later = await service.create(
+      commandContext(purchasingId),
+      input({ appointmentDay: 20, customerName: '筛选乙', site: 'TAICHUNG_LONGJING', machineType: 'SHREDDER' }),
+      randomUUID(),
+      NOW,
+    )
+    await service.transition(commandContext(purchasingId), later.id, { status: 'APPOINTED' })
+
+    const keyword = await queries.listForActor(purchasingId, { page: 1, pageSize: 100, keyword: '筛选甲' })
+    expect(keyword.items.map(item => item.id)).toEqual([earlier.id])
+
+    const byStatus = await queries.listForActor(purchasingId, { page: 1, pageSize: 100, status: 'APPOINTED' })
+    expect(byStatus.items.some(item => item.id === later.id)).toBe(true)
+    expect(byStatus.items.some(item => item.id === earlier.id)).toBe(false)
+
+    const bySiteAndType = await queries.listForActor(purchasingId, {
+      page: 1,
+      pageSize: 100,
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+    })
+    expect(bySiteAndType.items.some(item => item.id === later.id)).toBe(true)
+    expect(bySiteAndType.items.some(item => item.id === earlier.id)).toBe(false)
+
+    const byDate = await queries.listForActor(purchasingId, {
+      page: 1,
+      pageSize: 100,
+      dateFrom: '2026-11-20',
+      dateTo: '2026-11-20',
+    })
+    expect(byDate.items.some(item => item.id === later.id)).toBe(true)
+    expect(byDate.items.some(item => item.id === earlier.id)).toBe(false)
+
+    await expect(queries.listForActor(purchasingId, { page: 1, pageSize: 100, dateFrom: '2026-02-31' }))
+      .rejects.toMatchObject({ code: 'MACHINE_VIEWING_VALIDATION_FAILED', status: 422 })
   })
 })

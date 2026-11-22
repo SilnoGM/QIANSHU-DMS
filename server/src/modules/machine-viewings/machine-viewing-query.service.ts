@@ -12,7 +12,12 @@ import type {
   MachineViewingListQueryDto,
   MachineViewingPageDto,
 } from './machine-viewing.dto'
-import { formatMachineViewingDate } from './machine-viewing.logic'
+import { MACHINE_VIEWING_ERROR_CODES, machineViewingFailure } from './machine-viewing.errors'
+import {
+  formatMachineViewingDate,
+  MachineViewingValidationError,
+  parseMachineViewingDateOnly,
+} from './machine-viewing.logic'
 
 const ROW_INCLUDE = {
   createdBy: { select: PERSON_REFERENCE_SELECT },
@@ -67,6 +72,59 @@ export function toMachineViewingDto(row: Row): MachineViewingDto {
   }
 }
 
+function parseFilterDate(value: string, label: string): Date {
+  try {
+    return parseMachineViewingDateOnly(value, label)
+  }
+  catch (error) {
+    if (error instanceof MachineViewingValidationError) {
+      machineViewingFailure(MACHINE_VIEWING_ERROR_CODES.VALIDATION_FAILED, error.message)
+    }
+    throw error
+  }
+}
+
+/**
+ * 归属条件与业务筛选在同一个 where 内组合：Prisma 会把顶层字段与 `OR`
+ * 按 AND 连接，关键字的四个字段只影响匹配范围，不会扩大操作者的可见行。
+ */
+export function buildMachineViewingListWhere(
+  viewer: MachineViewingViewer,
+  query: MachineViewingListQueryDto,
+): Prisma.MachineViewingAppointmentWhereInput {
+  const where: Prisma.MachineViewingAppointmentWhereInput = viewer.canViewAll
+    ? {}
+    : { createdByUserId: viewer.actorUserId }
+
+  if (query.status !== undefined) where.status = query.status
+  if (query.site !== undefined) where.site = query.site
+  if (query.machineType !== undefined) where.machineType = query.machineType
+
+  const keyword = query.keyword?.trim()
+  if (keyword !== undefined && keyword !== '') {
+    const contains = { contains: keyword, mode: 'insensitive' as const }
+    where.OR = [
+      { appointmentNo: contains },
+      { customerName: contains },
+      { customerPhone: contains },
+      { contactPerson: contains },
+    ]
+  }
+
+  const dateFrom = query.dateFrom === undefined ? undefined : parseFilterDate(query.dateFrom, '开始日期')
+  const dateTo = query.dateTo === undefined ? undefined : parseFilterDate(query.dateTo, '结束日期')
+  if (dateFrom !== undefined && dateTo !== undefined && dateFrom.getTime() > dateTo.getTime()) {
+    machineViewingFailure(MACHINE_VIEWING_ERROR_CODES.VALIDATION_FAILED, '开始日期不能晚于结束日期')
+  }
+  if (dateFrom !== undefined || dateTo !== undefined) {
+    where.appointmentDate = {
+      ...(dateFrom === undefined ? {} : { gte: dateFrom }),
+      ...(dateTo === undefined ? {} : { lte: dateTo }),
+    }
+  }
+  return where
+}
+
 @Injectable()
 export class MachineViewingQueryService {
   constructor(private readonly prisma: PrismaService) {}
@@ -77,9 +135,7 @@ export class MachineViewingQueryService {
     const pageSize = query.pageSize ?? 20
     return this.prisma.$transaction(async (transaction) => {
       const viewer = await resolveMachineViewingViewer(transaction, actorUserId)
-      const where: Prisma.MachineViewingAppointmentWhereInput = viewer.canViewAll
-        ? {}
-        : { createdByUserId: viewer.actorUserId }
+      const where = buildMachineViewingListWhere(viewer, query)
       const [rows, total] = await Promise.all([
         transaction.machineViewingAppointment.findMany({
           where,

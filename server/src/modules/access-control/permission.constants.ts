@@ -243,15 +243,16 @@ export const ADVERTISING_RECHARGE_PERMISSION_CODES = [
 export const NETWORK_NODES_PERMISSION_CODES = ['network-nodes:read'] as const
 
 /**
- * 看机预约：运营登记并查看本人预约，采运只读全部。
+ * 看机预约：运营登记并查看本人预约，采运查看全部并由双方共同推进状态。
  *
- * 「运营只看本人」复用发票申请的行级归属判定（`:read` 只保证能进接口，
- * 是否跨用户由 `data-scope:all` 决定），因此不需要再拆 `:read-self`；
- * 采运只授予读，不授予 create，避免同一页面出现两套可写口径。
+ * 「运营只看/只改本人」复用发票申请的行级归属判定（`:read`/`:update` 只保证能进
+ * 接口，是否跨用户由 `data-scope:all` 决定），因此不需要再拆 `:read-self`；
+ * 采运不授予 create，避免同一页面出现两套新建口径。
  */
 export const MACHINE_VIEWING_PERMISSION_CODES = [
   'machine-viewings:read',
   'machine-viewings:create',
+  'machine-viewings:update',
 ] as const
 
 /**

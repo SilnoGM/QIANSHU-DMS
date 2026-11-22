@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common'
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import { ApiHeader, ApiTags } from '@nestjs/swagger'
 
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
@@ -11,12 +11,16 @@ import { CurrentUserId } from '../auth/decorators/current-user-id.decorator'
 import {
   MACHINE_VIEWING_PERMISSION_CREATE,
   MACHINE_VIEWING_PERMISSION_READ,
+  MACHINE_VIEWING_PERMISSION_UPDATE,
 } from './machine-viewing.contract'
 import {
   CreateMachineViewingDto,
   MachineViewingDto,
+  MachineViewingIdParamsDto,
   MachineViewingListQueryDto,
   MachineViewingPageDto,
+  MachineViewingStatusTransitionDto,
+  UpdateMachineViewingDto,
 } from './machine-viewing.dto'
 import { MachineViewingQueryService } from './machine-viewing-query.service'
 import { MachineViewingService, type MachineViewingCommandContext } from './machine-viewing.service'
@@ -42,11 +46,14 @@ function context(request: object): MachineViewingCommandContext {
   return { actorUserId: getRequestAuthContext(request).userId, requestId: getRequestId(request) }
 }
 
+const notFound: ApiContractErrorOptions = { status: 404, codes: ['MACHINE_VIEWING_NOT_FOUND'] }
+const stateChanged: ApiContractErrorOptions = { status: 409, codes: ['MACHINE_VIEWING_STATE_CHANGED'] }
+
 /**
- * 看机预约只提供「登记」与「列表」两个动作。
+ * 看机预约：登记、列表、编辑、状态流转（含反馈录入与取消）。
  *
- * 列表的归属范围由服务层按 `data-scope:all` 判定：运营只看本人，采运看全部；
- * 创建只授予运营角色，采运即使能进列表也不持有 create 权限。
+ * 列表与写操作的归属范围都由服务层按 `data-scope:all` 判定：运营只看/只改本人，
+ * 采运看全部；创建只授予运营角色，采运即使能进列表也不持有 create 权限。
  */
 @ApiTags('machine-viewings')
 @Controller('machine-viewings')
@@ -84,5 +91,30 @@ export class MachineViewingController {
     @Req() request: object,
   ): Promise<MachineViewingDto> {
     return this.service.create(context(request), input, idempotencyKey)
+  }
+
+  @Patch(':id')
+  @RequirePermissions(MACHINE_VIEWING_PERMISSION_UPDATE)
+  @ApiContractResponse({ status: HttpStatus.OK, type: MachineViewingDto })
+  @contract('machine_viewings_update', true, [notFound, stateChanged])
+  update(
+    @Param() params: MachineViewingIdParamsDto,
+    @Body() input: UpdateMachineViewingDto,
+    @Req() request: object,
+  ): Promise<MachineViewingDto> {
+    return this.service.update(context(request), params.id, input)
+  }
+
+  @Post(':id/status-transitions')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(MACHINE_VIEWING_PERMISSION_UPDATE)
+  @ApiContractResponse({ status: HttpStatus.OK, type: MachineViewingDto })
+  @contract('machine_viewings_transition_status', true, [notFound, stateChanged])
+  transition(
+    @Param() params: MachineViewingIdParamsDto,
+    @Body() input: MachineViewingStatusTransitionDto,
+    @Req() request: object,
+  ): Promise<MachineViewingDto> {
+    return this.service.transition(context(request), params.id, input)
   }
 }

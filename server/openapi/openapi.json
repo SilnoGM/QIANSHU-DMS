@@ -86412,7 +86412,9 @@
                 "PURCHASE_ORDER_CORRECTION_APPLIED",
                 "PACKAGING_COST_CANCELLED",
                 "SALES_RECEIPT_VOUCHER_SENT",
-                "SALES_RECEIPT_CONFIRMED"
+                "SALES_RECEIPT_CONFIRMED",
+                "MACHINE_VIEWING_APPOINTMENT_UPDATED",
+                "MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED"
               ]
             }
           },
@@ -112210,6 +112212,79 @@
               "default": 20,
               "type": "number"
             }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "按预约编号、客户姓名、客户电话或业务对接人模糊搜索",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "预约状态精确匹配。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_APPOINTMENT",
+                "APPOINTED",
+                "FEEDBACK_GIVEN",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "site",
+            "required": false,
+            "in": "query",
+            "description": "看机地点精确匹配。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "NEW_TAIPEI_LINKOU",
+                "TAICHUNG_LONGJING"
+              ]
+            }
+          },
+          {
+            "name": "machineType",
+            "required": false,
+            "in": "query",
+            "description": "看机机型精确匹配。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "MINI_TILLER",
+                "SHREDDER",
+                "INCINERATOR"
+              ]
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "description": "预约日期起（含），YYYY-MM-DD。",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "description": "预约日期止（含），YYYY-MM-DD。",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -112658,6 +112733,598 @@
               "codes": [
                 "MACHINE_VIEWING_CONFLICT",
                 "MACHINE_VIEWING_IDEMPOTENCY_CONFLICT"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "MACHINE_VIEWING_VALIDATION_FAILED",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/machine-viewings/{id}": {
+      "patch": {
+        "operationId": "machine_viewings_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMachineViewingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineViewingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "machine-viewings"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "MACHINE_VIEWING_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "MACHINE_VIEWING_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "MACHINE_VIEWING_VALIDATION_FAILED",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/machine-viewings/{id}/status-transitions": {
+      "post": {
+        "operationId": "machine_viewings_transition_status",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineViewingStatusTransitionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineViewingDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "machine-viewings"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "MACHINE_VIEWING_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "MACHINE_VIEWING_STATE_CHANGED"
               ]
             },
             {
@@ -132081,7 +132748,9 @@
               "PURCHASE_ORDER_CORRECTION_APPLIED",
               "PACKAGING_COST_CANCELLED",
               "SALES_RECEIPT_VOUCHER_SENT",
-              "SALES_RECEIPT_CONFIRMED"
+              "SALES_RECEIPT_CONFIRMED",
+              "MACHINE_VIEWING_APPOINTMENT_UPDATED",
+              "MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED"
             ]
           },
           "outcome": {
@@ -139646,7 +140315,7 @@
               "FEEDBACK_GIVEN",
               "CANCELLED"
             ],
-            "description": "预约状态；提交后默认为 PENDING_APPOINTMENT，状态流转入口尚未开放。"
+            "description": "预约状态；提交后默认为 PENDING_APPOINTMENT，之后按 已预约 → 已反馈 顺序流转，或从待预约/已预约取消。"
           },
           "feedback": {
             "type": "string",
@@ -139774,6 +140443,96 @@
           "period",
           "customerName",
           "contactPerson"
+        ]
+      },
+      "UpdateMachineViewingDto": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "string",
+            "enum": [
+              "NEW_TAIPEI_LINKOU",
+              "TAICHUNG_LONGJING"
+            ],
+            "description": "看机地点。"
+          },
+          "machineType": {
+            "type": "string",
+            "enum": [
+              "MINI_TILLER",
+              "SHREDDER",
+              "INCINERATOR"
+            ],
+            "description": "看机机型。"
+          },
+          "appointmentDate": {
+            "type": "string",
+            "format": "date",
+            "description": "预约日期 YYYY-MM-DD，只能为今年或明年且不能早于今天。"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "AM",
+              "PM"
+            ],
+            "description": "上午或下午。"
+          },
+          "hour": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "description": "选填；只表示所选时段内第几点。不传表示只保留上午/下午。"
+          },
+          "customerName": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "陈先生"
+          },
+          "customerPhone": {
+            "type": "string",
+            "maxLength": 64,
+            "example": "0912-345-678"
+          },
+          "contactPerson": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "site",
+          "machineType",
+          "appointmentDate",
+          "period",
+          "customerName",
+          "contactPerson"
+        ]
+      },
+      "MachineViewingStatusTransitionDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "APPOINTED",
+              "FEEDBACK_GIVEN",
+              "CANCELLED"
+            ],
+            "description": "目标状态：已预约、已反馈或已取消。"
+          },
+          "feedback": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "目标状态为已反馈时必填；已反馈状态下再次提交表示修改反馈。"
+          },
+          "cancelReason": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "取消预约时选填；只写入审计，不落库到反馈字段。"
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "SystemStatusCheckDto": {

@@ -229,6 +229,9 @@ enum AuditEventType {
   /// 表外收款三步流转：发送水单与确认收到。
   SALES_RECEIPT_VOUCHER_SENT
   SALES_RECEIPT_CONFIRMED
+  /// 看机预约编辑与状态流转。追加在末尾与数据库枚举顺序一致。
+  MACHINE_VIEWING_APPOINTMENT_UPDATED
+  MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED
 
   @@map("audit_event_type")
 }
