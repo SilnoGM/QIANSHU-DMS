@@ -45442,6 +45442,8 @@
               "type": "string",
               "enum": [
                 "PENDING_REVIEW",
+                "PENDING_CONFIRM",
+                "PENDING_POSTING",
                 "APPROVED",
                 "REJECTED",
                 "VOIDED"
@@ -45456,6 +45458,8 @@
               "type": "string",
               "enum": [
                 "PENDING_REVIEW",
+                "PENDING_CONFIRM",
+                "PENDING_POSTING",
                 "APPROVED",
                 "REJECTED"
               ]
@@ -45804,6 +45808,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -46126,6 +46132,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -46448,6 +46456,700 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/sales-receipt-requests/{id}/send-voucher": {
+      "post": {
+        "operationId": "sales_receipts_send_voucher",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesReceiptActionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesReceiptRequestDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-receipt-requests"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_DOCUMENT_NOT_FOUND",
+                "SALES_ORDER_NOT_FOUND",
+                "SALES_RECEIPT_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SALES_RECEIPT_CONTEXT_CHANGED",
+                "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
+                "SALES_RECEIPT_REVERSAL_CONFLICT",
+                "SALES_RECEIPT_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SALES_ORDER_AMOUNT_INVALID",
+                "SALES_ORDER_CANCELLED",
+                "SALES_ORDER_COMPLETED",
+                "SALES_ORDER_DOCUMENT_UNAVAILABLE",
+                "SALES_ORDER_PAYMENT_AMOUNT_INVALID",
+                "SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE",
+                "SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE",
+                "SALES_RECEIPT_CNY_AMOUNT_INVALID",
+                "SALES_RECEIPT_POSTING_UNAVAILABLE",
+                "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/sales-receipt-requests/{id}/confirm": {
+      "post": {
+        "operationId": "sales_receipts_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesReceiptActionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesReceiptRequestDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-receipt-requests"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_DOCUMENT_NOT_FOUND",
+                "SALES_ORDER_NOT_FOUND",
+                "SALES_RECEIPT_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "SALES_RECEIPT_CONTEXT_CHANGED",
+                "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
+                "SALES_RECEIPT_REVERSAL_CONFLICT",
+                "SALES_RECEIPT_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "SALES_ORDER_AMOUNT_INVALID",
+                "SALES_ORDER_CANCELLED",
+                "SALES_ORDER_COMPLETED",
+                "SALES_ORDER_DOCUMENT_UNAVAILABLE",
+                "SALES_ORDER_PAYMENT_AMOUNT_INVALID",
+                "SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE",
+                "SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE",
+                "SALES_RECEIPT_CNY_AMOUNT_INVALID",
+                "SALES_RECEIPT_POSTING_UNAVAILABLE",
+                "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -46792,6 +47494,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -47136,6 +47840,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -47496,6 +48202,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -47828,6 +48536,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -48181,6 +48891,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -48233,6 +48945,8 @@
               "type": "string",
               "enum": [
                 "PENDING_REVIEW",
+                "PENDING_CONFIRM",
+                "PENDING_POSTING",
                 "APPROVED",
                 "REJECTED",
                 "VOIDED"
@@ -48247,6 +48961,8 @@
               "type": "string",
               "enum": [
                 "PENDING_REVIEW",
+                "PENDING_CONFIRM",
+                "PENDING_POSTING",
                 "APPROVED",
                 "REJECTED"
               ]
@@ -48595,6 +49311,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -48964,6 +49682,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -49305,6 +50025,8 @@
                 "SALES_RECEIPT_CNY_AMOUNT_INVALID",
                 "SALES_RECEIPT_POSTING_UNAVAILABLE",
                 "SALES_RECEIPT_RATE_UNAVAILABLE",
+                "SALES_RECEIPT_VOUCHER_NOT_IMAGE",
+                "SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             },
@@ -85688,7 +86410,9 @@
                 "ASSISTANT_DELIVERY_RESENT",
                 "ASSISTANT_TARGET_MESSAGE_SENT",
                 "PURCHASE_ORDER_CORRECTION_APPLIED",
-                "PACKAGING_COST_CANCELLED"
+                "PACKAGING_COST_CANCELLED",
+                "SALES_RECEIPT_VOUCHER_SENT",
+                "SALES_RECEIPT_CONFIRMED"
               ]
             }
           },
@@ -121162,12 +121886,24 @@
             "type": "string",
             "enum": [
               "PENDING_REVIEW",
+              "PENDING_CONFIRM",
+              "PENDING_POSTING",
               "APPROVED",
               "REJECTED"
             ]
           },
           "submittedAt": {
             "type": "string",
+            "format": "date-time"
+          },
+          "voucherSentAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "nullable": true,
             "format": "date-time"
           },
           "reviewedAt": {
@@ -121195,6 +121931,24 @@
           },
           "submittedBy": {
             "$ref": "#/components/schemas/SalesReceiptPersonDto"
+          },
+          "voucherSentBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesReceiptPersonDto"
+              }
+            ]
+          },
+          "confirmedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesReceiptPersonDto"
+              }
+            ]
           },
           "reviewedBy": {
             "nullable": true,
@@ -121232,6 +121986,8 @@
           "remark",
           "status",
           "submittedAt",
+          "voucherSentAt",
+          "confirmedAt",
           "reviewedAt",
           "reviewRemark",
           "version",
@@ -121239,6 +121995,8 @@
           "salesOrder",
           "accountOwner",
           "submittedBy",
+          "voucherSentBy",
+          "confirmedBy",
           "reviewedBy",
           "voucher",
           "approvedPayment"
@@ -121248,6 +122006,12 @@
         "type": "object",
         "properties": {
           "PENDING_REVIEW": {
+            "type": "number"
+          },
+          "PENDING_CONFIRM": {
+            "type": "number"
+          },
+          "PENDING_POSTING": {
             "type": "number"
           },
           "APPROVED": {
@@ -121262,6 +122026,8 @@
         },
         "required": [
           "PENDING_REVIEW",
+          "PENDING_CONFIRM",
+          "PENDING_POSTING",
           "APPROVED",
           "REJECTED",
           "VOIDED"
@@ -121366,6 +122132,17 @@
           "userShareRate",
           "companyShareRate",
           "entries"
+        ]
+      },
+      "SalesReceiptActionDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "expectedVersion"
         ]
       },
       "SalesReceiptApproveDto": {
@@ -131302,7 +132079,9 @@
               "ASSISTANT_DELIVERY_RESENT",
               "ASSISTANT_TARGET_MESSAGE_SENT",
               "PURCHASE_ORDER_CORRECTION_APPLIED",
-              "PACKAGING_COST_CANCELLED"
+              "PACKAGING_COST_CANCELLED",
+              "SALES_RECEIPT_VOUCHER_SENT",
+              "SALES_RECEIPT_CONFIRMED"
             ]
           },
           "outcome": {

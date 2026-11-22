@@ -90,7 +90,8 @@ export async function insertFixture(client: Client) {
   return { userId, salesOrderId, assetId }
 }
 
-export async function insertRequest(client: Client, fixture: Awaited<ReturnType<typeof insertFixture>>, amount = '100') {
+/** `voucherAssetId` 允许用例替换凭证资产，用于构造历史 DOCUMENT 凭证的在途申请。 */
+export async function insertRequest(client: Client, fixture: Awaited<ReturnType<typeof insertFixture>>, amount = '100', voucherAssetId: string = fixture.assetId) {
   const fingerprint = randomBytes(32)
   const numbering = await insertCollectionIssuance(client, fingerprint)
   const result = await client.query<{ id: string }>(`INSERT INTO sales_receipt_requests
@@ -98,6 +99,6 @@ export async function insertRequest(client: Client, fixture: Awaited<ReturnType<
     payment_method, payment_method_name_snapshot, voucher_media_asset_id, voucher_title,
     submitted_by_user_id, idempotency_key_hash, request_fingerprint_hash, collection_no, numbering_issuance_id)
     VALUES ($1,$2,'DEPOSIT',$3,'TWD',CURRENT_TIMESTAMP,'bank_transfer','银行转账',$4,'测试凭证',$2,$5,$6,$7,$8) RETURNING id`,
-  [fixture.salesOrderId, fixture.userId, amount, fixture.assetId, randomBytes(32), fingerprint, numbering.collectionNo, numbering.numberingIssuanceId])
+  [fixture.salesOrderId, fixture.userId, amount, voucherAssetId, randomBytes(32), fingerprint, numbering.collectionNo, numbering.numberingIssuanceId])
   return result.rows[0].id
 }

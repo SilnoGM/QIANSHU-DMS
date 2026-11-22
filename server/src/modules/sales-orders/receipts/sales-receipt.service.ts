@@ -27,10 +27,12 @@ import { parseSalesOrderIdempotencyKey } from '../sales-order-command.normalizer
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import { noopSystemNotifications } from '../../notifications/noop-system-notification'
 import { SystemNotificationService } from '../../notifications/system-notification.service'
+import type { SystemNotificationPublishResult } from '../../notifications/notification.types'
 import { formatNotificationDateTime, salesOrderPaymentTypeLabel } from '../../notifications/notification-display-labels'
-import type { SalesReceiptApproveDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptApprovalContextDto } from '../dto/sales-receipt.dto'
+import type { SalesReceiptActionDto, SalesReceiptApproveDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptApprovalContextDto } from '../dto/sales-receipt.dto'
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
 import { assertReceiptCapacity, convertReceiptToCny, receiptFailure } from './sales-receipt-money'
+import { SALES_RECEIPT_ENTRY_STATUS, SALES_RECEIPT_IN_FLIGHT_STATUSES, SALES_RECEIPT_POSTING_STATUS, isSalesReceiptInFlight } from './sales-receipt-status'
 
 type Tx = Prisma.TransactionClient
 function hash(value: string) { return createHash('sha256').update(value).digest() }
@@ -113,13 +115,13 @@ export class SalesReceiptService {
   private async capacity(tx: Tx, salesOrderId: string, total: string, additional = '0.00') {
     const [paid, pending] = await Promise.all([
       tx.salesOrderPayment.aggregate({ where: { salesOrderId, voidedAt: null }, _sum: { amount: true } }),
-      tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }),
+      tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: { in: [...SALES_RECEIPT_IN_FLIGHT_STATUSES] } }, _sum: { amount: true } }),
     ])
     assertReceiptCapacity(total, paid._sum.amount?.toFixed(2) ?? '0.00', pending._sum.amount?.toFixed(2) ?? '0.00', additional)
   }
-  private auditEvent(tx: Tx, context: SalesOrderMutationContext, eventType: AuditEventType, targetId: string, salesOrderId: string) {
+  private auditEvent(tx: Tx, context: SalesOrderMutationContext, eventType: AuditEventType, targetId: string, salesOrderId: string, metadata: Record<string, unknown> = {}) {
     return this.audit.record(tx, { eventType, outcome: AuditOutcome.SUCCESS, actorType: AuditActorType.USER,
-      actorUserId: context.actorUserId, targetType: eventType === AuditEventType.SALES_ORDER_PAYMENT_VOIDED ? 'SALES_ORDER_PAYMENT' : 'SALES_RECEIPT_REQUEST', targetId, requestId: context.requestId, metadata: { salesOrderId } })
+      actorUserId: context.actorUserId, targetType: eventType === AuditEventType.SALES_ORDER_PAYMENT_VOIDED ? 'SALES_ORDER_PAYMENT' : 'SALES_RECEIPT_REQUEST', targetId, requestId: context.requestId, metadata: { salesOrderId, ...metadata } })
   }
   private fundContext(context: SalesOrderMutationContext, action: 'APPROVE' | 'VOID'): FundBusinessTransactionContext {
     return { ...context, sourceCode: 'SALES_RECEIPT', consumerCode: `SALES_RECEIPT.${action}` }
@@ -269,7 +271,7 @@ export class SalesReceiptService {
         await applyTransactionTimeouts(tx)
         await this.authorize(tx, context, ['sales-receipts:review'])
         const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
-        if (row.status !== 'PENDING_REVIEW') receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已处理', HttpStatus.CONFLICT)
+        if (row.status !== SALES_RECEIPT_POSTING_STATUS) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请尚未进入待入账', HttpStatus.CONFLICT)
         this.assertOpen(order)
         const rate = await this.rate(tx, row.currencyCode)
         const amount = convertReceiptToCny(row.amount.toFixed(2), rate.rate.toFixed(4))
@@ -288,7 +290,7 @@ export class SalesReceiptService {
         const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
         const reviewRemark = reason(input.reason)
         if (row.status === 'APPROVED' && row.reviewedByUserId === context.actorUserId && row.reviewRemark === reviewRemark) return
-        if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
+        if (row.status !== SALES_RECEIPT_POSTING_STATUS || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
         this.assertOpen(order)
         if (order.version !== input.expectedContext.orderVersion) receiptFailure('SALES_RECEIPT_CONTEXT_CHANGED', '订单已变化，请重新核对', HttpStatus.CONFLICT)
         await this.capacity(tx, order.id, order.agreedTotalAmount.toFixed(2))
@@ -308,7 +310,7 @@ export class SalesReceiptService {
         await tx.salesOrderDocument.create({ data: { salesOrderId: order.id, paymentId: payment.id, mediaAssetId: row.voucherMediaAssetId, documentType: 'PAYMENT_VOUCHER', title: row.voucherTitle, createdByUserId: context.actorUserId } })
         await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'APPROVED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, approvedPaymentId: payment.id, version: { increment: 1 } } })
         await this.updatePaymentStatus(tx, context, order, true, reviewRemark ?? '收款审核通过，系统重新计算付款状态')
-        await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_APPROVED, id, order.id)
+        await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_APPROVED, id, order.id, { fromStatus: row.status })
         await this.notifications.publish({
           eventType: 'SALES_RECEIPT_APPROVED',
           source: { type: 'SALES_RECEIPT_REQUEST', id },
@@ -342,10 +344,11 @@ export class SalesReceiptService {
       await this.authorize(tx, context, ['sales-receipts:review'])
       const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
       if (row.status === 'REJECTED' && row.reviewedByUserId === context.actorUserId && row.reviewRemark === reviewRemark) return
-      if (row.status !== 'PENDING_REVIEW' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
+      // 三个阶段都允许驳回：财务在任一环节发现金额或凭证问题都能退回重提。
+      if (!isSalesReceiptInFlight(row.status) || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
       const now = new Date()
       await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, version: { increment: 1 } } })
-      await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_REJECTED, id, order.id)
+      await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_REJECTED, id, order.id, { fromStatus: row.status })
       await this.notifications.publish({
         eventType: 'SALES_RECEIPT_REJECTED',
         source: { type: 'SALES_RECEIPT_REQUEST', id },
@@ -367,6 +370,121 @@ export class SalesReceiptService {
         requestedByUserId: context.actorUserId,
       }, { transaction: tx })
     })
+    return this.query.getById(id, context.actorUserId)
+  }
+
+  /**
+   * 表外水单发送：文案 + 收款凭证图片播报到财务群。
+   *
+   * publish 对配置问题不抛异常，只返回 SKIPPED/FAILED，所以这里在业务事务内失败关闭：
+   * 抛出 ApiException 会让通知行、通知编号与状态变更一起回滚，申请留在「待发群」。
+   * 判定同时覆盖「群渠道已入队」与「凭证图片未被附件策略拦下」，避免只发正文。
+   */
+  private async publishVoucherToGroup(
+    tx: Tx,
+    context: SalesOrderMutationContext,
+    row: {
+      id: string
+      amount: Prisma.Decimal
+      collectionNo: string | null
+      currencyCode: string
+      paymentType: string
+      paymentMethodNameSnapshot: string
+      receivedAt: Date
+      remark: string | null
+      voucherMediaAssetId: string
+      version: number
+    },
+    order: { orderNo: string, customerName: string },
+  ): Promise<SystemNotificationPublishResult> {
+    let result: SystemNotificationPublishResult
+    try {
+      result = await this.notifications.publish({
+        eventType: 'SALES_RECEIPT_VOUCHER_SENT',
+        source: { type: 'SALES_RECEIPT_REQUEST', id: row.id },
+        // 群目标由 ASSISTANT 渠道策略覆盖；命令目标只服务可能配置的站内渠道。
+        target: { kind: 'PERMISSION', permissionCode: 'sales-receipts:review' },
+        templateKey: 'sales.receipt.voucher-sent',
+        variables: {
+          amount: row.amount.toFixed(2),
+          collectionNo: row.collectionNo ?? '',
+          currencyCode: row.currencyCode,
+          customerName: order.customerName,
+          orderNo: order.orderNo,
+          paymentMethod: row.paymentMethodNameSnapshot,
+          paymentType: salesOrderPaymentTypeLabel(row.paymentType),
+          receivedAt: formatNotificationDateTime(row.receivedAt),
+          remark: row.remark ?? '',
+        },
+        media: [{ assetId: row.voucherMediaAssetId, sourceKey: 'salesReceipt.voucher' }],
+        dedupeKey: `sales-receipt-voucher-sent:${row.id}:v${row.version}`,
+        requestedByUserId: context.actorUserId,
+      }, { transaction: tx })
+    } catch (error) {
+      if (error instanceof ApiException) throw error
+      // 通知编号规则不可用等底层错误统一翻译，避免被 mapError 误报成销售收款编号问题。
+      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单发送失败，请检查群通知配置后重试')
+    }
+    const assistant = result.channels.find(channel => channel.channel === 'ASSISTANT')
+    if (result.duplicated || assistant?.status !== 'PENDING' || assistant.recipientCount - assistant.skippedCount < 1) {
+      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单未进入群发送队列，请检查群目标、模板与公司号配置')
+    }
+    // 凭证必须真正进入附件队列；被策略拦下时只发正文，不满足「发送水单」的业务语义。
+    const media = await tx.notificationMedia.findMany({ where: { notificationId: result.notificationId }, select: { blockedReason: true } })
+    if (media.length !== 1 || media[0]?.blockedReason !== null) {
+      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '收款凭证图片未进入群发送队列，请检查模板附件策略')
+    }
+    return result
+  }
+
+  /** 第一步：财务确认凭证可对外播报，发送水单后进入待确认。 */
+  async sendVoucher(context: SalesOrderMutationContext, id: string, input: SalesReceiptActionDto) {
+    try {
+      await this.prisma.$transaction(async tx => {
+        await applyTransactionTimeouts(tx)
+        await this.authorize(tx, context, ['sales-receipts:review'])
+        const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
+        // 同一操作者的网络重试：状态已经推进到下一步即视为成功，不重复播报。
+        if (row.status === 'PENDING_CONFIRM' && row.voucherSentByUserId === context.actorUserId && row.version === input.expectedVersion + 1) return
+        if (row.status !== SALES_RECEIPT_ENTRY_STATUS || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
+        this.assertOpen(order)
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM media_assets WHERE id = ${row.voucherMediaAssetId}::uuid FOR SHARE`)
+        const asset = await tx.mediaAsset.findFirst({ where: { id: row.voucherMediaAssetId, status: 'READY', deletedAt: null, objectKey: { not: null } }, select: { mediaType: true, objectKey: true } })
+        if (!asset) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证当前不可用')
+        // 水单必须是图片：PDF 凭证无法进入通知附件，只能驳回后换图片重提。
+        if (asset.mediaType !== 'IMAGE') receiptFailure('SALES_RECEIPT_VOUCHER_NOT_IMAGE', '凭证为 PDF，无法作为水单图片发送；请驳回后重新上传图片')
+        await this.verifyVoucher(asset.objectKey!)
+        const now = new Date()
+        const next = await tx.salesReceiptRequest.update({ where: { id },
+          data: { status: 'PENDING_CONFIRM', voucherSentByUserId: context.actorUserId, voucherSentAt: now, version: { increment: 1 } } })
+        await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_VOUCHER_SENT, id, order.id, { fromStatus: row.status })
+        await this.publishVoucherToGroup(tx, context, next, order)
+      })
+    } catch (error) { return mapError(error) }
+    return this.query.getById(id, context.actorUserId)
+  }
+
+  /**
+   * 第二步：财务确认款项已经到账。
+   *
+   * 只推进状态与证据，不生成正式收款、不改订单付款状态；金额与入账规则仍在第三步核对。
+   * 本期不为这一步单独发通知，群里的水单本身就是交接信号。
+   */
+  async confirm(context: SalesOrderMutationContext, id: string, input: SalesReceiptActionDto) {
+    try {
+      await this.prisma.$transaction(async tx => {
+        await applyTransactionTimeouts(tx)
+        await this.authorize(tx, context, ['sales-receipts:review'])
+        const { order, row } = await this.lockRequest(tx, id, context.actorUserId)
+        if (row.status === 'PENDING_POSTING' && row.confirmedByUserId === context.actorUserId && row.version === input.expectedVersion + 1) return
+        if (row.status !== 'PENDING_CONFIRM' || row.version !== input.expectedVersion) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '申请已变化，请刷新后重试', HttpStatus.CONFLICT)
+        this.assertOpen(order)
+        const now = new Date()
+        await tx.salesReceiptRequest.update({ where: { id },
+          data: { status: 'PENDING_POSTING', confirmedByUserId: context.actorUserId, confirmedAt: now, version: { increment: 1 } } })
+        await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_CONFIRMED, id, order.id, { fromStatus: row.status })
+      })
+    } catch (error) { return mapError(error) }
     return this.query.getById(id, context.actorUserId)
   }
 

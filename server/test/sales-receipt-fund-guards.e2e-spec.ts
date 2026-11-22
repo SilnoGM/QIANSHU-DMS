@@ -54,7 +54,10 @@ describe('sales receipt fund invariants against direct PostgreSQL writes', () =>
     [paymentId, fixture.userId, batchId, rate.rows[0].id, rate.rows[0].version, requestId])
     await client.query(`INSERT INTO sales_order_documents (sales_order_id,media_asset_id,document_type,title,payment_id,created_by_user_id)
       SELECT sales_order_id,voucher_media_asset_id,'PAYMENT_VOUCHER',voucher_title,$1,$2 FROM sales_receipt_requests WHERE id=$3`, [paymentId, fixture.userId, requestId])
-    await client.query(`UPDATE sales_receipt_requests SET status='APPROVED',version=2,reviewed_by_user_id=$2,reviewed_at=clock_timestamp(),approved_payment_id=$3 WHERE id=$1`, [requestId, fixture.userId, paymentId])
+    // 直接写库也必须走完三步流转：跳步或版本跳跃由触发器拦下。
+    await client.query(`UPDATE sales_receipt_requests SET status='PENDING_CONFIRM',version=2,voucher_sent_by_user_id=$2,voucher_sent_at=clock_timestamp() WHERE id=$1`, [requestId, fixture.userId])
+    await client.query(`UPDATE sales_receipt_requests SET status='PENDING_POSTING',version=3,confirmed_by_user_id=$2,confirmed_at=clock_timestamp() WHERE id=$1`, [requestId, fixture.userId])
+    await client.query(`UPDATE sales_receipt_requests SET status='APPROVED',version=4,reviewed_by_user_id=$2,reviewed_at=clock_timestamp(),approved_payment_id=$3 WHERE id=$1`, [requestId, fixture.userId, paymentId])
     await client.query(`UPDATE sales_orders SET payment_status='PARTIALLY_PAID' WHERE id=$1`, [fixture.salesOrderId])
     // 先证明基线本身能通过全部延期约束，后续失败才能归因于攻击操作。
     await client.query('SET CONSTRAINTS ALL IMMEDIATE')

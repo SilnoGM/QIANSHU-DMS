@@ -5,8 +5,8 @@ import { IsDefined, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min, Valid
 import { SalesOrderPaymentRequestDto } from './sales-order-mutation.dto'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
-export enum SalesReceiptStatusDto { PENDING_REVIEW = 'PENDING_REVIEW', APPROVED = 'APPROVED', REJECTED = 'REJECTED' }
-export enum SalesReceiptViewDto { PENDING_REVIEW = 'PENDING_REVIEW', APPROVED = 'APPROVED', REJECTED = 'REJECTED', VOIDED = 'VOIDED' }
+export enum SalesReceiptStatusDto { PENDING_REVIEW = 'PENDING_REVIEW', PENDING_CONFIRM = 'PENDING_CONFIRM', PENDING_POSTING = 'PENDING_POSTING', APPROVED = 'APPROVED', REJECTED = 'REJECTED' }
+export enum SalesReceiptViewDto { PENDING_REVIEW = 'PENDING_REVIEW', PENDING_CONFIRM = 'PENDING_CONFIRM', PENDING_POSTING = 'PENDING_POSTING', APPROVED = 'APPROVED', REJECTED = 'REJECTED', VOIDED = 'VOIDED' }
 export class SalesReceiptRequestCreateDto extends SalesOrderPaymentRequestDto {
   @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true })
   @IsOptional() @IsUUID('4') resubmittedFromId?: string | null
@@ -41,6 +41,10 @@ export class SalesReceiptExpectedContextDto {
 export class SalesReceiptRejectDto {
   @ApiProperty() @IsInt() @Min(1) expectedVersion!: number
   @ApiProperty({ maxLength: 500 }) @IsString() @IsUnicodeCodePointLength(1, 500) reason!: string
+}
+/** 发送水单与确认收到都只推进状态与证据，不写金额与备注。 */
+export class SalesReceiptActionDto {
+  @ApiProperty() @IsInt() @Min(1) expectedVersion!: number
 }
 export class SalesReceiptApproveDto {
   @ApiProperty() @IsInt() @Min(1) expectedVersion!: number
@@ -109,6 +113,8 @@ export class SalesReceiptRequestDetailDto {
   @ApiProperty({ nullable: true, type: 'string' }) remark!: string | null
   @ApiProperty({ enum: SalesReceiptStatusDto }) status!: SalesReceiptStatusDto
   @ApiProperty({ format: 'date-time' }) submittedAt!: string
+  @ApiProperty({ nullable: true, type: 'string', format: 'date-time' }) voucherSentAt!: string | null
+  @ApiProperty({ nullable: true, type: 'string', format: 'date-time' }) confirmedAt!: string | null
   @ApiProperty({ nullable: true, type: 'string', format: 'date-time' }) reviewedAt!: string | null
   @ApiProperty({ nullable: true, type: 'string' }) reviewRemark!: string | null
   @ApiProperty() version!: number
@@ -116,12 +122,16 @@ export class SalesReceiptRequestDetailDto {
   @ApiProperty({ type: () => SalesReceiptOrderDto }) salesOrder!: SalesReceiptOrderDto
   @ApiProperty({ type: () => SalesReceiptPersonDto }) accountOwner!: SalesReceiptPersonDto
   @ApiProperty({ type: () => SalesReceiptPersonDto }) submittedBy!: SalesReceiptPersonDto
+  @ApiProperty({ nullable: true, type: () => SalesReceiptPersonDto }) voucherSentBy!: SalesReceiptPersonDto | null
+  @ApiProperty({ nullable: true, type: () => SalesReceiptPersonDto }) confirmedBy!: SalesReceiptPersonDto | null
   @ApiProperty({ nullable: true, type: () => SalesReceiptPersonDto }) reviewedBy!: SalesReceiptPersonDto | null
   @ApiProperty({ type: () => SalesReceiptVoucherDto }) voucher!: SalesReceiptVoucherDto
   @ApiProperty({ nullable: true, type: () => SalesReceiptPaymentDto }) approvedPayment!: SalesReceiptPaymentDto | null
 }
 export class SalesReceiptStatusCountsDto {
   @ApiProperty() PENDING_REVIEW!: number
+  @ApiProperty() PENDING_CONFIRM!: number
+  @ApiProperty() PENDING_POSTING!: number
   @ApiProperty() APPROVED!: number
   @ApiProperty() REJECTED!: number
   @ApiProperty() VOIDED!: number

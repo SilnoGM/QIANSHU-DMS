@@ -22,7 +22,7 @@ import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-
 import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
-import { insertFixture } from './fixtures/sales-receipt-schema.fixture'
+import { insertFixture, insertRequest } from './fixtures/sales-receipt-schema.fixture'
 import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptRequestCreateDto } from '../src/modules/sales-orders/dto/sales-receipt.dto'
 
 describe('sales receipt atomic posting in isolated PostgreSQL', () => {
@@ -57,9 +57,29 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     if (!await tx.dictionaryItem.findFirst({ where: { dictionaryTypeId: dictionary.id, value: 'RECEIPT_TEST_TRANSFER' } })) await tx.dictionaryItem.create({ data: { dictionaryTypeId: dictionary.id, value: 'RECEIPT_TEST_TRANSFER', label: '测试转账', enabled: true } })
       await tx.dictionaryType.update({ where: { id: dictionary.id }, data: { enabled: true } })
     })
+    // 表外水单发送要求真实群通知链路：渠道、公司号、群目标、模板与策略缺一不可，
+    // 缺少任一项都会被严格闸门拒绝并保持「待发群」。
+    await prisma.notificationChannelSettings.upsert({ where: { channel: 'ASSISTANT' }, create: { channel: 'ASSISTANT', enabled: true }, update: { enabled: true } })
+    await prisma.assistantAccount.create({ data: { name: '收款 E2E 公司号', appId: `receipt-e2e-${randomUUID()}`, wxid: 'wxid-receipt-e2e', status: 'ONLINE' } })
+    await prisma.assistantTarget.create({ data: { key: 'receipt-e2e-finance', chatroomId: `receipt-e2e-group-${randomUUID()}`, name: '收款 E2E 财务群', internalOnly: true, enabled: true } })
+    await prisma.notificationTemplate.create({ data: {
+      key: 'sales.receipt.voucher-sent', channel: 'ASSISTANT', name: '表外水单发送（E2E）', domain: 'SALES',
+      bodyTemplate: '表外收款：{{amount}}', variables: [{ name: 'amount', required: true, sensitive: true }],
+      mediaPolicy: { enabled: true, maxCount: 1, kinds: ['IMAGE'], sources: ['salesReceipt.voucher'] },
+    } })
+    await prisma.notificationChannelPolicy.create({ data: {
+      eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'ASSISTANT', targetMode: 'GROUP',
+      targetConfig: { targetKeys: ['receipt-e2e-finance'] }, templateKey: 'sales.receipt.voucher-sent',
+      allowSensitive: true, enabled: true,
+    } })
   })
   afterAll(async () => { await client?.end(); await app?.close(); await database?.close(); if (mediaRoot) await rm(mediaRoot, { recursive: true, force: true }) })
   function context(userId: string) { return { actorUserId: userId, requestId: randomUUID() } }
+  /** 把申请推进到「待入账」：发送水单 → 确认收到，供只关心入账的用例复用。 */
+  async function advanceToPosting(id: string, actorUserId: string) {
+    await service.sendVoucher(context(actorUserId), id, { expectedVersion: 1 })
+    await service.confirm(context(actorUserId), id, { expectedVersion: 2 })
+  }
   async function fixture(share = '30') {
     await client.query('BEGIN')
     let fixture: Awaited<ReturnType<typeof insertFixture>>
@@ -102,9 +122,11 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(replay).toMatchObject({ id: submitted.id, collectionNo: submitted.collectionNo, numberingIssuanceId: submitted.numberingIssuanceId })
     expect((await query.list({ keyword: submitted.collectionNo! })).items.map(item => item.id)).toContain(submitted.id)
     await expect(service.submit(context(f.userId), f.salesOrderId, { ...f.input, amount: '999' }, key)).rejects.toMatchObject({ code: 'SALES_RECEIPT_IDEMPOTENCY_CONFLICT' })
+    await advanceToPosting(submitted.id, reviewer)
+    expect((await query.getById(submitted.id)).status).toBe('PENDING_POSTING')
     const preview = await service.approvalContext(context(reviewer), submitted.id)
     expect(preview.businessAmount).toBe('208.33')
-    const approved = await Promise.all([1, 2].map(() => service.approve(context(reviewer), submitted.id, { expectedVersion: 1, expectedContext: preview.expectedContext })))
+    const approved = await Promise.all([1, 2].map(() => service.approve(context(reviewer), submitted.id, { expectedVersion: 3, expectedContext: preview.expectedContext })))
     expect(approved[0]?.approvedPayment?.id).toBe(approved[1]?.approvedPayment?.id)
     const payment = approved[0].approvedPayment!
     expect(payment.posting?.entries.map(entry => entry.amount)).toEqual(['62.50', '145.83'])
@@ -130,13 +152,14 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       return { ...f.input, amount, voucher: { mediaAssetId: media.id } }
     }
     const active = await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('300'), randomUUID())
+    await advanceToPosting(active.id, reviewer)
     const activeContext = await service.approvalContext(context(reviewer), active.id)
-    await service.approve(context(reviewer), active.id, { expectedVersion: 1, expectedContext: activeContext.expectedContext })
+    await service.approve(context(reviewer), active.id, { expectedVersion: 3, expectedContext: activeContext.expectedContext })
     await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('200'), randomUUID())
     const rejected = await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('100'), randomUUID())
     await service.reject(context(reviewer), rejected.id, { expectedVersion: 1, reason: '测试驳回记录' })
     const filters = { accountOwnerUserId: f.userId, keyword: result.salesOrder.orderNo, currencyCode: 'TWD', submittedFrom: '2000-01-01T00:00:00.000Z', submittedTo: '2100-01-01T00:00:00.000Z', pageSize: 1 }
-    const expectedCounts = { PENDING_REVIEW: 1, APPROVED: 1, REJECTED: 1, VOIDED: 1 }
+    const expectedCounts = { PENDING_REVIEW: 1, PENDING_CONFIRM: 0, PENDING_POSTING: 0, APPROVED: 1, REJECTED: 1, VOIDED: 1 }
     const activePage = await query.list({ ...filters, view: SalesReceiptViewDto.APPROVED })
     expect(activePage.total).toBe(1)
     expect(activePage.items.map(item => item.id)).toEqual([active.id])
@@ -157,7 +180,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(legacyPage.items.map(item => item.id)).toEqual(expect.arrayContaining([active.id, submitted.id]))
     const noMatch = await query.list({ ...filters, currencyCode: 'MYR', view: SalesReceiptViewDto.VOIDED })
     expect(noMatch.total).toBe(0)
-    expect(noMatch.statusCounts).toEqual({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
+    expect(noMatch.statusCounts).toEqual({ PENDING_REVIEW: 0, PENDING_CONFIRM: 0, PENDING_POSTING: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
 
   })
   it('reserves pending, rejects with evidence, and resubmits the same voucher as a new request', async () => {
@@ -175,6 +198,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it('rolls back payment, balance and review when final audit fails', async () => {
     const f = await fixture()
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
     const audit = app.get(AuditService)
     const real = audit.record.bind(audit)
@@ -182,9 +206,9 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       if (input.eventType === 'SALES_RECEIPT_APPROVED') return Promise.reject(new Error('injected receipt audit failure'))
       return real(tx, input)
     })
-    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })).rejects.toThrow('injected receipt audit failure') }
+    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext })).rejects.toThrow('injected receipt audit failure') }
     finally { failure.mockRestore() }
-    expect((await query.getById(request.id)).status).toBe('PENDING_REVIEW')
+    expect((await query.getById(request.id)).status).toBe('PENDING_POSTING')
     expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
     expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(0)
@@ -201,9 +225,10 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it('rejects stale rate preview and legacy direct endpoint service', async () => {
     const f = await fixture()
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
     await prisma.exchangeRate.update({ where: { id: preview.expectedContext.exchangeRateId }, data: { version: { increment: 1 } } })
-    await expect(service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })).rejects.toMatchObject({ code: 'SALES_RECEIPT_CONTEXT_CHANGED' })
+    await expect(service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext })).rejects.toMatchObject({ code: 'SALES_RECEIPT_CONTEXT_CHANGED' })
     await expect(app.get(SalesOrderMutationService).recordPayment(context(f.userId), f.salesOrderId, f.input)).rejects.toMatchObject({ code: 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED' })
   })
   it('serializes competing submissions and approve versus reject without duplicate postings', async () => {
@@ -214,10 +239,11 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     const outcomes = await Promise.allSettled(inputs.map(input => service.submit(context(f.userId), f.salesOrderId, input, randomUUID())))
     expect(outcomes.filter(item => item.status === 'fulfilled')).toHaveLength(1)
     const request = (await query.list({}, f.salesOrderId)).items[0]
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
     const decisions = await Promise.allSettled([
-      service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext }),
-      service.reject(context(f.userId), request.id, { expectedVersion: 1, reason: '并发驳回' }),
+      service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext }),
+      service.reject(context(f.userId), request.id, { expectedVersion: 3, reason: '并发驳回' }),
     ])
     expect(decisions.filter(item => item.status === 'fulfilled')).toHaveLength(1)
     const final = await query.getById(request.id)
@@ -232,19 +258,23 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     const line = await prisma.salesOrderLine.findFirstOrThrow({ where: { salesOrderId: f.salesOrderId } })
     const order = await prisma.salesOrder.findUniqueOrThrow({ where: { id: f.salesOrderId } })
     await expect(app.get(SalesOrderProductEditService).updateProducts(context(f.userId), f.salesOrderId, { expectedVersion: order.version, reason: '调低应收', confirmDepositReduction: false, existingLines: [{ lineId: line.id, name: line.productNameSnapshot, description: null, actualUnitPriceAmount: '450', desiredQuantity: 2 }], newLines: [] })).rejects.toMatchObject({ code: 'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE' })
+    await advanceToPosting(request.id, f.userId)
+    // 进入待入账后仍占用订单：钱已经确认到账，取消订单必须继续被拦截。
+    await expect(app.get(SalesOrderMutationService).updateOrderStatus(context(f.userId), f.salesOrderId, { toStatus: 'CANCELLED', reason: '取消订单' })).rejects.toMatchObject({ code: 'SALES_RECEIPT_STATE_CHANGED' })
     const preview = await service.approvalContext(context(f.userId), request.id)
     const media = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: request.voucher.mediaAssetId } })
     const path = join(mediaRoot, media.objectKey!)
     await rename(path, `${path}.temporarily-missing`)
-    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })).rejects.toMatchObject({ code: 'SALES_ORDER_DOCUMENT_UNAVAILABLE' }) }
+    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext })).rejects.toMatchObject({ code: 'SALES_ORDER_DOCUMENT_UNAVAILABLE' }) }
     finally { await rename(`${path}.temporarily-missing`, path) }
-    expect((await query.getById(request.id)).status).toBe('PENDING_REVIEW')
+    expect((await query.getById(request.id)).status).toBe('PENDING_POSTING')
   })
   it.each(['0', '100'])('reverses only actual nonzero entries at %s percent', async share => {
     const f = await fixture(share)
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
-    const approved = await service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })
+    const approved = await service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext })
     expect(approved.approvedPayment?.posting?.entries).toHaveLength(1)
     await service.voidPayment(context(f.userId), f.salesOrderId, approved.approvedPayment!.id, { expectedOrderVersion: approved.salesOrder.version, reason: '测试完整冲正' })
     expect((await query.getById(request.id)).approvedPayment?.reversal?.entries).toHaveLength(1)
@@ -253,15 +283,16 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it.each(['sales_order_documents', 'sales_order_payments', 'fund_ledger_entries', 'sales_orders'] as const)('rolls back the full approval when %s write fails', async table => {
     const f = await fixture()
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
     await client.query(`CREATE FUNCTION receipt_test_fail_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected receipt write failure'; END $$`)
     await client.query(`CREATE TRIGGER receipt_test_fail_write BEFORE ${table === 'sales_orders' ? 'UPDATE' : 'INSERT'} ON "${table}" FOR EACH ROW EXECUTE FUNCTION receipt_test_fail_write()`)
-    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })).rejects.toThrow() }
+    try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext })).rejects.toThrow() }
     finally {
       await client.query(`DROP TRIGGER receipt_test_fail_write ON "${table}"`)
       await client.query('DROP FUNCTION receipt_test_fail_write()')
     }
-    expect((await query.getById(request.id)).status).toBe('PENDING_REVIEW')
+    expect((await query.getById(request.id)).status).toBe('PENDING_POSTING')
     expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
     expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(0)
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
@@ -270,9 +301,10 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it('serializes approval and a currency-first rate update without deadlock or partial posting', async () => {
     const f = await fixture()
     const request = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    await advanceToPosting(request.id, f.userId)
     const preview = await service.approvalContext(context(f.userId), request.id)
     const [approval, update] = await Promise.allSettled([
-      service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext }),
+      service.approve(context(f.userId), request.id, { expectedVersion: 3, expectedContext: preview.expectedContext }),
       prisma.$transaction(async tx => {
         const currencies = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`SELECT id FROM currencies WHERE code = 'TWD' FOR UPDATE`)
         await tx.$queryRaw(Prisma.sql`SELECT id FROM exchange_rates WHERE currency_id = ${currencies[0].id}::uuid FOR UPDATE`)
@@ -289,7 +321,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(1)
     } else {
       expect(approval.reason).toMatchObject({ code: 'SALES_RECEIPT_CONTEXT_CHANGED' })
-      expect(final.status).toBe('PENDING_REVIEW')
+      expect(final.status).toBe('PENDING_POSTING')
       expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
       expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(0)
       expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
@@ -338,6 +370,110 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       expect(await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })).toBe(count)
       expect((await prisma.mediaAsset.findUniqueOrThrow({ where: { id: f.input.voucher.mediaAssetId } })).status).toBe('UPLOADING')
     } finally { await command.enable(context(f.userId), rule.id, { expectedVersion: disabled.version }) }
+  })
+
+  it('sends the voucher image to the configured group exactly once and posts only after confirmation', async () => {
+    const f = await fixture()
+    const reviewer = f.userId
+    const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    const sent = await service.sendVoucher(context(reviewer), submitted.id, { expectedVersion: 1 })
+    expect(sent.status).toBe('PENDING_CONFIRM')
+    expect(sent.voucherSentBy?.id).toBe(reviewer)
+    expect(sent.voucherSentAt).toEqual(expect.any(String))
+    expect(sent.confirmedAt).toBeNull()
+    expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
+
+    const notification = await prisma.notification.findFirstOrThrow({ where: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', sourceId: submitted.id } })
+    expect(notification.status).toBe('PENDING')
+    expect(notification.variables).toMatchObject({ amount: '1000.00', currencyCode: 'TWD' })
+    const media = await prisma.notificationMedia.findMany({ where: { notificationId: notification.id } })
+    expect(media).toEqual([expect.objectContaining({ mediaAssetId: submitted.voucher.mediaAssetId, blockedReason: null })])
+    const delivery = await prisma.assistantDelivery.findFirstOrThrow({ where: { notificationId: notification.id } })
+    expect(delivery).toMatchObject({ status: 'PENDING', recipientUserId: null })
+    expect(delivery.targetId).toBeTruthy()
+
+    // 同一操作者重放不会重复播报或再占用一条通知编号。
+    const replay = await service.sendVoucher(context(reviewer), submitted.id, { expectedVersion: 1 })
+    expect(replay.status).toBe('PENDING_CONFIRM')
+    expect(await prisma.notification.count({ where: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', sourceId: submitted.id } })).toBe(1)
+
+    const confirmed = await service.confirm(context(reviewer), submitted.id, { expectedVersion: 2 })
+    expect(confirmed.status).toBe('PENDING_POSTING')
+    expect(confirmed.confirmedBy?.id).toBe(reviewer)
+    expect(confirmed.confirmedAt).toEqual(expect.any(String))
+    // 确认收到仍然不产生正式收款与资金分录，付款状态只在入账时变化。
+    expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
+    expect((await prisma.salesOrder.findUniqueOrThrow({ where: { id: f.salesOrderId } })).paymentStatus).toBe('UNPAID')
+    expect(await prisma.fundPostingBatch.count({ where: { businessId: submitted.id } })).toBe(0)
+    expect((await service.confirm(context(reviewer), submitted.id, { expectedVersion: 2 })).status).toBe('PENDING_POSTING')
+
+    const preview = await service.approvalContext(context(reviewer), submitted.id)
+    const approved = await service.approve(context(reviewer), submitted.id, { expectedVersion: 3, expectedContext: preview.expectedContext })
+    expect(approved.status).toBe('APPROVED')
+    expect(approved.approvedPayment?.id).toBeTruthy()
+    expect((await prisma.salesOrder.findUniqueOrThrow({ where: { id: f.salesOrderId } })).paymentStatus).toBe('PAID')
+  })
+  it('fails closed when the group notification is not configured and leaves the request in pending-send', async () => {
+    const f = await fixture()
+    const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    const policy = await prisma.notificationChannelPolicy.findUniqueOrThrow({ where: { eventType_channel: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'ASSISTANT' } } })
+    await prisma.notificationChannelPolicy.update({ where: { id: policy.id }, data: { enabled: false } })
+    try {
+      await expect(service.sendVoucher(context(f.userId), submitted.id, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE' })
+      const current = await query.getById(submitted.id)
+      expect(current.status).toBe('PENDING_REVIEW')
+      expect(current.version).toBe(1)
+      expect(current.voucherSentAt).toBeNull()
+      // 通知行与通知编号随事务一起回滚，不留下半条记录。
+      expect(await prisma.notification.count({ where: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', sourceId: submitted.id } })).toBe(0)
+    } finally {
+      await prisma.notificationChannelPolicy.update({ where: { id: policy.id }, data: { enabled: true } })
+    }
+  })
+  it('refuses to send a legacy document voucher and keeps the request in pending-send', async () => {
+    const f = await fixture()
+    // READY 资产必须在同一事务内被申请引用，否则媒体引用触发器会拒绝孤立资产。
+    const documentAssetId = randomUUID()
+    let requestId: string
+    await client.query('BEGIN')
+    try {
+      await client.query(`INSERT INTO media_assets (id, media_type, status, object_key, original_filename,
+        mime_type, size_bytes, checksum_sha256, created_by_user_id)
+        VALUES ($1, 'DOCUMENT', 'READY', $2, 'legacy.pdf', 'application/pdf', 128, $3, $4)`,
+      [documentAssetId, `assets/${documentAssetId}.pdf`, 'd'.repeat(64), f.userId])
+      requestId = await insertRequest(client, f, '100', documentAssetId)
+      await client.query('COMMIT')
+    } catch (error) { await client.query('ROLLBACK'); throw error }
+    await writeFile(join(mediaRoot, `assets/${documentAssetId}.pdf`), Buffer.alloc(128), { mode: 0o600 })
+    await expect(service.sendVoucher(context(f.userId), requestId, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'SALES_RECEIPT_VOUCHER_NOT_IMAGE' })
+    const current = await query.getById(requestId)
+    expect(current.status).toBe('PENDING_REVIEW')
+    expect(current.voucher.mediaType).toBe('DOCUMENT')
+  })
+  it('rejects from every in-flight stage and releases the reserved amount', async () => {
+    const entry = await fixture()
+    const entryRequest = await service.submit(context(entry.userId), entry.salesOrderId, entry.input, randomUUID())
+    await service.reject(context(entry.userId), entryRequest.id, { expectedVersion: 1, reason: '待发群驳回' })
+
+    const confirming = await fixture()
+    const confirmRequest = await service.submit(context(confirming.userId), confirming.salesOrderId, confirming.input, randomUUID())
+    await service.sendVoucher(context(confirming.userId), confirmRequest.id, { expectedVersion: 1 })
+    await service.reject(context(confirming.userId), confirmRequest.id, { expectedVersion: 2, reason: '待确认驳回' })
+
+    const posting = await fixture()
+    const postingRequest = await service.submit(context(posting.userId), posting.salesOrderId, posting.input, randomUUID())
+    await advanceToPosting(postingRequest.id, posting.userId)
+    await service.reject(context(posting.userId), postingRequest.id, { expectedVersion: 3, reason: '待入账驳回' })
+
+    expect((await query.getById(entryRequest.id)).status).toBe('REJECTED')
+    expect((await query.getById(confirmRequest.id)).version).toBe(3)
+    const rejected = await query.getById(postingRequest.id)
+    expect(rejected.status).toBe('REJECTED')
+    expect(rejected.version).toBe(4)
+    for (const [orderId, id] of [[entry.salesOrderId, entryRequest.id], [confirming.salesOrderId, confirmRequest.id], [posting.salesOrderId, postingRequest.id]] as const) {
+      expect((await query.list({}, orderId)).pendingAmount).toBe('0.00')
+      expect((await query.getById(id)).status).toBe('REJECTED')
+    }
   })
 
 })

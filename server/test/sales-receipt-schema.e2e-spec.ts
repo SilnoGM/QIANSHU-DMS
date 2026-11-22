@@ -1,4 +1,5 @@
 import { Client } from 'pg'
+import { randomUUID } from 'node:crypto'
 import { createReceiptTestDatabase } from './fixtures/receipt-test-database'
 import { insertFixture, insertRequest } from './fixtures/sales-receipt-schema.fixture'
 
@@ -55,14 +56,41 @@ describe('sales receipt migration with isolated PostgreSQL', () => {
       await client.query('SET CONSTRAINTS ALL DEFERRED')
       await rejectsConstraint(client, () => client.query('DELETE FROM sales_receipt_requests WHERE id=$1', [id]), 'sales_receipt_requests_immutable_check')
       await rejectsConstraint(client, () => client.query('UPDATE sales_receipt_requests SET amount=200 WHERE id=$1', [id]), 'sales_receipt_requests_immutable_check')
-      await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='APPROVED',version=2,reviewed_at=clock_timestamp(),reviewed_by_user_id=$2 WHERE id=$1`, [id, fixture.userId]), 'sales_receipt_requests_state_check')
+      await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='APPROVED',version=2,reviewed_at=clock_timestamp(),reviewed_by_user_id=$2 WHERE id=$1`, [id, fixture.userId]), 'sales_receipt_requests_transition_check')
       await rejectsConstraint(client, () => client.query(`INSERT INTO sales_order_payments (sales_order_id,payment_type,amount,received_at,created_by_user_id,origin) VALUES ($1,'DEPOSIT',100,CURRENT_TIMESTAMP,$2,'LEGACY')`, [fixture.salesOrderId,fixture.userId]), 'sales_order_payments_review_required_check')
       await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='REJECTED',version=2,reviewed_at=clock_timestamp(),reviewed_by_user_id=$2,review_remark=NULL WHERE id=$1`, [id,fixture.userId]), 'sales_receipt_requests_state_check')
+      // 三步流转只允许前进一步：跳过待确认直接进待入账由触发器拦下。
+      await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='PENDING_POSTING',version=2,voucher_sent_by_user_id=$2,voucher_sent_at=clock_timestamp(),confirmed_by_user_id=$2,confirmed_at=clock_timestamp() WHERE id=$1`, [id,fixture.userId]), 'sales_receipt_requests_transition_check')
+      // 版本必须逐次递增，不能借一次更新跳过中间版本。
+      await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='REJECTED',version=3,reviewed_at=clock_timestamp(),reviewed_by_user_id=$2,review_remark='跳版本' WHERE id=$1`, [id,fixture.userId]), 'sales_receipt_requests_version_check')
+      // 进入待确认必须同时写入发送水单的处理人与时间。
+      await rejectsConstraint(client, () => client.query(`UPDATE sales_receipt_requests SET status='PENDING_CONFIRM',version=2 WHERE id=$1`, [id]), 'sales_receipt_requests_state_check')
       await client.query(`UPDATE sales_receipt_requests SET status='REJECTED',version=2,reviewed_at=clock_timestamp(),reviewed_by_user_id=$2,review_remark='凭证信息需核对' WHERE id=$1`, [id,fixture.userId])
       await client.query('SET CONSTRAINTS ALL IMMEDIATE')
       const media = await client.query<{ status: string }>('SELECT status FROM media_assets WHERE id=$1',[fixture.assetId])
       expect(media.rows[0].status).toBe('READY')
       await rejectsConstraint(client, () => client.query(`UPDATE media_assets SET status='TRASHED', deleted_at=clock_timestamp(), retention_until=clock_timestamp()+interval '30 days' WHERE id=$1`, [fixture.assetId]), 'sales_receipt_requests_voucher_ready_check')
+    } finally { await client.query('ROLLBACK') }
+  })
+
+  it('walks pending-send to pending-confirm to pending-posting under the trigger', async () => {
+    await client.query('BEGIN')
+    try {
+      const fixture = await insertFixture(client)
+      const id = await insertRequest(client, fixture)
+      await client.query('SET CONSTRAINTS ALL IMMEDIATE')
+      await client.query('SET CONSTRAINTS ALL DEFERRED')
+      await client.query(`UPDATE sales_receipt_requests SET status='PENDING_CONFIRM',version=2,voucher_sent_by_user_id=$2,voucher_sent_at=clock_timestamp() WHERE id=$1`, [id, fixture.userId])
+      await client.query(`UPDATE sales_receipt_requests SET status='PENDING_POSTING',version=3,confirmed_by_user_id=$2,confirmed_at=clock_timestamp() WHERE id=$1`, [id, fixture.userId])
+      const row = await client.query<{ status: string, version: number }>('SELECT status, version FROM sales_receipt_requests WHERE id=$1', [id])
+      expect(row.rows[0]).toEqual({ status: 'PENDING_POSTING', version: 3 })
+      // 待入账仍然占用订单额度：再提交一笔让合计超过应收，必须被延迟一致性触发器拦下。
+      const secondAssetId = randomUUID()
+      await client.query(`INSERT INTO media_assets (id, media_type, status, object_key, original_filename,
+        mime_type, size_bytes, checksum_sha256, width, height, created_by_user_id)
+        VALUES ($1, 'IMAGE', 'READY', $2, 'second.png', 'image/png', 128, $3, 10, 10, $4)`,
+      [secondAssetId, `receipt-fixture/${secondAssetId}.png`, 'a'.repeat(64), fixture.userId])
+      await rejectsConstraint(client, () => insertRequest(client, fixture, '950', secondAssetId), 'sales_receipt_requests_reserved_amount_check')
     } finally { await client.query('ROLLBACK') }
   })
 

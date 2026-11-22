@@ -1,4 +1,5 @@
 import { assertReceiptCapacity, receiptFailure } from './receipts/sales-receipt-money'
+import { SALES_RECEIPT_IN_FLIGHT_STATUSES } from './receipts/sales-receipt-status'
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
@@ -252,8 +253,8 @@ export class SalesOrderMutationService {
       )
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
       if ((toStatus === 'CANCELLED' || toStatus === 'TERMINATED')
-        && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
-        receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有待审核收款，请先处理申请', HttpStatus.CONFLICT)
+        && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: { in: [...SALES_RECEIPT_IN_FLIGHT_STATUSES] } } }) > 0) {
+        receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有处理中的收款，请先处理申请', HttpStatus.CONFLICT)
       }
       assertSalesOrderStatusTransition(order.orderStatus, toStatus, {
         activeReceivedAmount: receivedAmount,
@@ -527,7 +528,7 @@ export class SalesOrderMutationService {
         balanceDueAmount: body.balanceDueAmount,
       })
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
-      const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
+      const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId, status: { in: [...SALES_RECEIPT_IN_FLIGHT_STATUSES] } }, _sum: { amount: true } })
       assertReceiptCapacity(amounts.agreedTotalAmount, receivedAmount, pending._sum.amount?.toFixed(2) ?? '0.00')
       const newPaymentStatus = deriveSalesOrderPaymentStatus(
         amounts.agreedTotalAmount,

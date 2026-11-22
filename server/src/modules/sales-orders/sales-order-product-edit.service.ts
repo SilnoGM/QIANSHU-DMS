@@ -1,4 +1,5 @@
 import { assertReceiptCapacity } from './receipts/sales-receipt-money'
+import { SALES_RECEIPT_IN_FLIGHT_STATUSES } from './receipts/sales-receipt-status'
 import { randomUUID } from 'node:crypto'
 
 import { HttpStatus, Injectable } from '@nestjs/common'
@@ -439,7 +440,7 @@ export class SalesOrderProductEditService {
         const paidAmount = paymentAggregate._sum.amount === null
           ? '0.00'
           : fixed2(paymentAggregate._sum.amount)
-        const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId: order.id, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
+        const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId: order.id, status: { in: [...SALES_RECEIPT_IN_FLIGHT_STATUSES] } }, _sum: { amount: true } })
         const paidUnits = parseSalesOrderAmountUnits(paidAmount)
         if (newAgreedUnits < paidUnits) {
           throw failure(

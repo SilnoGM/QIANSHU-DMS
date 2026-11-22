@@ -226,6 +226,9 @@ enum AuditEventType {
   /// 误建采购链纠正与伴随的包装费取消。追加在末尾与数据库枚举顺序一致。
   PURCHASE_ORDER_CORRECTION_APPLIED
   PACKAGING_COST_CANCELLED
+  /// 表外收款三步流转：发送水单与确认收到。
+  SALES_RECEIPT_VOUCHER_SENT
+  SALES_RECEIPT_CONFIRMED
 
   @@map("audit_event_type")
 }
@@ -355,7 +358,12 @@ enum SalesOrderLineType {
 }
 
 enum SalesReceiptRequestStatus {
+  /// 待发群：提交后等待财务把收款凭证发送到财务群。
   PENDING_REVIEW
+  /// 待确认：水单已发送，等待财务确认款项到账。
+  PENDING_CONFIRM
+  /// 待入账：已确认到账，等待核对汇率与结算规则后入账。
+  PENDING_POSTING
   APPROVED
   REJECTED
 
@@ -778,6 +786,8 @@ model User {
   advertisingRechargesVoided  AdvertisingRechargeRequest[] @relation("AdvertisingRechargeVoider")
   receiptRequestsOwned SalesReceiptRequest[] @relation("ReceiptAccountOwner")
   receiptRequestsSubmitted SalesReceiptRequest[] @relation("ReceiptSubmittedBy")
+  receiptRequestsVoucherSent SalesReceiptRequest[] @relation("ReceiptVoucherSentBy")
+  receiptRequestsConfirmed SalesReceiptRequest[] @relation("ReceiptConfirmedBy")
   receiptRequestsReviewed SalesReceiptRequest[] @relation("ReceiptReviewedBy")
   salesOrdersIssued           SalesOrder[]               @relation("SalesOrderIssuer")
   salesOrderPaymentsCreated   SalesOrderPayment[]        @relation("SalesOrderPaymentCreatedBy")
@@ -2573,6 +2583,11 @@ model SalesReceiptRequest {
   status SalesReceiptRequestStatus @default(PENDING_REVIEW)
   submittedByUserId String @map("submitted_by_user_id") @db.Uuid
   submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  /// 三步流转的前两步处理人与时间；第三步（核对入账）复用 reviewed_*。
+  voucherSentByUserId String? @map("voucher_sent_by_user_id") @db.Uuid
+  voucherSentAt DateTime? @map("voucher_sent_at") @db.Timestamptz(6)
+  confirmedByUserId String? @map("confirmed_by_user_id") @db.Uuid
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(6)
   reviewedByUserId String? @map("reviewed_by_user_id") @db.Uuid
   reviewedAt DateTime? @map("reviewed_at") @db.Timestamptz(6)
   reviewRemark String? @map("review_remark") @db.VarChar(500)
@@ -2586,6 +2601,8 @@ model SalesReceiptRequest {
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   accountOwner User @relation("ReceiptAccountOwner", fields: [accountOwnerUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   submittedBy User @relation("ReceiptSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voucherSentBy User? @relation("ReceiptVoucherSentBy", fields: [voucherSentByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  confirmedBy User? @relation("ReceiptConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   reviewedBy User? @relation("ReceiptReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   voucherMediaAsset MediaAsset @relation(fields: [voucherMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   approvedPayment SalesOrderPayment? @relation(fields: [approvedPaymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
