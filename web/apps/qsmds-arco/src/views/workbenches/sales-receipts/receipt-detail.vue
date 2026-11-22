@@ -566,7 +566,7 @@ onBeforeUnmount(() => controller?.abort())
           <FaButton v-if="action === 'approve' && !context" variant="outline" :loading="busy" @click="prepare('approve')">
             {{ t('salesReceipt.refreshPreview') }}
           </FaButton>
-          <FaButton :loading="busy" :disabled="busy || (action === 'approve' && !context)" @click="submit">
+          <FaButton :loading="busy" :variant="action === 'reject' ? 'destructive' : 'default'" :disabled="busy || (action === 'approve' && !context)" @click="submit">
             {{ actionSubmitLabel }}
           </FaButton>
         </template>
@@ -578,12 +578,12 @@ onBeforeUnmount(() => controller?.abort())
             <FaButton v-if="canSendVoucher" :disabled="busy" @click="prepare('send')">
               {{ t('salesReceipt.sendVoucher') }}
             </FaButton>
-            <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
+            <FaButton variant="destructive" :disabled="busy" @click="prepare('reject')">
               {{ t('salesReceipt.reject') }}
             </FaButton>
           </template>
           <template v-else-if="detail?.status === 'PENDING_CONFIRM' && canReview">
-            <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
+            <FaButton variant="destructive" :disabled="busy" @click="prepare('reject')">
               {{ t('salesReceipt.reject') }}
             </FaButton>
             <FaButton :disabled="busy" @click="prepare('confirmReceipt')">
@@ -591,7 +591,7 @@ onBeforeUnmount(() => controller?.abort())
             </FaButton>
           </template>
           <template v-else-if="detail?.status === 'PENDING_POSTING' && canReview">
-            <FaButton variant="outline" :disabled="busy" @click="prepare('reject')">
+            <FaButton variant="destructive" :disabled="busy" @click="prepare('reject')">
               {{ t('salesReceipt.reject') }}
             </FaButton>
             <FaButton :disabled="busy" @click="prepare('approve')">
