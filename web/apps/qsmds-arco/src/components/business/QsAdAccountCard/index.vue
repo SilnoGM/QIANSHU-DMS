@@ -132,7 +132,7 @@ function formatTime(value: string): string {
 <template>
   <FaCard
     content-class="p-0"
-    class="overflow-hidden"
+    class="py-0 overflow-hidden"
     :class="exhausted ? 'border-destructive/40' : undefined"
   >
     <div class="px-4 pt-3 flex flex-wrap gap-3 items-start justify-between">
