@@ -174,6 +174,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/bill-reconciliation/slh-bill-management',
     '/qs-finance/fund-accounts/list',
     '/qs-finance/fund-accounts/withdrawal-approvals',
+    '/qs-finance/fund-accounts/withdrawal-approvals/6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
     '/qs-purchase-transport/reviews',
     '/qs-purchase-transport/containers',
     '/qs-purchase-transport/containers/container-1/import',
@@ -225,6 +226,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-finance/bill-reconciliation/slh-bill-management/import',
     '/qs-finance/fund-accounts/transactions',
     '/qs-finance/fund-accounts/withdrawal-approvals',
+    '/qs-finance/fund-accounts/withdrawal-approvals/6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
     '/qs-finance/invoices/approval',
   ]) {
     assert.equal(canEnter(financeStaff, path), true, `财务角色应能进入 ${path}`)
@@ -244,6 +246,7 @@ test('直接 URL 准入与菜单一致：跨工作台路径全部被拦截，自
     '/qs-operations/personal-finance/withdrawals',
     '/qs-finance/realtime-payments/purchase-payments',
     '/qs-finance/fund-accounts/withdrawal-approvals',
+    '/qs-finance/fund-accounts/withdrawal-approvals/6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
     '/qs-finance/invoices/approval',
     '/system/audit',
     '/system/application-settings',

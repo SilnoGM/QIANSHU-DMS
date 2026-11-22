@@ -49,6 +49,12 @@ test('财务工作台注册账户管理分组及两个资金账户入口与提�
         path: 'withdrawal-approvals',
         title: '账户提款审批',
       },
+      {
+        auth: 'fund-withdrawals:review',
+        name: 'qsFinanceFundWithdrawalApproval',
+        path: 'withdrawal-approvals/:id',
+        title: 'fundWithdrawal.approvalDetailTitle',
+      },
     ],
   )
   assert.ok(
@@ -66,6 +72,17 @@ test('账户管理迁入财务工作台，管理员移除原入口', () => {
   assert.ok(!admin.includes('FUND_ACCOUNT_MANAGEMENT_PERMISSIONS'))
 })
 
+test('审批详情页是列表的隐藏兄弟路由，面包屑回到列表', () => {
+  const detail = fundAccountManagementRoutes.children?.find(
+    route => route.name === 'qsFinanceFundWithdrawalApproval',
+  )
+  assert.equal(detail?.path, 'withdrawal-approvals/:id')
+  assert.equal(detail?.meta?.menu, false)
+  assert.equal(detail?.meta?.activeMenu, '/qs-finance/fund-accounts/withdrawal-approvals')
+  assert.equal(detail?.meta?.auth, 'fund-withdrawals:review')
+  assert.equal(typeof detail?.component, 'function')
+})
+
 test('资金账户专属权限精确控制分组、菜单和直接访问资格', () => {
   const menuFixture = [{
     path: fundAccountManagementRoutes.path,
@@ -77,15 +94,23 @@ test('资金账户专属权限精确控制分组、菜单和直接访问资格',
       path: route.path,
       meta: {
         auth: route.meta?.auth,
+        menu: route.meta?.menu,
         title: route.meta?.title,
       },
     })),
   }]
-  const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
-    menuFixture,
-    value => matchesAuthorization(permissions, value),
-    () => true,
-  )[0]?.children?.map(menu => menu.path) ?? []
+  // 菜单过滤函数只做权限裁剪，meta.menu === false 由菜单装配阶段剔除；这里按同样的
+  // 口径过滤，避免隐藏的审批详情页污染可见菜单断言。
+  function visiblePaths(permissions: string[]) {
+    const [group] = filterAccessibleMenus(
+      menuFixture,
+      value => matchesAuthorization(permissions, value),
+      () => true,
+    )
+    return (group?.children ?? [])
+      .filter(menu => menu.meta?.menu !== false)
+      .map(menu => menu.path)
+  }
 
   assert.deepEqual(visiblePaths(['fund-accounts:read']), [
     'list',

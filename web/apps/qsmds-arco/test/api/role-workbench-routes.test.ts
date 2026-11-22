@@ -132,9 +132,9 @@ test('财务分为实时收付、账单对账、发票管理和账户管理，�
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
   // 账单对账分组新增导入与详情两个隐藏叶子；对账分组新增对账详情一个隐藏叶子；
   // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由；
-  // 账户管理分组新增账户提款审批一个可见叶子；采购付款新增记录页隐藏叶子；
+  // 账户管理分组新增账户提款审批可见叶子与审批详情隐藏叶子；采购付款新增记录页隐藏叶子；
   // 实收实付新增广告充值列表与隐藏详情两个叶子。
-  assert.equal(new Set(routes.map(route => route.name)).size, 19)
+  assert.equal(new Set(routes.map(route => route.name)).size, 20)
   const advertisingRecharges = routes.find(route => route.name === 'qsFinanceRealtimeAdvertisingRecharges')
   assert.equal(advertisingRecharges?.path, 'advertising-recharges')
   assert.equal(advertisingRecharges?.meta?.auth, 'advertising-recharges:read')

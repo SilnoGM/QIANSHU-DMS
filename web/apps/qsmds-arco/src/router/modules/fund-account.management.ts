@@ -56,6 +56,19 @@ const routes: RouteRecordRaw = {
         auth: 'fund-withdrawals:review',
       },
     },
+    {
+      // 审批详情页是列表的隐藏兄弟叶子：URL 可直达，面包屑与菜单高亮回到列表。
+      path: 'withdrawal-approvals/:id',
+      name: 'qsFinanceFundWithdrawalApproval',
+      component: () => import('@/views/admin/fund-account-management/withdrawal-approvals/approval-page.vue'),
+      meta: {
+        title: 'fundWithdrawal.approvalDetailTitle',
+        icon: 'qs-fund-withdrawal',
+        menu: false,
+        activeMenu: '/qs-finance/fund-accounts/withdrawal-approvals',
+        auth: 'fund-withdrawals:review',
+      },
+    },
   ],
 }
 
