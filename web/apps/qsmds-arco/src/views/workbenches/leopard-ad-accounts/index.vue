@@ -145,6 +145,7 @@ async function submitAssign(): Promise<void> {
   assignSubmitting.value = true
   assignError.value = ''
   const request = new AbortController()
+  let succeeded = false
 
   try {
     await adAccountsApi.assign(
@@ -155,14 +156,19 @@ async function submitAssign(): Promise<void> {
       },
       request.signal,
     )
-    assignOpen.value = false
-    await load()
+    succeeded = true
   }
   catch (failure) {
     assignError.value = getApiClientFailureMessage(failure, '绑定失败')
   }
   finally {
+    // 必须先释放 submitting 再关闭：QsGenericModal 在提交期会拒绝受控关闭。
     assignSubmitting.value = false
+  }
+
+  if (succeeded) {
+    assignOpen.value = false
+    await load()
   }
 }
 
@@ -185,17 +191,23 @@ async function submitRelease(): Promise<void> {
   releaseSubmitting.value = true
   releaseError.value = ''
   const request = new AbortController()
+  let succeeded = false
 
   try {
     await adAccountsApi.release(releaseTarget.value.id, request.signal)
-    releaseOpen.value = false
-    await load()
+    succeeded = true
   }
   catch (failure) {
     releaseError.value = getApiClientFailureMessage(failure, '解绑失败')
   }
   finally {
+    // 同上：submitting 未释放时受控关闭会被组件拒绝。
     releaseSubmitting.value = false
+  }
+
+  if (succeeded) {
+    releaseOpen.value = false
+    await load()
   }
 }
 
