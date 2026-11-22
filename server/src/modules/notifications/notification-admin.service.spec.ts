@@ -16,6 +16,7 @@ const configuration: AssistantConfiguration = {
   batchSize: 20,
   requestTimeoutMs: 1_000,
   minSendIntervalMs: 3_000,
+  sendIntervalJitterMs: 0,
 }
 
 function service(prisma: Record<string, unknown>) {

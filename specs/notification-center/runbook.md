@@ -26,7 +26,7 @@
 3. 公司号已加入财务群、运营群；两个群都已保存到通讯录，否则 `fetchContactsList` 同步不到。
 4. 财务群、运营群标记为 `internalOnly = true`，成员均为有权查看金额与客户名称的内部员工。
 5. 审核人、测试员工已添加公司号为好友；非好友不可发送。
-6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`、`NOTIFICATION_MEDIA_URL_SECRET`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）。Token 与签名密钥只放环境变量或密钥服务，不写文档、日志、示例。
+6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`、`NOTIFICATION_MEDIA_URL_SECRET`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）与 `ASSISTANT_SEND_INTERVAL_JITTER_MS`（默认 2000，实际冷却 3000~5000ms 随机）。Token 与签名密钥只放环境变量或密钥服务，不写文档、日志、示例。
 7. 管理端可以打开「通知中心 > 千树小助理」，账号状态显示 `ONLINE`。
 
 ## 3. 日常检查
@@ -162,7 +162,7 @@
 3. 租约空窗超过 1 分钟：确认 `ASSISTANT_WORKER_ENABLED` 与进程存活。
 4. 检查 `assistant_send_gates` 的 `next_allowed_at`、`lock_owner`、`lock_expires_at`；发送租约到期会自动接管，不要在没有确认发送已停止时手工清锁。
 5. 超时仍为 `SENDING` 的交付会在下一轮按“结果未知”重新排队（`SENDING_RECOVERED`），可能极小概率重复发送；调查时结合上游 `msgId` 与实际收件情况判断。
-6. 积压过多时先停发，避免恢复后集中轰炸；按事件优先级恢复，并通过 `ASSISTANT_MIN_SEND_INTERVAL_MS` 调整全局发送间隔。
+6. 积压过多时先停发，避免恢复后集中轰炸；按事件优先级恢复，并通过 `ASSISTANT_MIN_SEND_INTERVAL_MS` 调整全局发送间隔（需要固定节奏时把 `ASSISTANT_SEND_INTERVAL_JITTER_MS` 设为 `0`）。
 
 ### 9.4 大面积失败
 

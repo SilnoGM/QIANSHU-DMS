@@ -87,7 +87,7 @@
 
 - `AssistantDispatchService` 进程内循环：5 秒轮询、批量 20、串行发送。
 - `assistant_dispatch_leases` 获取/续租/释放；TTL 覆盖请求超时与最小发送间隔；续租失败停止领取。
-- 全局发送闸门 `assistant_send_gates`：所有 sendText 串行，发送结束后写 `next_allowed_at`，默认间隔 3000ms。
+- 全局发送闸门 `assistant_send_gates`：所有 sendText 串行，发送结束后写 `next_allowed_at`，默认最小间隔 3000ms 并叠加 0~2000ms 随机抖动。
 - 超时 `SENDING` 回收：结果未知重新排队并记录 `SENDING_RECOVERED`，超过重试上限落 `FAILED`。
 - 重试：5s/30s/2m；离线 30s/2m/5m；4xx 不重试；TTL 兜底。
 - 静默时段：`NORMAL` 延后，`HIGH` 突破。

@@ -12,6 +12,7 @@ const DEFAULT_WORKER_POLL_MS = 5_000
 const DEFAULT_WORKER_BATCH = 20
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
 const DEFAULT_MIN_SEND_INTERVAL_MS = 3_000
+const DEFAULT_SEND_INTERVAL_JITTER_MS = 2_000
 
 export interface AssistantConfiguration {
   readonly baseUrl: string
@@ -21,6 +22,7 @@ export interface AssistantConfiguration {
   readonly batchSize: number
   readonly requestTimeoutMs: number
   readonly minSendIntervalMs: number
+  readonly sendIntervalJitterMs: number
 }
 
 function boundedInteger(
@@ -54,5 +56,7 @@ export default registerAs('assistant', (): AssistantConfiguration => {
     requestTimeoutMs: boundedInteger(process.env.ASSISTANT_REQUEST_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, 1_000, 60_000),
     // 队列、管理端测试、绑定验证和群 @ 共用同一最小间隔；0 仅用于本地显式关闭节流。
     minSendIntervalMs: boundedInteger(process.env.ASSISTANT_MIN_SEND_INTERVAL_MS, DEFAULT_MIN_SEND_INTERVAL_MS, 0, 60_000),
+    // 实际冷却 = 最小间隔 + [0, 抖动] 的均匀随机；最小间隔为 0 时抖动不生效。
+    sendIntervalJitterMs: boundedInteger(process.env.ASSISTANT_SEND_INTERVAL_JITTER_MS, DEFAULT_SEND_INTERVAL_JITTER_MS, 0, 60_000),
   })
 })

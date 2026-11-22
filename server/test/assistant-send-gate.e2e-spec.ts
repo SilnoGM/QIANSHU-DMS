@@ -8,6 +8,7 @@ import { AssistantSendGateService } from '../src/modules/notifications/assistant
 
 const GATE_ID = 'assistant-send'
 const MIN_SEND_INTERVAL_MS = 200
+const SEND_INTERVAL_JITTER_MS = 100
 
 const configuration: AssistantConfiguration = {
   baseUrl: 'https://api.geweapi.com',
@@ -17,6 +18,7 @@ const configuration: AssistantConfiguration = {
   batchSize: 20,
   requestTimeoutMs: 1_000,
   minSendIntervalMs: MIN_SEND_INTERVAL_MS,
+  sendIntervalJitterMs: 0,
 }
 
 function sleep(ms: number): Promise<void> {
@@ -88,5 +90,31 @@ describe('AssistantSendGateService with PostgreSQL', () => {
     })
 
     expect((nextStartedAt - startedAt)).toBeGreaterThanOrEqual(MIN_SEND_INTERVAL_MS - 20)
+  })
+
+  it('writes a jittered cooldown inside the configured interval range', async () => {
+    const jitteredGate = new AssistantSendGateService(
+      prisma,
+      {
+        get: () => ({ ...configuration, sendIntervalJitterMs: SEND_INTERVAL_JITTER_MS }),
+      } as unknown as ConfigService,
+    )
+    const cooldowns: number[] = []
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await jitteredGate.run(() => Promise.resolve())
+      // next_allowed_at 与 updated_at 在同一条 UPDATE 内写入，两者之差就是本次落库的冷却时间。
+      const rows = await prisma.$queryRaw<Array<{ cooldownMs: number }>>`
+        SELECT (EXTRACT(EPOCH FROM ("next_allowed_at" - "updated_at")) * 1000)::double precision AS "cooldownMs"
+        FROM "assistant_send_gates"
+        WHERE "id" = ${GATE_ID}
+      `
+      cooldowns.push(Number(rows[0]?.cooldownMs))
+    }
+
+    for (const cooldownMs of cooldowns) {
+      expect(cooldownMs).toBeGreaterThanOrEqual(MIN_SEND_INTERVAL_MS - 1)
+      expect(cooldownMs).toBeLessThanOrEqual(MIN_SEND_INTERVAL_MS + SEND_INTERVAL_JITTER_MS + 1)
+    }
   })
 })

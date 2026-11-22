@@ -28,7 +28,8 @@
 | `ASSISTANT_WORKER_POLL_MS` | 否 | `5000` | 轮询间隔 |
 | `ASSISTANT_WORKER_BATCH` | 否 | `20` | 单轮领取上限 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | `10000` | GeWe 请求超时 |
-| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔；`0` 仅用于本地关闭节流 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔（冷却下限）；`0` 仅用于本地关闭节流 |
+| `ASSISTANT_SEND_INTERVAL_JITTER_MS` | 否 | `2000` | 在最小间隔之上叠加 `[0, 抖动]` 均匀随机，默认实际冷却 3000~5000ms；最小间隔为 `0` 时抖动不生效 |
 | `NOTIFICATION_MEDIA_URL_SECRET` | 是（生产） | — | 32 字节 base64url；图片取流地址签名密钥，必须与认证域三个 key 不同。缺失时生产拒绝启动 |
 | `NOTIFICATION_INTERNAL_API_ENABLED` | 否 | `false` | 内部 HTTP 发布入口，阶段 1 关闭 |
 | `NOTIFICATION_INTERNAL_TOKEN` | 否 | — | 内部入口令牌；关闭时不使用 |

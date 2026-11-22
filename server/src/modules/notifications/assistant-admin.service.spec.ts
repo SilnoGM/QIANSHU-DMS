@@ -16,6 +16,7 @@ const configuration: AssistantConfiguration = {
   batchSize: 20,
   requestTimeoutMs: 1_000,
   minSendIntervalMs: 3_000,
+  sendIntervalJitterMs: 0,
 }
 
 const context = { actorUserId: 'user-1', requestId: 'req-1' }

@@ -702,11 +702,12 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
     })
   }
 
-  /** 一次发送的最坏预算：请求超时 + 全局最小间隔。 */
+  /** 一次发送的最坏预算：请求超时 + 最小间隔 + 抖动上限。 */
   private resolveSendBudgetMs(config: AssistantConfiguration | undefined, sends: number): number {
     const requestTimeoutMs = config?.requestTimeoutMs ?? 10_000
     const minSendIntervalMs = config?.minSendIntervalMs ?? 3_000
-    return sends * (requestTimeoutMs + minSendIntervalMs)
+    const sendIntervalJitterMs = config?.sendIntervalJitterMs ?? 2_000
+    return sends * (requestTimeoutMs + minSendIntervalMs + sendIntervalJitterMs)
   }
 
   private resolveLeaseTtlMs(config?: AssistantConfiguration): number {
