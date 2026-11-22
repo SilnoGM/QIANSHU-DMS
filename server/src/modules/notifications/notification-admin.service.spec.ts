@@ -113,7 +113,7 @@ describe('NotificationAdminService', () => {
       maxLength: 512,
     })
     expect(withdrawal?.media).toBeNull()
-    expect(result).toHaveLength(43)
+    expect(result).toHaveLength(44)
     for (const event of result) {
       expect(event.variablesKnown).toBe(true)
       expect(event.defaultTemplateKey).not.toBeNull()
@@ -529,7 +529,7 @@ describe('NotificationAdminService', () => {
   it('lists record event options without exposing template variables', () => {
     const options = service({}).listRecordOptions()
 
-    expect(options.events).toHaveLength(43)
+    expect(options.events).toHaveLength(44)
     expect(options.events.find(event => event.eventType === 'PURCHASE_REVIEW_PENDING')).toEqual({
       eventType: 'PURCHASE_REVIEW_PENDING',
       label: '采购审核',

@@ -66,8 +66,16 @@ export class VoidAdvertisingRechargeDto extends AdvertisingRechargeVersionDto {
   @IsString() @Matches(NON_BLANK_PATTERN) @MaxLength(ADVERTISING_RECHARGE_REASON_MAX_LENGTH) reason!: string
 }
 
-export class PayAdvertisingRechargeDto extends AdvertisingRechargeVersionDto {
-  @ApiProperty({
+/**
+ * 非个人户补付款码：超管上传付款码后申请转入待付款。
+ * 二维码只允许回填一次，重复提交由服务端按 409 拒绝。
+ */
+export class SupplementAdvertisingRechargePaymentCodeDto extends AdvertisingRechargeVersionDto {
+  @ApiProperty({ format: 'uuid', description: '超级管理员补传的付款码媒体资产 id。' })
+  @IsUUID('4') paymentQrMediaAssetId!: string
+}
+
+export class PayAdvertisingRechargeDto extends AdvertisingRechargeVersionDto {  @ApiProperty({
     type: 'string',
     pattern: '^(?:0|[1-9]\\d{0,27})(?:\\.\\d{1,2})?$',
     example: '3680.00',

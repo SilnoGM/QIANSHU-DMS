@@ -10,6 +10,14 @@ import {
 } from './advertising-recharge.contract'
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,27})(?:\.\d{1,2})?$/u
+
+/**
+ * 财务侧广告充值详情页的绝对地址（站内哈希路由）。
+ * 与运营「复制给财务」的链接指向同一页面，补付款码与付款都在这一页完成。
+ */
+export function buildAdvertisingRechargeDetailUrl(appOrigin: string, requestId: string): string {
+  return `${appOrigin}/#/qs-finance/realtime-payments/advertising-recharges/${encodeURIComponent(requestId)}`
+}
 const REQUEST_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 

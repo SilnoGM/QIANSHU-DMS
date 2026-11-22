@@ -112,6 +112,7 @@ const PURCHASE_ORDER_FULFILLMENT_STATUS_LABELS: Readonly<Record<string, string>>
 
 const ADVERTISING_RECHARGE_STATUS_LABELS: Readonly<Record<string, string>> = Object.freeze({
   PENDING: '待付款',
+  PENDING_PAYMENT_CODE: '补充付款码',
   PAID: '已付款',
   REJECTED: '已驳回',
   WITHDRAWN: '已撤回',
