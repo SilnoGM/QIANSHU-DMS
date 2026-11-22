@@ -201,6 +201,35 @@ async function copyAccountInfo(): Promise<void> {
 
 onBeforeUnmount(() => clearTimeout(copyResetTimer))
 
+const { auth } = useAppAuth()
+const router = useRouter()
+
+/** 与广告充值页同码：没有建单权限的人不显示这个入口，避免点了才被拒。 */
+const canCreateRecharge = computed(() => auth('advertising-recharges:create'))
+
+/**
+ * 先复制再跳转：目标页读 query 自动开弹窗并预填，剪贴板作为手动粘贴的备份。
+ * 复制失败不阻断流程——参数里已经带了同样的文本。
+ */
+async function openRechargeRequest(): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable')
+    }
+
+    await navigator.clipboard.writeText(accountCopyText.value)
+    toast.success('账户信息已复制')
+  }
+  catch {
+    toast.error('复制失败，已在充值页自动填入')
+  }
+
+  await router.push({
+    path: '/qs-operations/network-ads/advertising-recharges',
+    query: { create: '1', paste: accountCopyText.value },
+  })
+}
+
 function formatTime(value: string): string {
   return dayjs(value).format('MM-DD HH:mm')
 }
@@ -253,6 +282,13 @@ function formatTime(value: string): string {
           <span aria-hidden="true">·</span>
           <span class="truncate">{{ account.companyCn ?? '—' }}</span>
         </div>
+      </div>
+
+      <div v-if="mode === 'operations' && canCreateRecharge" class="flex shrink-0 items-center">
+        <FaButton size="sm" variant="secondary" @click="openRechargeRequest">
+          <FaIcon name="i-lucide:wallet" class="size-3.5" aria-hidden="true" />
+          充值
+        </FaButton>
       </div>
 
       <div v-if="mode === 'management'" class="flex shrink-0 flex-wrap gap-2 items-center">

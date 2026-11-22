@@ -31,12 +31,15 @@ const props = withDefaults(defineProps<{
   currencies: readonly CurrencyDescriptor[]
   enabled: boolean
   error?: null | string
+  /** 从广告户卡片「充值」跳转而来时带入的识别文本，打开弹窗时自动解析。 */
+  initialPaste?: string
   modelValue: boolean
   submitting?: boolean
   upload: RechargeImageUploadFile
 }>(), {
   created: null,
   error: null,
+  initialPaste: '',
   submitting: false,
 })
 
@@ -175,12 +178,6 @@ function reset(): void {
   closeArmed.value = false
 }
 
-watch(() => props.modelValue, (visible) => {
-  if (visible) {
-    reset()
-  }
-})
-
 // 币种强制跟随账户类型，不保留用户上一次的手选结果。
 watch(accountType, (value) => {
   rechargeCurrency.value = value === 'PERSONAL' ? 'CNY' : 'USD'
@@ -227,6 +224,31 @@ function clearPastedText(): void {
   pastePreview.value = { name: null, no: null }
   pasteConflict.value = false
 }
+
+/**
+ * 外部带入的识别文本：先写进粘贴框再走同一条解析路径，
+ * 这样「识别成功 / 只识别到编号 / 识别失败」的提示与手动粘贴完全一致。
+ */
+function applyInitialPaste(): void {
+  const text = props.initialPaste.trim()
+
+  if (text.length === 0) {
+    return
+  }
+
+  pasteText.value = text
+  applyPastedText()
+}
+
+/** 打开时才重置并应用初始粘贴；顺序固定为 reset → apply，避免被重置清掉。 */
+watch(() => props.modelValue, (visible) => {
+  if (!visible) {
+    return
+  }
+
+  reset()
+  applyInitialPaste()
+})
 
 watch(() => props.created, (created) => {
   if (created !== null) {

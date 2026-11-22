@@ -44,6 +44,11 @@ const createKey = ref('')
 const creating = ref(false)
 const createError = ref('')
 const created = ref<AdvertisingRechargeDto | null>(null)
+/** 由广告户卡片「充值」跳转带入的识别文本，只用于打开新增弹窗那一次。 */
+const initialPaste = ref('')
+const createQueryHandled = ref(false)
+const route = useRoute()
+const router = useRouter()
 const detailOpen = ref(false)
 const detail = ref<AdvertisingRechargeDto | null>(null)
 let controller: AbortController | null = null
@@ -123,6 +128,33 @@ function openCreate(): void {
   createOpen.value = true
 }
 
+/**
+ * 广告户卡片「充值」按钮带 `?create=1&paste=...` 跳过来时，自动打开新增弹窗并识别。
+ * query 消费后立刻清掉：页面是 keepAlive 的，不清会导致刷新或再次激活时重复弹窗。
+ */
+function consumeCreateQuery(): void {
+  const { create, paste } = route.query
+
+  if (create !== '1') {
+    createQueryHandled.value = false
+    return
+  }
+
+  if (createQueryHandled.value) {
+    return
+  }
+
+  createQueryHandled.value = true
+
+  // 无建单权限时不落初始粘贴，避免权限后续变化后残留旧文本。
+  if (canCreate.value) {
+    initialPaste.value = typeof paste === 'string' ? paste : ''
+    openCreate()
+  }
+
+  void router.replace({ query: {} })
+}
+
 async function submitCreate(payload: AdvertisingRechargeCreatePayload): Promise<void> {
   if (creating.value) {
     return
@@ -197,14 +229,17 @@ watch(createOpen, (open) => {
   if (!open) {
     created.value = null
     createError.value = ''
+    initialPaste.value = ''
   }
 })
 
 onMounted(() => {
   active.value = true
+  consumeCreateQuery()
 })
 onActivated(() => {
   active.value = true
+  consumeCreateQuery()
 })
 onDeactivated(() => {
   active.value = false
@@ -311,6 +346,7 @@ onBeforeUnmount(() => {
       :submitting="creating"
       :error="createError || null"
       :created="created"
+      :initial-paste="initialPaste"
       :upload="uploadQr"
       @submit="submitCreate"
     />
