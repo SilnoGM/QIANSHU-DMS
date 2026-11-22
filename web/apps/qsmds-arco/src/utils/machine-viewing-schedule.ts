@@ -310,6 +310,11 @@ export function validateMachineViewingEditDraft(
   return errors
 }
 
+export function isMachineViewingDateToday(appointmentDate: string, epochMs: number): boolean {
+  const today = shanghaiDateParts(epochMs)
+  return appointmentDate === `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`
+}
+
 export function toMachineViewingUpdatePayload(
   draft: MachineViewingDraft,
   originalDate: string,

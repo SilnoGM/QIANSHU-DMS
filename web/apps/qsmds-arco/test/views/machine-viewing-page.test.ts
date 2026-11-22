@@ -124,7 +124,7 @@ test('状态流转、反馈、编辑与取消入口按 update 权限和状态展
     assert.match(source, /row\.status === 'PENDING_APPOINTMENT'/u, `${label}：待预约动作缺失`)
     assert.match(source, /row\.status === 'APPOINTED'/u, `${label}：已预约动作缺失`)
     assert.match(source, /row\.status === 'FEEDBACK_GIVEN'/u, `${label}：已反馈动作缺失`)
-    assert.match(source, /machineViewing\.action\.markAppointed/u, label)
+    assert.match(source, /machineViewing\.action\.markManually/u, `${label}：缺少手动标记入口`)
     assert.match(source, /machineViewing\.action\.edit/u, label)
     assert.match(source, /machineViewing\.action\.cancel/u, label)
     assert.match(source, /machineViewingsApi\.transitionStatus/u, `${label}：状态操作必须调用流转接口`)
@@ -132,6 +132,29 @@ test('状态流转、反馈、编辑与取消入口按 update 权限和状态展
     assert.match(source, /:record="editingRecord"/u, `${label}：编辑弹窗必须传入原记录`)
     assert.match(source, /@submit="submitForm"/u, `${label}：新建与编辑必须共用提交入口`)
     assert.match(source, /machineViewing\.feedback\.required/u, `${label}：已反馈必须校验正文`)
+    assert.doesNotMatch(source, /openStatusAction\('APPOINTED'/u, `${label}：不能再用状态弹窗直接标记已预约`)
+  }
+})
+
+test('手动标记只对今天的 PENDING 开放，并在复制成功后推进状态', () => {
+  for (const [label, url] of PAGES) {
+    const source = readFileSync(url, 'utf8')
+    assert.match(source, /isMachineViewingDateToday/u, `${label}：手动入口必须按上海日期判断今天`)
+    assert.match(source, /isTodayRow\(row\)/u, `${label}：缺少今天判断`)
+    assert.match(source, /machineViewingsApi\.manualNotificationText/u, `${label}：缺少文案生成接口`)
+    assert.match(source, /machineViewingsApi\.markManuallyNotified/u, `${label}：缺少手动推进接口`)
+    assert.match(source, /machineViewing\.manual\.copyAndMark/u, `${label}：缺少复制并标记按钮`)
+    assert.match(source, /navigator\.clipboard\?\.writeText/u, `${label}：复制必须走 Clipboard API`)
+    assert.match(
+      source,
+      /manualError\.value = t\('machineViewing\.manual\.copyFailed'\)\n\s+return/u,
+      `${label}：复制失败必须停止，不能推进状态`,
+    )
+    assert.match(
+      source,
+      /manualCopying\.value = false\n\s+await nextTick\(\)\n\s+manualOpen\.value = false/u,
+      `${label}：手动弹窗必须先释放 busy 再关闭`,
+    )
   }
 })
 

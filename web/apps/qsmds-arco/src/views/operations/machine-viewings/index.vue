@@ -3,6 +3,7 @@ import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type {
   CreateMachineViewingDto,
   MachineViewingDto,
+  MachineViewingManualNotificationTextDto,
   MachineViewingStatusTransitionDto,
   UpdateMachineViewingDto,
 } from '@/api/generated/types.gen'
@@ -22,10 +23,12 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import {
   formatMachineViewingTime,
+  isMachineViewingDateToday,
   MACHINE_VIEWING_MACHINE_TYPE_OPTIONS,
   MACHINE_VIEWING_SITE_OPTIONS,
 } from '@/utils/machine-viewing-schedule'
 import { MACHINE_VIEWING_STATUS_OPTIONS, machineViewingStatusMeta } from '@/utils/machine-viewing-status'
+import { serverNowEpochMs } from '@/utils/server-clock'
 import { resolveStatusTagToneClass } from '@/utils/status-tag-tone'
 import MachineViewingDetailDrawer from './machine-viewing-detail-drawer.vue'
 import MachineViewingFeedbackModal from './machine-viewing-feedback-modal.vue'
@@ -64,12 +67,27 @@ const feedbackRecord = ref<MachineViewingDto | null>(null)
 const detailOpen = ref(false)
 const detailRecord = ref<MachineViewingDto | null>(null)
 
-const statusAction = ref<'APPOINTED' | 'FEEDBACK_GIVEN' | 'CANCELLED' | null>(null)
+const statusAction = ref<'FEEDBACK_GIVEN' | 'CANCELLED' | null>(null)
 const statusRecord = ref<MachineViewingDto | null>(null)
 const statusFeedback = ref('')
 const statusReason = ref('')
 const statusSubmitting = ref(false)
 const statusError = ref('')
+
+const manualOpen = ref(false)
+const manualRecord = ref<MachineViewingDto | null>(null)
+const manualText = ref<MachineViewingManualNotificationTextDto | null>(null)
+const manualLoading = ref(false)
+const manualCopying = ref(false)
+const manualError = ref('')
+const manualDisplayText = computed(() => {
+  if (manualText.value === null) {
+    return ''
+  }
+  return [manualText.value.title, manualText.value.body]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join('\n\n')
+})
 
 let controller: AbortController | null = null
 
@@ -174,24 +192,12 @@ const statusModalOpen = computed({
     }
   },
 })
-const statusModalTitle = computed(() => {
-  if (statusAction.value === 'CANCELLED') {
-    return t('machineViewing.cancel.title')
-  }
-  if (statusAction.value === 'APPOINTED') {
-    return t('machineViewing.appoint.title')
-  }
-  return t('machineViewing.feedback.formTitle')
-})
-const statusConfirmLabel = computed(() => {
-  if (statusAction.value === 'CANCELLED') {
-    return t('machineViewing.cancel.confirm')
-  }
-  if (statusAction.value === 'APPOINTED') {
-    return t('machineViewing.appoint.confirm')
-  }
-  return t('machineViewing.feedback.save')
-})
+const statusModalTitle = computed(() => statusAction.value === 'CANCELLED'
+  ? t('machineViewing.cancel.title')
+  : t('machineViewing.feedback.formTitle'))
+const statusConfirmLabel = computed(() => statusAction.value === 'CANCELLED'
+  ? t('machineViewing.cancel.confirm')
+  : t('machineViewing.feedback.save'))
 
 function filterValue(key: string): string | undefined {
   const value = filters.value[key]
@@ -365,6 +371,7 @@ watch(() => account.authEpoch, () => {
   items.value = []
   total.value = 0
   open.value = false
+  manualOpen.value = false
   keyword.value = ''
   filters.value = {}
   dateRange.value = { start: undefined, end: undefined }
@@ -382,6 +389,14 @@ watch(open, (value) => {
     createError.value = ''
     updateError.value = ''
     fieldErrors.value = {}
+  }
+})
+
+watch(manualOpen, (value) => {
+  if (!value) {
+    manualRecord.value = null
+    manualText.value = null
+    manualError.value = ''
   }
 })
 
@@ -404,11 +419,11 @@ function businessActions(row: MachineViewingDto): ActionMenuItem[][] {
     return []
   }
   const items: ActionMenuItem[] = []
-  if (row.status === 'PENDING_APPOINTMENT') {
+  if (row.status === 'PENDING_APPOINTMENT' && isTodayRow(row)) {
     items.push({
-      label: t('machineViewing.action.markAppointed'),
-      icon: 'i-lucide:calendar-check',
-      handle: () => openStatusAction('APPOINTED', row),
+      label: t('machineViewing.action.markManually'),
+      icon: 'i-lucide:clipboard-check',
+      handle: () => openManualNotification(row),
     })
   }
   if (row.status === 'APPOINTED') {
@@ -441,7 +456,83 @@ function businessActions(row: MachineViewingDto): ActionMenuItem[][] {
   return items.length === 0 ? [] : [items]
 }
 
-function openStatusAction(action: 'APPOINTED' | 'FEEDBACK_GIVEN' | 'CANCELLED', row: MachineViewingDto): void {
+function isTodayRow(row: MachineViewingDto): boolean {
+  return isMachineViewingDateToday(row.appointmentDate, serverNowEpochMs())
+}
+
+function openManualNotification(row: MachineViewingDto): void {
+  if (!canUpdate.value || row.status !== 'PENDING_APPOINTMENT' || !isTodayRow(row)) {
+    return
+  }
+  manualRecord.value = row
+  manualText.value = null
+  manualError.value = ''
+  manualLoading.value = false
+  manualCopying.value = false
+  manualOpen.value = true
+  void loadManualText()
+}
+
+async function loadManualText(): Promise<void> {
+  if (manualRecord.value === null || manualLoading.value) {
+    return
+  }
+  manualLoading.value = true
+  manualError.value = ''
+  try {
+    const response = await machineViewingsApi.manualNotificationText(
+      manualRecord.value.id,
+      new AbortController().signal,
+    )
+    manualText.value = response.data
+  }
+  catch (failure) {
+    manualError.value = getApiClientFailureMessage(failure, t('machineViewing.manual.textFailed'))
+  }
+  finally {
+    manualLoading.value = false
+  }
+}
+
+async function copyAndMarkManual(): Promise<void> {
+  if (manualRecord.value === null || manualText.value === null || manualCopying.value) {
+    return
+  }
+  manualCopying.value = true
+  manualError.value = ''
+  try {
+    if (!navigator.clipboard?.writeText) {
+      manualError.value = t('machineViewing.manual.copyFailed')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(manualDisplayText.value)
+    }
+    catch {
+      manualError.value = t('machineViewing.manual.copyFailed')
+      return
+    }
+    await machineViewingsApi.markManuallyNotified(
+      manualRecord.value.id,
+      new AbortController().signal,
+    )
+    toast.success(t('machineViewing.manual.saved'))
+    // QsGenericModal 在 submitting 期间会拒绝受控关闭；先释放 busy 再关闭。
+    manualCopying.value = false
+    await nextTick()
+    manualOpen.value = false
+    manualRecord.value = null
+    await load()
+  }
+  catch (failure) {
+    manualError.value = getApiClientFailureMessage(failure, t('machineViewing.action.failed'))
+  }
+  finally {
+    manualCopying.value = false
+  }
+}
+
+function openStatusAction(action: 'FEEDBACK_GIVEN' | 'CANCELLED', row: MachineViewingDto): void {
   if (!canUpdate.value || statusSubmitting.value) {
     return
   }
@@ -473,9 +564,7 @@ async function submitStatusAction(): Promise<void> {
     await machineViewingsApi.transitionStatus(statusRecord.value.id, payload, new AbortController().signal)
     const successKey = statusAction.value === 'CANCELLED'
       ? 'machineViewing.action.cancelled'
-      : statusAction.value === 'APPOINTED'
-        ? 'machineViewing.action.appointed'
-        : 'machineViewing.feedback.saved'
+      : 'machineViewing.feedback.saved'
     toast.success(t(successKey))
     // QsGenericModal 在 submitting 期间会拒绝受控关闭；先释放 busy 再清空动作。
     statusSubmitting.value = false
@@ -678,7 +767,7 @@ async function submitStatusAction(): Promise<void> {
     >
       <template #header-leading>
         <FaIcon
-          :name="statusAction === 'CANCELLED' ? 'i-lucide:circle-x' : statusAction === 'APPOINTED' ? 'i-lucide:calendar-check' : 'i-lucide:message-square-text'"
+          :name="statusAction === 'CANCELLED' ? 'i-lucide:circle-x' : 'i-lucide:message-square-text'"
           class="size-5"
           :class="statusAction === 'CANCELLED' ? 'text-destructive' : 'text-primary'"
           aria-hidden="true"
@@ -695,10 +784,7 @@ async function submitStatusAction(): Promise<void> {
         <p v-if="statusRecord" class="qs-type-meta text-muted-foreground m-0">
           {{ statusRecord.appointmentNo }} · {{ formatMachineViewingTime(t, statusRecord) }}
         </p>
-        <p v-if="statusAction === 'APPOINTED'" class="qs-type-body text-foreground m-0">
-          {{ t('machineViewing.appoint.description') }}
-        </p>
-        <div v-else-if="statusAction === 'FEEDBACK_GIVEN'">
+        <div v-if="statusAction === 'FEEDBACK_GIVEN'">
           <label for="machine-viewing-status-feedback" class="text-sm font-medium">
             {{ t('machineViewing.feedback.content') }} <span class="text-destructive" aria-hidden="true">*</span>
           </label>
@@ -739,6 +825,64 @@ async function submitStatusAction(): Promise<void> {
           @click="submitStatusAction"
         >
           {{ statusConfirmLabel }}
+        </FaButton>
+      </template>
+    </QsGenericModal>
+    <QsGenericModal
+      v-model="manualOpen"
+      :title="t('machineViewing.manual.title')"
+      size="lg"
+      :submitting="manualCopying"
+    >
+      <template #header-leading>
+        <FaIcon name="i-lucide:clipboard-check" class="text-primary size-5" aria-hidden="true" />
+      </template>
+      <div class="min-w-0 space-y-4">
+        <FaAlert
+          v-if="manualError"
+          variant="destructive"
+          :title="t('machineViewing.action.failed')"
+          :description="manualError"
+          role="alert"
+        />
+        <p v-if="manualRecord" class="qs-type-meta text-muted-foreground m-0">
+          {{ manualRecord.appointmentNo }} · {{ formatMachineViewingTime(t, manualRecord) }} ·
+          {{ manualRecord.customerName }}
+        </p>
+        <div v-if="manualLoading" class="qs-type-body text-muted-foreground py-8 text-center">
+          {{ t('machineViewing.manual.loading') }}
+        </div>
+        <template v-else-if="manualText">
+          <div>
+            <div class="qs-type-meta text-muted-foreground">
+              {{ t('machineViewing.manual.content') }}
+            </div>
+            <pre class="qs-type-body text-foreground m-0 mt-2 p-4 border border-border rounded-lg bg-muted/20 whitespace-pre-wrap break-words">{{ manualDisplayText }}</pre>
+          </div>
+          <p class="qs-type-meta text-muted-foreground m-0">
+            {{ t('machineViewing.manual.hint') }}
+          </p>
+        </template>
+        <div v-else class="space-y-3">
+          <p class="qs-type-body text-muted-foreground m-0">
+            {{ t('machineViewing.manual.empty') }}
+          </p>
+          <FaButton variant="outline" :disabled="manualLoading" @click="loadManualText">
+            {{ t('machineViewing.retry') }}
+          </FaButton>
+        </div>
+      </div>
+      <template #footer>
+        <FaButton variant="outline" class="w-full sm:w-auto" :disabled="manualCopying" @click="manualOpen = false">
+          {{ t('machineViewing.form.cancel') }}
+        </FaButton>
+        <FaButton
+          class="w-full sm:w-auto"
+          :loading="manualCopying"
+          :disabled="manualLoading || manualCopying || manualText === null"
+          @click="copyAndMarkManual"
+        >
+          {{ t('machineViewing.manual.copyAndMark') }}
         </FaButton>
       </template>
     </QsGenericModal>

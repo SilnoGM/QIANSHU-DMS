@@ -42,7 +42,7 @@
     "action": {
       "detail": "View details",
       "more": "More actions",
-      "markAppointed": "Mark as appointed",
+      "markManually": "Mark as appointed manually",
       "feedback": "Add feedback",
       "editFeedback": "Edit feedback",
       "edit": "Edit appointment",
@@ -56,10 +56,16 @@
       "saved": "Appointment updated",
       "saveFailed": "Failed to update the appointment"
     },
-    "appoint": {
-      "title": "Mark this appointment as appointed?",
-      "description": "The appointment will move to \"Appointed\" while waiting for the customer visit. Use \"Cancel appointment\" to stop it.",
-      "confirm": "Confirm appointed"
+    "manual": {
+      "title": "Mark as appointed manually",
+      "content": "Notification text",
+      "loading": "Generating notification text…",
+      "hint": "After a successful copy the appointment will be marked as appointed. No system notification is sent automatically.",
+      "empty": "Notification text is temporarily unavailable.",
+      "copyAndMark": "Copy and mark as appointed",
+      "saved": "Copied and marked as appointed",
+      "textFailed": "Failed to generate notification text",
+      "copyFailed": "Copy failed. Select the text manually and try again."
     },
     "cancel": {
       "title": "Cancel this viewing appointment?",

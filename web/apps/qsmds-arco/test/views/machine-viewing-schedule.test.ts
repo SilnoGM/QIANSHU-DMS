@@ -9,6 +9,7 @@ import {
   daysInMonth,
   formatMachineViewingFullTime,
   formatMachineViewingTime,
+  isMachineViewingDateToday,
   previewMachineViewingTime,
   resolveMachineViewingEditDate,
   resolveMachineViewingEditYear,
@@ -191,6 +192,13 @@ function record(overrides: Partial<Record<string, unknown>> = {}) {
     ...overrides,
   } as never
 }
+
+test('手动标记只认上海今天', () => {
+  assert.equal(isMachineViewingDateToday('2026-11-05', NOW), true)
+  assert.equal(isMachineViewingDateToday('2026-11-04', NOW), false)
+  // UTC 还是 11-05 时，上海已经跨到 11-06。
+  assert.equal(isMachineViewingDateToday('2026-11-06', new Date('2026-11-05T16:30:00.000Z').getTime()), true)
+})
 
 test('编辑草稿从原记录回填，未改月/日时保留原年份', () => {
   const editDraft = createMachineViewingEditDraft(record())

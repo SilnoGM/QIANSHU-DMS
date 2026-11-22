@@ -42,7 +42,7 @@
     "action": {
       "detail": "查看詳情",
       "more": "更多操作",
-      "markAppointed": "標記已預約",
+      "markManually": "手動標記已預約",
       "feedback": "填寫回饋",
       "editFeedback": "修改回饋",
       "edit": "編輯預約",
@@ -56,10 +56,16 @@
       "saved": "看機預約已更新",
       "saveFailed": "預約更新失敗"
     },
-    "appoint": {
-      "title": "標記看機預約為已預約？",
-      "description": "標記後預約進入「已預約」，等待客戶到場；如需終止請使用「取消預約」。",
-      "confirm": "確認已預約"
+    "manual": {
+      "title": "手動標記已預約",
+      "content": "通知文案",
+      "loading": "正在產生通知文案…",
+      "hint": "複製成功後會把預約標記為已預約；不會自動傳送系統通知。",
+      "empty": "暫時無法產生通知文案。",
+      "copyAndMark": "複製並標記已預約",
+      "saved": "已複製並標記為已預約",
+      "textFailed": "通知文案產生失敗",
+      "copyFailed": "複製失敗，請手動選取文案複製後重試"
     },
     "cancel": {
       "title": "取消看機預約？",

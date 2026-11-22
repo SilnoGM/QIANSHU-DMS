@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateMachineViewingDto,
   MachineViewingDto,
+  MachineViewingManualNotificationTextDto,
   MachineViewingPageDto,
   MachineViewingsListData,
   MachineViewingStatusTransitionDto,
@@ -32,6 +33,10 @@ export function createMachineViewingsApi(client: AxiosInstance) {
       client.patch<MachineViewingDto>(`machine-viewings/${id}`, data, write(signal)),
     transitionStatus: (id: string, data: MachineViewingStatusTransitionDto, signal: AbortSignal) =>
       client.post<MachineViewingDto>(`machine-viewings/${id}/status-transitions`, data, write(signal)),
+    manualNotificationText: (id: string, signal: AbortSignal) =>
+      client.get<MachineViewingManualNotificationTextDto>(`machine-viewings/${id}/manual-notification-text`, read(signal)),
+    markManuallyNotified: (id: string, signal: AbortSignal) =>
+      client.post<MachineViewingDto>(`machine-viewings/${id}/manual-notifications`, undefined, write(signal)),
   }
 }
 
