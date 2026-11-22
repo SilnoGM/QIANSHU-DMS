@@ -23,6 +23,14 @@ const updateMigration = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261122110000_machine_viewing_update_and_audit/migration.sql'),
   'utf8',
 )
+const scheduleRevisionMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261122120000_machine_viewing_schedule_revision/migration.sql'),
+  'utf8',
+)
+const rescheduleNotificationMigration = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261122130000_machine_viewing_reschedule_notification/migration.sql'),
+  'utf8',
+)
 const permissionConstants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -135,6 +143,35 @@ describe('machine viewing appointment database contract', () => {
     expect(migration).toContain(
       `ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'MACHINE_VIEWING_APPOINTMENT_CREATED'`,
     )
+  })
+
+  it('adds schedule revision and reschedule audit in an additive migration', () => {
+    const model = modelBlock('MachineViewingAppointment')
+    expect(model).toContain('scheduleRevision    Int                      @default(1) @map("schedule_revision")')
+    expect(scheduleRevisionMigration).toContain('ADD COLUMN "schedule_revision" INTEGER NOT NULL DEFAULT 1')
+    expect(scheduleRevisionMigration).toContain('"machine_viewing_appointments_schedule_revision_check"')
+    expect(scheduleRevisionMigration).toContain('CHECK ("schedule_revision" >= 1)')
+
+    expect(enumBlock('AuditEventType')).toContain('MACHINE_VIEWING_APPOINTMENT_RESCHEDULED')
+    expect(scheduleRevisionMigration).toContain(
+      `ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS 'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED'`,
+    )
+    expect(scheduleRevisionMigration).not.toContain('UPDATE "machine_viewing_appointments"')
+  })
+
+  it('registers the reschedule policy and moves the 8:30 quiet-hours boundary', () => {
+    expect(rescheduleNotificationMigration).toContain(
+      `'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED'`,
+    )
+    expect(rescheduleNotificationMigration).toContain(
+      `'{"start":"22:00","end":"08:30","timezone":"Asia/Shanghai"}'::jsonb`,
+    )
+    expect(rescheduleNotificationMigration).toContain(
+      `"event_type" = 'MACHINE_VIEWING_APPOINTMENT_CREATED'`,
+    )
+    expect(rescheduleNotificationMigration).toContain('machine viewing created policy quiet hours were not updated')
+    // 通知模板由管理员配置，迁移不内置默认文案。
+    expect(rescheduleNotificationMigration).not.toContain('INSERT INTO "notification_templates"')
   })
 
   it('adds the update permission and mutation audit events in a separate additive migration', () => {

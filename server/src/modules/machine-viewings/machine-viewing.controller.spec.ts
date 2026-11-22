@@ -153,4 +153,31 @@ describe('MachineViewingController', () => {
     expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.transition))
       .toBe(HttpStatus.OK)
   })
+
+  it('reads manual notification text and marks it with machine-viewings:update', async () => {
+    const text = { title: '看机预约 MV/20261105-0001', body: '时间：2026-11-05 上午' }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = {
+      manualNotificationText: jest.fn().mockResolvedValue(text),
+      markManuallyNotified: jest.fn().mockResolvedValue(RESULT),
+    }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.manualNotificationText({ id: RESULT.id }, ACTOR)).resolves.toEqual(text)
+    expect(service.manualNotificationText).toHaveBeenCalledWith(ACTOR, RESULT.id)
+    expect(permissionsOf('manualNotificationText')).toEqual(['machine-viewings:update'])
+
+    await expect(controller.markManuallyNotified({ id: RESULT.id }, request)).resolves.toEqual(RESULT)
+    expect(service.markManuallyNotified).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+    )
+    expect(permissionsOf('markManuallyNotified')).toEqual(['machine-viewings:update'])
+    expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.markManuallyNotified))
+      .toBe(HttpStatus.OK)
+  })
 })

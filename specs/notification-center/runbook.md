@@ -195,5 +195,6 @@
 - 管理员不能查看他人的站内消息；需要排查时只核对聚合数量与事件策略。
 - 保留期清理：每日低峰执行 `pnpm -C server notifications:cleanup`。未归档 180 天、已归档 1 年、交付 90 天；通知只有在没有剩余收件箱条目和交付时才删除。命令输出 `kind=notification_cleanup` 与四类删除计数。
 - 业务扫描：`pnpm -C server notifications:scan`，只在上海时间 09:00–22:00 执行；按 09:05/13:05/17:05/21:05 运行。窗口外输出 `skipped/outside_window`；并发扫描由 advisory lock 跳过。先跑 `--dry-run` 核对静态节点到期与两类日汇总。
+- 看机预约扫描：`pnpm -C server notifications:machine-viewing-scan`，每天上海时间 08:30 后执行，只处理当天仍为 `PENDING_APPOINTMENT` 的预约；通知成功后推进 `APPOINTED`。先跑 `--dry-run` 核对当天待通知数。
 - 静默时段：千树小助理默认 22:00–09:00 不发送 `NORMAL`；`HIGH` 仍可突破。检查策略的 `quietHours` 是否显式覆盖了渠道默认值。
 - 桌面通知：仅桌面端显示开关；由 Web Locks 主标签轮询 `inbox/new`，其他标签通过 BroadcastChannel 同步未读数；页面关闭后不推送。

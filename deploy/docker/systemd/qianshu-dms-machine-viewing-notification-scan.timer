@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qianshu DMS Machine Viewing Notification Scan (Docker)
+
+[Timer]
+OnCalendar=*-*-* 08:30:00 Asia/Shanghai
+AccuracySec=1m
+Persistent=true
+Unit=qianshu-dms-machine-viewing-notification-scan.service
+
+[Install]
+WantedBy=timers.target

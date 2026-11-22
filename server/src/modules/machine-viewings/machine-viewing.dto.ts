@@ -193,3 +193,8 @@ export class MachineViewingPageDto {
   @ApiProperty() pageSize!: number
   @ApiProperty() total!: number
 }
+
+export class MachineViewingManualNotificationTextDto {
+  @ApiProperty({ type: 'string', nullable: true }) title!: string | null
+  @ApiProperty() body!: string
+}

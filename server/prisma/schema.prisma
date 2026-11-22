@@ -232,6 +232,8 @@ enum AuditEventType {
   /// 看机预约编辑与状态流转。追加在末尾与数据库枚举顺序一致。
   MACHINE_VIEWING_APPOINTMENT_UPDATED
   MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED
+  /// 看机预约改期：日期/时段/小时变化并重新进入待通知。追加在末尾。
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED
 
   @@map("audit_event_type")
 }
@@ -3355,6 +3357,8 @@ model MachineViewingAppointment {
   status              MachineViewingStatus     @default(PENDING_APPOINTMENT)
   /// 看机反馈正文；为空表示尚未反馈，列表显示占位符而不是空字符串。
   feedback            String?                  @db.VarChar(500)
+  /// 日期/时段/小时每变更一次递增；通知去重键按该版本区分，保证改期后可重发。
+  scheduleRevision    Int                      @default(1) @map("schedule_revision")
   createdByUserId     String                   @map("created_by_user_id") @db.Uuid
   requestKeyHash      Bytes                    @map("request_key_hash") @db.ByteA
   createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)

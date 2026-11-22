@@ -9,12 +9,6 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
 import {
-  machineViewingMachineTypeLabel,
-  machineViewingPeriodLabel,
-  machineViewingSiteLabel,
-  machineViewingStatusLabel,
-} from '../notifications/notification-display-labels'
-import {
   MACHINE_VIEWING_EDITABLE_STATUS_VALUES,
   MACHINE_VIEWING_NO_CONSUMER_CODE,
   MACHINE_VIEWING_NO_RULE_CODE,
@@ -44,6 +38,16 @@ import {
   sameMachineViewingPayload,
   type NormalizedMachineViewingCreate,
 } from './machine-viewing.logic'
+import {
+  isMachineViewingNotificationTimeReached,
+  isMachineViewingToday,
+  MachineViewingNotificationTextUnavailableError,
+  publishAppointmentNotification,
+  publishRescheduleNotification,
+  renderManualAppointmentNotificationText,
+  type MachineViewingManualNotificationText,
+  type MachineViewingNoticeAppointment,
+} from './machine-viewing-notification'
 import {
   MachineViewingQueryService,
   resolveMachineViewingViewer,
@@ -91,6 +95,7 @@ const EDITABLE_SELECT = {
   contactPerson: true,
   status: true,
   feedback: true,
+  scheduleRevision: true,
 } satisfies Prisma.MachineViewingAppointmentSelect
 
 @Injectable()
@@ -186,7 +191,7 @@ export class MachineViewingService {
             createdByUserId: context.actorUserId,
             requestKeyHash,
           },
-          select: { id: true },
+          select: { id: true, scheduleRevision: true },
         })
         await this.audit.record(transaction, {
           eventType: AuditEventType.MACHINE_VIEWING_APPOINTMENT_CREATED,
@@ -206,27 +211,51 @@ export class MachineViewingService {
             customerName: normalized.customerName,
           },
         })
-        await this.notifications.publish({
-          eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
-          source: { type: 'MACHINE_VIEWING_APPOINTMENT', id: created.id },
-          target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
-          templateKey: 'operations.machine-viewing.created',
-          variables: {
-            appointmentDate,
+        // 未来预约和 08:30 前创建的当天预约都进入当天批次；只有 08:30 后的当天预约立即通知。
+        if (isMachineViewingToday(normalized.appointmentDate, now)
+          && isMachineViewingNotificationTimeReached(now)) {
+          const notice = {
+            id: created.id,
             appointmentNo: issuance.number,
-            contactPerson: normalized.contactPerson,
+            appointmentDate: normalized.appointmentDate,
+            period: normalized.period,
+            hour: normalized.hour,
+            site: normalized.site,
+            machineType: normalized.machineType,
             customerName: normalized.customerName,
-            customerPhone: normalized.customerPhone ?? '—',
-            hour: normalized.hour ?? null,
-            machineType: machineViewingMachineTypeLabel(normalized.machineType),
-            period: machineViewingPeriodLabel(normalized.period),
-            site: machineViewingSiteLabel(normalized.site),
-            status: machineViewingStatusLabel('PENDING_APPOINTMENT'),
-          },
-          dedupeKey: `machine-viewing-created:${created.id}`,
-          priority: 'NORMAL',
-          requestedByUserId: context.actorUserId,
-        }, { transaction })
+            customerPhone: normalized.customerPhone,
+            contactPerson: normalized.contactPerson,
+            scheduleRevision: created.scheduleRevision,
+          } satisfies MachineViewingNoticeAppointment
+          const triggered = await publishAppointmentNotification(
+            transaction,
+            this.notifications,
+            notice,
+            now,
+            context.actorUserId,
+          )
+          if (triggered) {
+            await transaction.machineViewingAppointment.update({
+              where: { id: created.id },
+              data: { status: 'APPOINTED' },
+            })
+            await this.audit.record(transaction, {
+              eventType: AuditEventType.MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED,
+              outcome: 'SUCCESS',
+              actorType: 'USER',
+              actorUserId: context.actorUserId,
+              requestId: context.requestId,
+              targetType: 'MACHINE_VIEWING_APPOINTMENT',
+              targetId: created.id,
+              metadata: {
+                appointmentNo: issuance.number,
+                fromStatus: 'PENDING_APPOINTMENT',
+                toStatus: 'APPOINTED',
+                trigger: 'IMMEDIATE_NOTIFICATION',
+              },
+            })
+          }
+        }
         return await this.requireDto(transaction, created.id)
       }, { timeout: 30_000 })
     }
@@ -290,6 +319,55 @@ export class MachineViewingService {
           changeMetadata[entry.field] = entry.to
         }
 
+        const scheduleChanged = changedFields.some(field =>
+          field === 'appointmentDate' || field === 'period' || field === 'hour')
+        const nextRevision = scheduleChanged ? previous.scheduleRevision + 1 : previous.scheduleRevision
+        const nextNotice = {
+          appointmentDate: normalized.appointmentDate,
+          appointmentNo: previous.appointmentNo,
+          contactPerson: normalized.contactPerson,
+          customerName: normalized.customerName,
+          customerPhone: normalized.customerPhone,
+          hour: normalized.hour,
+          id,
+          machineType: normalized.machineType,
+          period: normalized.period,
+          scheduleRevision: nextRevision,
+          site: normalized.site,
+        } satisfies MachineViewingNoticeAppointment
+
+        let nextStatus = previous.status
+        let rescheduleNotificationTriggered = false
+        let appointmentNotificationTriggered = false
+        if (scheduleChanged) {
+          // 只有已经通知过的预约才有「改期」语义；待通知预约改日期只更新排期。
+          if (previous.status === 'APPOINTED') {
+            rescheduleNotificationTriggered = await publishRescheduleNotification(
+              transaction,
+              this.notifications,
+              previous,
+              nextNotice,
+              now,
+              context.actorUserId,
+            )
+            nextStatus = 'PENDING_APPOINTMENT'
+          }
+          // 今天 08:30 后的改期按「当天新增」处理，立即补一次预约通知。
+          if (isMachineViewingToday(normalized.appointmentDate, now)
+            && isMachineViewingNotificationTimeReached(now)) {
+            appointmentNotificationTriggered = await publishAppointmentNotification(
+              transaction,
+              this.notifications,
+              nextNotice,
+              now,
+              context.actorUserId,
+            )
+            if (appointmentNotificationTriggered) {
+              nextStatus = 'APPOINTED'
+            }
+          }
+        }
+
         await transaction.machineViewingAppointment.update({
           where: { id },
           data: {
@@ -301,6 +379,8 @@ export class MachineViewingService {
             customerName: normalized.customerName,
             customerPhone: normalized.customerPhone,
             contactPerson: normalized.contactPerson,
+            ...(scheduleChanged ? { scheduleRevision: nextRevision } : {}),
+            ...(nextStatus === previous.status ? {} : { status: nextStatus }),
           },
         })
         await this.audit.record(transaction, {
@@ -314,11 +394,55 @@ export class MachineViewingService {
           metadata: {
             appointmentNo: previous.appointmentNo,
             changedFields: changedFields.join(','),
-            status: previous.status,
+            previousStatus: previous.status,
+            status: nextStatus,
             appointmentDate: formatMachineViewingDate(normalized.appointmentDate),
+            ...(scheduleChanged ? { scheduleRevision: nextRevision } : {}),
             ...changeMetadata,
           },
         })
+        if (scheduleChanged) {
+          await this.audit.record(transaction, {
+            eventType: AuditEventType.MACHINE_VIEWING_APPOINTMENT_RESCHEDULED,
+            outcome: 'SUCCESS',
+            actorType: 'USER',
+            actorUserId: context.actorUserId,
+            requestId: context.requestId,
+            targetType: 'MACHINE_VIEWING_APPOINTMENT',
+            targetId: id,
+            metadata: {
+              appointmentNo: previous.appointmentNo,
+              previousAppointmentDate: formatMachineViewingDate(previous.appointmentDate),
+              appointmentDate: formatMachineViewingDate(normalized.appointmentDate),
+              previousPeriod: previous.period,
+              period: normalized.period,
+              previousHour: previous.hour,
+              hour: normalized.hour,
+              fromStatus: previous.status,
+              toStatus: nextStatus,
+              scheduleRevision: nextRevision,
+              rescheduleNotificationTriggered,
+              appointmentNotificationTriggered,
+            },
+          })
+        }
+        if (nextStatus !== previous.status) {
+          await this.audit.record(transaction, {
+            eventType: AuditEventType.MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED,
+            outcome: 'SUCCESS',
+            actorType: 'USER',
+            actorUserId: context.actorUserId,
+            requestId: context.requestId,
+            targetType: 'MACHINE_VIEWING_APPOINTMENT',
+            targetId: id,
+            metadata: {
+              appointmentNo: previous.appointmentNo,
+              fromStatus: previous.status,
+              toStatus: nextStatus,
+              trigger: scheduleChanged ? 'RESCHEDULE' : 'IMMEDIATE_NOTIFICATION',
+            },
+          })
+        }
         return await this.requireDto(transaction, id)
       }, { timeout: 30_000 })
     }
@@ -335,6 +459,7 @@ export class MachineViewingService {
     context: MachineViewingCommandContext,
     rawId: string,
     input: MachineViewingStatusTransitionDto,
+    now: Date = new Date(),
   ): Promise<MachineViewingDto> {
     const id = requireMachineViewingId(rawId)
     let normalized: ReturnType<typeof normalizeMachineViewingStatusTransition>
@@ -363,6 +488,13 @@ export class MachineViewingService {
         })
         if (previous === null) {
           machineViewingFailure(MACHINE_VIEWING_ERROR_CODES.NOT_FOUND, '看机预约不存在', 404)
+        }
+        if (normalized.status === 'APPOINTED' && !isMachineViewingToday(previous.appointmentDate, now)) {
+          machineViewingFailure(
+            MACHINE_VIEWING_ERROR_CODES.STATE_CHANGED,
+            '只能标记今天的看机预约为已预约',
+            409,
+          )
         }
 
         const action = resolveMachineViewingTransition(previous.status, normalized.status)
@@ -419,6 +551,113 @@ export class MachineViewingService {
             toStatus: normalized.status,
             ...(normalized.feedback === null ? {} : { feedback: normalized.feedback }),
             ...(normalized.cancelReason === null ? {} : { cancelReason: normalized.cancelReason }),
+          },
+        })
+        return await this.requireDto(transaction, id)
+      }, { timeout: 30_000 })
+    }
+    catch (error) {
+      return mapMachineViewingError(error)
+    }
+  }
+
+  /**
+   * 手动标记只面向「今天 + 待预约」：生成可复制的通知文案，复制动作由前端完成。
+   * 文案读取与状态推进分两步，避免复制失败却已经把状态改掉。
+   */
+  async manualNotificationText(
+    actorUserId: string,
+    rawId: string,
+    now: Date = new Date(),
+  ): Promise<MachineViewingManualNotificationText> {
+    const id = requireMachineViewingId(rawId)
+    return this.prisma.$transaction(async (transaction) => {
+      const viewer = await resolveMachineViewingViewer(transaction, actorUserId)
+      const row = await transaction.machineViewingAppointment.findFirst({
+        where: {
+          id,
+          ...(viewer.canViewAll ? {} : { createdByUserId: viewer.actorUserId }),
+        },
+        select: EDITABLE_SELECT,
+      })
+      if (row === null) {
+        machineViewingFailure(MACHINE_VIEWING_ERROR_CODES.NOT_FOUND, '看机预约不存在', 404)
+      }
+      if (row.status !== 'PENDING_APPOINTMENT' || !isMachineViewingToday(row.appointmentDate, now)) {
+        machineViewingFailure(
+          MACHINE_VIEWING_ERROR_CODES.STATE_CHANGED,
+          '只能对今天的待预约生成通知文案',
+          409,
+        )
+      }
+      try {
+        return await renderManualAppointmentNotificationText(transaction, row)
+      }
+      catch (error) {
+        if (error instanceof MachineViewingNotificationTextUnavailableError) {
+          machineViewingFailure(
+            MACHINE_VIEWING_ERROR_CODES.NOTIFICATION_TEXT_UNAVAILABLE,
+            error.message,
+            422,
+          )
+        }
+        throw error
+      }
+    })
+  }
+
+  async markManuallyNotified(
+    context: MachineViewingCommandContext,
+    rawId: string,
+    now: Date = new Date(),
+  ): Promise<MachineViewingDto> {
+    const id = requireMachineViewingId(rawId)
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const viewer = await resolveMachineViewingViewer(transaction, context.actorUserId)
+        await transaction.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "machine_viewing_appointments"
+          WHERE "id" = ${id}::uuid ${scopeSql(viewer)}
+          FOR UPDATE
+        `)
+        const row = await transaction.machineViewingAppointment.findFirst({
+          where: {
+            id,
+            ...(viewer.canViewAll ? {} : { createdByUserId: viewer.actorUserId }),
+          },
+          select: EDITABLE_SELECT,
+        })
+        if (row === null) {
+          machineViewingFailure(MACHINE_VIEWING_ERROR_CODES.NOT_FOUND, '看机预约不存在', 404)
+        }
+        if (row.status === 'APPOINTED' && isMachineViewingToday(row.appointmentDate, now)) {
+          return await this.requireDto(transaction, id)
+        }
+        if (row.status !== 'PENDING_APPOINTMENT' || !isMachineViewingToday(row.appointmentDate, now)) {
+          machineViewingFailure(
+            MACHINE_VIEWING_ERROR_CODES.STATE_CHANGED,
+            '只能手动标记今天的待预约',
+            409,
+          )
+        }
+        await transaction.machineViewingAppointment.update({
+          where: { id },
+          data: { status: 'APPOINTED' },
+        })
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED,
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'MACHINE_VIEWING_APPOINTMENT',
+          targetId: id,
+          metadata: {
+            appointmentNo: row.appointmentNo,
+            fromStatus: 'PENDING_APPOINTMENT',
+            toStatus: 'APPOINTED',
+            trigger: 'MANUAL_COPY',
           },
         })
         return await this.requireDto(transaction, id)

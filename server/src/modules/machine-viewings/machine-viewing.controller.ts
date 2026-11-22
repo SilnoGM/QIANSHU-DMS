@@ -18,6 +18,7 @@ import {
   MachineViewingDto,
   MachineViewingIdParamsDto,
   MachineViewingListQueryDto,
+  MachineViewingManualNotificationTextDto,
   MachineViewingPageDto,
   MachineViewingStatusTransitionDto,
   UpdateMachineViewingDto,
@@ -116,5 +117,32 @@ export class MachineViewingController {
     @Req() request: object,
   ): Promise<MachineViewingDto> {
     return this.service.transition(context(request), params.id, input)
+  }
+
+  @Get(':id/manual-notification-text')
+  @RequirePermissions(MACHINE_VIEWING_PERMISSION_UPDATE)
+  @ApiContractResponse({ status: HttpStatus.OK, type: MachineViewingManualNotificationTextDto })
+  @contract('machine_viewings_manual_notification_text', false, [
+    notFound,
+    stateChanged,
+    { status: 422, codes: ['MACHINE_VIEWING_NOTIFICATION_TEXT_UNAVAILABLE'] },
+  ])
+  manualNotificationText(
+    @Param() params: MachineViewingIdParamsDto,
+    @CurrentUserId() actorUserId: string,
+  ): Promise<MachineViewingManualNotificationTextDto> {
+    return this.service.manualNotificationText(actorUserId, params.id)
+  }
+
+  @Post(':id/manual-notifications')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(MACHINE_VIEWING_PERMISSION_UPDATE)
+  @ApiContractResponse({ status: HttpStatus.OK, type: MachineViewingDto })
+  @contract('machine_viewings_mark_manually_notified', true, [notFound, stateChanged])
+  markManuallyNotified(
+    @Param() params: MachineViewingIdParamsDto,
+    @Req() request: object,
+  ): Promise<MachineViewingDto> {
+    return this.service.markManuallyNotified(context(request), params.id)
   }
 }
