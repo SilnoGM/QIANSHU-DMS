@@ -140,6 +140,26 @@ const canSubmit = computed(() => (
   && reason.value.trim().length > 0
   && previewError.value === ''
 ))
+const reasonLength = computed(() => [...reason.value].length)
+/** 禁用提交时给出唯一原因，避免用户只看到灰按钮却不知道下一步该做什么。 */
+const submitHint = computed(() => {
+  if (loading.value || submitting.value || activeDetail.value === null) {
+    return ''
+  }
+  if (hasBlockingPayments.value) {
+    return t('purchaseOrderAmountRevision.submitHintPayments')
+  }
+  if (previewError.value !== '') {
+    return t('purchaseOrderAmountRevision.submitHintError')
+  }
+  if (preview.value === null || !preview.value.changed) {
+    return t('purchaseOrderAmountRevision.submitHintNoChange')
+  }
+  if (reason.value.trim().length === 0) {
+    return t('purchaseOrderAmountRevision.submitHintReason')
+  }
+  return ''
+})
 
 function resetForm(): void {
   const detail = activeDetail.value
@@ -354,71 +374,67 @@ async function submit(): Promise<void> {
           <div
             v-for="line in activeDetail.lines"
             :key="line.id"
-            class="p-4 gap-3 grid sm:grid-cols-[minmax(0,1fr)_4rem_8rem_9rem_8rem] sm:items-end"
+            class="p-4 gap-3 grid"
           >
             <div class="min-w-0">
-              <p class="qs-type-compact-label m-0">
-                {{ t('purchaseOrderAmountRevision.product') }}
-              </p>
-              <p class="m-0 mt-1 break-words">
-                {{ line.productName }}
-              </p>
-              <p class="qs-type-meta text-muted-foreground m-0">
+              <div class="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                <p class="font-medium m-0 break-words">
+                  {{ line.productName }}
+                </p>
+                <span class="qs-type-meta text-muted-foreground">× {{ line.quantity }}</span>
+              </div>
+              <p class="qs-type-meta text-muted-foreground m-0 mt-1">
                 {{ line.productNo ?? t('purchaseOrderAmountRevision.temporaryProduct') }}
               </p>
             </div>
-            <div>
-              <p class="qs-type-compact-label m-0">
-                {{ t('purchaseOrderAmountRevision.quantity') }}
-              </p>
-              <p class="m-0 mt-1 tabular-nums">
-                {{ line.quantity }}
-              </p>
-            </div>
-            <div>
-              <p class="qs-type-compact-label m-0">
-                {{ t('purchaseOrderAmountRevision.currentPrice') }}
-              </p>
-              <p class="m-0 mt-1">
-                <AmountDisplay
-                  :value="line.actualPurchaseUnitPriceAmount"
-                  currency="CNY"
+            <div class="gap-3 grid sm:grid-cols-3">
+              <div class="min-w-0">
+                <p class="qs-type-compact-label m-0">
+                  {{ t('purchaseOrderAmountRevision.currentPrice') }}
+                </p>
+                <p class="m-0 mt-1">
+                  <AmountDisplay
+                    :value="line.actualPurchaseUnitPriceAmount"
+                    currency="CNY"
+                    :currencies="currencies"
+                    class="max-w-full overflow-x-auto"
+                  />
+                </p>
+              </div>
+              <div class="min-w-0">
+                <p class="qs-type-compact-label mb-1">
+                  {{ t('purchaseOrderAmountRevision.newPrice') }}
+                </p>
+                <MoneyInput
+                  v-model="linePrices[line.id]"
+                  v-model:currency="currency"
                   :currencies="currencies"
+                  :currency-selectable="false"
+                  :disabled="submitting || hasBlockingPayments"
+                  placeholder="0.00"
                 />
-              </p>
-            </div>
-            <div>
-              <p class="qs-type-compact-label mb-1">
-                {{ t('purchaseOrderAmountRevision.newPrice') }}
-              </p>
-              <MoneyInput
-                v-model="linePrices[line.id]"
-                v-model:currency="currency"
-                :currencies="currencies"
-                :currency-selectable="false"
-                :disabled="submitting || hasBlockingPayments"
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <p class="qs-type-compact-label m-0">
-                {{ t('purchaseOrderAmountRevision.lineTotal') }}
-              </p>
-              <p class="m-0 mt-1">
-                <AmountDisplay
-                  :value="preview?.lineTotals[line.id] ?? '0.00'"
-                  currency="CNY"
-                  :currencies="currencies"
-                />
-              </p>
+              </div>
+              <div class="min-w-0">
+                <p class="qs-type-compact-label m-0">
+                  {{ t('purchaseOrderAmountRevision.lineTotal') }}
+                </p>
+                <p class="m-0 mt-1">
+                  <AmountDisplay
+                    :value="preview?.lineTotals[line.id] ?? '0.00'"
+                    currency="CNY"
+                    :currencies="currencies"
+                    class="max-w-full overflow-x-auto"
+                  />
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       <section class="mt-4 p-4 border border-border/70 bg-muted/20">
-        <dl class="m-0 gap-4 grid sm:grid-cols-2">
-          <div>
+        <dl class="m-0 gap-4 grid sm:grid-cols-3">
+          <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1">
               {{ t('purchaseOrderAmountRevision.purchaseTotal') }}
             </dt>
@@ -427,11 +443,26 @@ async function submit(): Promise<void> {
                 :value="preview?.purchaseTotalAmount ?? activeDetail.amounts.purchaseTotalAmount"
                 currency="CNY"
                 :currencies="currencies"
-                class="qs-type-data-emphasis"
+                class="qs-type-data-emphasis max-w-full overflow-x-auto"
               />
             </dd>
           </div>
-          <div>
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label mb-1">
+              {{ t('purchaseOrderAmountRevision.deposit') }}
+            </dt>
+            <dd class="m-0">
+              <MoneyInput
+                v-model="deposit"
+                v-model:currency="currency"
+                :currencies="currencies"
+                :currency-selectable="false"
+                :disabled="submitting || hasBlockingPayments || depositLocked"
+                placeholder="0.00"
+              />
+            </dd>
+          </div>
+          <div class="min-w-0">
             <dt class="qs-type-compact-label mb-1">
               {{ t('purchaseOrderAmountRevision.balance') }}
             </dt>
@@ -440,29 +471,16 @@ async function submit(): Promise<void> {
                 :value="preview?.balanceDueAmount ?? activeDetail.amounts.balanceDueAmount"
                 currency="CNY"
                 :currencies="currencies"
-                class="qs-type-data-emphasis"
+                class="qs-type-data-emphasis max-w-full overflow-x-auto"
               />
             </dd>
           </div>
-          <div class="sm:col-span-2">
-            <p class="qs-type-compact-label mb-1">
-              {{ t('purchaseOrderAmountRevision.deposit') }}
-            </p>
-            <MoneyInput
-              v-model="deposit"
-              v-model:currency="currency"
-              :currencies="currencies"
-              :currency-selectable="false"
-              :disabled="submitting || hasBlockingPayments || depositLocked"
-              placeholder="0.00"
-            />
-            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ depositLocked
-                ? t('purchaseOrderAmountRevision.depositLockedHint')
-                : t('purchaseOrderAmountRevision.depositHint') }}
-            </p>
-          </div>
         </dl>
+        <p class="qs-type-meta text-muted-foreground m-0 mt-3">
+          {{ depositLocked
+            ? t('purchaseOrderAmountRevision.depositLockedHint')
+            : t('purchaseOrderAmountRevision.depositHint') }}
+        </p>
       </section>
 
       <p
@@ -478,16 +496,19 @@ async function submit(): Promise<void> {
         {{ localError }}
       </p>
 
-      <label class="qs-type-compact-label mb-1 mt-4 block" for="purchase-amount-revision-reason">
-        {{ t('purchaseOrderAmountRevision.reason') }}
-      </label>
+      <div class="mb-1 mt-4 flex gap-3 items-center justify-between">
+        <label class="qs-type-compact-label" for="purchase-amount-revision-reason">
+          {{ t('purchaseOrderAmountRevision.reason') }}
+        </label>
+        <span class="qs-type-meta text-muted-foreground tabular-nums">{{ reasonLength }}/500</span>
+      </div>
       <FaTextarea
         id="purchase-amount-revision-reason"
         v-model="reason"
         :disabled="submitting"
         :maxlength="500"
         :placeholder="t('purchaseOrderAmountRevision.reasonPlaceholder')"
-        input-class="min-h-24"
+        input-class="min-h-20"
       />
       <p class="qs-type-meta text-muted-foreground m-0 mt-2">
         {{ t('purchaseOrderAmountRevision.note') }}
@@ -495,6 +516,9 @@ async function submit(): Promise<void> {
     </template>
 
     <template #footer>
+      <span v-if="submitHint" class="qs-type-meta text-muted-foreground sm:mr-auto">
+        {{ submitHint }}
+      </span>
       <FaButton
         type="button"
         variant="outline"
