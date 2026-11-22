@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { AdAccountDto } from '@/api/generated/types.gen'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import dayjs from '@/utils/dayjs'
@@ -146,6 +147,57 @@ const assignToneClass = computed(() => (
   isAssigned.value ? 'text-sky-600 dark:text-sky-400' : 'text-primary'
 ))
 
+/** 点击户名一次性复制账户名与编号，投手转手到群里时不用再拼。 */
+const accountCopyText = computed(() => [
+  `广告账户：${props.account.accountName}`,
+  `广告账户编号：${props.account.accountId}`,
+].join('\n'))
+
+type CopyState = 'error' | 'idle' | 'success'
+
+const toast = useQsToast()
+const copyState = ref<CopyState>('idle')
+let copyResetTimer: ReturnType<typeof setTimeout> | undefined
+
+const copyTooltip = computed(() => ({
+  error: '复制失败',
+  idle: '点击复制账户信息',
+  success: '已复制',
+})[copyState.value])
+const copyLiveMessage = computed(() => ({
+  error: '账户信息复制失败',
+  idle: '',
+  success: '账户信息已复制',
+})[copyState.value])
+
+function scheduleCopyReset(): void {
+  clearTimeout(copyResetTimer)
+  copyResetTimer = setTimeout(() => {
+    copyState.value = 'idle'
+  }, 1_500)
+}
+
+async function copyAccountInfo(): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable')
+    }
+
+    await navigator.clipboard.writeText(accountCopyText.value)
+    copyState.value = 'success'
+    toast.success('账户信息已复制')
+  }
+  catch {
+    // 失败只反馈给当前用户，不把待复制内容写进日志。
+    copyState.value = 'error'
+    toast.error('账户信息复制失败')
+  }
+
+  scheduleCopyReset()
+}
+
+onBeforeUnmount(() => clearTimeout(copyResetTimer))
+
 function formatTime(value: string): string {
   return dayjs(value).format('MM-DD HH:mm')
 }
@@ -160,7 +212,17 @@ function formatTime(value: string): string {
     <div class="px-4 pt-3 flex flex-wrap gap-3 items-start justify-between">
       <div class="min-w-0">
         <div class="flex flex-wrap gap-2 items-center">
-          <span class="font-medium">{{ account.accountName }}</span>
+          <FaTooltip :text="copyTooltip" :delay="300">
+            <button
+              type="button"
+              class="qs-ad-account-card__name"
+              :aria-label="`复制账户信息：${account.accountName}`"
+              @click="copyAccountInfo"
+            >
+              {{ account.accountName }}
+            </button>
+          </FaTooltip>
+          <span class="sr-only" aria-live="polite">{{ copyLiveMessage }}</span>
           <FaTag
             v-if="alertTag"
             variant="outline"
@@ -277,6 +339,30 @@ function formatTime(value: string): string {
 </template>
 
 <style scoped>
+/* 户名兼作复制按钮：字号与字重写进来，避免被浏览器默认 button 样式覆盖。 */
+.qs-ad-account-card__name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  text-align: left;
+}
+
+.qs-ad-account-card__name:hover {
+  text-decoration: underline;
+}
+
+.qs-ad-account-card__name:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid oklch(var(--primary) / 0.4);
+  outline-offset: 2px;
+}
+
 /* 与静态代理卡片的操作链接同款：去按钮装饰、悬浮下划线，靠文字色表达语义。 */
 .qs-ad-account-card__link {
   padding: 0;
