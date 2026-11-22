@@ -104,7 +104,7 @@ function formatTime(value: string): string {
       </div>
     </div>
 
-    <div class="px-4 py-3 gap-4 grid lg:grid-cols-4 sm:grid-cols-2">
+    <div class="px-4 py-3 gap-4 grid grid-cols-2">
       <div>
         <div class="text-xs text-muted-foreground">
           可用余额

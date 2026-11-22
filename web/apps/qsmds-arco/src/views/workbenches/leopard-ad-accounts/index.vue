@@ -244,8 +244,8 @@ onUnmounted(() => {
         </FaButton>
       </div>
 
-      <div v-if="loading" class="space-y-3">
-        <div v-for="index in 3" :key="index" class="border rounded-lg bg-muted/40 h-40 motion-safe:animate-pulse" />
+      <div v-if="loading" class="gap-4 grid lg:grid-cols-2">
+        <div v-for="index in 4" :key="index" class="border rounded-lg bg-muted/40 h-44 motion-safe:animate-pulse" />
       </div>
 
       <FaEmpty
@@ -264,7 +264,7 @@ onUnmounted(() => {
         class="py-12"
       />
 
-      <div v-else class="space-y-3">
+      <div v-else class="gap-4 grid lg:grid-cols-2">
         <QsAdAccountCard
           v-for="row in visibleRows"
           :key="row.id"
