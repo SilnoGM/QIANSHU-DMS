@@ -14,6 +14,7 @@
     "status": {
       "all": "All",
       "pending": "Pending payment",
+      "pendingPaymentCode": "Awaiting payment code",
       "paid": "Paid",
       "rejected": "Rejected",
       "withdrawn": "Withdrawn",
@@ -58,6 +59,7 @@
       "retry": "Retry",
       "reject": "Reject",
       "submitPayment": "Submit payment",
+      "submitPaymentCode": "Submit payment code",
       "void": "Void and reverse"
     },
     "empty": {
@@ -108,6 +110,10 @@
       "payment": "Payment",
       "paymentProof": "Payment screenshot",
       "paymentProofHint": "jpg, png or webp only, up to 10 MiB",
+      "paymentCodeTitle": "Add payment code",
+      "paymentCodeDescription": "Non-personal accounts require a payment code first. Submitting it moves the request to pending payment.",
+      "paymentCode": "Payment code",
+      "paymentCodeHint": "jpg, png or webp only, up to 10 MiB; cannot be replaced after submission",
       "paySectionTitle": "Record payment",
       "resultTitle": "Request result",
       "paidHint": "Payment is recorded in the fund ledger. To correct it, void the whole request with a reversal and submit a new request.",
@@ -122,6 +128,7 @@
       "submitted": "Recharge request submitted",
       "withdrawn": "Recharge request withdrawn",
       "paid": "Payment recorded and posted",
+      "paymentCodeSubmitted": "Payment code submitted; request is now pending payment",
       "rejected": "Recharge request rejected",
       "voided": "Recharge request voided and reversed"
     },
@@ -131,6 +138,7 @@
       "submit": "Failed to submit the ad recharge request",
       "withdraw": "Failed to withdraw the ad recharge request",
       "pay": "Failed to record the payment",
+      "paymentCode": "Failed to submit the payment code",
       "reject": "Failed to reject the ad recharge request",
       "void": "Failed to void the ad recharge request",
       "noPermission": "You do not have permission to view ad recharges",

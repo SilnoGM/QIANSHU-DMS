@@ -49,10 +49,21 @@ const rejecting = ref(false)
 const voidOpen = ref(false)
 const voidReasonError = ref('')
 const voiding = ref(false)
+const paymentCodeMediaAssetId = ref<string | null>(null)
+const paymentCodeError = ref('')
+const supplementing = ref(false)
+const uploadingCode = ref(false)
 let controller: AbortController | null = null
 
 /** 上传或提交期间锁定页头导航，避免带着未完成的证据离开。 */
-const locked = computed(() => uploading.value || paying.value || rejecting.value || voiding.value)
+const locked = computed(() => (
+  uploading.value
+  || uploadingCode.value
+  || paying.value
+  || supplementing.value
+  || rejecting.value
+  || voiding.value
+))
 
 const paymentCurrencies = computed(() => resolvePaymentCurrencies(currencyCatalog.currencies.value))
 const statusMeta = computed(() => recharge.value === null ? null : advertisingRechargeStatusMeta(recharge.value.status))
@@ -87,6 +98,48 @@ const canSubmitPayment = computed(() => (
 const uploadProof: RechargeImageUploadFile = async (file, signal) => {
   const response = await advertisingRechargesApi.uploadProof(id.value, file, signal)
   return { mediaAssetId: response.data.mediaAssetId }
+}
+
+/** 非个人户补付款码：上传成功后申请由服务端转入待付款。 */
+const canSubmitPaymentCode = computed(() => (
+  canPay.value
+  && recharge.value?.status === 'PENDING_PAYMENT_CODE'
+  && !supplementing.value
+  && !uploadingCode.value
+  && paymentCodeMediaAssetId.value !== null
+))
+
+const uploadPaymentCode: RechargeImageUploadFile = async (file, signal) => {
+  const response = await advertisingRechargesApi.uploadPaymentCode(file, signal)
+  return { mediaAssetId: response.data.mediaAssetId }
+}
+
+async function submitPaymentCode(): Promise<void> {
+  const row = recharge.value
+  if (!canSubmitPaymentCode.value || row === null || paymentCodeMediaAssetId.value === null) {
+    return
+  }
+
+  supplementing.value = true
+  paymentCodeError.value = ''
+  const request = new AbortController()
+
+  try {
+    const response = await advertisingRechargesApi.supplementPaymentCode(
+      row.id,
+      { paymentQrMediaAssetId: paymentCodeMediaAssetId.value, expectedVersion: row.version },
+      request.signal,
+    )
+    recharge.value = response.data
+    paymentCodeMediaAssetId.value = null
+    toast.success(t('advertisingRecharge.toast.paymentCodeSubmitted'))
+  }
+  catch (failure) {
+    paymentCodeError.value = getApiClientFailureMessage(failure, t('advertisingRecharge.error.paymentCode'))
+  }
+  finally {
+    supplementing.value = false
+  }
 }
 
 async function load(): Promise<void> {
@@ -381,6 +434,39 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="p-5 border border-border rounded-xl min-w-0 lg:p-6">
+          <template v-if="recharge.status === 'PENDING_PAYMENT_CODE'">
+            <h2 class="qs-type-section-title m-0 mb-4">
+              {{ t('advertisingRecharge.detail.paymentCodeTitle') }}
+            </h2>
+            <FaAlert :description="t('advertisingRecharge.detail.paymentCodeDescription')" class="mb-4" />
+            <FaAlert v-if="!canPay" :description="t('advertisingRecharge.error.noPayPermission')" class="mb-4" />
+            <FaAlert v-if="paymentCodeError" :description="paymentCodeError" variant="destructive" class="mb-4" role="alert" />
+            <div class="flex flex-col gap-1.5">
+              <span class="qs-type-meta text-muted-foreground">{{ t('advertisingRecharge.detail.paymentCode') }}</span>
+              <RechargeImageUpload
+                :key="`${recharge.id}-payment-code`"
+                v-model="paymentCodeMediaAssetId"
+                :enabled="canPay && recharge.status === 'PENDING_PAYMENT_CODE'"
+                :disabled="supplementing"
+                :upload="uploadPaymentCode"
+                :label="t('advertisingRecharge.detail.paymentCode')"
+                :hint="t('advertisingRecharge.detail.paymentCodeHint')"
+                @busy-change="uploadingCode = $event"
+              />
+            </div>
+            <div class="mt-5 flex justify-end">
+              <FaButton
+                type="button"
+                class="min-h-11 sm:min-h-9"
+                :loading="supplementing"
+                :disabled="!canSubmitPaymentCode"
+                @click="submitPaymentCode"
+              >
+                {{ t('advertisingRecharge.action.submitPaymentCode') }}
+              </FaButton>
+            </div>
+          </template>
+
           <template v-if="recharge.status === 'PENDING'">
             <h2 class="qs-type-section-title m-0 mb-4">
               {{ t('advertisingRecharge.detail.paySectionTitle') }}

@@ -14,6 +14,7 @@
     "status": {
       "all": "全部",
       "pending": "待付款",
+      "pendingPaymentCode": "补充付款码",
       "paid": "已付款",
       "rejected": "已驳回",
       "withdrawn": "已撤回",
@@ -58,6 +59,7 @@
       "retry": "重试",
       "reject": "驳回",
       "submitPayment": "提交付款",
+      "submitPaymentCode": "提交付款码",
       "void": "作废并冲正"
     },
     "empty": {
@@ -108,6 +110,10 @@
       "payment": "付款信息",
       "paymentProof": "付款截图凭证",
       "paymentProofHint": "仅支持 jpg、png、webp，单张不超过 10 MiB",
+      "paymentCodeTitle": "补充付款码",
+      "paymentCodeDescription": "非个人户需要先上传付款码；提交后申请进入待付款，财务即可按此付款。",
+      "paymentCode": "付款码",
+      "paymentCodeHint": "仅支持 jpg、png、webp，单张不超过 10 MiB；提交后不可更换",
       "paySectionTitle": "登记付款",
       "resultTitle": "申请结果",
       "paidHint": "付款已完成并记入资金流水；如需更正请整单作废并冲正，再重新提交申请。",
@@ -122,6 +128,7 @@
       "submitted": "充值申请已提交",
       "withdrawn": "充值申请已撤回",
       "paid": "付款已登记并入账",
+      "paymentCodeSubmitted": "付款码已提交，申请进入待付款",
       "rejected": "充值申请已驳回",
       "voided": "充值申请已作废并冲正"
     },
@@ -131,6 +138,7 @@
       "submit": "提交广告充值申请失败",
       "withdraw": "撤回广告充值申请失败",
       "pay": "登记付款失败",
+      "paymentCode": "提交付款码失败",
       "reject": "驳回广告充值申请失败",
       "void": "作废广告充值申请失败",
       "noPermission": "没有查看广告充值的权限",

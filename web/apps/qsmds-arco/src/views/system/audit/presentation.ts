@@ -188,6 +188,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   AD_ACCOUNT_SYNCED: '猎豹广告户已同步',
   AD_ACCOUNT_ASSIGNED: '猎豹广告户已绑定',
   AD_ACCOUNT_RELEASED: '猎豹广告户已解绑',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED: '广告充值付款码已补充',
 }
 
 export function auditMetadataEntries(

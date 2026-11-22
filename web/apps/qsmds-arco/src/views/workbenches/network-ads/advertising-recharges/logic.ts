@@ -3,6 +3,10 @@ import type { AdvertisingRechargeDto } from '@/api/generated/types.gen'
 export type AdvertisingRechargeStatus = AdvertisingRechargeDto['status']
 
 export const ADVERTISING_RECHARGE_STATUS_META: Record<AdvertisingRechargeStatus, { labelKey: string, tagClass: string }> = {
+  PENDING_PAYMENT_CODE: {
+    labelKey: 'advertisingRecharge.status.pendingPaymentCode',
+    tagClass: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300',
+  },
   PENDING: {
     labelKey: 'advertisingRecharge.status.pending',
     tagClass: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
