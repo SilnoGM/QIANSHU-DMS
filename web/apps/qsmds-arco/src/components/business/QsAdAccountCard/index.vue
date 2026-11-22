@@ -8,8 +8,8 @@ import dayjs from '@/utils/dayjs'
  * 猎豹广告账户卡片（横向细长版，一行放两张）。
  *
  * 三条视觉约定：
- * 1. 进度条颜色跟随风险：< 80% 品牌色、80~95% 警示、≥ 95% 或已耗尽为危险色；
- *    绿色表示健康，不能出现在「额度耗尽」的账户上。
+ * 1. 进度条与余额文字同色，颜色只看「可用余额」：> $50 健康、$30~$50 预警、< $30 危险；
+ *    与已花费/限额的消耗比例无关——比例只决定进度条长度。
  * 2. 余额低于阈值显示「余额预警」，已耗尽则升级为「已耗尽」，两者都用危险语义色 + 图标。
  * 3. 卡片边框在已耗尽时转为浅红，便于在一屏里快速揪出停投风险的账户。
  *
@@ -85,36 +85,52 @@ const spendPercent = computed(() => {
 })
 
 /**
- * 单一风险分档，余额文字与进度条共用同一来源，避免两处颜色不一致。
- * 余额低于阈值本身就是停投前兆，因此与「已耗尽 / ≥95%」同级按危险处理。
+ * 颜色只按「可用余额」分档，与已花费/限额比例无关：
+ *   > $50 健康（品牌绿）、$30~$50 预警（琥珀）、< $30 危险（红）。
+ * 红线取服务端下发的 `balanceAlertThreshold`，与菜单徽章、通知事件保持同一阈值；
+ * 琥珀线的 50 是纯展示口径，接口不提供。
  */
-const riskLevel = computed<'danger' | 'warning' | 'healthy'>(() => {
-  if (exhausted.value || props.account.lowBalance || spendPercent.value >= 95) {
+const BALANCE_CAUTION_USD = 50
+
+const balanceTier = computed<'danger' | 'warning' | 'healthy' | 'unknown'>(() => {
+  const balance = balanceNumber.value
+
+  if (balance === null) {
+    return 'unknown'
+  }
+
+  if (balance < props.account.balanceAlertThreshold) {
     return 'danger'
   }
 
-  return spendPercent.value >= 80 ? 'warning' : 'healthy'
+  return balance <= BALANCE_CAUTION_USD ? 'warning' : 'healthy'
 })
 
 const progressTone = computed(() => {
-  if (riskLevel.value === 'danger') {
-    return 'bg-destructive'
+  switch (balanceTier.value) {
+    case 'danger':
+      return 'bg-destructive'
+    case 'warning':
+      return 'bg-warning'
+    case 'healthy':
+      return 'bg-primary'
+    default:
+      return 'bg-muted-foreground'
   }
-
-  return riskLevel.value === 'warning' ? 'bg-warning' : 'bg-primary'
 })
 
-/** 与进度条同色；无花费上限账户没有口径，保持中性灰。 */
+/** 余额文字与进度条同色；无花费上限账户没有可用余额，保持中性灰。 */
 const balanceTone = computed(() => {
-  if (props.account.availableBalance === null) {
-    return 'text-muted-foreground'
+  switch (balanceTier.value) {
+    case 'danger':
+      return 'text-destructive'
+    case 'warning':
+      return 'text-warning'
+    case 'healthy':
+      return 'text-primary'
+    default:
+      return 'text-muted-foreground'
   }
-
-  if (riskLevel.value === 'danger') {
-    return 'text-destructive'
-  }
-
-  return riskLevel.value === 'warning' ? 'text-warning' : 'text-primary'
 })
 
 const isAssigned = computed(() => props.account.assignedUser !== null)
@@ -238,7 +254,7 @@ function formatTime(value: string): string {
     <div class="px-4 pb-2 pt-2.5">
       <div class="text-xs text-muted-foreground flex gap-2 items-baseline justify-between">
         <span class="tabular-nums">已花费 ${{ account.amountSpent }} / 限额 ${{ account.spendCap }}</span>
-        <span class="font-medium tabular-nums" :class="exhausted ? 'text-destructive' : undefined">{{ spendPercent }}%</span>
+        <span class="font-medium tabular-nums">{{ spendPercent }}%</span>
       </div>
       <div class="mt-1 rounded bg-muted h-1.5 overflow-hidden">
         <div class="h-full transition-colors" :class="progressTone" :style="{ width: `${spendPercent}%` }" />
