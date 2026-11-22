@@ -77,6 +77,19 @@ describe('MachineViewingController', () => {
     expect(permissionsOf('list')).toEqual(['machine-viewings:read'])
   })
 
+  it('returns status counts under machine-viewings:read', async () => {
+    const counts = [{ value: 'ALL' as const, count: 1 }]
+    const queries = { statusCounts: jest.fn().mockResolvedValue({ statuses: counts }) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      { create: jest.fn() } as unknown as MachineViewingService,
+    )
+
+    await expect(controller.statusCounts({ keyword: '陈先生' }, ACTOR)).resolves.toEqual({ statuses: counts })
+    expect(queries.statusCounts).toHaveBeenCalledWith(ACTOR, { keyword: '陈先生' })
+    expect(permissionsOf('statusCounts')).toEqual(['machine-viewings:read'])
+  })
+
   it('creates under machine-viewings:create only', async () => {
     const input: CreateMachineViewingDto = {
       site: 'TAICHUNG_LONGJING',

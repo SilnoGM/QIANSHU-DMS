@@ -571,6 +571,25 @@ describe('machine viewing appointments against PostgreSQL', () => {
     expect(appointmentNotification).toBeNull()
   })
 
+  it('returns status counts that keep non-status filters and ignore the selected status', async () => {
+    await service.create(
+      commandContext(purchasingId),
+      input({ customerName: '计数客户' }),
+      randomUUID(),
+      BEFORE_NOTIFICATION_TIME,
+    )
+
+    await expect(queries.statusCounts(purchasingId, { keyword: '计数客户' })).resolves.toEqual({
+      statuses: [
+        { value: 'ALL', count: 1 },
+        { value: 'PENDING_APPOINTMENT', count: 1 },
+        { value: 'APPOINTED', count: 0 },
+        { value: 'FEEDBACK_GIVEN', count: 0 },
+        { value: 'CANCELLED', count: 0 },
+      ],
+    })
+  })
+
   it('filters by keyword, status, site, machine type and appointment date range', async () => {
     const earlier = await service.create(
       commandContext(purchasingId),

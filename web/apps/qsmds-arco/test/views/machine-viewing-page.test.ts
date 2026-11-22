@@ -90,18 +90,24 @@ test('详情抽屉完整展示反馈正文且只读', () => {
   }
 })
 
-test('列表接入关键字、状态/地点/机型与预约日期范围筛选', () => {
+test('列表接入关键字、地点/机型、日期范围与状态切换', () => {
   for (const [label, url] of PAGES) {
     const source = readFileSync(url, 'utf8')
     assert.match(source, /v-model:search="keyword"/u, `${label}：缺少关键字搜索`)
     assert.match(source, /v-model:filters="filters"/u, `${label}：缺少业务筛选`)
     assert.match(source, /:filter-definitions="filterDefinitions"/u, `${label}：缺少筛选定义`)
-    assert.match(source, /key: 'status'/u, `${label}：缺少状态筛选`)
     assert.match(source, /key: 'site'/u, `${label}：缺少地点筛选`)
     assert.match(source, /key: 'machineType'/u, `${label}：缺少机型筛选`)
+    assert.doesNotMatch(source, /key: 'status'/u, `${label}：状态应由切换组件负责，不能重复放在筛选器`)
     assert.match(source, /QsDateRangeFilter/u, `${label}：缺少预约日期范围`)
     assert.match(source, /@filter-change="applyFilters"/u, `${label}：筛选变化必须重新查询`)
     assert.match(source, /keyword: keyword\.value\.trim\(\)/u, `${label}：关键字必须裁剪后提交`)
+    assert.match(source, /QsStatusSwitchToolbar/u, `${label}：缺少状态切换组件`)
+    assert.match(source, /:items="statusTabs"/u, `${label}：状态切换缺少计数项`)
+    assert.match(source, /machineViewingsApi\.statusCounts/u, `${label}：缺少状态计数接口`)
+    assert.match(source, /const statusTabs = computed/u, `${label}：缺少状态计数映射`)
+    assert.match(source, /countsLoaded\.value \? \{ count:/u, `${label}：计数未加载时不能显示 0`)
+    assert.match(source, /function selectStatusView/u, `${label}：缺少状态切换处理`)
   }
 })
 
@@ -116,17 +122,24 @@ test('状态弹窗成功后先释放 busy 再关闭', () => {
   }
 })
 
-test('状态流转、反馈、编辑与取消入口按 update 权限和状态展示', () => {
+test('不同状态给出不同动作，最多两个直显，其余进入更多', () => {
   for (const [label, url] of PAGES) {
     const source = readFileSync(url, 'utf8')
     assert.match(source, /auth\('machine-viewings:update'\)/u, `${label}：缺少 update 权限判断`)
-    assert.match(source, /function businessActions/u, `${label}：缺少行级业务动作`)
+    assert.match(source, /function rowActions/u, `${label}：缺少行级业务动作`)
     assert.match(source, /row\.status === 'PENDING_APPOINTMENT'/u, `${label}：待预约动作缺失`)
     assert.match(source, /row\.status === 'APPOINTED'/u, `${label}：已预约动作缺失`)
     assert.match(source, /row\.status === 'FEEDBACK_GIVEN'/u, `${label}：已反馈动作缺失`)
-    assert.match(source, /machineViewing\.action\.markManually/u, `${label}：缺少手动标记入口`)
+    assert.match(source, /machineViewing\.action\.markManuallyShort/u, `${label}：缺少手动标记入口`)
     assert.match(source, /machineViewing\.action\.edit/u, label)
     assert.match(source, /machineViewing\.action\.cancel/u, label)
+    assert.match(source, /machineViewing\.action\.feedback/u, label)
+    assert.match(source, /machineViewing\.action\.editFeedback/u, label)
+    assert.match(source, /machineViewing\.action\.detail/u, label)
+    assert.match(source, /function directRowActions/u, `${label}：缺少直显动作切分`)
+    assert.match(source, /function overflowRowActions/u, `${label}：缺少更多动作切分`)
+    assert.match(source, /rowActions\(row\)\.slice\(0, 2\)/u, `${label}：直显动作必须最多 2 个`)
+    assert.match(source, /rowActions\(row\)\.slice\(2\)/u, `${label}：其余动作必须进入更多`)
     assert.match(source, /machineViewingsApi\.transitionStatus/u, `${label}：状态操作必须调用流转接口`)
     assert.match(source, /machineViewingsApi\.update/u, `${label}：编辑必须调用更新接口`)
     assert.match(source, /:record="editingRecord"/u, `${label}：编辑弹窗必须传入原记录`)
@@ -141,6 +154,8 @@ test('手动标记只对今天的 PENDING 开放，并在复制成功后推进�
     const source = readFileSync(url, 'utf8')
     assert.match(source, /isMachineViewingDateToday/u, `${label}：手动入口必须按上海日期判断今天`)
     assert.match(source, /isTodayRow\(row\)/u, `${label}：缺少今天判断`)
+    assert.match(source, /if \(isTodayRow\(row\)\)/u, `${label}：手动动作必须只在今天出现`)
+    assert.match(source, /openStatusAction\('CANCELLED', row\)/u, `${label}：操作列缺少取消预约按钮`)
     assert.match(source, /machineViewingsApi\.manualNotificationText/u, `${label}：缺少文案生成接口`)
     assert.match(source, /machineViewingsApi\.markManuallyNotified/u, `${label}：缺少手动推进接口`)
     assert.match(source, /machineViewing\.manual\.copyAndMark/u, `${label}：缺少复制并标记按钮`)

@@ -5,12 +5,15 @@ import type {
   MachineViewingManualNotificationTextDto,
   MachineViewingPageDto,
   MachineViewingsListData,
+  MachineViewingsStatusCountsData,
+  MachineViewingStatusCountsDto,
   MachineViewingStatusTransitionDto,
   UpdateMachineViewingDto,
 } from '../generated/types.gen'
 import api from '../index'
 
 export type MachineViewingListQuery = NonNullable<MachineViewingsListData['query']>
+export type MachineViewingStatusCountsQuery = NonNullable<MachineViewingsStatusCountsData['query']>
 
 const read = (signal: AbortSignal) => ({ signal, errorPresentation: 'local' as const })
 const write = (signal: AbortSignal) => ({ ...read(signal), retry: false as const })
@@ -24,6 +27,8 @@ export function createMachineViewingsApi(client: AxiosInstance) {
   return {
     list: (query: MachineViewingListQuery, signal: AbortSignal) =>
       client.get<MachineViewingPageDto>('machine-viewings', { ...read(signal), params: query }),
+    statusCounts: (query: MachineViewingStatusCountsQuery, signal: AbortSignal) =>
+      client.get<MachineViewingStatusCountsDto>('machine-viewings/status-counts', { ...read(signal), params: query }),
     create: (data: CreateMachineViewingDto, key: string, signal: AbortSignal) =>
       client.post<MachineViewingDto>('machine-viewings', data, {
         ...write(signal),

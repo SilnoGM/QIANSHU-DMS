@@ -7,9 +7,10 @@ import type {
   MachineViewingStatusTransitionDto,
   UpdateMachineViewingDto,
 } from '@/api/generated/types.gen'
-import type { MachineViewingListQuery } from '@/api/modules/machine-viewings'
+import type { MachineViewingListQuery, MachineViewingStatusCountsQuery } from '@/api/modules/machine-viewings'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import { getApiClientFailureMessage } from '@/api/errors'
 import machineViewingsApi from '@/api/modules/machine-viewings'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -21,6 +22,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import {
   formatMachineViewingTime,
   isMachineViewingDateToday,
@@ -49,10 +51,14 @@ const pageSize = ref(20)
 const keyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const dateRange = shallowRef<CalendarDateRangeValue>({ start: undefined, end: undefined })
+const statusView = ref<'ALL' | MachineViewingDto['status']>('ALL')
 const items = ref<MachineViewingDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const loadError = ref('')
+const statusCounts = ref<Partial<Record<string, number>>>({})
+const countsLoaded = ref(false)
+const countsError = ref('')
 
 const open = ref(false)
 const editingRecord = ref<MachineViewingDto | null>(null)
@@ -90,6 +96,7 @@ const manualDisplayText = computed(() => {
 })
 
 let controller: AbortController | null = null
+let countsController: AbortController | null = null
 
 const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
   {
@@ -157,14 +164,6 @@ const columns = computed<QsGenericTableColumn<MachineViewingDto>[]>(() => [
 
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   {
-    key: 'status',
-    label: t('machineViewing.column.status'),
-    options: MACHINE_VIEWING_STATUS_OPTIONS.map(value => ({
-      value,
-      label: t(machineViewingStatusMeta(value).labelKey),
-    })),
-  },
-  {
     key: 'site',
     label: t('machineViewing.column.site'),
     options: MACHINE_VIEWING_SITE_OPTIONS.map(value => ({ value, label: t(`machineViewing.site.${value}`) })),
@@ -176,11 +175,32 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   },
 ])
 
-// 操作列按「详情 + 更多菜单」的最大集合计算，筛选和权限变化时列宽不会跳动。
-const actionColumnWidth = resolveActionColumnWidth([
-  { kind: 'text', chars: 2 },
-  { kind: 'icon' },
+/** 状态切换的数量只在首次成功加载后展示，避免请求失败时把 0 当成真实数量。 */
+const statusTabs = computed<QsStatusSwitchItem[]>(() => [
+  {
+    value: 'ALL',
+    label: t('machineViewing.filters.allStatuses'),
+    ...(countsLoaded.value ? { count: statusCounts.value.ALL ?? 0 } : {}),
+  },
+  ...MACHINE_VIEWING_STATUS_OPTIONS.map(value => ({
+    value,
+    label: t(machineViewingStatusMeta(value).labelKey),
+    ...(countsLoaded.value ? { count: statusCounts.value[value] ?? 0 } : {}),
+  })),
 ])
+
+// 操作列最多两个直显按钮，按「两个 4 字按钮 + 更多图标」计算最大宽度。
+const actionColumnWidth = Math.max(
+  resolveActionColumnWidth([
+    { kind: 'text', chars: 2 },
+    { kind: 'icon' },
+  ]),
+  resolveActionColumnWidth([
+    { kind: 'text', chars: 4 },
+    { kind: 'text', chars: 4 },
+    { kind: 'icon' },
+  ]),
+)
 const formSubmitting = computed(() => creating.value || updating.value)
 const formError = computed(() => editingRecord.value === null ? createError.value : updateError.value)
 const statusModalOpen = computed({
@@ -211,7 +231,7 @@ function listQuery(): MachineViewingListQuery {
     page: page.value,
     pageSize: pageSize.value,
     ...(keyword.value.trim() === '' ? {} : { keyword: keyword.value.trim() }),
-    ...(filterValue('status') === undefined ? {} : { status: filterValue('status') as NonNullable<MachineViewingListQuery['status']> }),
+    ...(statusView.value === 'ALL' ? {} : { status: statusView.value }),
     ...(filterValue('site') === undefined ? {} : { site: filterValue('site') as NonNullable<MachineViewingListQuery['site']> }),
     ...(filterValue('machineType') === undefined ? {} : { machineType: filterValue('machineType') as NonNullable<MachineViewingListQuery['machineType']> }),
     ...(dateFrom === undefined ? {} : { dateFrom }),
@@ -219,15 +239,31 @@ function listQuery(): MachineViewingListQuery {
   }
 }
 
-/** 查询条件变化后回到第一页；page 已经变化时交给 watch 触发，避免重复请求。 */
+/** 状态计数不带状态与分页，其余筛选与列表完全一致。 */
+function statusCountsQuery(): MachineViewingStatusCountsQuery {
+  const { page: _page, pageSize: _pageSize, status: _status, ...query } = listQuery()
+  return query
+}
+
+/** 查询条件变化后回到第一页并同时刷新状态数量。 */
 function applyFilters(): void {
   if (!enabled.value) {
     return
   }
+  void loadStatusCounts()
   if (page.value !== 1) {
     page.value = 1
     return
   }
+  void load()
+}
+
+function selectStatusView(value: string): void {
+  if (value !== 'ALL' && !(MACHINE_VIEWING_STATUS_OPTIONS as readonly string[]).includes(value)) {
+    return
+  }
+  statusView.value = value as 'ALL' | MachineViewingDto['status']
+  page.value = 1
   void load()
 }
 
@@ -256,6 +292,35 @@ async function load(): Promise<void> {
     if (controller === request) {
       loading.value = false
       controller = null
+    }
+  }
+}
+
+async function loadStatusCounts(): Promise<void> {
+  countsController?.abort()
+  if (!enabled.value) {
+    return
+  }
+  const request = new AbortController()
+  countsController = request
+  countsError.value = ''
+  try {
+    const response = await machineViewingsApi.statusCounts(statusCountsQuery(), request.signal)
+    if (!request.signal.aborted && countsController === request) {
+      statusCounts.value = Object.fromEntries(
+        response.data.statuses.map(item => [item.value, item.count]),
+      )
+      countsLoaded.value = true
+    }
+  }
+  catch (failure) {
+    if (!request.signal.aborted && countsController === request) {
+      countsError.value = getApiClientFailureMessage(failure, t('machineViewing.statusCountsFailed'))
+    }
+  }
+  finally {
+    if (countsController === request) {
+      countsController = null
     }
   }
 }
@@ -322,7 +387,7 @@ async function submitForm(payload: CreateMachineViewingDto | UpdateMachineViewin
     updating.value = false
     await nextTick()
     open.value = false
-    await load()
+    await Promise.all([load(), loadStatusCounts()])
   }
   catch (failure) {
     updateError.value = getApiClientFailureMessage(failure, t('machineViewing.edit.saveFailed'))
@@ -349,7 +414,7 @@ async function submitCreate(payload: CreateMachineViewingDto): Promise<void> {
     await nextTick()
     open.value = false
     page.value = 1
-    await load()
+    await Promise.all([load(), loadStatusCounts()])
   }
   catch (failure) {
     createError.value = getApiClientFailureMessage(failure, t('machineViewing.saveFailed'))
@@ -366,10 +431,16 @@ async function submitCreate(payload: CreateMachineViewingDto): Promise<void> {
 
 watch(() => account.authEpoch, () => {
   controller?.abort()
+  countsController?.abort()
   controller = null
+  countsController = null
   loading.value = false
   items.value = []
   total.value = 0
+  statusCounts.value = {}
+  countsLoaded.value = false
+  countsError.value = ''
+  statusView.value = 'ALL'
   open.value = false
   manualOpen.value = false
   keyword.value = ''
@@ -381,6 +452,12 @@ watch(() => account.authEpoch, () => {
 watch([enabled, page, pageSize, () => account.authEpoch], () => {
   if (enabled.value) {
     void load()
+  }
+}, { immediate: true })
+
+watch([enabled, () => account.authEpoch], () => {
+  if (enabled.value) {
+    void loadStatusCounts()
   }
 }, { immediate: true })
 
@@ -411,49 +488,79 @@ function openDetail(row: MachineViewingDto): void {
 }
 
 /**
- * 状态、反馈、编辑、取消都只对「待预约/已预约」开放；已反馈只能改反馈，
- * 已取消完全锁定。后端仍会按行锁复核，这里只负责不展示无效入口。
+ * 行操作按状态给出有序动作；前两个直接显示，其余收进更多。
+ *
+ * 排序原则：先把当前状态最常做的业务动作放前面，详情永远最后。
+ * - 今天待预约：手动标记、取消预约、编辑预约、查看详情
+ * - 未来待预约：编辑预约、取消预约、查看详情
+ * - 已预约：填写反馈、取消预约、编辑预约、查看详情
+ * - 已反馈：修改反馈、查看详情
+ * - 已取消：查看详情
  */
-function businessActions(row: MachineViewingDto): ActionMenuItem[][] {
-  if (!canUpdate.value) {
-    return []
+function rowActions(row: MachineViewingDto): ActionMenuItem[] {
+  const actions: ActionMenuItem[] = []
+  if (canUpdate.value) {
+    if (row.status === 'PENDING_APPOINTMENT') {
+      if (isTodayRow(row)) {
+        actions.push({
+          label: t('machineViewing.action.markManuallyShort'),
+          icon: 'i-lucide:clipboard-check',
+          handle: () => openManualNotification(row),
+        })
+      }
+      actions.push({
+        label: t('machineViewing.action.cancel'),
+        icon: 'i-lucide:circle-x',
+        variant: 'destructive',
+        handle: () => openStatusAction('CANCELLED', row),
+      })
+      actions.push({
+        label: t('machineViewing.action.edit'),
+        icon: 'i-lucide:pencil',
+        handle: () => openEdit(row),
+      })
+    }
+    else if (row.status === 'APPOINTED') {
+      actions.push({
+        label: t('machineViewing.action.feedback'),
+        icon: 'i-lucide:message-square-text',
+        handle: () => openStatusAction('FEEDBACK_GIVEN', row),
+      })
+      actions.push({
+        label: t('machineViewing.action.cancel'),
+        icon: 'i-lucide:circle-x',
+        variant: 'destructive',
+        handle: () => openStatusAction('CANCELLED', row),
+      })
+      actions.push({
+        label: t('machineViewing.action.edit'),
+        icon: 'i-lucide:pencil',
+        handle: () => openEdit(row),
+      })
+    }
+    else if (row.status === 'FEEDBACK_GIVEN') {
+      actions.push({
+        label: t('machineViewing.action.editFeedback'),
+        icon: 'i-lucide:pencil-line',
+        handle: () => openStatusAction('FEEDBACK_GIVEN', row),
+      })
+    }
   }
-  const items: ActionMenuItem[] = []
-  if (row.status === 'PENDING_APPOINTMENT' && isTodayRow(row)) {
-    items.push({
-      label: t('machineViewing.action.markManually'),
-      icon: 'i-lucide:clipboard-check',
-      handle: () => openManualNotification(row),
-    })
-  }
-  if (row.status === 'APPOINTED') {
-    items.push({
-      label: t('machineViewing.action.feedback'),
-      icon: 'i-lucide:message-square-text',
-      handle: () => openStatusAction('FEEDBACK_GIVEN', row),
-    })
-  }
-  if (row.status === 'FEEDBACK_GIVEN') {
-    items.push({
-      label: t('machineViewing.action.editFeedback'),
-      icon: 'i-lucide:pencil-line',
-      handle: () => openStatusAction('FEEDBACK_GIVEN', row),
-    })
-  }
-  if (row.status === 'PENDING_APPOINTMENT' || row.status === 'APPOINTED') {
-    items.push({
-      label: t('machineViewing.action.edit'),
-      icon: 'i-lucide:pencil',
-      handle: () => openEdit(row),
-    })
-    items.push({
-      label: t('machineViewing.action.cancel'),
-      icon: 'i-lucide:circle-x',
-      variant: 'destructive',
-      handle: () => openStatusAction('CANCELLED', row),
-    })
-  }
-  return items.length === 0 ? [] : [items]
+  actions.push({
+    label: t('machineViewing.action.detail'),
+    icon: 'i-lucide:eye',
+    handle: () => openDetail(row),
+  })
+  return actions
+}
+
+function directRowActions(row: MachineViewingDto): ActionMenuItem[] {
+  return rowActions(row).slice(0, 2)
+}
+
+function overflowRowActions(row: MachineViewingDto): ActionMenuItem[][] {
+  const actions = rowActions(row).slice(2)
+  return actions.length === 0 ? [] : [actions]
 }
 
 function isTodayRow(row: MachineViewingDto): boolean {
@@ -522,7 +629,7 @@ async function copyAndMarkManual(): Promise<void> {
     await nextTick()
     manualOpen.value = false
     manualRecord.value = null
-    await load()
+    await Promise.all([load(), loadStatusCounts()])
   }
   catch (failure) {
     manualError.value = getApiClientFailureMessage(failure, t('machineViewing.action.failed'))
@@ -571,7 +678,7 @@ async function submitStatusAction(): Promise<void> {
     await nextTick()
     statusAction.value = null
     statusRecord.value = null
-    await load()
+    await Promise.all([load(), loadStatusCounts()])
   }
   catch (failure) {
     statusError.value = getApiClientFailureMessage(failure, t('machineViewing.action.failed'))
@@ -592,6 +699,29 @@ async function submitStatusAction(): Promise<void> {
     </FaPageHeader>
 
     <FaPageMain class="min-w-0">
+      <QsStatusSwitchToolbar
+        :model-value="statusView"
+        :items="statusTabs"
+        :aria-label="t('machineViewing.filters.statusView')"
+        class="mb-4"
+        @update:model-value="selectStatusView"
+      />
+      <FaAlert
+        v-if="countsError"
+        variant="destructive"
+        :title="t('machineViewing.statusCountsFailed')"
+        class="mb-4"
+        role="alert"
+      >
+        <template #description>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>{{ countsError }}</span>
+            <FaButton variant="outline" size="sm" class="shrink-0 min-h-11 sm:min-h-8" @click="loadStatusCounts">
+              {{ t('machineViewing.retry') }}
+            </FaButton>
+          </div>
+        </template>
+      </FaAlert>
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
@@ -729,15 +859,18 @@ async function submitStatusAction(): Promise<void> {
         </template>
         <template #actions="{ row }">
           <FaButton
+            v-for="action in directRowActions(row)"
+            :key="action.label"
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.appointmentNo}：${t('machineViewing.action.detail')}`"
-            @click="openDetail(row)"
+            :class="action.variant === 'destructive' ? 'text-destructive' : undefined"
+            :aria-label="`${row.appointmentNo}：${action.label}`"
+            @click="action.handle()"
           >
-            {{ t('machineViewing.action.detail') }}
+            {{ action.label }}
           </FaButton>
-          <FaDropdown v-if="businessActions(row).length > 0" :items="businessActions(row)" align="end">
+          <FaDropdown v-if="overflowRowActions(row).length > 0" :items="overflowRowActions(row)" align="end">
             <FaButton
               variant="ghost"
               size="icon-sm"

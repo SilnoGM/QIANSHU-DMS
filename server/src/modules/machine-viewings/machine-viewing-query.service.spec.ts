@@ -1,5 +1,5 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { buildMachineViewingListWhere } from './machine-viewing-query.service'
+import { buildMachineViewingListWhere, MachineViewingQueryService } from './machine-viewing-query.service'
 
 const ACTOR = 'c1a2b3c4-d5e6-47f8-9a0b-c1d2e3f4a5b6'
 
@@ -58,6 +58,43 @@ describe('buildMachineViewingListWhere', () => {
     ]) {
       expect(() => buildMachineViewingListWhere({ actorUserId: ACTOR, canViewAll: true }, query))
         .toThrow(ApiException)
+    }
+  })
+})
+
+describe('MachineViewingQueryService.statusCounts', () => {
+  it('returns ALL plus every status count with the same non-status filters', async () => {
+    const count = jest.fn(({ where }: { where: { status?: string } }) =>
+      Promise.resolve(where.status === undefined
+        ? 7
+        : where.status === 'PENDING_APPOINTMENT' ? 3 : 1))
+    const transaction = {
+      machineViewingAppointment: { count },
+      userRole: { findFirst: jest.fn().mockResolvedValue({ userId: ACTOR }) },
+    }
+    const service = new MachineViewingQueryService({
+      $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(transaction)),
+    } as never)
+
+    await expect(service.statusCounts(ACTOR, {
+      keyword: '陈先生',
+      site: 'NEW_TAIPEI_LINKOU',
+      dateFrom: '2026-11-01',
+    })).resolves.toEqual({
+      statuses: [
+        { value: 'ALL', count: 7 },
+        { value: 'PENDING_APPOINTMENT', count: 3 },
+        { value: 'APPOINTED', count: 1 },
+        { value: 'FEEDBACK_GIVEN', count: 1 },
+        { value: 'CANCELLED', count: 1 },
+      ],
+    })
+    expect(count).toHaveBeenCalledTimes(5)
+    for (const call of count.mock.calls) {
+      expect(call[0].where).toMatchObject({
+        site: 'NEW_TAIPEI_LINKOU',
+        appointmentDate: { gte: new Date('2026-11-01T00:00:00.000Z') },
+      })
     }
   })
 })

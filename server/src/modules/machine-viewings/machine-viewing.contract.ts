@@ -28,6 +28,13 @@ export const MACHINE_VIEWING_STATUS_VALUES = [
 ] as const
 export type MachineViewingStatusValue = (typeof MACHINE_VIEWING_STATUS_VALUES)[number]
 
+/** 状态视图在 ALL 之外复用真实状态值；计数接口不接受状态筛选。 */
+export const MACHINE_VIEWING_STATUS_FILTER_VALUES = [
+  'ALL',
+  ...MACHINE_VIEWING_STATUS_VALUES,
+] as const
+export type MachineViewingStatusFilterValue = (typeof MACHINE_VIEWING_STATUS_FILTER_VALUES)[number]
+
 /** 可主动流转的目标状态；当前状态由服务端按行锁读取后裁决。 */
 export const MACHINE_VIEWING_TRANSITION_TARGET_VALUES = [
   'APPOINTED',

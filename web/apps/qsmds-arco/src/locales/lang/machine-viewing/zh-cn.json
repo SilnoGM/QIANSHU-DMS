@@ -42,7 +42,7 @@
     "action": {
       "detail": "查看详情",
       "more": "更多操作",
-      "markManually": "手动标记已预约",
+      "markManuallyShort": "手动标记",
       "feedback": "填写反馈",
       "editFeedback": "修改反馈",
       "edit": "编辑预约",
@@ -75,7 +75,9 @@
     },
     "filters": {
       "keywordPlaceholder": "搜索预约编号、客户或对接人",
-      "appointmentDate": "预约日期"
+      "appointmentDate": "预约日期",
+      "allStatuses": "全部",
+      "statusView": "预约状态"
     },
     "detail": {
       "title": "看机预约详情",
@@ -146,6 +148,7 @@
       "contactPersonTooLong": "业务对接人不能超过 64 个字符"
     },
     "created": "看机预约已提交",
+    "statusCountsFailed": "状态数量加载失败",
     "saveFailed": "预约提交失败"
   }
 }

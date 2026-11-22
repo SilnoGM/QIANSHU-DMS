@@ -42,7 +42,7 @@
     "action": {
       "detail": "View details",
       "more": "More actions",
-      "markManually": "Mark as appointed manually",
+      "markManuallyShort": "Mark manually",
       "feedback": "Add feedback",
       "editFeedback": "Edit feedback",
       "edit": "Edit appointment",
@@ -75,7 +75,9 @@
     },
     "filters": {
       "keywordPlaceholder": "Search no., customer or contact",
-      "appointmentDate": "Appointment date"
+      "appointmentDate": "Appointment date",
+      "allStatuses": "All",
+      "statusView": "Appointment status"
     },
     "detail": {
       "title": "Machine viewing details",
@@ -146,6 +148,7 @@
       "contactPersonTooLong": "Contact person must be at most 64 characters"
     },
     "created": "Machine viewing appointment submitted",
+    "statusCountsFailed": "Failed to load status counts",
     "saveFailed": "Failed to submit the appointment"
   }
 }

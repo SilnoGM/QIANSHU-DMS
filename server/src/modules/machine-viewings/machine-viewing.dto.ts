@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator'
 
@@ -14,11 +14,13 @@ import {
   MACHINE_VIEWING_MACHINE_TYPE_VALUES,
   MACHINE_VIEWING_PERIOD_VALUES,
   MACHINE_VIEWING_SITE_VALUES,
+  MACHINE_VIEWING_STATUS_FILTER_VALUES,
   MACHINE_VIEWING_STATUS_VALUES,
   MACHINE_VIEWING_TRANSITION_TARGET_VALUES,
   type MachineViewingMachineTypeValue,
   type MachineViewingPeriodValue,
   type MachineViewingSiteValue,
+  type MachineViewingStatusFilterValue,
   type MachineViewingStatusValue,
   type MachineViewingTransitionTargetValue,
 } from './machine-viewing.contract'
@@ -54,6 +56,25 @@ export class MachineViewingListQueryDto {
 
   @ApiPropertyOptional({ type: 'string', format: 'date', description: '预约日期止（含），YYYY-MM-DD。' })
   @IsOptional() @Matches(DATE_ONLY_PATTERN) dateTo?: string
+}
+
+/** 状态计数复用列表筛选，但排除分页与状态本身，保证切换状态时数量不塌缩。 */
+export class MachineViewingStatusCountsQueryDto extends OmitType(
+  MachineViewingListQueryDto,
+  ['page', 'pageSize', 'status'] as const,
+) {}
+
+export class MachineViewingStatusCountDto {
+  @ApiProperty({ enum: MACHINE_VIEWING_STATUS_FILTER_VALUES }) value!: MachineViewingStatusFilterValue
+  @ApiProperty() count!: number
+}
+
+export class MachineViewingStatusCountsDto {
+  @ApiProperty({
+    type: [MachineViewingStatusCountDto],
+    description: '每个状态的数量，外加 ALL 的合计；关键词、地点、机型与日期筛选生效，状态筛选不生效。',
+  })
+  statuses!: MachineViewingStatusCountDto[]
 }
 
 export class MachineViewingIdParamsDto {

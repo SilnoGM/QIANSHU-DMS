@@ -20,6 +20,8 @@ import {
   MachineViewingListQueryDto,
   MachineViewingManualNotificationTextDto,
   MachineViewingPageDto,
+  MachineViewingStatusCountsDto,
+  MachineViewingStatusCountsQueryDto,
   MachineViewingStatusTransitionDto,
   UpdateMachineViewingDto,
 } from './machine-viewing.dto'
@@ -73,6 +75,17 @@ export class MachineViewingController {
     @CurrentUserId() actorUserId: string,
   ): Promise<MachineViewingPageDto> {
     return this.queries.listForActor(actorUserId, query)
+  }
+
+  @Get('status-counts')
+  @RequirePermissions(MACHINE_VIEWING_PERMISSION_READ)
+  @ApiContractResponse({ status: HttpStatus.OK, type: MachineViewingStatusCountsDto })
+  @contract('machine_viewings_status_counts')
+  statusCounts(
+    @Query() query: MachineViewingStatusCountsQueryDto,
+    @CurrentUserId() actorUserId: string,
+  ): Promise<MachineViewingStatusCountsDto> {
+    return this.queries.statusCounts(actorUserId, query)
   }
 
   @Post()

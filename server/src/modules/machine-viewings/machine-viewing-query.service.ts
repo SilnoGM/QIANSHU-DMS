@@ -7,10 +7,13 @@ import {
   toPersonReference,
 } from '../../infrastructure/database/person-reference'
 import { DATA_SCOPE_ALL } from '../access-control/data-scope'
+import { MACHINE_VIEWING_STATUS_VALUES } from './machine-viewing.contract'
 import type {
   MachineViewingDto,
   MachineViewingListQueryDto,
   MachineViewingPageDto,
+  MachineViewingStatusCountsDto,
+  MachineViewingStatusCountsQueryDto,
 } from './machine-viewing.dto'
 import { MACHINE_VIEWING_ERROR_CODES, machineViewingFailure } from './machine-viewing.errors'
 import {
@@ -148,6 +151,31 @@ export class MachineViewingQueryService {
         transaction.machineViewingAppointment.count({ where }),
       ])
       return { items: rows.map(toMachineViewingDto), page, pageSize, total }
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+  }
+
+  /** 状态视图计数与列表共享同一套可见范围和非状态筛选，切换状态时数量不会塌缩。 */
+  async statusCounts(
+    actorUserId: string,
+    query: MachineViewingStatusCountsQueryDto,
+  ): Promise<MachineViewingStatusCountsDto> {
+    return this.prisma.$transaction(async (transaction) => {
+      const viewer = await resolveMachineViewingViewer(transaction, actorUserId)
+      const base = buildMachineViewingListWhere(viewer, query)
+      const [total, ...counts] = await Promise.all([
+        transaction.machineViewingAppointment.count({ where: base }),
+        ...MACHINE_VIEWING_STATUS_VALUES.map(status =>
+          transaction.machineViewingAppointment.count({ where: { ...base, status } })),
+      ])
+      return {
+        statuses: [
+          { value: 'ALL', count: total },
+          ...MACHINE_VIEWING_STATUS_VALUES.map((status, index) => ({
+            value: status,
+            count: counts[index] ?? 0,
+          })),
+        ],
+      }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
 

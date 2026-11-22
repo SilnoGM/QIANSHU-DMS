@@ -42,6 +42,7 @@ test('列表按分页查询，创建携带幂等键且禁止自动重试', async
   }, signal)
   await api.manualNotificationText('viewing-1', signal)
   await api.markManuallyNotified('viewing-1', signal)
+  await api.statusCounts({ keyword: '陈先生' }, signal)
 
   assert.equal(calls[0][0], 'machine-viewings')
   assert.deepEqual(calls[0][1], {
@@ -85,6 +86,13 @@ test('列表按分页查询，创建携带幂等键且禁止自动重试', async
   assert.deepEqual(calls[5][2], {
     errorPresentation: 'local',
     retry: false,
+    signal,
+  })
+
+  assert.equal(calls[6][0], 'machine-viewings/status-counts')
+  assert.deepEqual(calls[6][1], {
+    errorPresentation: 'local',
+    params: { keyword: '陈先生' },
     signal,
   })
 })
