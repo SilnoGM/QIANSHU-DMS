@@ -1,4 +1,8 @@
-import type { CreateMachineViewingDto, MachineViewingDto } from '../api/generated/types.gen'
+import type {
+  CreateMachineViewingDto,
+  MachineViewingDto,
+  UpdateMachineViewingDto,
+} from '../api/generated/types.gen'
 
 export type MachineViewingSiteValue = MachineViewingDto['site']
 export type MachineViewingMachineTypeValue = MachineViewingDto['machineType']
@@ -223,4 +227,105 @@ export function previewMachineViewingTime(
       hour: draft.hour ?? '',
     },
   )
+}
+
+/** 编辑弹窗以原记录为草稿，日期仍拆成月/日供下拉框使用。 */
+export function createMachineViewingEditDraft(record: MachineViewingDto): MachineViewingDraft {
+  const [year, month, day] = record.appointmentDate.split('-').map(Number)
+  if (!Number.isSafeInteger(year) || !Number.isSafeInteger(month) || !Number.isSafeInteger(day)) {
+    throw new TypeError('看机预约日期格式无效')
+  }
+  return {
+    site: record.site,
+    machineType: record.machineType,
+    month,
+    day,
+    period: record.period,
+    hour: record.hour,
+    customerName: record.customerName,
+    customerPhone: record.customerPhone ?? '',
+    contactPerson: record.contactPerson,
+  }
+}
+
+/**
+ * 编辑时的年份口径：月/日没改就保留原年份；改过才按「早于今天顺延明年」重算。
+ * 否则跨年预约只改客户名也会被推到下一年。
+ */
+export function resolveMachineViewingEditYear(
+  originalDate: string,
+  month: number,
+  day: number,
+  epochMs: number,
+): number {
+  const [year, originalMonth, originalDay] = originalDate.split('-').map(Number)
+  if (!Number.isSafeInteger(year)) {
+    throw new TypeError('看机预约日期格式无效')
+  }
+  return month === originalMonth && day === originalDay
+    ? year
+    : resolveViewingYear(month, day, epochMs)
+}
+
+export function resolveMachineViewingEditDate(
+  originalDate: string,
+  draft: Pick<MachineViewingDraft, 'month' | 'day'>,
+  epochMs: number,
+): string {
+  if (draft.month === null || draft.day === null) {
+    throw new TypeError('看机预约草稿尚未填写完整')
+  }
+  const year = resolveMachineViewingEditYear(originalDate, draft.month, draft.day, epochMs)
+  return `${year}-${String(draft.month).padStart(2, '0')}-${String(draft.day).padStart(2, '0')}`
+}
+
+/**
+ * 在新建校验之上追加编辑专属的日期口径：不能早于今天，且只能落在今年或明年。
+ * 原日期未改时仍以原年份参与校验，避免跨年预约被误判成今年。
+ */
+export function validateMachineViewingEditDraft(
+  draft: MachineViewingDraft,
+  originalDate: string,
+  epochMs: number,
+): MachineViewingDraftErrors {
+  const errors = validateMachineViewingDraft(draft, epochMs)
+  if (errors.appointmentTime !== undefined || draft.month === null || draft.day === null) {
+    return errors
+  }
+  const date = resolveMachineViewingEditDate(originalDate, draft, epochMs)
+  const [year, month, day] = date.split('-').map(Number)
+  const today = shanghaiDateParts(epochMs)
+  const dateUtc = Date.UTC(year, month - 1, day)
+  if (dateUtc < Date.UTC(today.year, today.month - 1, today.day)) {
+    errors.appointmentTime = 'machineViewing.validation.appointmentDatePast'
+    return errors
+  }
+  if (year !== today.year && year !== today.year + 1) {
+    errors.appointmentTime = 'machineViewing.validation.appointmentDateOutOfRange'
+    return errors
+  }
+  if (day > daysInMonth(year, month)) {
+    errors.appointmentTime = 'machineViewing.validation.appointmentTimeInvalid'
+  }
+  return errors
+}
+
+export function toMachineViewingUpdatePayload(
+  draft: MachineViewingDraft,
+  originalDate: string,
+  epochMs: number,
+): UpdateMachineViewingDto {
+  if (draft.site === '' || draft.machineType === '' || draft.month === null || draft.day === null) {
+    throw new TypeError('看机预约草稿尚未填写完整')
+  }
+  return {
+    site: draft.site,
+    machineType: draft.machineType,
+    appointmentDate: resolveMachineViewingEditDate(originalDate, draft, epochMs),
+    period: draft.period,
+    ...(draft.hour === null ? {} : { hour: draft.hour }),
+    customerName: draft.customerName.trim(),
+    ...(draft.customerPhone.trim() === '' ? {} : { customerPhone: draft.customerPhone.trim() }),
+    contactPerson: draft.contactPerson.trim(),
+  }
 }

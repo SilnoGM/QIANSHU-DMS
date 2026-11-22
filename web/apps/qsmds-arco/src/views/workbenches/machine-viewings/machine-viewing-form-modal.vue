@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { CreateMachineViewingDto } from '@/api/generated/types.gen'
+import type { CreateMachineViewingDto, MachineViewingDto, UpdateMachineViewingDto } from '@/api/generated/types.gen'
 import type { MachineViewingDraft, MachineViewingField } from '@/utils/machine-viewing-schedule'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import {
   createMachineViewingDraft,
+  createMachineViewingEditDraft,
   MACHINE_VIEWING_CONTACT_PERSON_MAX_LENGTH,
   MACHINE_VIEWING_CUSTOMER_NAME_MAX_LENGTH,
   MACHINE_VIEWING_CUSTOMER_PHONE_MAX_LENGTH,
@@ -13,20 +14,24 @@ import {
   MACHINE_VIEWING_SITE_OPTIONS,
   previewMachineViewingTime,
   toMachineViewingCreatePayload,
+  toMachineViewingUpdatePayload,
   validateMachineViewingDraft,
+  validateMachineViewingEditDraft,
   viewingDayOptions,
 } from '@/utils/machine-viewing-schedule'
 import { serverNowEpochMs } from '@/utils/server-clock'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
+  /** 传入记录表示编辑；与新建共用一套字段与校验。 */
+  record?: MachineViewingDto | null
   submitting?: boolean
   error?: string | null
   fieldErrors?: Readonly<Record<string, string>>
-}>(), { submitting: false, error: null, fieldErrors: () => ({}) })
+}>(), { record: null, submitting: false, error: null, fieldErrors: () => ({}) })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'submit': [data: CreateMachineViewingDto]
+  'submit': [data: CreateMachineViewingDto | UpdateMachineViewingDto]
 }>()
 
 const { t } = useI18n()
@@ -38,6 +43,15 @@ const formRef = useTemplateRef<{
 const draft = ref<MachineViewingDraft>(createMachineViewingDraft(null, serverNowEpochMs()))
 const requested = ref(false)
 const locked = computed(() => props.submitting || requested.value)
+const editing = computed(() => props.record !== null)
+const modalTitle = computed(() => editing.value ? t('machineViewing.form.editTitle') : t('machineViewing.form.title'))
+const submitLabel = computed(() => editing.value ? t('machineViewing.form.save') : t('machineViewing.form.submit'))
+
+function draftErrors(current: MachineViewingDraft): ReturnType<typeof validateMachineViewingDraft> {
+  return props.record === null
+    ? validateMachineViewingDraft(current, serverNowEpochMs())
+    : validateMachineViewingEditDraft(current, props.record.appointmentDate, serverNowEpochMs())
+}
 
 const siteOptions = computed(() => MACHINE_VIEWING_SITE_OPTIONS.map(value => ({
   value,
@@ -130,17 +144,23 @@ function rule(field: MachineViewingField) {
       && (field === 'customerName' || field === 'customerPhone' || field === 'contactPerson')) {
       current[field] = value
     }
-    const key = validateMachineViewingDraft(current, serverNowEpochMs())[field]
+    const key = draftErrors(current)[field]
     return key ? t(key) : true
   }
 }
 
-watch(() => props.modelValue, async (open) => {
+watch(() => [props.modelValue, props.record] as const, async ([open, record]) => {
   if (!open) {
     requested.value = false
     return
   }
   requested.value = false
+  if (record !== null) {
+    draft.value = createMachineViewingEditDraft(record)
+    await nextTick()
+    formRef.value?.clearValidate()
+    return
+  }
   let issuerPrefix = account.profile?.issuerPrefix ?? null
   if (account.profile === null && account.profileState !== 'loading') {
     const profile = await account.loadProfile().catch(() => null)
@@ -166,6 +186,7 @@ const SERVER_FIELD_MAP: Readonly<Record<string, string>> = {
   machineType: 'machineType',
   appointmentMonth: 'appointmentTime',
   appointmentDay: 'appointmentTime',
+  appointmentDate: 'appointmentTime',
   period: 'appointmentTime',
   hour: 'appointmentTime',
   customerName: 'customerName',
@@ -189,7 +210,7 @@ function submit(): void {
   if (locked.value) {
     return
   }
-  const errors = validateMachineViewingDraft(draft.value, serverNowEpochMs())
+  const errors = draftErrors(draft.value)
   const entries = Object.entries(errors)
   if (entries.length > 0) {
     formRef.value?.clearValidate()
@@ -199,14 +220,16 @@ function submit(): void {
     return
   }
   requested.value = true
-  emit('submit', toMachineViewingCreatePayload(draft.value))
+  emit('submit', props.record === null
+    ? toMachineViewingCreatePayload(draft.value)
+    : toMachineViewingUpdatePayload(draft.value, props.record.appointmentDate, serverNowEpochMs()))
 }
 </script>
 
 <template>
   <QsGenericModal
     :model-value="modelValue"
-    :title="t('machineViewing.form.title')"
+    :title="modalTitle"
     size="lg"
     :submitting="locked"
     @update:model-value="close"
@@ -321,7 +344,7 @@ function submit(): void {
       <FaFormItem
         name="contactPerson"
         :label="t('machineViewing.form.contactPerson')"
-        :description="t('machineViewing.form.contactPersonHint')"
+        :description="editing ? undefined : t('machineViewing.form.contactPersonHint')"
         :rules="rule('contactPerson')"
         required
       >
@@ -339,7 +362,7 @@ function submit(): void {
         {{ t('machineViewing.form.cancel') }}
       </FaButton>
       <FaButton :loading="locked" :disabled="locked" class="w-full sm:w-auto" @click="submit">
-        {{ t('machineViewing.form.submit') }}
+        {{ submitLabel }}
       </FaButton>
     </template>
   </QsGenericModal>

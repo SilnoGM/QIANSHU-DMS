@@ -4,6 +4,8 @@ import type {
   MachineViewingDto,
   MachineViewingPageDto,
   MachineViewingsListData,
+  MachineViewingStatusTransitionDto,
+  UpdateMachineViewingDto,
 } from '../generated/types.gen'
 import api from '../index'
 
@@ -26,6 +28,10 @@ export function createMachineViewingsApi(client: AxiosInstance) {
         ...write(signal),
         headers: { 'Idempotency-Key': key },
       }),
+    update: (id: string, data: UpdateMachineViewingDto, signal: AbortSignal) =>
+      client.patch<MachineViewingDto>(`machine-viewings/${id}`, data, write(signal)),
+    transitionStatus: (id: string, data: MachineViewingStatusTransitionDto, signal: AbortSignal) =>
+      client.post<MachineViewingDto>(`machine-viewings/${id}/status-transitions`, data, write(signal)),
   }
 }
 

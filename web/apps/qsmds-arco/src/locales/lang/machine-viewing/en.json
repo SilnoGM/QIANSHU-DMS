@@ -32,10 +32,44 @@
       "none": "-",
       "title": "View feedback",
       "content": "Feedback",
-      "close": "Close"
+      "close": "Close",
+      "formTitle": "Add viewing feedback",
+      "placeholder": "Describe the visit and viewing result (up to 500 characters)",
+      "required": "Enter feedback",
+      "save": "Save feedback",
+      "saved": "Feedback saved"
     },
     "action": {
-      "detail": "View details"
+      "detail": "View details",
+      "more": "More actions",
+      "markAppointed": "Mark as appointed",
+      "feedback": "Add feedback",
+      "editFeedback": "Edit feedback",
+      "edit": "Edit appointment",
+      "cancel": "Cancel appointment",
+      "confirm": "Confirm",
+      "appointed": "Marked as appointed",
+      "cancelled": "Appointment cancelled",
+      "failed": "Action failed"
+    },
+    "edit": {
+      "saved": "Appointment updated",
+      "saveFailed": "Failed to update the appointment"
+    },
+    "appoint": {
+      "title": "Mark this appointment as appointed?",
+      "description": "The appointment will move to \"Appointed\" while waiting for the customer visit. Use \"Cancel appointment\" to stop it.",
+      "confirm": "Confirm appointed"
+    },
+    "cancel": {
+      "title": "Cancel this viewing appointment?",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Optional reason, up to 500 characters",
+      "confirm": "Cancel appointment"
+    },
+    "filters": {
+      "keywordPlaceholder": "Search no., customer or contact",
+      "appointmentDate": "Appointment date"
     },
     "detail": {
       "title": "Machine viewing details",
@@ -66,6 +100,7 @@
     },
     "form": {
       "title": "Book a viewing",
+      "editTitle": "Edit viewing appointment",
       "site": "Site",
       "sitePlaceholder": "Select a site",
       "machineType": "Machine",
@@ -87,6 +122,7 @@
       "contactPersonPlaceholder": "Enter the contact person",
       "contactPersonHint": "Defaults to your issuer prefix and can be changed",
       "submit": "Submit",
+      "save": "Save changes",
       "cancel": "Cancel",
       "previewLabel": "Appointment preview"
     },
@@ -95,6 +131,8 @@
       "machineTypeRequired": "Select a machine",
       "appointmentTimeRequired": "Select the month, day and period",
       "appointmentTimeInvalid": "That date does not exist, please choose again",
+      "appointmentDatePast": "The appointment date cannot be earlier than today",
+      "appointmentDateOutOfRange": "The appointment date must be this year or next year",
       "customerNameRequired": "Enter the customer name",
       "customerNameTooLong": "Customer name must be at most 128 characters",
       "customerPhoneTooLong": "Phone must be at most 64 characters",

@@ -32,10 +32,44 @@
       "none": "-",
       "title": "查看回饋",
       "content": "回饋內容",
-      "close": "關閉"
+      "close": "關閉",
+      "formTitle": "填寫看機回饋",
+      "placeholder": "請填寫客戶到場情況與看機結果（最多 500 字）",
+      "required": "請填寫回饋內容",
+      "save": "儲存回饋",
+      "saved": "回饋已儲存"
     },
     "action": {
-      "detail": "查看詳情"
+      "detail": "查看詳情",
+      "more": "更多操作",
+      "markAppointed": "標記已預約",
+      "feedback": "填寫回饋",
+      "editFeedback": "修改回饋",
+      "edit": "編輯預約",
+      "cancel": "取消預約",
+      "confirm": "確認",
+      "appointed": "已標記為已預約",
+      "cancelled": "看機預約已取消",
+      "failed": "操作失敗"
+    },
+    "edit": {
+      "saved": "看機預約已更新",
+      "saveFailed": "預約更新失敗"
+    },
+    "appoint": {
+      "title": "標記看機預約為已預約？",
+      "description": "標記後預約進入「已預約」，等待客戶到場；如需終止請使用「取消預約」。",
+      "confirm": "確認已預約"
+    },
+    "cancel": {
+      "title": "取消看機預約？",
+      "reason": "取消原因（選填）",
+      "reasonPlaceholder": "可填寫取消原因，最多 500 字",
+      "confirm": "確認取消預約"
+    },
+    "filters": {
+      "keywordPlaceholder": "搜尋預約編號、客戶或對接人",
+      "appointmentDate": "預約日期"
     },
     "detail": {
       "title": "看機預約詳情",
@@ -66,6 +100,7 @@
     },
     "form": {
       "title": "預約看機",
+      "editTitle": "編輯看機預約",
       "site": "看機地點",
       "sitePlaceholder": "選擇看機地點",
       "machineType": "看機機型",
@@ -87,6 +122,7 @@
       "contactPersonPlaceholder": "請輸入業務對接人",
       "contactPersonHint": "預設為你的出單人前綴，可以修改",
       "submit": "提交預約",
+      "save": "儲存修改",
       "cancel": "取消",
       "previewLabel": "預約時間預覽"
     },
@@ -95,6 +131,8 @@
       "machineTypeRequired": "請選擇看機機型",
       "appointmentTimeRequired": "請選擇預約的月、日與時段",
       "appointmentTimeInvalid": "預約日期不存在，請重新選擇",
+      "appointmentDatePast": "預約日期不能早於今天",
+      "appointmentDateOutOfRange": "預約日期只能選擇今年或明年",
       "customerNameRequired": "請填寫客戶姓名",
       "customerNameTooLong": "客戶姓名不能超過 128 個字元",
       "customerPhoneTooLong": "客戶電話不能超過 64 個字元",

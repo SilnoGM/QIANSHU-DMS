@@ -11,10 +11,14 @@ test('列表按分页查询，创建携带幂等键且禁止自动重试', async
     calls.push(args)
     return Promise.resolve({ data: {} })
   }
-  const api = createMachineViewingsApi({ get: invoke, post: invoke } as unknown as AxiosInstance)
+  const api = createMachineViewingsApi({
+    get: invoke,
+    post: invoke,
+    patch: invoke,
+  } as unknown as AxiosInstance)
   const signal = new AbortController().signal
 
-  await api.list({ page: 2, pageSize: 50 }, signal)
+  await api.list({ page: 2, pageSize: 50, keyword: '陈先生', status: 'APPOINTED' }, signal)
   await api.create({
     site: 'TAICHUNG_LONGJING',
     machineType: 'SHREDDER',
@@ -24,11 +28,23 @@ test('列表按分页查询，创建携带幂等键且禁止自动重试', async
     customerName: '陈先生',
     contactPerson: '李华',
   }, 'key-1', signal)
+  await api.update('viewing-1', {
+    site: 'TAICHUNG_LONGJING',
+    machineType: 'SHREDDER',
+    appointmentDate: '2026-11-20',
+    period: 'AM',
+    customerName: '陈先生',
+    contactPerson: '李华',
+  }, signal)
+  await api.transitionStatus('viewing-1', {
+    status: 'FEEDBACK_GIVEN',
+    feedback: '客户已到场',
+  }, signal)
 
   assert.equal(calls[0][0], 'machine-viewings')
   assert.deepEqual(calls[0][1], {
     errorPresentation: 'local',
-    params: { page: 2, pageSize: 50 },
+    params: { page: 2, pageSize: 50, keyword: '陈先生', status: 'APPOINTED' },
     signal,
   })
 
@@ -38,6 +54,21 @@ test('列表按分页查询，创建携带幂等键且禁止自动重试', async
     errorPresentation: 'local',
     retry: false,
     headers: { 'Idempotency-Key': 'key-1' },
+    signal,
+  })
+
+  assert.equal(calls[2][0], 'machine-viewings/viewing-1')
+  assert.deepEqual(calls[2][2], {
+    errorPresentation: 'local',
+    retry: false,
+    signal,
+  })
+
+  assert.equal(calls[3][0], 'machine-viewings/viewing-1/status-transitions')
+  assert.deepEqual(calls[3][1], { status: 'FEEDBACK_GIVEN', feedback: '客户已到场' })
+  assert.deepEqual(calls[3][2], {
+    errorPresentation: 'local',
+    retry: false,
     signal,
   })
 })

@@ -32,10 +32,44 @@
       "none": "-",
       "title": "查看反馈",
       "content": "反馈内容",
-      "close": "关闭"
+      "close": "关闭",
+      "formTitle": "填写看机反馈",
+      "placeholder": "请填写客户到场情况与看机结果（最多 500 字）",
+      "required": "请填写反馈内容",
+      "save": "保存反馈",
+      "saved": "反馈已保存"
     },
     "action": {
-      "detail": "查看详情"
+      "detail": "查看详情",
+      "more": "更多操作",
+      "markAppointed": "标记已预约",
+      "feedback": "填写反馈",
+      "editFeedback": "修改反馈",
+      "edit": "编辑预约",
+      "cancel": "取消预约",
+      "confirm": "确认",
+      "appointed": "已标记为已预约",
+      "cancelled": "看机预约已取消",
+      "failed": "操作失败"
+    },
+    "edit": {
+      "saved": "看机预约已更新",
+      "saveFailed": "预约更新失败"
+    },
+    "appoint": {
+      "title": "标记看机预约为已预约？",
+      "description": "标记后预约进入「已预约」，等待客户到场；如需终止请使用「取消预约」。",
+      "confirm": "确认已预约"
+    },
+    "cancel": {
+      "title": "取消看机预约？",
+      "reason": "取消原因（选填）",
+      "reasonPlaceholder": "可填写取消原因，最多 500 字",
+      "confirm": "确认取消预约"
+    },
+    "filters": {
+      "keywordPlaceholder": "搜索预约编号、客户或对接人",
+      "appointmentDate": "预约日期"
     },
     "detail": {
       "title": "看机预约详情",
@@ -66,6 +100,7 @@
     },
     "form": {
       "title": "预约看机",
+      "editTitle": "编辑看机预约",
       "site": "看机地点",
       "sitePlaceholder": "选择看机地点",
       "machineType": "看机机型",
@@ -87,6 +122,7 @@
       "contactPersonPlaceholder": "请输入业务对接人",
       "contactPersonHint": "默认为你的出单人前缀，可以修改",
       "submit": "提交预约",
+      "save": "保存修改",
       "cancel": "取消",
       "previewLabel": "预约时间预览"
     },
@@ -95,6 +131,8 @@
       "machineTypeRequired": "请选择看机机型",
       "appointmentTimeRequired": "请选择预约的月、日与时段",
       "appointmentTimeInvalid": "预约日期不存在，请重新选择",
+      "appointmentDatePast": "预约日期不能早于今天",
+      "appointmentDateOutOfRange": "预约日期只能选择今年或明年",
       "customerNameRequired": "请填写客户姓名",
       "customerNameTooLong": "客户姓名不能超过 128 个字符",
       "customerPhoneTooLong": "客户电话不能超过 64 个字符",
