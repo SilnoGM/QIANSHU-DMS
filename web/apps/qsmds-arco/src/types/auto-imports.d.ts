@@ -20,6 +20,7 @@ declare global {
   const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const StaleProfileStateError: typeof import('../store/modules/app/profile-lifecycle').StaleProfileStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
+  const adAccountBadgeCounts: typeof import('../store/modules/app/ad-account-badge-counts').adAccountBadgeCounts
   const buildRegisteredRoutes: typeof import('../store/modules/app/route.logic').buildRegisteredRoutes
   const collectNotificationPages: typeof import('../store/modules/app/notification-polling').collectNotificationPages
   const computed: typeof import('vue').computed
@@ -102,6 +103,7 @@ declare global {
   const unreadPollDelay: typeof import('../store/modules/app/notification-polling').unreadPollDelay
   const unreadRetryDelay: typeof import('../store/modules/app/notification-polling').unreadRetryDelay
   const unref: typeof import('vue').unref
+  const useAdAccountBadgeStore: typeof import('../store/modules/app/ad-account-badge').useAdAccountBadgeStore
   const useAppAccountStore: typeof import('../store/modules/app/account').useAppAccountStore
   const useAppAuth: typeof import('../composables/app/auth').useAppAuth
   const useAppFavoritesStore: typeof import('../store/modules/app/favorites').useAppFavoritesStore
