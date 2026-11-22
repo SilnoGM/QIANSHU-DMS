@@ -100,7 +100,7 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
 
 test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportMachineViewings', 'qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportMachineViewings', 'qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes', 'qsPurchaseTransportLeopardAdAccounts'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
@@ -120,6 +120,12 @@ test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，�
   assert.equal(proxyNodes?.meta?.title, 'IPFoxy静态节点')
   assert.equal(proxyNodes?.meta?.icon, 'qs-static-node')
   assert.match(String(proxyNodes?.component), /workbenches\/proxy-nodes\/index\.vue/u)
+  const adAccounts = routes.find(route => route.name === 'qsPurchaseTransportLeopardAdAccounts')
+  assert.equal(adAccounts?.meta?.auth, 'ad-accounts:manage')
+  assert.equal(adAccounts?.meta?.title, '猎豹广告户管理')
+  assert.equal(adAccounts?.meta?.icon, 'qs-ad-account')
+  assert.equal(adAccounts?.meta?.singleMenu, true)
+  assert.match(String(adAccounts?.component), /workbenches\/leopard-ad-accounts\/index\.vue/u)
   assert.equal(containers?.meta?.auth, 'container-batches:read')
   assert.equal(containers?.meta?.title, 'workbench.containers')
   assert.equal(containers?.meta?.icon, 'qs-container-management')

@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import { adAccountBadgeCounts } from '../../store/modules/app/ad-account-badge-counts'
 import { proxyNodeBadgeCounts } from '../../store/modules/app/proxy-node-badge-counts'
 
 function Layout() {
@@ -218,16 +219,16 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    // 网络与广告承载两条独立链路：静态节点只读本人绑定代理，广告充值由运营提交、
-    // 财务付款。两个叶子权限互不覆盖，因此不声明固定 redirect，交给 Route Store
-    // 回退到当前角色有权限的第一个子路由。
+    // 网络与广告承载三条独立链路：静态代理只读本人绑定节点、猎豹广告户只读本人绑定账户、
+    // 广告户充值由运营提交财务付款。三个叶子权限互不覆盖，因此不声明固定 redirect，
+    // 交给 Route Store 回退到当前角色有权限的第一个子路由。
     path: '/qs-operations/network-ads',
     name: 'qsOperationsNetworkAds',
     component: Layout,
     meta: {
       title: '网络与广告',
       icon: 'qs-network-ads',
-      auth: ['proxy-nodes:read', 'advertising-recharges:read-self'],
+      auth: ['proxy-nodes:read', 'ad-accounts:read', 'advertising-recharges:read-self'],
     },
     children: [
       {
@@ -235,7 +236,7 @@ const routes: RouteRecordRaw[] = [
         name: 'qsOperationsNetworkAdsStaticNodes',
         component: () => import('@/views/operations/network-ads/static-nodes/index.vue'),
         meta: {
-          title: '静态节点',
+          title: '静态代理',
           icon: 'qs-static-node',
           auth: 'proxy-nodes:read',
           keepAlive: true,
@@ -243,10 +244,22 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'leopard-ad-accounts',
+        name: 'qsOperationsNetworkAdsLeopardAdAccounts',
+        component: () => import('@/views/operations/network-ads/leopard-ad-accounts/index.vue'),
+        meta: {
+          title: '猎豹广告户',
+          icon: 'qs-ad-account',
+          auth: 'ad-accounts:read',
+          keepAlive: true,
+          badge: [() => adAccountBadgeCounts.mine.value, 'destructive'],
+        },
+      },
+      {
         path: 'advertising-recharges',
         name: 'qsOperationsNetworkAdsAdvertisingRecharges',
         component: () => import('@/views/workbenches/network-ads/advertising-recharges/index.vue'),
-        meta: { title: '广告充值', icon: 'qs-advertising-recharge', auth: 'advertising-recharges:read-self', keepAlive: true },
+        meta: { title: '广告户充值', icon: 'qs-advertising-recharge', auth: 'advertising-recharges:read-self', keepAlive: true },
       },
     ],
   },

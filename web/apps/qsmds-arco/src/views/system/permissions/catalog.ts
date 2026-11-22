@@ -7,6 +7,7 @@ export interface PermissionGroup {
 }
 
 const RESOURCE_LABELS: Readonly<Record<string, string>> = {
+  'ad-accounts': '猎豹广告户',
   'audit': '安全审计',
   'container-batches': '柜次管理',
   'currencies': '货币管理',

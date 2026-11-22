@@ -185,6 +185,9 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   ASSISTANT_TARGET_MESSAGE_SENT: '群目标 @消息已发送',
   PURCHASE_ORDER_CORRECTION_APPLIED: '误建采购链已纠正',
   PACKAGING_COST_CANCELLED: '打木架费用已取消',
+  AD_ACCOUNT_SYNCED: '猎豹广告户已同步',
+  AD_ACCOUNT_ASSIGNED: '猎豹广告户已绑定',
+  AD_ACCOUNT_RELEASED: '猎豹广告户已解绑',
 }
 
 export function auditMetadataEntries(

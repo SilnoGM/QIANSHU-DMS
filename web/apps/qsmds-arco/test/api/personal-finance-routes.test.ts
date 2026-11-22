@@ -107,7 +107,7 @@ test('运营工作台新增个人财务分组，两个叶子各用独立权限',
   assert.equal(operationsWorkbenchRoutes.at(-1)?.name, 'qsOperationsNetworkAds')
 })
 
-test('运营工作台网络与广告分组：广告充值用本人读取码，静态节点用 proxy-nodes:read', () => {
+test('运营工作台网络与广告分组：静态代理、猎豹广告户、广告户充值各自独立授权', () => {
   const networkAdsGroup = operationsWorkbenchRoutes.find(
     route => route.name === 'qsOperationsNetworkAds',
   )
@@ -116,9 +116,10 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
   assert.equal(networkAdsGroup?.meta?.icon, 'qs-network-ads')
   assert.deepEqual(networkAdsGroup?.meta?.auth, [
     'proxy-nodes:read',
+    'ad-accounts:read',
     'advertising-recharges:read-self',
   ])
-  // 两个叶子权限互不覆盖，分组不设固定 redirect，交给 Route Store 回退。
+  // 三个叶子权限互不覆盖，分组不设固定 redirect，交给 Route Store 回退。
   assert.equal(networkAdsGroup?.redirect, undefined)
   assert.deepEqual(
     networkAdsGroup?.children?.map(route => ({
@@ -134,19 +135,27 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
         icon: 'qs-static-node',
         name: 'qsOperationsNetworkAdsStaticNodes',
         path: 'static-nodes',
-        title: '静态节点',
+        title: '静态代理',
+      },
+      {
+        auth: 'ad-accounts:read',
+        icon: 'qs-ad-account',
+        name: 'qsOperationsNetworkAdsLeopardAdAccounts',
+        path: 'leopard-ad-accounts',
+        title: '猎豹广告户',
       },
       {
         auth: 'advertising-recharges:read-self',
         icon: 'qs-advertising-recharge',
         name: 'qsOperationsNetworkAdsAdvertisingRecharges',
         path: 'advertising-recharges',
-        title: '广告充值',
+        title: '广告户充值',
       },
     ],
   )
   assert.match(String(networkAdsGroup?.children?.[0]?.component), /views\/operations\/network-ads\/static-nodes\/index\.vue/u)
-  assert.match(String(networkAdsGroup?.children?.[1]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[1]?.component), /views\/operations\/network-ads\/leopard-ad-accounts\/index\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[2]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
 
   assert.deepEqual(
     visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self']),
@@ -156,6 +165,10 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
     visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read']),
     ['static-nodes'],
   )
+  assert.deepEqual(
+    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'ad-accounts:read']),
+    ['leopard-ad-accounts'],
+  )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self'], '/qs-operations/network-ads/advertising-recharges'),
     true,
@@ -163,6 +176,15 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read'], '/qs-operations/network-ads/static-nodes'),
     true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'ad-accounts:read'], '/qs-operations/network-ads/leopard-ad-accounts'),
+    true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read'], '/qs-operations/network-ads/leopard-ad-accounts'),
+    false,
+    '静态代理读取权限不能进入猎豹广告户页',
   )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'network-nodes:read'], '/qs-operations/network-ads/static-nodes'),

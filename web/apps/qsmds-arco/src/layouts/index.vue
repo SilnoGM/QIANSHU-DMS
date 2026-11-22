@@ -2,6 +2,7 @@
 import { useElementSize, useScroll, useTimeoutFn } from '@vueuse/core'
 import { useHotkeyBindings } from '@/hotkeys'
 import { useSlots } from '@/slots'
+import { useAdAccountBadgeStore } from '@/store/modules/app/ad-account-badge'
 import { useProxyNodeBadgeStore } from '@/store/modules/app/proxy-node-badge'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
@@ -25,20 +26,22 @@ const appSettingsStore = useAppSettingsStore()
 const appMenuStore = useAppMenuStore()
 const appAccountStore = useAppAccountStore()
 const proxyNodeBadgeStore = useProxyNodeBadgeStore()
+const adAccountBadgeStore = useAdAccountBadgeStore()
 useAppWatermarkStore()
 
-function refreshProxyNodeBadges(): void {
+function refreshMenuBadges(): void {
   void proxyNodeBadgeStore.refresh()
+  void adAccountBadgeStore.refresh()
 }
 
 onMounted(() => {
-  refreshProxyNodeBadges()
-  window.addEventListener('focus', refreshProxyNodeBadges)
+  refreshMenuBadges()
+  window.addEventListener('focus', refreshMenuBadges)
 })
 
 watch(
   () => appAccountStore.permissions,
-  refreshProxyNodeBadges,
+  refreshMenuBadges,
   { deep: true },
 )
 
@@ -174,7 +177,7 @@ function handleTopbarScrollVisibility(val: boolean) {
 eventBus.on('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
 onBeforeUnmount(() => {
   eventBus.off('topbar-scroll-visible-or-hidden', handleTopbarScrollVisibility)
-  window.removeEventListener('focus', refreshProxyNodeBadges)
+  window.removeEventListener('focus', refreshMenuBadges)
 })
 
 const enableAppSetting = import.meta.env.VITE_APP_SETTING
