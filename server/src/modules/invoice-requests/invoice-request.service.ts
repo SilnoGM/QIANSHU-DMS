@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -11,6 +11,7 @@ import { NumberingGeneratorService } from '../numbering/numbering-generator.serv
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { resolveInvoiceRequestViewer, type InvoiceRequestViewer } from './invoice-request-access'
 import {
+  INVOICE_REQUEST_BATCH_SETTLE_LIMIT,
   INVOICE_REQUEST_DUPLICATE_POOL_STATUS_VALUES,
   INVOICE_REQUEST_OWNER_CANCEL_STATUS_VALUES,
   INVOICE_REQUEST_TERMINAL_STATUS_VALUES,
@@ -18,6 +19,8 @@ import {
 } from './invoice-request.contract'
 import { InvoiceRequestDocumentService } from './invoice-request-document.service'
 import type {
+  InvoiceRequestBatchSettleDto,
+  InvoiceRequestBatchSettleResultDto,
   InvoiceRequestCancelDto,
   InvoiceRequestDto,
   InvoiceRequestNotifyDto,
@@ -32,7 +35,7 @@ import {
   INVOICE_REQUEST_POSTING_TYPE,
   INVOICE_REQUEST_SETTLE_CONSUMER,
 } from '../fund-accounts/application/fund-invoice-request'
-import { calculateSettleAmountCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE, INVOICE_TOTAL_TOLERANCE_CENTS, isSettleable, resolveInvoiceAmounts, resolveSettleableAt, sumLineAmounts } from './invoice-request.logic'
+import { calculateSettleAmountCny, INVOICE_MAILING_FEE_CNY, INVOICE_SERVICE_FEE_RATE, INVOICE_TOTAL_TOLERANCE_CENTS, isSettleable, resolveInvoiceAmounts, resolveSettleableAt, sumBatchSettleAmountsCny, sumLineAmounts } from './invoice-request.logic'
 import { assertInvoiceRequestVisible, InvoiceRequestQueryService } from './invoice-request-query.service'
 
 export interface InvoiceRequestCommandContext {
@@ -77,9 +80,47 @@ interface NormalizedSubmit {
   readonly taxAdjusted: boolean
 }
 
+/** 结算读取的单据字段：单张锁定与批量锁定共用同一组列。 */
+interface LockedInvoiceRequest {
+  readonly buyerName: string
+  readonly createdById: string
+  readonly documentMediaAssetId: string | null
+  readonly documentUploadedAt: Date | null
+  readonly id: string
+  readonly invoiceNo: string
+  readonly invoiceRemark: string | null
+  readonly status: InvoiceRequestStatusValue
+  readonly submittedOnBehalfByUserId: string | null
+  readonly taxAmount: Prisma.Decimal
+  readonly totalAmount: Prisma.Decimal
+  readonly version: number
+}
+
+/** 结算冻结的汇率快照字段。 */
+interface SettlementRate {
+  readonly foreignUnitsPerCny: Prisma.Decimal
+  readonly id: string
+  readonly version: number
+}
+
+/** `lockRequest` 与 `lockRequests` 共用，避免两处字段漂移。 */
+const LOCKED_REQUEST_SELECT = {
+  buyerName: true,
+  createdById: true,
+  documentMediaAssetId: true,
+  documentUploadedAt: true,
+  id: true,
+  invoiceNo: true,
+  invoiceRemark: true,
+  status: true,
+  submittedOnBehalfByUserId: true,
+  taxAmount: true,
+  totalAmount: true,
+  version: true,
+} satisfies Prisma.InvoiceRequestSelect
+
 /** 幂等键必须是客户端生成的 UUID：它同时用于咨询锁与幂等唯一键，必须稳定且不可预测。 */
-function requireRequestKey(value: unknown): string {
-  if (typeof value !== 'string' || !REQUEST_KEY_PATTERN.test(value)) {
+function requireRequestKey(value: unknown): string {  if (typeof value !== 'string' || !REQUEST_KEY_PATTERN.test(value)) {
     invoiceRequestFailure('VALIDATION_FAILED', '缺少或非法的 Idempotency-Key 请求头', 422)
   }
   return value.toLowerCase()
@@ -552,71 +593,99 @@ export class InvoiceRequestService {
         const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
         const row = await this.lockRequest(tx, id)
         assertInvoiceRequestVisible(row, viewer)
-        this.assertStatus(row.status, ['ISSUED'], '只有已开出邮寄的申请单可以结算入账')
-        this.assertVersion(row.version, input.expectedVersion)
-        if (row.documentUploadedAt === null) {
-          invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.DOCUMENT_REQUIRED, '请先上传发票照片', 422)
+        this.assertSettleable(row, input.expectedVersion, new Date())
+        const rate = await this.systemRateTwd(tx)
+        this.assertRateUnchanged(rate, input.exchangeRateId, input.exchangeRateVersion)
+        await this.settleRowInTransaction(tx, context, {
+          row,
+          rate,
+          amount: calculateSettleAmountCny(row.totalAmount, rate.foreignUnitsPerCny),
+        })
+      }, { timeout: 60_000 })
+      return await this.queries.get(context.actorUserId, id)
+    }
+    catch (error) {
+      return mapInvoiceRequestError(error)
+    }
+  }
+
+  /**
+   * 批量结算：一次最多 50 张，单事务全有或全无。
+   *
+   * 写前预检把状态、乐观锁、照片与 120 小时等待期一次性逐张收集齐，任何一张不合格都整批拒绝，
+   * 并通过 fieldErrors.invalidItems 返回逐张原因，不会出现「先入账几张再报错」。通过后整批共享
+   * 同一份汇率快照，先按 UUID 锁全部单据与资金账户，再逐张复用单张结算的入账与留痕路径。
+   */
+  async batchSettle(context: InvoiceRequestCommandContext, input: InvoiceRequestBatchSettleDto): Promise<InvoiceRequestBatchSettleResultDto> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const viewer = await resolveInvoiceRequestViewer(tx, context.actorUserId)
+        const ids = input.items.map(item => item.id)
+        const versions = new Map(input.items.map(item => [item.id, item.expectedVersion]))
+        // DTO 已限制 1–50 项，这里再拦一次重复 id：同一单被更新两次时第二次必然撞状态机。
+        if (versions.size !== ids.length) {
+          invoiceRequestFailure('VALIDATION_FAILED', '同一张申请单不能在批量结算里重复出现', 422)
         }
+        if (ids.length > INVOICE_REQUEST_BATCH_SETTLE_LIMIT) {
+          invoiceRequestFailure('VALIDATION_FAILED', ['一次最多结算 ', String(INVOICE_REQUEST_BATCH_SETTLE_LIMIT), ' 张申请单'].join(''), 422)
+        }
+        const rows = await this.lockRequests(tx, ids)
         const now = new Date()
-        if (!isSettleable(row.documentUploadedAt, now)) {
-          invoiceRequestFailure(
-            INVOICE_REQUEST_ERROR_CODES.SETTLE_WAIT_PERIOD,
-            ['发票上传满 120 小时后才能结算入账，可结算时间为 ', resolveSettleableAt(row.documentUploadedAt).toISOString()].join(''),
-            422,
+        const blocked: string[] = []
+        const settleable: LockedInvoiceRequest[] = []
+        for (const id of ids) {
+          const row = rows.get(id)
+          if (row === undefined) {
+            blocked.push([id, '：开票申请不存在'].join(''))
+            continue
+          }
+          // 与详情一致的归属口径：不可见按不存在处理，不在批量结果里泄露他人单据信息。
+          if (!viewer.canManageOthers && row.createdById !== viewer.actorUserId) {
+            blocked.push([row.invoiceNo, '：开票申请不存在或无权操作'].join(''))
+            continue
+          }
+          const reason = this.settleBlocker(row, versions.get(id) ?? 0, now)
+          if (reason !== null) {
+            blocked.push([row.invoiceNo, '：', reason].join(''))
+            continue
+          }
+          settleable.push(row)
+        }
+        if (blocked.length > 0) {
+          const preview = blocked.slice(0, 5).join('；')
+          const overflow = blocked.length > 5 ? ['；等 ', String(blocked.length), ' 张'].join('') : ''
+          throw new ApiException(
+            409,
+            INVOICE_REQUEST_ERROR_CODES.BATCH_SETTLE_INVALID,
+            ['有 ', String(blocked.length), ' 张申请单当前不可结算：', preview, overflow].join(''),
+            { invalidItems: blocked },
           )
         }
         const rate = await this.systemRateTwd(tx)
-        if (rate.id !== input.exchangeRateId || rate.version !== input.exchangeRateVersion) {
-          invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.RATE_CHANGED, '台币汇率已更新，请刷新后按最新汇率重新确认', 409)
+        this.assertRateUnchanged(rate, input.exchangeRateId, input.exchangeRateVersion)
+        const amounts = new Map(settleable.map(row => [row.id, calculateSettleAmountCny(row.totalAmount, rate.foreignUnitsPerCny)]))
+        const fundContext = this.settlementFundContext(context)
+        // 批量可能跨申请人：先一次性解析并锁定全部资金账户（helper 内部按 UUID 统一排序），
+        // 避免逐张按用户/公司组合加锁形成反序等待。
+        await this.funds.lockBusinessEventAccountsInTransaction(tx, settleable.map(row => ({
+          context: fundContext,
+          input: this.settlementFundInput(row, amounts.get(row.id) ?? '0.00', rate),
+        })))
+        // 同一批次的审计聚合标识；资金批次仍逐单生成并回写到各自的 fund_posting_batch_id。
+        const settlementBatchId = randomUUID()
+        const items: Array<{ id: string, invoiceNo: string, settleAmountCny: string, fundPostingBatchId: string }> = []
+        for (const row of settleable) {
+          const amount = amounts.get(row.id) ?? '0.00'
+          const fundPostingBatchId = await this.settleRowInTransaction(tx, context, { row, rate, amount, settlementBatchId })
+          items.push({ id: row.id, invoiceNo: row.invoiceNo, settleAmountCny: amount, fundPostingBatchId })
         }
-        const amount = calculateSettleAmountCny(row.totalAmount, rate.foreignUnitsPerCny)
-        const fundPostingBatchId = await this.postSettlement(tx, context, { applicantUserId: row.createdById, id, invoiceNo: row.invoiceNo, buyerName: row.buyerName, invoiceRemark: row.invoiceRemark, totalAmount: row.totalAmount, taxAmount: row.taxAmount, amount, rate })
-        const settledAt = new Date()
-        // 批次 id 必须与状态流转写在同一条 UPDATE 里：触发器只放行 ISSUED → SETTLED 那一次写入。
-        await tx.invoiceRequest.update({
-          where: { id },
-          data: {
-            status: 'SETTLED',
-            settledAt,
-            settledByUserId: context.actorUserId,
-            fundPostingBatchId,
-            settleAmountCny: new Prisma.Decimal(amount),
-            exchangeRateId: rate.id,
-            exchangeRateVersionSnapshot: rate.version,
-            foreignUnitsPerCnySnapshot: rate.foreignUnitsPerCny,
-            rateCapturedAt: settledAt,
-            version: { increment: 1 },
-          },
-        })
-        await this.writeHistory(tx, {
-          action: 'SETTLE', fromStatus: 'ISSUED', toStatus: 'SETTLED', reason: null,
-          requestId: id, actorUserId: context.actorUserId,
-        })
-        await this.audit.record(tx, {
-          eventType: 'INVOICE_REQUEST_SETTLED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
-          requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: id,
-          metadata: { invoiceNo: row.invoiceNo, settleAmountCny: amount, foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(4) },
-        })
-        await this.notifications.publish({
-          eventType: 'INVOICE_REQUEST_SETTLED',
-          source: { type: 'INVOICE_REQUEST', id },
-          target: { kind: 'USERS', userIds: [row.createdById] },
-          templateKey: 'invoice.settled',
-          variables: {
-            invoiceNo: row.invoiceNo,
-            invoiceRequestId: id,
-            occurredAt: notificationTime(settledAt),
-            settleAmountCny: amount,
-          },
-          media: row.documentMediaAssetId === null
-            ? []
-            : [{ assetId: row.documentMediaAssetId, sourceKey: 'invoice.document' }],
-          dedupeKey: `invoice-settled:${id}:v${row.version + 1}`,
-          priority: 'NORMAL',
-          requestedByUserId: context.actorUserId,
-        }, { transaction: tx })
+        return {
+          items,
+          totalAmountCny: sumBatchSettleAmountsCny(items.map(item => item.settleAmountCny)),
+          foreignUnitsPerCny: rate.foreignUnitsPerCny.toString(),
+          settledAt: new Date().toISOString(),
+        }
       }, { timeout: 60_000 })
-      return await this.queries.get(context.actorUserId, id)
     }
     catch (error) {
       return mapInvoiceRequestError(error)
@@ -629,53 +698,125 @@ export class InvoiceRequestService {
   private async postSettlement(
     tx: Prisma.TransactionClient,
     context: InvoiceRequestCommandContext,
-    input: { readonly amount: string, readonly applicantUserId: string, readonly id: string, readonly invoiceNo: string, readonly buyerName: string, readonly invoiceRemark: string | null, readonly rate: { readonly foreignUnitsPerCny: Prisma.Decimal, readonly id: string, readonly version: number }, readonly taxAmount: Prisma.Decimal, readonly totalAmount: Prisma.Decimal },
+    input: { readonly amount: string, readonly rate: SettlementRate, readonly row: LockedInvoiceRequest },
   ): Promise<string> {
-    // 批次归属必须是被结算单据的申请人；财务只是操作人，不能把成本记到自己名下。
-    const fundContext = {
+    const fundContext = this.settlementFundContext(context)
+    const fundInput = this.settlementFundInput(input.row, input.amount, input.rate)
+    await this.funds.lockBusinessEventAccountsInTransaction(tx, [{ context: fundContext, input: fundInput }])
+    const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, fundInput)
+    const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, fundInput, preview)
+    return posting.batchId
+  }
+
+  /**
+   * 单张与批量共用的结算写入：资金入账、状态流转、状态历史、审计与通知。
+   * 资金批次 id 必须与状态流转写在同一条 UPDATE 里：触发器只放行 ISSUED → SETTLED 那一次写入。
+   */
+  private async settleRowInTransaction(
+    tx: Prisma.TransactionClient,
+    context: InvoiceRequestCommandContext,
+    input: { readonly amount: string, readonly rate: SettlementRate, readonly row: LockedInvoiceRequest, readonly settlementBatchId?: string },
+  ): Promise<string> {
+    const { amount, rate, row } = input
+    const fundPostingBatchId = await this.postSettlement(tx, context, { amount, rate, row })
+    const settledAt = new Date()
+    await tx.invoiceRequest.update({
+      where: { id: row.id },
+      data: {
+        status: 'SETTLED',
+        settledAt,
+        settledByUserId: context.actorUserId,
+        fundPostingBatchId,
+        settleAmountCny: new Prisma.Decimal(amount),
+        exchangeRateId: rate.id,
+        exchangeRateVersionSnapshot: rate.version,
+        foreignUnitsPerCnySnapshot: rate.foreignUnitsPerCny,
+        rateCapturedAt: settledAt,
+        version: { increment: 1 },
+      },
+    })
+    await this.writeHistory(tx, {
+      action: 'SETTLE', fromStatus: 'ISSUED', toStatus: 'SETTLED', reason: null,
+      requestId: row.id, actorUserId: context.actorUserId,
+    })
+    await this.audit.record(tx, {
+      eventType: 'INVOICE_REQUEST_SETTLED', outcome: 'SUCCESS', actorType: 'USER', actorUserId: context.actorUserId,
+      requestId: context.requestId, targetType: 'INVOICE_REQUEST', targetId: row.id,
+      metadata: {
+        invoiceNo: row.invoiceNo,
+        settleAmountCny: amount,
+        foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(4),
+        // 只有批量才写批次聚合标识；单张审计保持既有形状。
+        ...(input.settlementBatchId === undefined ? {} : { settlementBatchId: input.settlementBatchId }),
+      },
+    })
+    await this.notifications.publish({
+      eventType: 'INVOICE_REQUEST_SETTLED',
+      source: { type: 'INVOICE_REQUEST', id: row.id },
+      target: { kind: 'USERS', userIds: [row.createdById] },
+      templateKey: 'invoice.settled',
+      variables: {
+        invoiceNo: row.invoiceNo,
+        invoiceRequestId: row.id,
+        occurredAt: notificationTime(settledAt),
+        settleAmountCny: amount,
+      },
+      media: row.documentMediaAssetId === null
+        ? []
+        : [{ assetId: row.documentMediaAssetId, sourceKey: 'invoice.document' }],
+      dedupeKey: `invoice-settled:${row.id}:v${row.version + 1}`,
+      priority: 'NORMAL',
+      requestedByUserId: context.actorUserId,
+    }, { transaction: tx })
+    return fundPostingBatchId
+  }
+
+  /** 资金入口的受控来源固定为开票结算；财务只是 actor，成本归属由 row.createdById 决定。 */
+  private settlementFundContext(context: InvoiceRequestCommandContext) {
+    return {
       actorUserId: context.actorUserId,
       consumerCode: INVOICE_REQUEST_SETTLE_CONSUMER,
       requestId: context.requestId,
       sourceCode: INVOICE_REQUEST_FUND_SOURCE,
     }
-    const fundInput = {
+  }
+
+  /** 资金入账载荷：单张与批量共用，批量预锁账户时也用它解析同一条业务事实。 */
+  private settlementFundInput(row: LockedInvoiceRequest, amount: string, rate: SettlementRate) {
+    return {
       postingTypeCode: INVOICE_REQUEST_POSTING_TYPE,
-      userId: input.applicantUserId,
-      amount: input.amount,
-      businessId: input.id,
-      businessNo: input.invoiceNo,
+      userId: row.createdById,
+      amount,
+      businessId: row.id,
+      businessNo: row.invoiceNo,
       summary: '开票服务费及邮寄费',
       source: {
-        headline: `${input.buyerName} · 开票服务费及邮寄费`,
-        subject: input.buyerName,
+        headline: `${row.buyerName} · 开票服务费及邮寄费`,
+        subject: row.buyerName,
         action: '开票服务费及邮寄费',
-        customerName: input.buyerName,
-        documentNo: input.invoiceNo,
-        link: { kind: 'INVOICE_REQUEST' as const, id: input.id },
+        customerName: row.buyerName,
+        documentNo: row.invoiceNo,
+        link: { kind: 'INVOICE_REQUEST' as const, id: row.id },
         detail: [
-          { label: '发票金额', value: input.totalAmount.toString() },
-          ...(input.invoiceRemark === null
+          { label: '发票金额', value: row.totalAmount.toString() },
+          ...(row.invoiceRemark === null
             ? []
-            : [{ label: '备注', value: truncateFundSourceText(input.invoiceRemark) }]),
+            : [{ label: '备注', value: truncateFundSourceText(row.invoiceRemark) }]),
         ],
       },
       metadata: {
-        invoiceRequestId: input.id,
-        invoiceNo: input.invoiceNo,
-        totalAmountTwd: input.totalAmount.toString(),
-        taxAmountTwd: input.taxAmount.toString(),
-        exchangeRateId: input.rate.id,
-        exchangeRateVersion: input.rate.version,
-        foreignUnitsPerCny: input.rate.foreignUnitsPerCny.toFixed(4),
+        invoiceRequestId: row.id,
+        invoiceNo: row.invoiceNo,
+        totalAmountTwd: row.totalAmount.toString(),
+        taxAmountTwd: row.taxAmount.toString(),
+        exchangeRateId: rate.id,
+        exchangeRateVersion: rate.version,
+        foreignUnitsPerCny: rate.foreignUnitsPerCny.toFixed(4),
         serviceFeeRate: INVOICE_SERVICE_FEE_RATE,
         mailingFeeCny: INVOICE_MAILING_FEE_CNY,
       },
-      idempotencyKey: [input.id, ':SETTLE'].join(''),
+      idempotencyKey: [row.id, ':SETTLE'].join(''),
     }
-    await this.funds.lockBusinessEventAccountsInTransaction(tx, [{ context: fundContext, input: fundInput }])
-    const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, fundInput)
-    const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, fundInput, preview)
-    return posting.batchId
   }
 
   /**
@@ -732,19 +873,7 @@ export class InvoiceRequestService {
   }
 
   /** 锁定单据行（`FOR UPDATE`）并回表读取流转需要的字段；行不存在按 404 处理。 */
-  private async lockRequest(tx: Prisma.TransactionClient, id: string): Promise<{
-    readonly createdById: string
-    readonly documentMediaAssetId: string | null
-    readonly documentUploadedAt: Date | null
-    readonly invoiceNo: string
-    readonly status: InvoiceRequestStatusValue
-    readonly submittedOnBehalfByUserId: string | null
-    readonly taxAmount: Prisma.Decimal
-    readonly totalAmount: Prisma.Decimal
-    readonly version: number
-    readonly buyerName: string
-    readonly invoiceRemark: string | null
-  }> {
+  private async lockRequest(tx: Prisma.TransactionClient, id: string): Promise<LockedInvoiceRequest> {
     const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT id FROM invoice_requests WHERE id = CAST(${id} AS uuid) FOR UPDATE`)
     if (rows.length !== 1) {
@@ -752,12 +881,68 @@ export class InvoiceRequestService {
     }
     const row = await tx.invoiceRequest.findUnique({
       where: { id },
-      select: { createdById: true, documentMediaAssetId: true, documentUploadedAt: true, invoiceNo: true, status: true, submittedOnBehalfByUserId: true, taxAmount: true, totalAmount: true, version: true, buyerName: true, invoiceRemark: true },
+      select: LOCKED_REQUEST_SELECT,
     })
     if (row === null) {
       invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.NOT_FOUND, '开票申请不存在', 404)
     }
     return row
+  }
+
+  /**
+   * 批量锁定：一条 `FOR UPDATE` 按 UUID 排序锁住全部存在的单据，避免两批交叉时形成环。
+   * 缺失的 id 不在这里报错，由调用方与「不可见」一起汇总成逐张原因。
+   */
+  private async lockRequests(tx: Prisma.TransactionClient, ids: readonly string[]): Promise<Map<string, LockedInvoiceRequest>> {
+    if (ids.length === 0) {
+      return new Map()
+    }
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM invoice_requests
+      WHERE id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})
+      ORDER BY id FOR UPDATE`)
+    const rows = await tx.invoiceRequest.findMany({
+      where: { id: { in: [...ids] } },
+      select: LOCKED_REQUEST_SELECT,
+    })
+    return new Map(rows.map(row => [row.id, row]))
+  }
+
+  /** 单张结算的写前校验：状态 → 乐观锁 → 照片 → 120 小时，与批量逐张原因同一顺序。 */
+  private assertSettleable(row: LockedInvoiceRequest, expectedVersion: number, now: Date): void {
+    this.assertStatus(row.status, ['ISSUED'], '只有已开出邮寄的申请单可以结算入账')
+    this.assertVersion(row.version, expectedVersion)
+    if (row.documentUploadedAt === null) {
+      invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.DOCUMENT_REQUIRED, '请先上传发票照片', 422)
+    }
+    if (!isSettleable(row.documentUploadedAt, now)) {
+      invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.SETTLE_WAIT_PERIOD, this.settleWaitMessage(row.documentUploadedAt), 422)
+    }
+  }
+
+  /** 批量预检的逐张原因；返回 `null` 表示这一张可以结算。 */
+  private settleBlocker(row: LockedInvoiceRequest, expectedVersion: number, now: Date): string | null {
+    if (row.status !== 'ISSUED') {
+      return '只有已开出邮寄的申请单可以结算入账'
+    }
+    if (row.version !== expectedVersion) {
+      return '申请单已被其他人处理，请刷新后重试'
+    }
+    if (row.documentUploadedAt === null) {
+      return '请先上传发票照片'
+    }
+    return isSettleable(row.documentUploadedAt, now) ? null : this.settleWaitMessage(row.documentUploadedAt)
+  }
+
+  private settleWaitMessage(documentUploadedAt: Date): string {
+    return ['发票上传满 120 小时后才能结算入账，可结算时间为 ', resolveSettleableAt(documentUploadedAt).toISOString()].join('')
+  }
+
+  /** 客户端展示汇率与事务内读取值必须一致，否则整批拒绝让财务按最新汇率重算。 */
+  private assertRateUnchanged(rate: SettlementRate, exchangeRateId: string, exchangeRateVersion: number): void {
+    if (rate.id !== exchangeRateId || rate.version !== exchangeRateVersion) {
+      invoiceRequestFailure(INVOICE_REQUEST_ERROR_CODES.RATE_CHANGED, '台币汇率已更新，请刷新后按最新汇率重新确认', 409)
+    }
   }
 
   private assertVersion(current: number, expected: number): void {
