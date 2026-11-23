@@ -129,7 +129,8 @@ test('未改动的唛头排除标记不制造 PATCH', () => {
   assert.equal(hasProductEditChanges(model, source, precisions), false)
 })
 
-test('备注变化只提交 remark，清空提交 null 并可对账', () => {  const source = product()
+test('备注变化只提交 remark，清空提交 null 并可对账', () => {
+  const source = product()
   const model = createProductEditFormModel(source, () => 'row-1')
   model.remark = ' 需加宽机身到 1.2 米 '
 

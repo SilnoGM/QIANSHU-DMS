@@ -55,15 +55,25 @@ const actionIntro = computed(() => action.value === 'approve'
 const actionShowsReason = computed(() => action.value === 'approve' || action.value === 'reject' || action.value === 'void')
 const actionNeedsReason = computed(() => action.value === 'reject' || action.value === 'void')
 const actionSubmitLabel = computed(() => {
-  if (action.value === 'send') return t('salesReceipt.sendVoucher')
-  if (action.value === 'confirmReceipt') return t('salesReceipt.confirmReceipt')
+  if (action.value === 'send') {
+    return t('salesReceipt.sendVoucher')
+  }
+  if (action.value === 'confirmReceipt') {
+    return t('salesReceipt.confirmReceipt')
+  }
   return action.value === null ? '' : t(`salesReceipt.${action.value}`)
 })
 /** 在途状态的一句话说明，让财务知道当前卡在哪一步。 */
 const statusHint = computed(() => {
-  if (detail.value?.status === 'PENDING_REVIEW') return t('salesReceipt.awaitingVoucherSend')
-  if (detail.value?.status === 'PENDING_CONFIRM') return t('salesReceipt.awaitingConfirm')
-  if (detail.value?.status === 'PENDING_POSTING') return t('salesReceipt.awaitingPosting')
+  if (detail.value?.status === 'PENDING_REVIEW') {
+    return t('salesReceipt.awaitingVoucherSend')
+  }
+  if (detail.value?.status === 'PENDING_CONFIRM') {
+    return t('salesReceipt.awaitingConfirm')
+  }
+  if (detail.value?.status === 'PENDING_POSTING') {
+    return t('salesReceipt.awaitingPosting')
+  }
   return ''
 })
 interface ReceiptProgressStep {
@@ -75,7 +85,9 @@ interface ReceiptProgressStep {
 /** 三步流转的处理进度：未发生的步骤显示占位，历史一次性审核只展示提交与入账。 */
 const progressSteps = computed<ReceiptProgressStep[]>(() => {
   const item = detail.value
-  if (!item) return []
+  if (!item) {
+    return []
+  }
   return [
     { id: 'submitted', label: t('salesReceipt.progress.submitted'), person: item.submittedBy, at: item.submittedAt },
     { id: 'voucherSent', label: t('salesReceipt.progress.voucherSent'), person: item.voucherSentBy, at: item.voucherSentAt },

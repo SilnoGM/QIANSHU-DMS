@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+// eslint-disable-next-line test/no-import-node-test -- 一次性交接逻辑用 Node 内置 runner 验证。
 import test from 'node:test'
 
 import {

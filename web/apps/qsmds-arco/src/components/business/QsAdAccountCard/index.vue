@@ -381,15 +381,15 @@ function formatTime(value: string): string {
 /* 户名兼作复制按钮：字号与字重写进来，避免被浏览器默认 button 样式覆盖。 */
 .qs-ad-account-card__name {
   padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
   font-family: inherit;
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.5rem;
+  color: inherit;
   text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
 }
 
 .qs-ad-account-card__name:hover {
@@ -397,9 +397,9 @@ function formatTime(value: string): string {
 }
 
 .qs-ad-account-card__name:focus-visible {
-  border-radius: 0.25rem;
-  outline: 2px solid oklch(var(--primary) / 0.4);
+  outline: 2px solid oklch(var(--primary) / 40%);
   outline-offset: 2px;
+  border-radius: 0.25rem;
 }
 
 /* 与静态代理卡片的操作链接同款：去按钮装饰、悬浮下划线，靠文字色表达语义。 */
