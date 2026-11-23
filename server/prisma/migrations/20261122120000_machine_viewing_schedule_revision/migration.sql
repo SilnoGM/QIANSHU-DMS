@@ -21,7 +21,8 @@ BEGIN
   SELECT count(*)::integer
   INTO column_count
   FROM information_schema.columns
-  WHERE table_schema = 'public'
+  -- E2E 会在隔离 schema 里重放迁移，自校验必须跟随当前 search_path 的首个 schema。
+  WHERE table_schema = current_schema()
     AND table_name = 'machine_viewing_appointments'
     AND column_name = 'schedule_revision'
     AND data_type = 'integer'
@@ -36,7 +37,10 @@ BEGIN
   INTO constraint_count
   FROM pg_constraint AS constraint_entry
   JOIN pg_class AS table_entry ON table_entry.oid = constraint_entry.conrelid
-  WHERE table_entry.relname = 'machine_viewing_appointments'
+  JOIN pg_namespace AS schema_entry ON schema_entry.oid = table_entry.relnamespace
+  -- 同名表可能同时存在于 public 与隔离 schema，只统计当前 schema 才能避免误判。
+  WHERE schema_entry.nspname = current_schema()
+    AND table_entry.relname = 'machine_viewing_appointments'
     AND constraint_entry.conname = 'machine_viewing_appointments_schedule_revision_check';
 
   IF constraint_count <> 1 THEN

@@ -4,7 +4,7 @@ import { resolveExcludedProductIds } from './product-shipping-mark-exclusion'
 type ReadClient = Pick<Prisma.TransactionClient, 'product'>
 
 function clientReturning(rows: readonly { id: string }[]) {
-  const findMany = jest.fn(async () => rows)
+  const findMany = jest.fn(() => Promise.resolve(rows))
   return {
     client: { product: { findMany } } as unknown as ReadClient,
     findMany,

@@ -313,6 +313,9 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-source-sales-order-selector.vue',
   'web/apps/qsmds-arco/src/views/operations/sales-orders/index.vue',
+  // 编辑弹窗调用产品编辑候选接口时原样透传既有的 supplierValue 过滤参数，
+  // 不新增供应商主数据读取或维护入口。
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/sales-order-edit-modal.vue',
   'web/apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue',
   'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
   'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',

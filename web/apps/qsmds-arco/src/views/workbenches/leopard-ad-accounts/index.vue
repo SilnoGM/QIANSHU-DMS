@@ -374,7 +374,11 @@ onUnmounted(() => {
   >
     <div class="text-sm text-muted-foreground">
       确认解除「{{ releaseTarget?.accountName }}」与
-      {{ releaseTarget?.assignedUser?.displayName ?? '当前用户' }} 的绑定？
+      <QsPersonDisplay
+        :display-name="releaseTarget?.assignedUser?.displayName ?? '当前用户'"
+        size="sm"
+        class="align-middle"
+      /> 的绑定？
     </div>
 
     <template #footer>
