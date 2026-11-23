@@ -1,6 +1,9 @@
 {
   "invoiceRequest.detailTitle": "开票申请详情",
   "invoiceRequest.statusAll": "全部",
+  "invoiceRequest.issuedView.WAITING": "等待中",
+  "invoiceRequest.issuedView.SETTLEABLE": "可结算",
+  "invoiceRequest.issuedView.ariaLabel": "已开出邮寄筛选",
   "invoiceRequest.status.PENDING_REVIEW": "开票审核中",
   "invoiceRequest.status.RETURNED": "已退回",
   "invoiceRequest.status.NOTIFIED": "已通知开票",

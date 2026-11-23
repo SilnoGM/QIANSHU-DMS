@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { InvoiceBatchSettleRow } from '../invoice-batch-settle.logic'
-import type { InvoiceRequestStatusValue } from '../invoice-status.logic'
+import type { InvoiceIssuedSettleView, InvoiceRequestStatusValue } from '../invoice-status.logic'
 import type { InvoiceRequestListItemDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
@@ -29,7 +29,7 @@ import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
-import { isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
+import { isSettleable, issuedSettleSwitchItems, resolveListIssuedView, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
 import BatchSettleModal from './batch-settle-modal.vue'
 import InvoiceRequestReviewModal from './review-modal.vue'
 
@@ -49,6 +49,9 @@ const canReview = computed(() => auth('invoice-requests:review'))
 const canSettle = computed(() => auth('invoice-requests:settle'))
 
 const status = ref<'ALL' | InvoiceRequestStatusValue>('PENDING_REVIEW')
+/** 「已开出邮寄」下的二级视图；第一层其他状态不展示也不传参。 */
+const issuedView = ref<InvoiceIssuedSettleView>('WAITING')
+const issuedCounts = ref({ waiting: 0, settleable: 0 })
 const search = ref('')
 const items = ref<InvoiceRequestListItemDto[]>([])
 const counts = ref<Record<string, number>>({})
@@ -102,6 +105,13 @@ const toolbarItems = computed(() => statusSwitchItems().map(item => ({
   value: item.value,
   label: t(item.labelKey),
   count: counts.value[item.value] ?? 0,
+})))
+
+/** 二级切换只在「已开出邮寄」出现；计数与第一层 ISSUED 共用同一分母。 */
+const issuedViewItems = computed(() => issuedSettleSwitchItems().map(item => ({
+  value: item.value,
+  label: t(item.labelKey),
+  count: item.value === 'WAITING' ? issuedCounts.value.waiting : issuedCounts.value.settleable,
 })))
 
 function settleHint(row: InvoiceRequestListItemDto): string {
@@ -238,13 +248,24 @@ async function load(): Promise<void> {
   now.value = new Date()
   try {
     const signal = new AbortController().signal
+    const issuedViewFilter = resolveListIssuedView(status.value, issuedView.value)
     const [list, statusCounts] = await Promise.all([
-      invoiceRequestsApi.list({ page: page.value, pageSize: pageSize.value, status: status.value, ...(search.value === '' ? {} : { keyword: search.value }) }, signal),
+      invoiceRequestsApi.list({
+        page: page.value,
+        pageSize: pageSize.value,
+        status: status.value,
+        ...(issuedViewFilter === undefined ? {} : { issuedView: issuedViewFilter }),
+        ...(search.value === '' ? {} : { keyword: search.value }),
+      }, signal),
       invoiceRequestsApi.statusCounts(search.value === '' ? {} : { keyword: search.value }, signal),
     ])
     items.value = list.data.items
     total.value = list.data.total
     counts.value = Object.fromEntries(statusCounts.data.statuses.map(entry => [entry.value, entry.count]))
+    issuedCounts.value = {
+      waiting: statusCounts.data.issuedWaiting,
+      settleable: statusCounts.data.issuedSettleable,
+    }
   }
   catch {
     loadError.value = t('invoiceRequest.list.loadFailed')
@@ -256,6 +277,22 @@ async function load(): Promise<void> {
 
 function changeStatus(): void {
   page.value = 1
+  // 进入「已开出邮寄」默认看等待中；离开该视图时二级选择不保留。
+  issuedView.value = 'WAITING'
+  clearBatchSelection()
+  void load()
+}
+
+function changeIssuedView(value: string): void {
+  if (value !== 'WAITING' && value !== 'SETTLEABLE') {
+    return
+  }
+  if (issuedView.value === value) {
+    return
+  }
+  issuedView.value = value
+  page.value = 1
+  // 两个视图互斥，停留在旧视图的勾选不能跨视图带入批量结算。
   clearBatchSelection()
   void load()
 }
@@ -484,6 +521,14 @@ onMounted(load)
     </FaPageMain>
     <FaPageMain v-else class="min-w-0">
       <QsStatusSwitchToolbar v-model="status" :items="toolbarItems" :aria-label="t('invoiceRequest.approval.title')" class="mb-4" @update:model-value="changeStatus" />
+      <QsStatusSwitchToolbar
+        v-if="status === 'ISSUED'"
+        :model-value="issuedView"
+        :items="issuedViewItems"
+        :aria-label="t('invoiceRequest.issuedView.ariaLabel')"
+        class="mb-4"
+        @update:model-value="changeIssuedView"
+      />
       <QsGenericTable
         ref="tableRef"
         v-model:page="page"

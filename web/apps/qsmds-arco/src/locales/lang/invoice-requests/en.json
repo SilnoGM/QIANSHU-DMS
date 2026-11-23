@@ -1,6 +1,9 @@
 {
   "invoiceRequest.detailTitle": "Invoice request details",
   "invoiceRequest.statusAll": "All",
+  "invoiceRequest.issuedView.WAITING": "Waiting",
+  "invoiceRequest.issuedView.SETTLEABLE": "Settleable",
+  "invoiceRequest.issuedView.ariaLabel": "Issued invoice filter",
   "invoiceRequest.status.PENDING_REVIEW": "In review",
   "invoiceRequest.status.RETURNED": "Returned",
   "invoiceRequest.status.NOTIFIED": "Notified",
