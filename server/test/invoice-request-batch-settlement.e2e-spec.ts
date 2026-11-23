@@ -66,11 +66,12 @@ describe('invoice request batch settlement against isolated PostgreSQL', () => {
       where: { code: 'TWD' },
       select: { id: true, exchangeRate: { select: { id: true, version: true, foreignUnitsPerCny: true } } },
     })
-    await prisma.currency.update({ where: { code: 'TWD' }, data: { enabled: true } })
+    // 数据库要求启用外币前必须已有汇率：先补汇率再启用，空库也能跑；已启用时更新为空操作。
     const exchangeRate = twd.exchangeRate ?? await prisma.exchangeRate.create({
       data: { currencyId: twd.id, foreignUnitsPerCny: '4.500000000000' },
       select: { id: true, version: true, foreignUnitsPerCny: true },
     })
+    await prisma.currency.update({ where: { code: 'TWD' }, data: { enabled: true } })
     rate = {
       id: exchangeRate.id,
       version: exchangeRate.version,
