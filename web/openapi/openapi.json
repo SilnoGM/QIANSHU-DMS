@@ -144984,6 +144984,14 @@
           "accountName": {
             "type": "string"
           },
+          "accountSource": {
+            "type": "string",
+            "enum": [
+              "SELF",
+              "AUTHORIZED"
+            ],
+            "description": "账户来源：SELF 自开 / AUTHORIZED 第三方代理商授权"
+          },
           "companyCn": {
             "type": "string",
             "nullable": true,
@@ -145028,7 +145036,8 @@
           },
           "sevenDayAverage": {
             "type": "string",
-            "description": "最近 7 个完整自然日的日均消耗（USD）"
+            "nullable": true,
+            "description": "最近 7 个完整自然日的日均消耗（USD）；授权账户不提供日消耗，返回 null"
           },
           "sustainableDays": {
             "type": "integer",
@@ -145055,7 +145064,8 @@
           "vendorUpdatedAt": {
             "type": "string",
             "format": "date-time",
-            "description": "猎豹侧数据刷新时间"
+            "nullable": true,
+            "description": "猎豹侧数据刷新时间；授权账户没有该字段"
           },
           "lastSyncedAt": {
             "type": "string",
@@ -145076,6 +145086,7 @@
           "id",
           "accountId",
           "accountName",
+          "accountSource",
           "companyCn",
           "accountStatus",
           "accountStatusText",
@@ -145171,6 +145182,10 @@
           "spendSynced": {
             "type": "boolean",
             "description": "本轮日消耗是否成功拉取；false 表示只更新了账户主数据"
+          },
+          "authorizedSynced": {
+            "type": "boolean",
+            "description": "本轮授权账户是否成功拉取；false 表示保留授权户上次快照"
           }
         },
         "required": [
@@ -145181,7 +145196,8 @@
           "spendRows",
           "alerts",
           "resets",
-          "spendSynced"
+          "spendSynced",
+          "authorizedSynced"
         ]
       },
       "AssignAdAccountRequestDto": {
