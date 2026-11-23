@@ -67498,6 +67498,338 @@
         }
       }
     },
+    "/api/purchase-orders/price-quotation-sheet": {
+      "post": {
+        "operationId": "purchase_orders_generate_price_quotation_sheet",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceQuotationSheetRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private generated price quotation sheet PNG for supplier confirmation.",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_ORDER_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 413,
+              "codes": [
+                "PAYLOAD_TOO_LARGE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_ORDER_AMOUNT_INVALID",
+                "PURCHASE_ORDER_CUSTOM_PRICES_INVALID",
+                "PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID",
+                "PURCHASE_ORDER_DATE_INVALID",
+                "PURCHASE_ORDER_IMAGE_TOO_LARGE",
+                "PURCHASE_ORDER_LINE_MODE_MISMATCH",
+                "PURCHASE_ORDER_PRODUCT_COST_UNAVAILABLE",
+                "PURCHASE_ORDER_PRODUCT_MODE_INVALID",
+                "PURCHASE_ORDER_PRODUCT_SUPPLIER_MISMATCH",
+                "PURCHASE_ORDER_PRODUCT_UNAVAILABLE",
+                "PURCHASE_ORDER_QUANTITY_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "PURCHASE_ORDER_IMAGE_GENERATION_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/purchase-orders/{purchaseOrderId}/review-context": {
       "get": {
         "operationId": "purchase_orders_review_context",
@@ -130930,6 +131262,97 @@
         },
         "required": [
           "expectedVersion"
+        ]
+      },
+      "PriceQuotationSheetLineInputDto": {
+        "type": "object",
+        "properties": {
+          "lineType": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM"
+            ]
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "expectedReferencePurchaseUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "CATALOG 行必填：前端当前展示的采购定价，用于检测产品档案改价"
+          },
+          "referencePurchaseUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "CUSTOM 行必填：采购定价，必须与本单采购价相等"
+          },
+          "actualPurchaseUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "本单采购价，非负且最多两位小数"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 80,
+            "nullable": true,
+            "description": "行备注，仅用于核价单展示；超长备注由前端截断后提交"
+          }
+        },
+        "required": [
+          "lineType",
+          "actualPurchaseUnitPriceAmount",
+          "quantity"
+        ]
+      },
+      "PriceQuotationSheetRequestDto": {
+        "type": "object",
+        "properties": {
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM"
+            ]
+          },
+          "supplierValue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "customSupplierName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "lines": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceQuotationSheetLineInputDto"
+            }
+          }
+        },
+        "required": [
+          "productMode",
+          "orderDate",
+          "lines"
         ]
       },
       "PurchaseOrderReviewContextDto": {

@@ -1,5 +1,6 @@
 import type {
   CreatePurchaseOrderRequestDto,
+  PriceQuotationSheetRequestDto,
   PurchaseOrderDetailDto,
   PurchaseOrderProductOptionDto,
   PurchaseOrderProductOptionsDto,
@@ -82,6 +83,25 @@ export type ValidatePurchaseOrderCreateStepResult
       readonly fieldErrors: Readonly<Record<string, string>>
     }
 
+export interface PriceQuotationSheetSource {
+  readonly customSupplierName: string | null
+  readonly lines: readonly OrderProductLineModel[]
+  readonly orderDate: string
+  readonly productMode: PurchaseOrderCreateProductMode
+  readonly supplierValue: string | null
+  readonly today: string
+}
+
+export type PriceQuotationSheetBuildResult
+  = | {
+    readonly valid: true
+    readonly request: PriceQuotationSheetRequestDto
+  }
+  | {
+    readonly valid: false
+    readonly fieldErrors: Readonly<Record<string, string>>
+  }
+
 export interface PurchaseOrderSourceSynchronizationResult {
   readonly exhaustedCount: number
   readonly incompatibleCatalogCount: number
@@ -138,6 +158,8 @@ const USER_AMOUNT_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/u
 const QUANTITY_PATTERN = /^[1-9]\d*$/u
 const MAXIMUM_QUANTITY = 2_147_483_647
 const MAXIMUM_LINES = 100
+// 与服务端 DTO 同口径：核价单请求默认受 100 KiB JSON 解析上限约束。
+const PRICE_QUOTATION_SHEET_DESCRIPTION_MAX_LENGTH = 80
 const AMOUNT_SCALE = 100n
 
 interface NormalizedAmount {
@@ -801,6 +823,126 @@ export function validatePurchaseOrderCreateStep(
   return Object.keys(fieldErrors).length === 0
     ? { valid: true }
     : { fieldErrors: Object.freeze(fieldErrors), valid: false }
+}
+
+function truncatePriceQuotationDescription(value: string | null): string | null {
+  if (value === null) {
+    return null
+  }
+  const characters = Array.from(value)
+  return characters.length <= PRICE_QUOTATION_SHEET_DESCRIPTION_MAX_LENGTH
+    ? value
+    : characters.slice(0, PRICE_QUOTATION_SHEET_DESCRIPTION_MAX_LENGTH).join('')
+}
+
+/**
+ * 第二步核价单只要求能渲染出产品与两种价格，不要求定金、尾款、唛头或货件；
+ * 因此不能直接复用完整创建校验，否则用户会被后续步骤的必填项挡住。
+ */
+export function buildPriceQuotationSheetRequest(
+  source: PriceQuotationSheetSource,
+): PriceQuotationSheetBuildResult {
+  const fieldErrors: Record<string, string> = {}
+  const supplierValue = source.supplierValue?.trim().normalize('NFKC') ?? null
+  const customSupplierName = source.customSupplierName?.trim().normalize('NFKC') ?? null
+  if (source.productMode === 'CATALOG' && !supplierValue) {
+    fieldErrors.supplierValue = '请选择供应商'
+  }
+  if (
+    source.productMode === 'CUSTOM'
+    && (!customSupplierName || unicodeLength(customSupplierName) > 128)
+  ) {
+    fieldErrors.customSupplierName = '请输入 1 至 128 个字符的供应商名称'
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(source.orderDate) || source.orderDate > source.today) {
+    fieldErrors.orderDate = '采购日期不能为空且不能晚于今天'
+  }
+  if (source.lines.length === 0) {
+    fieldErrors.lines = '请至少添加一条采购产品明细'
+  }
+  if (source.lines.length > MAXIMUM_LINES) {
+    fieldErrors.lines = `采购产品明细最多 ${MAXIMUM_LINES} 行`
+  }
+
+  const lines: PriceQuotationSheetRequestDto['lines'] = []
+  source.lines.forEach((line, index) => {
+    const prefix = `lines.${index}`
+    const quantity = validQuantity(line.quantity)
+    const actualPrice = normalizeUserAmount(line.actualUnitPriceAmount)
+    const description = truncatePriceQuotationDescription(normalizeOptionalText(line.description))
+    if (line.lineType !== source.productMode) {
+      fieldErrors[`${prefix}.lineType`] = '产品明细与采购产品类型不匹配'
+      return
+    }
+    if (quantity === null) {
+      fieldErrors[`${prefix}.quantity`] = '采购数量必须是正整数'
+    }
+    if (actualPrice === null) {
+      fieldErrors[`${prefix}.actualUnitPriceAmount`] = '本单采购价必须是非负且最多两位小数的金额'
+    }
+    if (line.lineType === 'CATALOG') {
+      const referencePrice = normalizeUserAmount(line.standardUnitPriceAmount)
+      if (line.productId === null) {
+        fieldErrors[`${prefix}.productId`] = '请选择有效的数据库产品'
+      }
+      if (referencePrice === null) {
+        fieldErrors[`${prefix}.standardUnitPriceAmount`] = '数据库产品缺少采购定价'
+      }
+      if (quantity === null || actualPrice === null || referencePrice === null || line.productId === null) {
+        return
+      }
+      lines.push({
+        lineType: 'CATALOG',
+        productId: line.productId,
+        expectedReferencePurchaseUnitPriceAmount: referencePrice.normalized,
+        actualPurchaseUnitPriceAmount: actualPrice.normalized,
+        quantity,
+        description,
+      })
+      return
+    }
+
+    const name = line.name.trim().normalize('NFKC')
+    const referencePrice = normalizeUserAmount(line.standardUnitPriceAmount)
+    if (name === '') {
+      fieldErrors[`${prefix}.name`] = '请输入临时产品名称'
+    }
+    else if (unicodeLength(name) > 128) {
+      fieldErrors[`${prefix}.name`] = '临时产品名称最多 128 个字符'
+    }
+    if (referencePrice === null) {
+      fieldErrors[`${prefix}.standardUnitPriceAmount`] = '采购定价必须手工填写且最多两位小数'
+    }
+    else if (actualPrice !== null && referencePrice.units !== actualPrice.units) {
+      fieldErrors[`${prefix}.actualUnitPriceAmount`] = '临时产品的采购定价必须与本单采购价相等'
+    }
+    if (quantity === null || actualPrice === null || referencePrice === null || name === '') {
+      return
+    }
+    lines.push({
+      lineType: 'CUSTOM',
+      name,
+      referencePurchaseUnitPriceAmount: referencePrice.normalized,
+      actualPurchaseUnitPriceAmount: actualPrice.normalized,
+      quantity,
+      description,
+    })
+  })
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { fieldErrors: Object.freeze(fieldErrors), valid: false }
+  }
+  return {
+    valid: true,
+    request: {
+      productMode: source.productMode,
+      ...(source.productMode === 'CATALOG'
+        ? { supplierValue: supplierValue! }
+        : { customSupplierName: customSupplierName! }),
+      orderDate: source.orderDate,
+      lines,
+    },
+  }
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {

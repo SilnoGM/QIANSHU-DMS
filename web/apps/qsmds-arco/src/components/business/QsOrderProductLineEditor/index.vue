@@ -717,31 +717,37 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
       </table>
     </div>
 
-    <!-- 汇总属于整张订单，不跟随明细表横向滚动；保持纯文字层级，避免再形成第二层面板。 -->
-    <div class="mt-4 px-1 text-right flex flex-col gap-2 items-end" aria-label="产品金额汇总">
-      <div class="flex gap-2 whitespace-nowrap items-baseline justify-end">
-        <span class="text-xs text-primary font-semibold">{{ labels.referenceTotal }}：</span>
-        <AmountDisplay
-          :value="totals.standardTotal"
-          :currency="currency"
-          :currencies="currencies"
-          class="text-lg text-primary font-bold"
-        />
+    <!-- 汇总属于整张订单，不跟随明细表横向滚动；保持纯文字层级，避免再形成第二层面板。
+         采购页可在左侧注入核价单等业务动作，销售页不传 slot 时布局保持不变。 -->
+    <div class="mt-4 px-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <slot name="footer-leading" />
       </div>
-      <p
-        v-if="totals.missingStandardPriceCount > 0"
-        class="text-xs text-muted-foreground m-0"
-      >
-        其中 {{ totals.missingStandardPriceCount }} 项暂无 {{ currency }} 标准价，未计入汇总。
-      </p>
-      <div class="flex gap-2 whitespace-nowrap items-baseline justify-end">
-        <span class="text-xs text-destructive font-semibold">{{ labels.actualTotal }}：</span>
-        <AmountDisplay
-          :value="totals.actualTotal"
-          :currency="currency"
-          :currencies="currencies"
-          class="text-lg text-destructive font-bold"
-        />
+      <div class="text-right flex flex-col gap-2 items-end sm:ml-auto" aria-label="产品金额汇总">
+        <div class="flex gap-2 whitespace-nowrap items-baseline justify-end">
+          <span class="text-xs text-primary font-semibold">{{ labels.referenceTotal }}：</span>
+          <AmountDisplay
+            :value="totals.standardTotal"
+            :currency="currency"
+            :currencies="currencies"
+            class="text-lg text-primary font-bold"
+          />
+        </div>
+        <p
+          v-if="totals.missingStandardPriceCount > 0"
+          class="text-xs text-muted-foreground m-0"
+        >
+          其中 {{ totals.missingStandardPriceCount }} 项暂无 {{ currency }} 标准价，未计入汇总。
+        </p>
+        <div class="flex gap-2 whitespace-nowrap items-baseline justify-end">
+          <span class="text-xs text-destructive font-semibold">{{ labels.actualTotal }}：</span>
+          <AmountDisplay
+            :value="totals.actualTotal"
+            :currency="currency"
+            :currencies="currencies"
+            class="text-lg text-destructive font-bold"
+          />
+        </div>
       </div>
     </div>
 
