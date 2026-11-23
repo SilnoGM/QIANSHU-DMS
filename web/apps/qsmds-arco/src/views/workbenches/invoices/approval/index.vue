@@ -526,6 +526,7 @@ onMounted(load)
         :model-value="issuedView"
         :items="issuedViewItems"
         :aria-label="t('invoiceRequest.issuedView.ariaLabel')"
+        stretch
         class="mb-4"
         @update:model-value="changeIssuedView"
       />
