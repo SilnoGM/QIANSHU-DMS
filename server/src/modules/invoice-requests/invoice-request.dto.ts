@@ -8,7 +8,12 @@ import {
   INVOICE_REQUEST_STATUS_VALUES,
   type InvoiceRequestStatusValue,
 } from './invoice-request.contract'
-import { INVOICE_REQUEST_STATUS_FILTER_VALUES, type InvoiceRequestStatusFilterValue } from './invoice-request-list-filter'
+import {
+  INVOICE_ISSUED_SETTLE_VIEW_VALUES,
+  INVOICE_REQUEST_STATUS_FILTER_VALUES,
+  type InvoiceIssuedSettleView,
+  type InvoiceRequestStatusFilterValue,
+} from './invoice-request-list-filter'
 
 // 台币金额与数量都是整数：金额用字符串传（仓库金额惯例），数量用整数。
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d{0,15}$/u
@@ -118,6 +123,11 @@ export class InvoiceRequestListQueryDto {
   @IsOptional() @IsIn(INVOICE_REQUEST_STATUS_FILTER_VALUES) status?: InvoiceRequestStatusFilterValue
   @ApiPropertyOptional({ maxLength: 128, description: '匹配申请单号、抬头、统编、备注或寄送姓名。' })
   @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
+  @ApiPropertyOptional({
+    enum: INVOICE_ISSUED_SETTLE_VIEW_VALUES,
+    description: '仅对「已开出邮寄」有效的二级视图：WAITING=未满 120 小时，SETTLEABLE=已满 120 小时可结算。传入时强制按 ISSUED 过滤。',
+  })
+  @IsOptional() @IsIn(INVOICE_ISSUED_SETTLE_VIEW_VALUES) issuedView?: InvoiceIssuedSettleView
 }
 
 /** 计数查询与列表共用同一组筛选，只去掉分页（计数覆盖完整结果集，不是当前页）。 */
@@ -135,6 +145,10 @@ export class InvoiceRequestStatusCountDto {
 export class InvoiceRequestStatusCountsDto {
   @ApiProperty({ type: [InvoiceRequestStatusCountDto], description: '每个状态的数量，外加 ALL 的合计；当前关键词筛选生效，状态筛选不生效。' })
   statuses!: InvoiceRequestStatusCountDto[]
+  @ApiProperty({ type: 'integer', description: '「已开出邮寄」中未满 120 小时（等待中）的数量；与可结算数量相加等于 ISSUED 计数。' })
+  issuedWaiting!: number
+  @ApiProperty({ type: 'integer', description: '「已开出邮寄」中已满 120 小时（可结算）的数量。' })
+  issuedSettleable!: number
 }
 
 export class InvoiceRequestLineDto {

@@ -10,7 +10,7 @@ import {
   INVOICE_REQUEST_ERROR_CODES,
   invoiceRequestFailure,
 } from './invoice-request.errors'
-import { buildInvoiceRequestListWhere, type InvoiceRequestListFilterInput } from './invoice-request-list-filter'
+import { buildInvoiceRequestListWhere, resolveIssuedSettleCutoff, type InvoiceRequestListFilterInput } from './invoice-request-list-filter'
 import { resolveSettleableAt } from './invoice-request.logic'
 import type {
   InvoiceRequestDto,
@@ -158,9 +158,10 @@ export class InvoiceRequestQueryService {
     const filter: InvoiceRequestListFilterInput = {
       keyword: query.keyword,
       status: query.status ?? 'ALL',
+      ...(query.issuedView === undefined ? {} : { issuedView: query.issuedView }),
       ...(viewer.canManageOthers ? {} : { ownerId: viewer.actorUserId }),
     }
-    const where = buildInvoiceRequestListWhere(filter)
+    const where = buildInvoiceRequestListWhere(filter, { now: new Date() })
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 20
     const [rows, total] = await this.prisma.$transaction([
@@ -179,16 +180,27 @@ export class InvoiceRequestQueryService {
   /** 计数覆盖完整结果集：忽略状态维度、保留关键词与归属过滤，`ALL` 给合计。 */
   async statusCounts(actorUserId: string, query: InvoiceRequestStatusCountsQueryDto): Promise<InvoiceRequestStatusCountsDto> {
     const viewer = await resolveInvoiceRequestViewer(this.prisma, actorUserId)
+    const now = new Date()
+    const cutoff = resolveIssuedSettleCutoff(now)
     const base = buildInvoiceRequestListWhere({
       keyword: query.keyword,
       ...(viewer.canManageOthers ? {} : { ownerId: viewer.actorUserId }),
-    }, { omitStatus: true })
+    }, { now, omitStatus: true })
     const [total, ...counts] = await this.prisma.$transaction([
       this.prisma.invoiceRequest.count({ where: base }),
       ...INVOICE_REQUEST_STATUS_VALUES.map(status => this.prisma.invoiceRequest.count({ where: { ...base, status } })),
+      // 已开出邮寄的二级计数与列表共用同一分界：等待中 + 可结算 = ISSUED 总数。
+      this.prisma.invoiceRequest.count({ where: { ...base, status: 'ISSUED', documentUploadedAt: { gt: cutoff } } }),
+      this.prisma.invoiceRequest.count({ where: { ...base, status: 'ISSUED', documentUploadedAt: { lte: cutoff } } }),
     ])
     const statuses = INVOICE_REQUEST_STATUS_VALUES.map((status, index) => ({ value: status, count: counts[index] ?? 0 }))
-    return { statuses: [{ value: 'ALL', count: total }, ...statuses] }
+    const issuedWaiting = counts[INVOICE_REQUEST_STATUS_VALUES.length] ?? 0
+    const issuedSettleable = counts[INVOICE_REQUEST_STATUS_VALUES.length + 1] ?? 0
+    return {
+      statuses: [{ value: 'ALL', count: total }, ...statuses],
+      issuedWaiting,
+      issuedSettleable,
+    }
   }
 
   async get(actorUserId: string, id: string): Promise<InvoiceRequestDto> {

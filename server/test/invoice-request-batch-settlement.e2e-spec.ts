@@ -11,6 +11,7 @@ import { FundAccountCommandService } from '../src/modules/fund-accounts/applicat
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { INVOICE_REQUEST_ERROR_CODES } from '../src/modules/invoice-requests/invoice-request.errors'
 import { calculateSettleAmountCny, sumBatchSettleAmountsCny } from '../src/modules/invoice-requests/invoice-request.logic'
+import { InvoiceRequestQueryService } from '../src/modules/invoice-requests/invoice-request-query.service'
 import { InvoiceRequestService } from '../src/modules/invoice-requests/invoice-request.service'
 import { cleanupFundE2eData } from './fixtures/fund-e2e-cleanup'
 import { insertInvoiceDocumentAsset, insertInvoiceRequest } from './fixtures/invoice-request.fixture'
@@ -42,6 +43,7 @@ describe('invoice request batch settlement against isolated PostgreSQL', () => {
   let prisma: PrismaService
   let client: Client
   let commands: InvoiceRequestService
+  let queries: InvoiceRequestQueryService
   let financeId: string
   let applicantAId: string
   let applicantBId: string
@@ -53,6 +55,7 @@ describe('invoice request batch settlement against isolated PostgreSQL', () => {
     await application.init()
     prisma = application.get(PrismaService)
     commands = application.get(InvoiceRequestService)
+    queries = application.get(InvoiceRequestQueryService)
     const accounts = application.get(FundAccountCommandService)
     const postings = application.get(FundPostingApplicationService)
 
@@ -379,5 +382,25 @@ describe('invoice request batch settlement against isolated PostgreSQL', () => {
       select: { status: true },
     })
     expect(rows.map(row => row.status)).toEqual(['ISSUED', 'ISSUED'])
+  })
+
+  it('splits the issued view into waiting and settleable with matching counts', async () => {
+    const settleable = await createIssuedRequest({ applicantUserId: applicantAId, uploadedHoursAgo: 144 })
+    const waiting = await createIssuedRequest({ applicantUserId: applicantBId, uploadedHoursAgo: 1 })
+
+    const settleableView = await queries.list(financeId, { status: 'ISSUED', issuedView: 'SETTLEABLE', pageSize: 100 })
+    expect(settleableView.items.some(row => row.id === settleable.id)).toBe(true)
+    expect(settleableView.items.some(row => row.id === waiting.id)).toBe(false)
+
+    const waitingView = await queries.list(financeId, { status: 'ISSUED', issuedView: 'WAITING', pageSize: 100 })
+    expect(waitingView.items.some(row => row.id === waiting.id)).toBe(true)
+    expect(waitingView.items.some(row => row.id === settleable.id)).toBe(false)
+
+    // 二级计数必须与第一层 ISSUED 计数共用分母，否则切换两视图时数字会对不上。
+    const counts = await queries.statusCounts(financeId, {})
+    const issuedCount = counts.statuses.find(item => item.value === 'ISSUED')?.count ?? 0
+    expect(counts.issuedWaiting + counts.issuedSettleable).toBe(issuedCount)
+    expect(counts.issuedWaiting).toBeGreaterThanOrEqual(1)
+    expect(counts.issuedSettleable).toBeGreaterThanOrEqual(1)
   })
 })

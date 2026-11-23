@@ -101694,6 +101694,19 @@
               "maxLength": 128,
               "type": "string"
             }
+          },
+          {
+            "name": "issuedView",
+            "required": false,
+            "in": "query",
+            "description": "仅对「已开出邮寄」有效的二级视图：WAITING=未满 120 小时，SETTLEABLE=已满 120 小时可结算。传入时强制按 ISSUED 过滤。",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "WAITING",
+                "SETTLEABLE"
+              ]
+            }
           }
         ],
         "responses": {
@@ -142566,10 +142579,20 @@
             "items": {
               "$ref": "#/components/schemas/InvoiceRequestStatusCountDto"
             }
+          },
+          "issuedWaiting": {
+            "type": "integer",
+            "description": "「已开出邮寄」中未满 120 小时（等待中）的数量；与可结算数量相加等于 ISSUED 计数。"
+          },
+          "issuedSettleable": {
+            "type": "integer",
+            "description": "「已开出邮寄」中已满 120 小时（可结算）的数量。"
           }
         },
         "required": [
-          "statuses"
+          "statuses",
+          "issuedWaiting",
+          "issuedSettleable"
         ]
       },
       "InvoiceRequestDuplicateSuspectDto": {
