@@ -188,6 +188,7 @@ describe('CheetahGoClient listAccounts', () => {
     expect(account).toMatchObject({
       accountId: 'account-1',
       accountName: '账户 1',
+      accountSource: 'SELF',
       companyCn: '聊城千树文化传媒有限公司',
       accountStatus: 1,
       freeze: 2,
@@ -198,7 +199,104 @@ describe('CheetahGoClient listAccounts', () => {
     })
     expect(account.createdTime.toISOString()).toBe(new Date(1794294543 * 1000).toISOString())
     // 上游 update_date 是无时区字符串，按 Asia/Shanghai 解释。
-    expect(account.vendorUpdatedAt.toISOString()).toBe('2026-11-16T02:48:42.000Z')
+    expect(account.vendorUpdatedAt?.toISOString()).toBe('2026-11-16T02:48:42.000Z')
+  })
+})
+
+describe('CheetahGoClient listAuthorizedAccounts', () => {
+  const authorizedRows = [
+    {
+      account_id: '1411178864332686',
+      account_name: 'QS-FS-01',
+      account_status: 1,
+      account_status_text: 'ACTIVE',
+      spend_cap: '1100.01',
+      amount_spent: '930.99',
+      disable_reason: 0,
+      created_time: 1791885755,
+      currency: 'USD',
+      business_name: 'Meetsocial HK Digital Marketing Co.，ltd-1',
+      status: 1,
+    },
+    {
+      account_id: '1903467731228804',
+      account_name: 'Alishba Saeem',
+      account_status: 1,
+      account_status_text: 'ACTIVE',
+      spend_cap: '0.00',
+      amount_spent: '0.00',
+      disable_reason: 0,
+      created_time: 1791441373,
+      currency: 'VND',
+      business_name: '',
+      status: 1,
+    },
+    {
+      account_id: '1318703033413747',
+      account_name: 'QIANSHU-05',
+      account_status: 1,
+      account_status_text: 'ACTIVE',
+      spend_cap: '0.01',
+      amount_spent: '0.00',
+      disable_reason: 0,
+      created_time: 1774428887,
+      currency: 'USD',
+      business_name: 'Bluefocus',
+      status: 2,
+    },
+  ]
+
+  function authorizedPage(rows: unknown[]): { body: unknown } {
+    return {
+      body: {
+        code: 0,
+        msg: '成功',
+        data: {
+          list: rows,
+          pager: { total_page: 1, page: 1, page_size: 1000, total_count: rows.length },
+        },
+        log_id: 'log',
+      },
+    }
+  }
+
+  it('returns only the allowlisted authorized account with missing fields normalized', async () => {
+    const { client, requests } = createClient((request) => {
+      if (request.url.endsWith('/v1/access-token')) {
+        return tokenResponse('token-1')
+      }
+      return authorizedPage(authorizedRows)
+    })
+
+    const accounts = await client.listAuthorizedAccounts()
+
+    expect(accounts).toHaveLength(1)
+    expect(accounts[0]).toMatchObject({
+      accountId: '1411178864332686',
+      accountName: 'QS-FS-01',
+      accountSource: 'AUTHORIZED',
+      companyCn: null,
+      freeze: null,
+      dailySpendLimit: null,
+      disabledTransferAmount: '0.00',
+      spendCap: '1100.01',
+      amountSpent: '930.99',
+      vendorUpdatedAt: null,
+    })
+    expect(accounts[0].createdTime.toISOString()).toBe(new Date(1791885755 * 1000).toISOString())
+    expect(requests.find((request) => request.url.includes('/v1/auth-account-list'))?.url)
+      .toContain('page=1')
+  })
+
+  it('rejects the allowlisted account when its currency is not USD', async () => {
+    const { client } = createClient((request) => {
+      if (request.url.endsWith('/v1/access-token')) {
+        return tokenResponse('token-1')
+      }
+      return authorizedPage([{ ...authorizedRows[0], currency: 'VND' }])
+    })
+
+    await expect(client.listAuthorizedAccounts()).rejects.toMatchObject({ kind: 'VENDOR_REJECTED' })
   })
 })
 

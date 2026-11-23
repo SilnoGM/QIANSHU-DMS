@@ -12,6 +12,7 @@ function vendorAccount(overrides: Partial<CheetahGoAccount> = {}): CheetahGoAcco
   return {
     accountId: '183000000000097',
     accountName: 'QS-LB-14',
+    accountSource: 'SELF',
     companyCn: '聊城千树文化传媒有限公司',
     accountStatus: 1,
     accountStatusText: 'ACTIVE',
@@ -27,8 +28,31 @@ function vendorAccount(overrides: Partial<CheetahGoAccount> = {}): CheetahGoAcco
   }
 }
 
+function authorizedAccount(overrides: Partial<CheetahGoAccount> = {}): CheetahGoAccount {
+  return {
+    accountId: '1411178864332686',
+    accountName: 'QS-FS-01',
+    accountSource: 'AUTHORIZED',
+    companyCn: null,
+    accountStatus: 1,
+    accountStatusText: 'ACTIVE',
+    freeze: null,
+    disableReason: 0,
+    spendCap: '1100.01',
+    amountSpent: '930.99',
+    dailySpendLimit: null,
+    disabledTransferAmount: '0.00',
+    createdTime: new Date('2026-10-13T18:02:35+08:00'),
+    vendorUpdatedAt: null,
+    ...overrides,
+  }
+}
+
 function createService(options: {
   account?: CheetahGoAccount
+  authorizedAccounts?: CheetahGoAccount[]
+  authorizedError?: boolean
+  assignedUserId?: string | null
   alertedAt?: Date | null
   assignedUserStatus?: string | null
   spend?: Array<{ accountId: string, date: string, spend: string }>
@@ -51,7 +75,9 @@ function createService(options: {
         }),
       findUnique: jest
         .fn<Promise<{ assignedUserId: string | null } | null>, [unknown]>()
-        .mockResolvedValue({ assignedUserId: USER_ID }),
+        .mockResolvedValue({
+          assignedUserId: options.assignedUserId === undefined ? USER_ID : options.assignedUserId,
+        }),
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       update,
     },
@@ -74,6 +100,11 @@ function createService(options: {
 
   const client = {
     listAccounts: jest.fn<Promise<CheetahGoAccount[]>, []>().mockResolvedValue([account]),
+    listAuthorizedAccounts: jest.fn<Promise<CheetahGoAccount[]>, []>().mockImplementation(() => (
+      options.authorizedError === true
+        ? Promise.reject(new Error('authorized accounts unavailable'))
+        : Promise.resolve(options.authorizedAccounts ?? [])
+    )),
     listDailySpend: jest
       .fn<Promise<Array<{ accountId: string, date: string, spend: string }>>, [string, string]>()
       .mockResolvedValue(options.spend ?? []),
@@ -86,7 +117,7 @@ function createService(options: {
     client,
   )
 
-  return { service, publish, record, update, upsertDaily, client }
+  return { service, publish, record, update, upsertDaily, updateMany: transaction.adAccount.updateMany, client }
 }
 
 describe('AdAccountSyncService', () => {
@@ -201,5 +232,55 @@ describe('AdAccountSyncService', () => {
     expect(result.spendRows).toBe(2)
     expect(upsertDaily).toHaveBeenCalledTimes(2)
     expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('merges the allowlisted authorized account and reports authorizedSynced', async () => {
+    const { service, record } = createService({
+      account: vendorAccount({ amountSpent: '10.00' }),
+      authorizedAccounts: [authorizedAccount()],
+    })
+
+    const result = await service.sync({ now: () => NOW })
+
+    expect(result).toMatchObject({ accounts: 2, authorizedSynced: true })
+    expect(record).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      metadata: expect.objectContaining({ accounts: 2, authorizedSynced: true }) as unknown,
+    }))
+  })
+
+  it('keeps authorized snapshots when the authorized list fails', async () => {
+    const { service, updateMany } = createService({
+      account: vendorAccount({ amountSpent: '10.00' }),
+      authorizedError: true,
+    })
+
+    const result = await service.sync({ now: () => NOW })
+
+    expect(result).toMatchObject({ accounts: 1, authorizedSynced: false })
+    // 授权接口失败时只标记自开户缺失，不能把 QS-FS-01 的上一轮快照误标为未同步。
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { vendorMissing: false, accountSource: 'SELF' },
+      data: { vendorMissing: true },
+    })
+  })
+
+  it('alerts for an unassigned authorized account without inventing daily spend', async () => {
+    const { service, publish } = createService({
+      account: vendorAccount({ amountSpent: '10.00' }),
+      authorizedAccounts: [authorizedAccount({ amountSpent: '1090.01' })],
+      assignedUserId: null,
+    })
+
+    await service.sync({ now: () => NOW })
+
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+      target: { kind: 'PERMISSION', permissionCode: 'ad-accounts:manage' },
+      variables: expect.objectContaining({
+        availableBalance: '10.00',
+        sevenDayAverage: '—',
+        expectedDays: '—',
+        companyName: '授权账户',
+      }) as unknown,
+    }), expect.anything())
   })
 })

@@ -1928,6 +1928,15 @@ model ProxyNode {
   @@map("proxy_nodes")
 }
 
+/// 广告账户来源：SELF 为本 appid 自开账户；AUTHORIZED 为第三方代理商授权账户。
+/// 授权账户缺少 company_cn/freeze/daily_spend_limit/update_date，且没有日消耗数据。
+enum AdAccountSource {
+  SELF
+  AUTHORIZED
+
+  @@map("ad_account_source")
+}
+
 /// 猎豹 CheetahGo 广告账户快照。供应商是数据源，本表是绑定关系的唯一真相源。
 /// 同步只 upsert、不删除；供应商侧本次未返回的记录标记 vendorMissing。
 /// 金额字段保持上游十进制字符串原样落库，可用余额由 spendCap - amountSpent - disabledTransferAmount 现算。
@@ -1937,6 +1946,7 @@ model AdAccount {
   accountId              String    @unique(map: "ad_accounts_account_id_key") @map("account_id") @db.VarChar(64)
   accountName            String    @map("account_name") @db.VarChar(255)
   companyCn              String?   @map("company_cn") @db.VarChar(255)
+  accountSource          AdAccountSource @default(SELF) @map("account_source")
   accountStatus          Int       @map("account_status")
   accountStatusText      String?   @map("account_status_text") @db.VarChar(64)
   /// 1 冻结 / 2 解冻；上游字段可能缺失，NULL 表示未知，不能当成解冻。
@@ -1947,8 +1957,8 @@ model AdAccount {
   dailySpendLimit        Decimal?  @map("daily_spend_limit") @db.Decimal(30, 2)
   disabledTransferAmount Decimal   @default(0) @map("disabled_transfer_amount") @db.Decimal(30, 2)
   createdTime            DateTime  @map("created_time") @db.Timestamptz(6)
-  /// 上游 update_date（猎豹侧数据刷新时间），不是本表 updatedAt。
-  vendorUpdatedAt        DateTime  @map("vendor_updated_at") @db.Timestamptz(6)
+  /// 上游 update_date（猎豹侧数据刷新时间），不是本表 updatedAt；授权账户没有该字段。
+  vendorUpdatedAt        DateTime? @map("vendor_updated_at") @db.Timestamptz(6)
   /// 余额预警的跃迁标记：非空表示已就当前这一轮跌穿阈值发过通知，回升到阈值以上时清空。
   lowBalanceAlertedAt    DateTime? @map("low_balance_alerted_at") @db.Timestamptz(6)
   assignedUserId         String?   @map("assigned_user_id") @db.Uuid

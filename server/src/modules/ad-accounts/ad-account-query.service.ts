@@ -138,6 +138,7 @@ export class AdAccountQueryService {
       id: string
       accountId: string
       accountName: string
+      accountSource: 'SELF' | 'AUTHORIZED'
       companyCn: string | null
       accountStatus: number
       accountStatusText: string | null
@@ -149,7 +150,7 @@ export class AdAccountQueryService {
       disabledTransferAmount: Prisma.Decimal
       vendorMissing: boolean
       createdTime: Date
-      vendorUpdatedAt: Date
+      vendorUpdatedAt: Date | null
       lastSyncedAt: Date
       assignedUser: { id: string, displayName: string } | null
     },
@@ -162,13 +163,20 @@ export class AdAccountQueryService {
       disabledTransferAmount: account.disabledTransferAmount,
     })
     const coveredDays = resolveCoveredDays(account.createdTime, now, SPEND_WINDOW_DAYS)
-    const sevenDayAverage = resolveAverageDailySpend(totalSpend, coveredDays)
-    const sustainableDays = resolveSustainableDays({ availableBalance, averageDailySpend: sevenDayAverage })
+    // 授权户没有日消耗数据；余额耗尽仍可判定为 0 天，其余情况显示「—」。
+    const sevenDayAverage = account.accountSource === 'AUTHORIZED'
+      ? null
+      : resolveAverageDailySpend(totalSpend, coveredDays)
+    const sustainableDays = resolveSustainableDays({
+      availableBalance,
+      averageDailySpend: sevenDayAverage ?? new Prisma.Decimal(0),
+    })
 
     return {
       id: account.id,
       accountId: account.accountId,
       accountName: account.accountName,
+      accountSource: account.accountSource,
       companyCn: account.companyCn,
       accountStatus: account.accountStatus,
       accountStatusText: account.accountStatusText,
@@ -179,13 +187,13 @@ export class AdAccountQueryService {
       dailySpendLimit: account.dailySpendLimit === null ? null : account.dailySpendLimit.toFixed(2),
       disabledTransferAmount: account.disabledTransferAmount.toFixed(2),
       availableBalance: availableBalance === null ? null : availableBalance.toFixed(2),
-      sevenDayAverage: sevenDayAverage.toFixed(2),
+      sevenDayAverage: sevenDayAverage === null ? null : sevenDayAverage.toFixed(2),
       sustainableDays,
       lowBalance: shouldAlertLowBalance({ availableBalance, vendorMissing: account.vendorMissing }),
       balanceAlertThreshold: AD_ACCOUNT_BALANCE_ALERT_USD,
       vendorMissing: account.vendorMissing,
       createdTime: account.createdTime.toISOString(),
-      vendorUpdatedAt: account.vendorUpdatedAt.toISOString(),
+      vendorUpdatedAt: account.vendorUpdatedAt === null ? null : account.vendorUpdatedAt.toISOString(),
       lastSyncedAt: account.lastSyncedAt.toISOString(),
       assignedUser: account.assignedUser,
     }
