@@ -40,6 +40,7 @@
       "paymentAmount": "Paid amount (CNY)",
       "paymentAmountHint": "Split into the personal and company fund accounts by the applicant's current share rate",
       "applicant": "Applicant",
+      "applicantAndSubmittedAt": "Applicant / Submitted at",
       "submittedAt": "Submitted at",
       "paidAt": "Paid at",
       "paidBy": "Paid by",

@@ -40,6 +40,7 @@
       "paymentAmount": "付款金額（CNY）",
       "paymentAmountHint": "按申請人目前分成比例分攤到個人與公司資金帳戶",
       "applicant": "申請人",
+      "applicantAndSubmittedAt": "申請人 / 提交時間",
       "submittedAt": "提交時間",
       "paidAt": "付款時間",
       "paidBy": "付款人",

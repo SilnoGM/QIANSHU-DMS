@@ -45,13 +45,13 @@ const toolbarItems = computed(() => ADVERTISING_RECHARGE_STATUS_FILTER_OPTIONS.m
 })))
 const columns = computed<QsGenericTableColumn<AdvertisingRechargeDto>[]>(() => [
   { id: 'rechargeNo', accessorKey: 'rechargeNo', title: t('advertisingRecharge.field.rechargeNo'), minWidth: 170, fixed: 'left', cellClass: 'qs-type-data-emphasis', mobileCellClass: 'qs-type-data-emphasis' },
-  { id: 'applicant', accessorFn: row => row.applicant.name, title: t('advertisingRecharge.field.applicant'), minWidth: 140 },
   { id: 'adAccountName', accessorKey: 'adAccountName', title: t('advertisingRecharge.field.adAccountName'), minWidth: 180 },
   { id: 'adAccountNo', accessorKey: 'adAccountNo', title: t('advertisingRecharge.field.adAccountNo'), minWidth: 160 },
   { id: 'rechargeAmount', accessorKey: 'rechargeAmount', title: t('advertisingRecharge.field.rechargeAmount'), minWidth: 150, align: 'right' },
   { id: 'paymentAmount', accessorFn: row => row.payment?.amountCny ?? '', title: t('advertisingRecharge.field.paymentAmount'), minWidth: 150, align: 'right' },
   { id: 'status', accessorKey: 'status', title: t('advertisingRecharge.field.status'), minWidth: 110 },
-  { id: 'submittedAt', accessorKey: 'submittedAt', title: t('advertisingRecharge.field.submittedAt'), minWidth: 185 },
+  // 申请人 + 提交时间合并为最后一列：上面申请人、下面提交时间。
+  { id: 'applicantSubmittedAt', accessorFn: row => row.applicant.name, title: t('advertisingRecharge.field.applicantAndSubmittedAt'), minWidth: 185 },
 ])
 
 async function load(): Promise<void> {
@@ -174,8 +174,17 @@ onBeforeUnmount(() => {
         @pagination-change="load"
         @retry="load"
       >
-        <template #cell-applicant="{ row }">
-          <QsPersonDisplay :display-name="row.original.applicant.name" size="md" :avatar-url="row.original.applicant.avatarUrl" />
+        <template #cell-applicantSubmittedAt="{ row }">
+          <div class="flex flex-col gap-0.5">
+            <QsPersonDisplay
+              :display-name="row.original.applicant.name"
+              size="sm"
+              :avatar-url="row.original.applicant.avatarUrl"
+            />
+            <span class="qs-type-meta text-muted-foreground tabular-nums">
+              <DateTimeDisplay :value="row.original.submittedAt" format="datetime" />
+            </span>
+          </div>
         </template>
 
         <template #cell-rechargeAmount="{ row }">
@@ -200,10 +209,6 @@ onBeforeUnmount(() => {
           <span class="qs-type-tag px-2 py-0.5 border rounded-md" :class="advertisingRechargeStatusMeta(row.original.status).tagClass">
             {{ t(advertisingRechargeStatusMeta(row.original.status).labelKey) }}
           </span>
-        </template>
-
-        <template #cell-submittedAt="{ row }">
-          <DateTimeDisplay :value="row.original.submittedAt" format="datetime" />
         </template>
 
         <template #actions="{ row }">
