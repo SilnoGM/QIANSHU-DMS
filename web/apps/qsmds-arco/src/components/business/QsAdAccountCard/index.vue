@@ -59,6 +59,10 @@ const daysText = computed(() => {
   return days === null ? '—' : `${days} 天`
 })
 
+const sevenDayAverageText = computed(() => (
+  props.account.sevenDayAverage === null ? '—' : `$${props.account.sevenDayAverage}`
+))
+
 const daysTone = computed(() => {
   const days = props.account.sustainableDays
 
@@ -230,8 +234,8 @@ async function openRechargeRequest(): Promise<void> {
   await router.push('/qs-operations/network-ads/advertising-recharges')
 }
 
-function formatTime(value: string): string {
-  return dayjs(value).format('MM-DD HH:mm')
+function formatTime(value: string | null): string {
+  return value === null ? '—' : dayjs(value).format('MM-DD HH:mm')
 }
 </script>
 
@@ -255,6 +259,14 @@ function formatTime(value: string): string {
             </button>
           </FaTooltip>
           <span class="sr-only" aria-live="polite">{{ copyLiveMessage }}</span>
+          <FaTag
+            v-if="account.accountSource === 'AUTHORIZED'"
+            variant="outline"
+            class="text-sky-700 border-sky-500/30 bg-sky-500/10 gap-1 dark:text-sky-300"
+          >
+            <FaIcon name="i-lucide:shield-check" class="size-3" aria-hidden="true" />
+            授权户
+          </FaTag>
           <FaTag
             v-if="alertTag"
             variant="outline"
@@ -343,8 +355,11 @@ function formatTime(value: string): string {
           <div class="text-xs text-muted-foreground truncate">
             7 天日均
           </div>
-          <div class="text-base font-semibold mt-0.5 tabular-nums">
-            ${{ account.sevenDayAverage }}
+          <div
+            class="text-base font-semibold mt-0.5 tabular-nums"
+            :title="account.accountSource === 'AUTHORIZED' ? '授权户不提供日消耗' : undefined"
+          >
+            {{ sevenDayAverageText }}
           </div>
         </div>
         <div class="min-w-0">
