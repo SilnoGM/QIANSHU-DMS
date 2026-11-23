@@ -39,6 +39,12 @@ export const INVOICE_REQUEST_MANAGER_PERMISSION_CODE = 'invoice-requests:read-al
 /** 明细行上限（下限 1 由提交校验保证）。 */
 export const INVOICE_REQUEST_LINE_LIMIT = 5
 
+/**
+ * 批量结算单次上限：财务一次勾选的硬边界，DTO、服务端校验与前端选择共用同一数值。
+ * 50 张按现有单张入账耗时估算远低于 60 秒事务超时。
+ */
+export const INVOICE_REQUEST_BATCH_SETTLE_LIMIT = 50
+
 /** 发票照片的媒体池与用途标记。 */
 export const INVOICE_REQUEST_DOCUMENT_POOL = 'invoice'
 export const INVOICE_REQUEST_DOCUMENT_UPLOAD_PURPOSE = 'INVOICE_REQUEST_DOCUMENT'

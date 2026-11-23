@@ -34,6 +34,7 @@ export interface AdAccountSyncResult {
   readonly alerts: number
   readonly resets: number
   readonly spendSynced: boolean
+  readonly authorizedSynced: boolean
 }
 
 export interface AdAccountSyncOptions {
@@ -56,6 +57,7 @@ function emptyResult(
     alerts: 0,
     resets: 0,
     spendSynced: false,
+    authorizedSynced: false,
   }
 }
 
@@ -80,9 +82,12 @@ export class AdAccountSyncService {
 
     // 网络请求放在事务外：避免把上游抖动拖进长事务。
     const accounts = await this.client.listAccounts()
+    const authorized = await this.fetchAuthorizedAccounts()
+    const syncedAccounts = mergeAccounts(accounts, authorized.accounts)
     const { startDate, endDate } = resolveSpendWindow(now)
     const spend = await this.fetchSpend(startDate, endDate)
     const spendSynced = spend !== null
+    const authorizedSynced = authorized.synced
 
     return this.prisma.$transaction(async (transaction) => {
       const locked = await transaction.$queryRaw<Array<{ locked: boolean }>>(Prisma.sql`
@@ -97,24 +102,29 @@ export class AdAccountSyncService {
         return {
           status: 'completed' as const,
           dryRun,
-          accounts: accounts.length,
+          accounts: syncedAccounts.length,
           missing: 0,
           spendRows: spend?.length ?? 0,
           alerts: 0,
           resets: 0,
           spendSynced,
+          authorizedSynced,
         }
       }
 
       // 先整体标记缺失，再按本次返回置回 false：供应商侧消失的账户保留历史绑定。
+      // 授权列表拉取失败时只标记自开户，避免把 QS-FS-01 的上一轮快照误标为未同步。
       await transaction.adAccount.updateMany({
-        where: { vendorMissing: false },
+        where: {
+          vendorMissing: false,
+          ...(authorizedSynced ? {} : { accountSource: 'SELF' }),
+        },
         data: { vendorMissing: true },
       })
 
       const synced = new Map<string, { id: string, lowBalanceAlertedAt: Date | null }>()
 
-      for (const account of accounts) {
+      for (const account of syncedAccounts) {
         const row = await this.upsertAccount(transaction, account, now)
         synced.set(account.accountId, row)
       }
@@ -123,7 +133,7 @@ export class AdAccountSyncService {
       const totals = aggregateSpend(spend ?? [])
       const { alerts, resets } = await this.evaluateBalanceAlerts(
         transaction,
-        accounts,
+        syncedAccounts,
         synced,
         totals,
         now,
@@ -137,24 +147,26 @@ export class AdAccountSyncService {
         actorType: 'SYSTEM',
         targetType: 'AD_ACCOUNT',
         metadata: {
-          accounts: accounts.length,
+          accounts: syncedAccounts.length,
           missing,
           spendRows: spendCount,
           alerts,
           resets,
           spendSynced,
+          authorizedSynced,
         },
       })
 
       return {
         status: 'completed' as const,
         dryRun,
-        accounts: accounts.length,
+        accounts: syncedAccounts.length,
         missing,
         spendRows: spendCount,
         alerts,
         resets,
         spendSynced,
+        authorizedSynced,
       }
     }, { timeout: 120_000 })
   }
@@ -173,6 +185,23 @@ export class AdAccountSyncService {
     }
   }
 
+  /**
+   * 授权账户接口失败不影响自开户同步：本轮保留授权户上次快照，
+   * 由 authorizedSynced=false 让调用方与审计知道这一轮没有更新授权户。
+   */
+  private async fetchAuthorizedAccounts(): Promise<{ accounts: CheetahGoAccount[], synced: boolean }> {
+    if (this.client === null) {
+      return { accounts: [], synced: false }
+    }
+
+    try {
+      return { accounts: await this.client.listAuthorizedAccounts(), synced: true }
+    } catch (error) {
+      this.logger.warn(`授权广告账户拉取失败，本轮保留上次快照: ${String(error)}`)
+      return { accounts: [], synced: false }
+    }
+  }
+
   private async upsertAccount(
     transaction: Prisma.TransactionClient,
     account: CheetahGoAccount,
@@ -183,6 +212,7 @@ export class AdAccountSyncService {
       create: {
         accountId: account.accountId,
         accountName: account.accountName,
+        accountSource: account.accountSource,
         companyCn: account.companyCn,
         accountStatus: account.accountStatus,
         accountStatusText: account.accountStatusText,
@@ -199,6 +229,7 @@ export class AdAccountSyncService {
       },
       update: {
         accountName: account.accountName,
+        accountSource: account.accountSource,
         companyCn: account.companyCn,
         accountStatus: account.accountStatus,
         accountStatusText: account.accountStatusText,
@@ -291,11 +322,17 @@ export class AdAccountSyncService {
       }
 
       const coveredDays = resolveCoveredDays(account.createdTime, now, SPEND_WINDOW_DAYS)
-      const averageDailySpend = resolveAverageDailySpend(
-        totals.get(account.accountId) ?? new Prisma.Decimal(0),
-        coveredDays,
-      )
-      const expectedDays = resolveSustainableDays({ availableBalance, averageDailySpend })
+      // 授权户没有日消耗数据：日均与续航一律显示「—」，不能把 0 当成真实消耗。
+      const averageDailySpend = account.accountSource === 'AUTHORIZED'
+        ? null
+        : resolveAverageDailySpend(
+            totals.get(account.accountId) ?? new Prisma.Decimal(0),
+            coveredDays,
+          )
+      const expectedDays = resolveSustainableDays({
+        availableBalance,
+        averageDailySpend: averageDailySpend ?? new Prisma.Decimal(0),
+      })
       const assignedUser = await this.resolveAssignee(transaction, row.id)
 
       await this.notifications.publish({
@@ -310,9 +347,10 @@ export class AdAccountSyncService {
           adAccountNo: account.accountId,
           availableBalance: (availableBalance ?? new Prisma.Decimal(0)).toFixed(2),
           balanceThreshold: new Prisma.Decimal(AD_ACCOUNT_BALANCE_ALERT_USD).toFixed(2),
-          sevenDayAverage: averageDailySpend.toFixed(2),
+          sevenDayAverage: averageDailySpend === null ? '—' : averageDailySpend.toFixed(2),
           expectedDays: expectedDays === null ? '—' : String(expectedDays),
-          companyName: account.companyCn ?? '—',
+          companyName: account.companyCn
+            ?? (account.accountSource === 'AUTHORIZED' ? '授权账户' : '—'),
         },
         dedupeKey: `ad-account-balance-low:${account.accountId}:${alertDate}`,
       }, { transaction, now })
@@ -359,4 +397,20 @@ function aggregateSpend(rows: readonly CheetahGoDailySpend[]): Map<string, Prism
   }
 
   return totals
+}
+
+/** 同一 accountId 同时出现在两类列表时以自开户为准（字段更完整）。 */
+function mergeAccounts(
+  selfAccounts: readonly CheetahGoAccount[],
+  authorizedAccounts: readonly CheetahGoAccount[],
+): CheetahGoAccount[] {
+  const merged = new Map(selfAccounts.map((account) => [account.accountId, account]))
+
+  for (const account of authorizedAccounts) {
+    if (!merged.has(account.accountId)) {
+      merged.set(account.accountId, account)
+    }
+  }
+
+  return [...merged.values()]
 }

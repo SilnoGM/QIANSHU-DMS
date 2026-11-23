@@ -213,6 +213,68 @@ describe('advertising recharge against isolated PostgreSQL', () => {
     expect(await prisma.fundPostingBatch.count({ where: { businessSourceCodeSnapshot: 'ADVERTISING_RECHARGE' } })).toBe(0)
   })
 
+  it('publishes the finance detail link on the pending recharge notification', async () => {
+    // 模板默认被迁移清空，这里临时建站内模板并给财务授予付款权限，
+    // 验证「广告户充值」通知确实带出成品详情链接、并能落进收件箱跳转快照。
+    const permission = await prisma.permission.findUniqueOrThrow({
+      where: { code: 'advertising-recharges:pay' },
+      select: { id: true },
+    })
+    const role = await prisma.role.create({
+      data: {
+        code: `fund_adv_pay_${randomUUID().slice(0, 8)}`,
+        name: '广告充值付款（E2E）',
+        description: 'E2E 临时角色',
+      },
+      select: { id: true },
+    })
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } })
+    await prisma.userRole.create({ data: { userId: financeId, roleId: role.id } })
+    try {
+      const template = await prisma.notificationTemplate.create({
+        data: {
+          key: 'operations.advertising-recharge.pending',
+          channel: 'IN_APP',
+          name: '广告户充值（E2E）',
+          domain: 'OPERATIONS',
+          titleTemplate: '广告户充值 {{rechargeNo}} 待付款',
+          bodyTemplate: '单号：{{rechargeNo}}',
+          linkUrlTemplate: '{{rechargeUrl}}',
+          variables: [
+            { name: 'rechargeNo', required: true, maxLength: 64, sensitive: false },
+            { name: 'rechargeUrl', required: true, maxLength: 512, sensitive: false },
+          ],
+        },
+        select: { id: true },
+      })
+      try {
+        const created = await createRecharge({ amount: '10.00' })
+        const expectedPath = `/#/qs-finance/realtime-payments/advertising-recharges/${created.id}`
+        const notification = await prisma.notification.findFirstOrThrow({
+          where: { eventType: 'ADVERTISING_RECHARGE_PENDING', sourceId: created.id },
+          select: { id: true, variables: true },
+        })
+        const rechargeUrl = (notification.variables as { rechargeUrl?: unknown }).rechargeUrl
+        expect(typeof rechargeUrl).toBe('string')
+        expect(rechargeUrl).toContain(expectedPath)
+        const inbox = await prisma.notificationInboxItem.findMany({
+          where: { notificationId: notification.id },
+          select: { userId: true, linkUrlSnapshot: true },
+        })
+        expect(inbox).toHaveLength(1)
+        expect(inbox[0]?.userId).toBe(financeId)
+        expect(inbox[0]?.linkUrlSnapshot).toContain(expectedPath)
+      }
+      finally {
+        await prisma.notificationTemplate.delete({ where: { id: template.id } })
+      }
+    }
+    finally {
+      await prisma.userRole.deleteMany({ where: { roleId: role.id } })
+      await prisma.role.delete({ where: { id: role.id } })
+    }
+  })
+
   it('replays the same idempotency key and rejects changed content', async () => {
     const key = randomUUID()
     const qr = await qrAsset()

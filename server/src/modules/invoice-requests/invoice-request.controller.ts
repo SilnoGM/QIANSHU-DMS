@@ -10,6 +10,7 @@ import { CurrentUserId, resolveDataScopeActor } from '../auth/decorators/current
 import type { SalesOrderDocumentMultipartRequest } from '../sales-orders/documents/sales-order-document-multipart.parser'
 import { InvoiceRequestDocumentService, type InvoiceRequestDocumentContent } from './invoice-request-document.service'
 import {
+  InvoiceRequestBatchSettleDto, InvoiceRequestBatchSettleResultDto,
   InvoiceRequestCancelDto, InvoiceRequestDto, InvoiceRequestIdDto, InvoiceRequestListQueryDto, InvoiceRequestNotifyDto,
   InvoiceRequestPageDto, InvoiceRequestResubmitDto, InvoiceRequestReturnDto, InvoiceRequestSettleDto, InvoiceRequestStatusCountsDto,
   InvoiceRequestStatusCountsQueryDto, InvoiceRequestSubmitDto,
@@ -47,6 +48,9 @@ const documentErrors: ApiContractErrorOptions[] = [
 const settleErrors: ApiContractErrorOptions[] = [
   { status: 409, codes: ['INVOICE_REQUEST_STATE_CHANGED', 'INVOICE_REQUEST_STATUS_NOT_ALLOWED', 'INVOICE_REQUEST_RATE_CHANGED', 'INVOICE_REQUEST_RATE_UNAVAILABLE', 'INVOICE_REQUEST_POSTING_ACCOUNT_UNAVAILABLE', 'INVOICE_REQUEST_POSTING_UNAVAILABLE'] },
   { status: 422, codes: ['VALIDATION_FAILED', 'INVOICE_REQUEST_SETTLE_WAIT_PERIOD', 'INVOICE_REQUEST_DOCUMENT_REQUIRED'] },
+]
+const batchSettleErrors: ApiContractErrorOptions[] = [
+  { status: 409, codes: ['INVOICE_REQUEST_BATCH_SETTLE_INVALID', 'INVOICE_REQUEST_RATE_CHANGED', 'INVOICE_REQUEST_RATE_UNAVAILABLE', 'INVOICE_REQUEST_POSTING_ACCOUNT_UNAVAILABLE', 'INVOICE_REQUEST_POSTING_UNAVAILABLE'] },
 ]
 
 function context(request: object): InvoiceRequestCommandContext {
@@ -118,6 +122,15 @@ export class InvoiceRequestController {
   @Post(':id/settlements') @HttpCode(200) @RequirePermissions('invoice-requests:settle')
   @ApiContractResponse({ status: 200, type: InvoiceRequestDto }) @contract('invoice_requests_settle', true, [notFound, ...settleErrors])
   settle(@Param() params: InvoiceRequestIdDto, @Body() input: InvoiceRequestSettleDto, @Req() request: object) { return this.commands.settle(context(request), params.id, input) }
+
+  /**
+   * 批量结算：一次最多 50 张，整批共用一份汇率，单事务全有或全无。
+   * 任一张不可结算时整批拒绝，fieldErrors.invalidItems 逐张给出原因。
+   */
+  @Post('batch-settlements') @HttpCode(200) @RequirePermissions('invoice-requests:settle')
+  @ApiContractResponse({ status: 200, type: InvoiceRequestBatchSettleResultDto })
+  @contract('invoice_requests_batch_settle', true, batchSettleErrors)
+  batchSettle(@Body() input: InvoiceRequestBatchSettleDto, @Req() request: object) { return this.commands.batchSettle(context(request), input) }
 
   @Post(':id/document-uploads') @HttpCode(201) @RequirePermissions('invoice-requests:document') @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['mediaType', 'file'], additionalProperties: false, properties: { mediaType: { type: 'string', enum: ['IMAGE'] }, file: { type: 'string', format: 'binary' } } } })

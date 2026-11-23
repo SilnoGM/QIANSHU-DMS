@@ -112,6 +112,13 @@ describe('NotificationAdminService', () => {
       sensitive: false,
       maxLength: 512,
     })
+    // 广告户充值同样需要成品详情链接：模板做不到字符串拼接，必须由服务端下发完整 URL。
+    const advertisingPending = result.find(event => event.eventType === 'ADVERTISING_RECHARGE_PENDING')
+    expect(advertisingPending?.variables).toEqual(expect.arrayContaining(['rechargeUrl']))
+    expect(advertisingPending?.variableDefinitions.find(variable => variable.name === 'rechargeUrl')).toMatchObject({
+      sensitive: false,
+      maxLength: 512,
+    })
     expect(withdrawal?.media).toBeNull()
     expect(result).toHaveLength(44)
     for (const event of result) {

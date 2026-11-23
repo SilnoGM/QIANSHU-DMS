@@ -30,6 +30,24 @@ export function statusSwitchItems(): { value: InvoiceRequestStatusValue | 'ALL',
   ]
 }
 
+/** 「已开出邮寄」二级视图：未满 120 小时（等待中）与已满 120 小时（可结算）。 */
+export type InvoiceIssuedSettleView = 'WAITING' | 'SETTLEABLE'
+
+export function issuedSettleSwitchItems(): { value: InvoiceIssuedSettleView, labelKey: string }[] {
+  return [
+    { value: 'WAITING', labelKey: 'invoiceRequest.issuedView.WAITING' },
+    { value: 'SETTLEABLE', labelKey: 'invoiceRequest.issuedView.SETTLEABLE' },
+  ]
+}
+
+/** 二级视图只在「已开出邮寄」下传给列表；其他状态传了也会被服务端强制成 ISSUED。 */
+export function resolveListIssuedView(
+  status: InvoiceRequestStatusValue | 'ALL',
+  issuedView: InvoiceIssuedSettleView,
+): InvoiceIssuedSettleView | undefined {
+  return status === 'ISSUED' ? issuedView : undefined
+}
+
 /**
  * 状态标签色：待处理（审核中/已通知）用 amber、进行中（已开出邮寄）与已完成（已结算入账）用 primary、
  * 已退回与已取消用 destructive / muted。与既有销售收款页的语义一致。
