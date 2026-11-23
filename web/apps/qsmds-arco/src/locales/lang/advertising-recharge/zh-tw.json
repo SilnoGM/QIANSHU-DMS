@@ -31,6 +31,7 @@
       "rechargeAmountHintCny": "預設人民幣，可切換美元",
       "rechargeAmountHintUsd": "預設美元，可切換人民幣",
       "paymentQr": "付款二維碼",
+      "paymentProof": "付款憑證",
       "paymentQrHint": "財務將按此二維碼付款",
       "remark": "備註",
       "remarkPlaceholder": "選填，最多 500 字",

@@ -8,6 +8,7 @@ import { getApiClientFailureMessage } from '@/api/errors'
 import advertisingRechargesApi from '@/api/modules/advertising-recharges'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
@@ -17,6 +18,8 @@ import CreateModal from './create-modal.vue'
 import DetailDrawer from './detail-drawer.vue'
 import {
   ADVERTISING_RECHARGE_STATUS_FILTER_OPTIONS,
+  advertisingRechargeProofUrl,
+  advertisingRechargeQrUrl,
   advertisingRechargeStatusMeta,
   buildAdvertisingRechargeCopyText,
   buildAdvertisingRechargeDetailLink,
@@ -65,10 +68,37 @@ const columns = computed<QsGenericTableColumn<AdvertisingRechargeDto>[]>(() => [
   { id: 'adAccountName', accessorKey: 'adAccountName', title: t('advertisingRecharge.field.adAccountName'), minWidth: 180 },
   { id: 'adAccountNo', accessorKey: 'adAccountNo', title: t('advertisingRecharge.field.adAccountNo'), minWidth: 160 },
   { id: 'rechargeAmount', accessorKey: 'rechargeAmount', title: t('advertisingRecharge.field.rechargeAmount'), minWidth: 150, align: 'right' },
+  { id: 'paymentQr', title: t('advertisingRecharge.field.paymentQr'), minWidth: 104 },
+  { id: 'paymentProof', title: t('advertisingRecharge.field.paymentProof'), minWidth: 104 },
   { id: 'status', accessorKey: 'status', title: t('advertisingRecharge.field.status'), minWidth: 110 },
   { id: 'paymentAmount', accessorFn: row => row.payment?.amountCny ?? '', title: t('advertisingRecharge.field.paymentAmount'), minWidth: 150, align: 'right' },
   { id: 'submittedAt', accessorKey: 'submittedAt', title: t('advertisingRecharge.field.submittedAt'), minWidth: 185 },
 ])
+
+/** 列表缩略图：走私有内容路由，只在已登录会话内可取。 */
+function qrCellItems(row: AdvertisingRechargeDto) {
+  const qr = row.paymentQr
+
+  if (!qr) {
+    return []
+  }
+
+  const src = advertisingRechargeQrUrl(row.id, 'self')
+
+  return [{ alt: t('advertisingRecharge.field.paymentQr'), key: qr.mediaAssetId, src, previewSrc: src, tooltip: qr.fileName }]
+}
+
+function proofCellItems(row: AdvertisingRechargeDto) {
+  const proof = row.payment?.proof ?? null
+
+  if (!proof) {
+    return []
+  }
+
+  const src = advertisingRechargeProofUrl(row.id, 'self')
+
+  return [{ alt: t('advertisingRecharge.field.paymentProof'), key: proof.mediaAssetId, src, previewSrc: src, tooltip: proof.fileName }]
+}
 
 const uploadQr: RechargeImageUploadFile = async (file, signal) => {
   const response = await advertisingRechargesApi.uploadQr(file, signal)
@@ -313,6 +343,28 @@ onBeforeUnmount(() => {
             :currency="row.original.rechargeCurrency"
             :currencies="currencyCatalog.currencies.value"
           />
+        </template>
+
+        <template #cell-paymentQr="{ row }">
+          <ImageGroup
+            v-if="row.original.paymentQr"
+            :items="qrCellItems(row.original)"
+            :max-count="1"
+            size="sm"
+            tooltip-mode="native"
+          />
+          <span v-else class="text-muted-foreground">—</span>
+        </template>
+
+        <template #cell-paymentProof="{ row }">
+          <ImageGroup
+            v-if="row.original.payment?.proof"
+            :items="proofCellItems(row.original)"
+            :max-count="1"
+            size="sm"
+            tooltip-mode="native"
+          />
+          <span v-else class="text-muted-foreground">—</span>
         </template>
 
         <template #cell-status="{ row }">

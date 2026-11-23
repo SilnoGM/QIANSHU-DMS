@@ -31,6 +31,7 @@
       "rechargeAmountHintCny": "CNY by default; USD is available",
       "rechargeAmountHintUsd": "USD by default; CNY is available",
       "paymentQr": "Payment QR code",
+      "paymentProof": "Payment proof",
       "paymentQrHint": "Finance will pay with this QR code",
       "remark": "Remark",
       "remarkPlaceholder": "Optional, up to 500 characters",

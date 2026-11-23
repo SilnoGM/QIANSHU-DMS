@@ -31,6 +31,7 @@
       "rechargeAmountHintCny": "默认人民币，可切换美元",
       "rechargeAmountHintUsd": "默认美元，可切换人民币",
       "paymentQr": "付款二维码",
+      "paymentProof": "付款凭证",
       "paymentQrHint": "财务将按此二维码付款",
       "remark": "备注",
       "remarkPlaceholder": "选填，最多 500 字",
