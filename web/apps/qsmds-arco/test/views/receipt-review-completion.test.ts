@@ -21,6 +21,7 @@ function fixture(fails = false, operation = 'approve') {
   const sandbox = {
     detail: { value: { id: 'receipt', version: 1, salesOrderId: 'order', salesOrder: { version: 1 }, approvedPayment: { id: 'payment' } } },
     action: { value: operation },
+    actionNeedsReason: { value: operation === 'reject' || operation === 'void' },
     busy,
     context,
     contextError,

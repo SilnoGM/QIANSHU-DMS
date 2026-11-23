@@ -982,8 +982,26 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       remark: null,
       voucher: { mediaAssetId: paymentVoucherMediaAssetId },
     }, randomUUID())
+    // 三步收款的水单发送与确认到账由 sales-receipt-service.e2e-spec 覆盖；
+    // 本用例只验证入账后的订单状态，因此分两步直接推进到待入账（版本 1→2→3）。
+    await prisma.$executeRaw`
+      UPDATE sales_receipt_requests
+      SET status = 'PENDING_CONFIRM',
+          version = 2,
+          voucher_sent_by_user_id = ${actorUserId}::uuid,
+          voucher_sent_at = clock_timestamp()
+      WHERE id = ${receipt.id}::uuid
+    `
+    await prisma.$executeRaw`
+      UPDATE sales_receipt_requests
+      SET status = 'PENDING_POSTING',
+          version = 3,
+          confirmed_by_user_id = ${actorUserId}::uuid,
+          confirmed_at = clock_timestamp()
+      WHERE id = ${receipt.id}::uuid
+    `
     const approval = await salesReceipts.approvalContext({ actorUserId, requestId: randomUUID() }, receipt.id)
-    await salesReceipts.approve({ actorUserId, requestId: randomUUID() }, receipt.id, { expectedVersion: 1, expectedContext: approval.expectedContext })
+    await salesReceipts.approve({ actorUserId, requestId: randomUUID() }, receipt.id, { expectedVersion: 3, expectedContext: approval.expectedContext })
     const before = await prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
       select: { version: true, paymentStatus: true, fulfillmentStatus: true },
