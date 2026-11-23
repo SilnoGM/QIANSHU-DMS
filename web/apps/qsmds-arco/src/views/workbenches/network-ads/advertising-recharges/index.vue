@@ -296,7 +296,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('advertisingRecharge.empty.own')"
         :empty-description="t('advertisingRecharge.empty.ownHint')"
-        :action-column="{ fixed: 'right', minWidth: 84, width: 84, title: t('advertisingRecharge.field.action') }"
+        :action-column="{ fixed: 'right', minWidth: 176, width: 176, title: t('advertisingRecharge.field.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('advertisingRecharge.pageTitle')"
         @search="search"
@@ -336,24 +336,26 @@ onBeforeUnmount(() => {
         </template>
 
         <template #actions="{ row }">
-          <FaButton
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.rechargeNo} · ${t('advertisingRecharge.action.copyInfo')}`"
-            @click="copyRechargeInfo(row)"
-          >
-            {{ t('advertisingRecharge.action.copyInfo') }}
-          </FaButton>
-          <FaButton
-            variant="ghost"
-            size="sm"
-            class="min-h-11 sm:min-h-8"
-            :aria-label="`${row.rechargeNo} · ${t('advertisingRecharge.action.view')}`"
-            @click="openDetail(row)"
-          >
-            {{ t('advertisingRecharge.action.view') }}
-          </FaButton>
+          <div class="flex flex-nowrap gap-1 items-center">
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.rechargeNo} · ${t('advertisingRecharge.action.copyInfo')}`"
+              @click="copyRechargeInfo(row)"
+            >
+              {{ t('advertisingRecharge.action.copyInfo') }}
+            </FaButton>
+            <FaButton
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.rechargeNo} · ${t('advertisingRecharge.action.view')}`"
+              @click="openDetail(row)"
+            >
+              {{ t('advertisingRecharge.action.view') }}
+            </FaButton>
+          </div>
         </template>
       </QsGenericTable>
     </FaPageMain>
