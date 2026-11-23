@@ -768,6 +768,7 @@ export class AdvertisingRechargeService {
         rechargeAmount: input.rechargeAmount,
         rechargeCurrency: input.rechargeCurrency,
         rechargeNo: input.rechargeNo,
+        rechargeUrl: buildAdvertisingRechargeDetailUrl(this.appOrigin, input.id),
         status: advertisingRechargeStatusLabel('PENDING'),
       },
       media: input.qrMediaAssetId === null ? [] : [{ assetId: input.qrMediaAssetId, sourceKey: 'advertising.qr' }],

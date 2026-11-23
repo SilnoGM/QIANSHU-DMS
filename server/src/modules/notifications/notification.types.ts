@@ -390,7 +390,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   MACHINE_VIEWING_APPOINTMENT_CREATED: ['appointmentNo', 'appointmentDate', 'period', 'hour', 'site', 'machineType', 'customerName', 'customerPhone', 'contactPerson', 'status'],
   MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: ['appointmentNo', 'previousAppointmentTime', 'appointmentTime', 'site', 'machineType', 'customerName', 'contactPerson'],
   PROXY_NODE_EXPIRING: ['nodeLabel', 'host', 'expiresAt', 'daysRemaining', 'assignedUserName'],
-  ADVERTISING_RECHARGE_PENDING: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status'],
+  ADVERTISING_RECHARGE_PENDING: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status', 'rechargeUrl'],
   ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status', 'rechargeUrl'],
   ADVERTISING_RECHARGE_PAID: ['rechargeNo', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_REJECTED: ['rechargeNo', 'reason', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
