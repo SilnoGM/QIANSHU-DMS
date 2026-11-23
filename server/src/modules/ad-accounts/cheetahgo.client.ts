@@ -4,13 +4,17 @@ import { signCheetahGoTokenRequest } from './cheetahgo-signature'
 /**
  * 猎豹 CheetahGo Open API 客户端。
  *
- * 只实现本项目实际使用的两个只读接口：账户列表与日期范围日消耗。
+ * 只实现本项目实际使用的三个只读接口：自开账户列表、授权账户列表与日期范围日消耗。
  * 凭据（appid/secret）只在换取 token 的请求中出现；token 缓存到 JWT exp 前 5 分钟。
  * 签名算法与原因见 cheetahgo-signature.ts。
  */
 
 export const CHEETAHGO_REQUEST_TIMEOUT_MS = 15_000
 
+/** 业务只纳入这一个授权账户；其余授权户（含 VND）不接入。 */
+export const AUTHORIZED_ACCOUNT_ALLOWLIST: ReadonlySet<string> = new Set(['1411178864332686'])
+
+const AUTHORIZED_ACCOUNT_CURRENCY = 'USD'
 const ACCOUNT_PAGE_SIZE = 1000
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
 /** 上游无时区字符串统一按北京时间解释：update_date 是平台侧的墙上时间。 */
@@ -38,9 +42,12 @@ export class CheetahGoError extends Error {
   }
 }
 
+export type CheetahGoAccountSource = 'SELF' | 'AUTHORIZED'
+
 export interface CheetahGoAccount {
   readonly accountId: string
   readonly accountName: string
+  readonly accountSource: CheetahGoAccountSource
   readonly companyCn: string | null
   readonly accountStatus: number
   readonly accountStatusText: string | null
@@ -51,7 +58,8 @@ export interface CheetahGoAccount {
   readonly dailySpendLimit: string | null
   readonly disabledTransferAmount: string
   readonly createdTime: Date
-  readonly vendorUpdatedAt: Date
+  /** 上游 update_date；授权账户没有该字段。 */
+  readonly vendorUpdatedAt: Date | null
 }
 
 export interface CheetahGoDailySpend {
@@ -166,6 +174,7 @@ function normalizeAccount(row: unknown): CheetahGoAccount {
   return {
     accountId: requireString(row.account_id, 'account_id'),
     accountName: requireString(row.account_name, 'account_name'),
+    accountSource: 'SELF',
     companyCn: optionalString(row.company_cn),
     accountStatus: requireNumber(row.account_status, 'account_status'),
     accountStatusText: optionalString(row.account_status_text),
@@ -177,6 +186,46 @@ function normalizeAccount(row: unknown): CheetahGoAccount {
     disabledTransferAmount: decimalString(row.disabled_transfer_amount, 'disabled_transfer_amount'),
     createdTime: parseUnixSeconds(row.created_time, 'created_time'),
     vendorUpdatedAt: parsePlatformDateTime(row.update_date, 'update_date'),
+  }
+}
+
+/**
+ * 授权账户归一化：字段比自开户少，且没有 update_date 与 disabled_transfer_amount。
+ * 不在白名单内的授权户直接跳过；白名单账户币种不是 USD 时整体失败，避免把 VND
+ * 金额按美元展示。
+ */
+function normalizeAuthorizedAccount(row: unknown): CheetahGoAccount | null {
+  if (!isRecord(row)) {
+    throw invalidPayload('authorized account row')
+  }
+
+  const accountId = requireString(row.account_id, 'account_id')
+
+  if (!AUTHORIZED_ACCOUNT_ALLOWLIST.has(accountId)) {
+    return null
+  }
+
+  const currency = requireString(row.currency, 'currency')
+
+  if (currency !== AUTHORIZED_ACCOUNT_CURRENCY) {
+    throw new CheetahGoError('VENDOR_REJECTED', `cheetahgo authorized account currency unsupported: ${accountId}`)
+  }
+
+  return {
+    accountId,
+    accountName: requireString(row.account_name, 'account_name'),
+    accountSource: 'AUTHORIZED',
+    companyCn: optionalString(row.company_cn),
+    accountStatus: requireNumber(row.account_status, 'account_status'),
+    accountStatusText: optionalString(row.account_status_text),
+    freeze: optionalNumber(row.freeze),
+    disableReason: optionalNumber(row.disable_reason) ?? 0,
+    spendCap: decimalString(row.spend_cap, 'spend_cap'),
+    amountSpent: decimalString(row.amount_spent, 'amount_spent'),
+    dailySpendLimit: optionalDecimalString(row.daily_spend_limit),
+    disabledTransferAmount: decimalString(row.disabled_transfer_amount, 'disabled_transfer_amount', '0.00'),
+    createdTime: parseUnixSeconds(row.created_time, 'created_time'),
+    vendorUpdatedAt: null,
   }
 }
 
@@ -245,11 +294,23 @@ export class CheetahGoClient {
   }
 
   async listAccounts(): Promise<CheetahGoAccount[]> {
+    return await this.listAccountsFrom('/v1/facebook-account-list', normalizeAccount)
+  }
+
+  /** 授权账户只返回白名单中的账户；其余授权户在归一化阶段跳过。 */
+  async listAuthorizedAccounts(): Promise<CheetahGoAccount[]> {
+    return await this.listAccountsFrom('/v1/auth-account-list', normalizeAuthorizedAccount)
+  }
+
+  private async listAccountsFrom(
+    path: string,
+    normalize: (row: unknown) => CheetahGoAccount | null,
+  ): Promise<CheetahGoAccount[]> {
     const accounts: CheetahGoAccount[] = []
     let page = 1
 
     for (;;) {
-      const data = await this.authedRequest<unknown>('/v1/facebook-account-list', {
+      const data = await this.authedRequest<unknown>(path, {
         page: String(page),
         page_size: String(ACCOUNT_PAGE_SIZE),
       })
@@ -259,7 +320,11 @@ export class CheetahGoClient {
       }
 
       for (const row of data.list) {
-        accounts.push(normalizeAccount(row))
+        const account = normalize(row)
+
+        if (account !== null) {
+          accounts.push(account)
+        }
       }
 
       const pager = isRecord(data.pager) ? data.pager : null

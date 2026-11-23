@@ -19,6 +19,13 @@ export class AdAccountDto {
   @ApiProperty({ type: 'string' })
   accountName!: string
 
+  @ApiProperty({
+    type: 'string',
+    enum: ['SELF', 'AUTHORIZED'],
+    description: '账户来源：SELF 自开 / AUTHORIZED 第三方代理商授权',
+  })
+  accountSource!: 'SELF' | 'AUTHORIZED'
+
   @ApiProperty({ type: 'string', nullable: true, description: '开户主体（营业执照中文名称）' })
   companyCn!: string | null
 
@@ -53,8 +60,12 @@ export class AdAccountDto {
   })
   availableBalance!: string | null
 
-  @ApiProperty({ type: 'string', description: '最近 7 个完整自然日的日均消耗（USD）' })
-  sevenDayAverage!: string
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    description: '最近 7 个完整自然日的日均消耗（USD）；授权账户不提供日消耗，返回 null',
+  })
+  sevenDayAverage!: string | null
 
   @ApiProperty({
     type: 'integer',
@@ -75,8 +86,13 @@ export class AdAccountDto {
   @ApiProperty({ type: 'string', format: 'date-time', description: '账户创建时间' })
   createdTime!: string
 
-  @ApiProperty({ type: 'string', format: 'date-time', description: '猎豹侧数据刷新时间' })
-  vendorUpdatedAt!: string
+  @ApiProperty({
+    type: 'string',
+    format: 'date-time',
+    nullable: true,
+    description: '猎豹侧数据刷新时间；授权账户没有该字段',
+  })
+  vendorUpdatedAt!: string | null
 
   @ApiProperty({ type: 'string', format: 'date-time', description: '本系统最近一次同步时间' })
   lastSyncedAt!: string
@@ -157,4 +173,7 @@ export class SyncAdAccountsResultDto {
 
   @ApiProperty({ type: 'boolean', description: '本轮日消耗是否成功拉取；false 表示只更新了账户主数据' })
   spendSynced!: boolean
+
+  @ApiProperty({ type: 'boolean', description: '本轮授权账户是否成功拉取；false 表示保留授权户上次快照' })
+  authorizedSynced!: boolean
 }
