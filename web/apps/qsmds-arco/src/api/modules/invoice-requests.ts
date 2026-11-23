@@ -1,5 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import type {
+  InvoiceRequestBatchSettleDto,
+  InvoiceRequestBatchSettleResultDto,
   InvoiceRequestCancelDto,
   InvoiceRequestDto,
   InvoiceRequestNotifyDto,
@@ -46,6 +48,9 @@ export function createInvoiceRequestsApi(client: AxiosInstance) {
       client.post<InvoiceRequestDto>(`${path(id)}/cancellations`, data, write(signal)),
     settle: (id: string, data: InvoiceRequestSettleDto, signal: AbortSignal) =>
       client.post<InvoiceRequestDto>(`${path(id)}/settlements`, data, write(signal)),
+    // 批量结算整批共用一份汇率，单事务全有或全无；重复提交由服务端状态机裁决。
+    batchSettle: (data: InvoiceRequestBatchSettleDto, signal: AbortSignal) =>
+      client.post<InvoiceRequestBatchSettleResultDto>('invoice-requests/batch-settlements', data, write(signal)),
     uploadDocument: (id: string, file: File, signal: AbortSignal) => {
       const body = new FormData()
       // 服务端的流式解析器必须先拿到类型再拿到文件流，顺序不能调整。

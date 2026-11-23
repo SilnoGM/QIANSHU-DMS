@@ -1752,6 +1752,7 @@
       "apps/qsmds-arco/src/views/workbenches/containers/shipment-candidate-card.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/shipment-picker.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/swap-shipment-picker.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/batch-settle-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/review-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
@@ -2726,6 +2727,7 @@
       "apps/qsmds-arco/src/views/component_library/business/product-selector.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
     ]
@@ -4258,6 +4260,7 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
       "packages/components/src/basic/input/index.vue",
       "packages/components/src/basic/tag/tag/Tag.vue",

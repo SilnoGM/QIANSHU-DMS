@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import type { InvoiceBatchSettleRow } from '../invoice-batch-settle.logic'
 import type { InvoiceRequestStatusValue } from '../invoice-status.logic'
 import type { InvoiceRequestListItemDto } from '@/api/generated/types.gen'
 import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import exchangeRatesApi from '@/api/modules/exchange-rates'
 import invoiceRequestsApi from '@/api/modules/invoice-requests'
@@ -22,12 +23,14 @@ import { useAppAuth } from '@/composables/app/auth'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { formatExchangeRate } from '@/utils/exchange-rate'
 import { IMAGE_ONLY_ACCEPT, UPLOAD_POLICIES, validateUploadFile } from '@/utils/upload-policy'
+import { canBatchSettleRow, INVOICE_BATCH_SETTLE_LIMIT, isBatchSettleSelectionDisabled, reconcileBatchSettleSelection, resolveBatchSettlePageSelection, resolveBatchSettleSelectedPageIds } from '../invoice-batch-settle.logic'
 import { buildCompanyLookupUrl, isCompanyLookupTaxId } from '../invoice-company-lookup.logic'
 import { calculateEstimatedCostCny } from '../invoice-cost.logic'
 import { buildInvoiceDocumentFilename, buildInvoiceDocumentItems, formatInvoiceDocumentFileSize } from '../invoice-document.logic'
 import { resolveInvoiceFailureKey } from '../invoice-failure.logic'
 import InvoiceRequestDetailDrawer from '../invoice-request-detail-drawer.vue'
 import { isSettleable, resolveSettleRemaining, statusSwitchItems, statusTagClass } from '../invoice-status.logic'
+import BatchSettleModal from './batch-settle-modal.vue'
 import InvoiceRequestReviewModal from './review-modal.vue'
 
 /**
@@ -43,6 +46,7 @@ const { auth } = useAppAuth()
 const currencyCatalog = useCurrencyCatalog()
 const toast = useQsToast()
 const canReview = computed(() => auth('invoice-requests:review'))
+const canSettle = computed(() => auth('invoice-requests:settle'))
 
 const status = ref<'ALL' | InvoiceRequestStatusValue>('PENDING_REVIEW')
 const search = ref('')
@@ -74,6 +78,19 @@ const rate = ref<{ id: string, version: number, foreignUnitsPerCny: string } | n
 const reviewOpen = ref(false)
 const reviewId = ref<string | null>(null)
 
+/** 批量结算：跨页选择存整行快照，上限与服务端一致；弹窗打开时单独取一次汇率。 */
+const tableRef = ref<{
+  clearSelection: () => void
+  deselectRows: (ids: readonly string[]) => void
+  selectRows: (ids: readonly string[], limit?: number) => void
+} | null>(null)
+const batchSelected = shallowRef<ReadonlyMap<string, InvoiceBatchSettleRow>>(new Map())
+const batchSettleOpen = ref(false)
+const batchRate = ref<{ id: string, version: number, foreignUnitsPerCny: string } | null>(null)
+const batchRateLoading = ref(false)
+const selectedCount = computed(() => batchSelected.value.size)
+const batchSettleRows = computed(() => [...batchSelected.value.values()].slice(0, INVOICE_BATCH_SETTLE_LIMIT))
+
 const ACTION_TITLE_KEYS: Readonly<Record<ActionMode, string>> = {
   return: 'invoiceRequest.action.return',
   cancel: 'invoiceRequest.action.cancel',
@@ -101,6 +118,87 @@ function settleHint(row: InvoiceRequestListItemDto): string {
 /** 行内「结算入账」按钮的可用性：与结算弹窗同口径，未满 120 小时禁用并用 tooltip 展示等待时间。 */
 function canSettleRow(row: InvoiceRequestListItemDto): boolean {
   return row.documentUploadedAt !== null && isSettleable(row.documentUploadedAt, now.value)
+}
+
+const batchSelectionDisabled = computed(() => (row: InvoiceRequestListItemDto) =>
+  isBatchSettleSelectionDisabled(batchSelected.value, row, now.value))
+const batchPagePlan = computed(() => resolveBatchSettlePageSelection(items.value, batchSelected.value, now.value))
+const batchPageSelectableCount = computed(() => batchPagePlan.value.count)
+const batchPageSelectedIds = computed(() => resolveBatchSettleSelectedPageIds(items.value, batchSelected.value))
+const batchPageSelectedCount = computed(() => batchPageSelectedIds.value.length)
+
+function clearBatchSelection(): void {
+  batchSelected.value = new Map()
+  tableRef.value?.clearSelection()
+}
+
+function selectBatchPage(): void {
+  if (batchPageSelectableCount.value === 0) {
+    return
+  }
+  tableRef.value?.selectRows(batchPagePlan.value.ids, INVOICE_BATCH_SETTLE_LIMIT)
+}
+
+function deselectBatchPage(): void {
+  if (batchPageSelectedCount.value === 0) {
+    return
+  }
+  tableRef.value?.deselectRows(batchPageSelectedIds.value)
+}
+
+function handleBatchSelectionChange(
+  _rows: InvoiceRequestListItemDto[],
+  rowSelection: Record<string, boolean>,
+): void {
+  const result = reconcileBatchSettleSelection(batchSelected.value, items.value, rowSelection)
+  if (result.limited) {
+    toast.warning(t('invoiceRequest.batch.limitReached', { limit: INVOICE_BATCH_SETTLE_LIMIT }))
+    clearBatchSelection()
+    return
+  }
+  batchSelected.value = result.selected
+}
+
+async function loadBatchRate(): Promise<void> {
+  batchRate.value = null
+  batchRateLoading.value = true
+  try {
+    const response = await exchangeRatesApi.list(new AbortController().signal)
+    const current = response.data.items.find(entry => entry.currency.code === 'TWD')?.currentRate
+    if (current !== undefined && current !== null) {
+      batchRate.value = { id: current.id, version: current.version, foreignUnitsPerCny: current.foreignUnitsPerCny }
+    }
+  }
+  catch {
+    batchRate.value = null
+  }
+  finally {
+    batchRateLoading.value = false
+  }
+}
+
+/**
+ * 打开批量结算：先剔除已不再可结算的已选行（例如别处已上传换状态或未满 120 小时），
+ * 有不合法项就清空重选，避免带着过期快照进入确认弹窗。
+ */
+async function openBatchSettle(): Promise<void> {
+  const eligible = [...batchSelected.value.values()].filter(row => canBatchSettleRow(row, now.value))
+  const removed = batchSelected.value.size - eligible.length
+  if (removed > 0) {
+    clearBatchSelection()
+    toast.warning(t('invoiceRequest.batch.filtered', { count: removed }))
+    return
+  }
+  if (eligible.length === 0) {
+    return
+  }
+  await loadBatchRate()
+  batchSettleOpen.value = true
+}
+
+function handleBatchCompleted(): void {
+  clearBatchSelection()
+  void load()
 }
 
 const columns = computed<QsGenericTableColumn<InvoiceRequestListItemDto>[]>(() => [
@@ -158,6 +256,7 @@ async function load(): Promise<void> {
 
 function changeStatus(): void {
   page.value = 1
+  clearBatchSelection()
   void load()
 }
 
@@ -353,7 +452,32 @@ onMounted(load)
 
 <template>
   <div class="min-w-0">
-    <FaPageHeader :title="t('invoiceRequest.approval.title')" :description="t('invoiceRequest.approval.description')" />
+    <FaPageHeader :title="t('invoiceRequest.approval.title')" :description="t('invoiceRequest.approval.description')">
+      <span v-if="canSettle" class="gap-2 hidden md:inline-flex">
+        <FaButton
+          type="button"
+          variant="outline"
+          class="min-h-11 sm:min-h-9"
+          :disabled="selectedCount === 0 || batchRateLoading"
+          :loading="batchRateLoading"
+          :aria-label="t('invoiceRequest.batch.action')"
+          @click="openBatchSettle"
+        >
+          <FaIcon name="i-lucide:list-checks" aria-hidden="true" />
+          {{ t('invoiceRequest.batch.action') }}<span v-if="selectedCount > 0">（{{ selectedCount }}/{{ INVOICE_BATCH_SETTLE_LIMIT }}）</span>
+        </FaButton>
+        <FaButton
+          v-if="selectedCount > 0"
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="min-h-11 sm:min-h-9"
+          @click="clearBatchSelection"
+        >
+          {{ t('invoiceRequest.batch.clearSelection') }}
+        </FaButton>
+      </span>
+    </FaPageHeader>
 
     <FaPageMain v-if="!canReview">
       <FaEmpty icon="i-lucide:shield-alert" :title="t('invoiceRequest.list.noPermission')" class="py-12" />
@@ -361,6 +485,7 @@ onMounted(load)
     <FaPageMain v-else class="min-w-0">
       <QsStatusSwitchToolbar v-model="status" :items="toolbarItems" :aria-label="t('invoiceRequest.approval.title')" class="mb-4" @update:model-value="changeStatus" />
       <QsGenericTable
+        ref="tableRef"
         v-model:page="page"
         v-model:page-size="pageSize"
         v-model:search="search"
@@ -376,10 +501,42 @@ onMounted(load)
         :empty-title="t('invoiceRequest.list.empty')"
         :empty-description="t('invoiceRequest.list.emptyDescription')"
         :action-column="{ fixed: 'right', minWidth: 176, width: 176 }"
+        :selectable="canSettle"
+        :selection-disabled="batchSelectionDisabled"
         @pagination-change="load"
         @search="load"
         @retry="load"
+        @selection-change="handleBatchSelectionChange"
       >
+        <template #query-leading>
+          <span v-if="canSettle" class="gap-2 hidden md:inline-flex">
+            <FaButton
+              type="button"
+              variant="outline"
+              size="sm"
+              class="min-h-11 sm:min-h-9"
+              :disabled="loading || batchPageSelectableCount === 0"
+              :title="t('invoiceRequest.batch.selectPageHint')"
+              @click="selectBatchPage"
+            >
+              <FaIcon name="i-lucide:list-checks" aria-hidden="true" />
+              {{ t('invoiceRequest.batch.selectPage', { count: batchPageSelectableCount }) }}
+            </FaButton>
+            <FaButton
+              v-if="batchPageSelectedCount > 0"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-9"
+              :disabled="loading"
+              :title="t('invoiceRequest.batch.deselectPageHint')"
+              @click="deselectBatchPage"
+            >
+              <FaIcon name="i-lucide:x" aria-hidden="true" />
+              {{ t('invoiceRequest.batch.deselectPage', { count: batchPageSelectedCount }) }}
+            </FaButton>
+          </span>
+        </template>
         <template #cell-invoiceNo="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="qs-type-data-emphasis break-all whitespace-normal">
@@ -674,6 +831,7 @@ onMounted(load)
 
     <InvoiceRequestDetailDrawer :id="detailId" v-model="detailOpen" @closed="closeDetail" />
     <InvoiceRequestReviewModal :id="reviewId" v-model="reviewOpen" @completed="load" />
+    <BatchSettleModal v-model="batchSettleOpen" :rows="batchSettleRows" :rate="batchRate" @completed="handleBatchCompleted" />
 
     <QsGenericModal
       v-model="actionOpen"

@@ -10,6 +10,7 @@ const INVOICE_FAILURE_KEYS: Readonly<Record<string, string>> = {
   INVOICE_REQUEST_OWNER_ONLY: 'invoiceRequest.error.ownerOnly',
   INVOICE_REQUEST_DUPLICATE_SUSPECTED: 'invoiceRequest.error.duplicate',
   INVOICE_REQUEST_SETTLE_WAIT_PERIOD: 'invoiceRequest.error.settleWait',
+  INVOICE_REQUEST_BATCH_SETTLE_INVALID: 'invoiceRequest.error.batchSettleInvalid',
   INVOICE_REQUEST_TOTAL_MISMATCH: 'invoiceRequest.error.totalTolerance',
   INVOICE_REQUEST_DOCUMENT_REQUIRED: 'invoiceRequest.error.documentRequired',
   INVOICE_REQUEST_DOCUMENT_EXISTS: 'invoiceRequest.error.documentExists',
