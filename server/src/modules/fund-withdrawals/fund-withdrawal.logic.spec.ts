@@ -1,11 +1,21 @@
 import {
   buildFundWithdrawalProofFilename,
+  buildWithdrawalReviewUrl,
   formatWithdrawalFilenameAmount,
   normalizeFundWithdrawalAmount,
   requireFundWithdrawalRequestKey,
 } from './fund-withdrawal.logic'
 
 describe('fund withdrawal logic', () => {
+  it('builds the hash-route review link from the app origin', () => {
+    expect(buildWithdrawalReviewUrl(
+      'https://dms.example.com',
+      '6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
+    )).toBe(
+      'https://dms.example.com/#/qs-finance/fund-accounts/withdrawal-approvals/6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
+    )
+  })
+
   it('normalizes positive two-decimal amounts and rejects invalid values', () => {
     expect(normalizeFundWithdrawalAmount('100')).toBe('100.00')
     expect(normalizeFundWithdrawalAmount('100.5')).toBe('100.50')

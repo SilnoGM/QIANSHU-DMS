@@ -14,6 +14,7 @@ import { aliasLookupKey } from '../../product-aliases/product-alias.logic'
 import { ProductAliasService, noopProductAliasService } from '../../product-aliases/product-alias.service'
 import { DictionaryLookupService, type StoredDictionaryValueResolution } from '../../dictionaries/dictionary-lookup.service'
 import { buildShippingMarkSuffix, formatShippingMark, normalizeShippingMarkLabel, STOCK_SHIPPING_MARK_SUFFIX } from '../shipping-mark-label'
+import { resolveExcludedProductIds } from '../product-shipping-mark-exclusion'
 import { purchaseOrderPayableScopeWhere } from '../purchase-order-access'
 import type { PurchasePayableBatchOrdersDto, PurchasePayableBatchSuppliersDto, PurchasePayableListQueryDto, PurchasePayableOrderDto, PurchasePayableOrderPageDto } from './purchase-payable.dto'
 import { payableFailure, summarizePayable } from './purchase-payable.logic'
@@ -112,6 +113,7 @@ export class PurchasePayableQueryService {
           recipientsByOrderId.get(row.id) ?? null,
           aliasContext.personalByOrder.get(row.id) ?? new Map(),
           aliasContext.defaultAliases,
+          aliasContext.excludedProductIds,
         )),
       }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
@@ -144,16 +146,18 @@ export class PurchasePayableQueryService {
       await this.recipients.getForOrder(tx, row),
       aliasContext.personalByOrder.get(row.id) ?? new Map(),
       aliasContext.defaultAliases,
+      aliasContext.excludedProductIds,
     )
   }
 
-  /** 批量读取个人别名与产品默认别名，避免按订单/产品 N+1 查询。 */
+  /** 批量读取个人别名、产品默认别名与唛头排除集合，避免按订单/产品 N+1 查询。 */
   private async loadAliasContext(
     tx: Prisma.TransactionClient,
     rows: readonly Order[],
   ): Promise<{
     readonly defaultAliases: ReadonlyMap<string, string>
     readonly personalByOrder: ReadonlyMap<string, ReadonlyMap<string, string>>
+    readonly excludedProductIds: ReadonlySet<string>
   }> {
     const productIds = [...new Set(rows.flatMap(row => row.parts.flatMap(part => (
       part.items.flatMap(item => item.line.productId === null ? [] : [item.line.productId])
@@ -168,9 +172,10 @@ export class PurchasePayableQueryService {
       })))
       return [...orderProductIds].map(productId => ({ userId: issuerUserId, productId }))
     })
-    const [resolved, defaultAliases] = await Promise.all([
+    const [resolved, defaultAliases, excludedProductIds] = await Promise.all([
       this.aliases.resolveAliases(requests, tx),
       this.aliases.resolveDefaults(productIds, tx),
+      resolveExcludedProductIds(tx, productIds),
     ])
     const personalByOrder = new Map<string, Map<string, string>>()
     for (const row of rows) {
@@ -193,7 +198,7 @@ export class PurchasePayableQueryService {
       }
       personalByOrder.set(row.id, aliases)
     }
-    return { defaultAliases, personalByOrder }
+    return { defaultAliases, personalByOrder, excludedProductIds }
   }
 
   private map(
@@ -202,6 +207,7 @@ export class PurchasePayableQueryService {
     paymentRecipientProfile: PaymentRecipientProfileDto | null,
     aliasesByProduct: ReadonlyMap<string, string>,
     defaultAliases: ReadonlyMap<string, string>,
+    excludedProductIds: ReadonlySet<string>,
   ): PurchasePayableOrderDto {
     const payables = [...row.payables].sort((a, b) => a.paymentType === b.paymentType ? 0 : a.paymentType === 'DEPOSIT' ? -1 : 1)
     const owner = payables[0]
@@ -230,6 +236,7 @@ export class PurchasePayableQueryService {
         products,
         aliases: aliasesByProduct,
         defaultAliases,
+        excludedProductIds,
       }))]
     }).slice(0, SHIPPING_MARK_LIMIT)
     return {
@@ -319,6 +326,7 @@ export class PurchasePayableQueryService {
           recipientsByOrderId.get(row.id) ?? null,
           aliasContext.personalByOrder.get(row.id) ?? new Map(),
           aliasContext.defaultAliases,
+          aliasContext.excludedProductIds,
         )),
         total,
         page,

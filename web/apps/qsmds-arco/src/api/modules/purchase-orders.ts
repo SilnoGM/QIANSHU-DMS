@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreatePurchaseOrderRequestDto,
   FactoryShipmentResultDto,
+  PriceQuotationSheetRequestDto,
   PurchaseOrderAmountRevisionRequestDto,
   PurchaseOrderDetailDto,
   PurchaseOrderDocumentAttachRequestDto,
@@ -83,6 +84,13 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
     generateOrderImageDraft: (purchaseOrderId: string, data: PurchaseOrderGenerateImageDraftRequestDto, signal: AbortSignal) =>
       client.post<PurchaseOrderImageDraftDto>(`${orderPath(purchaseOrderId)}/order-image-drafts`, data, {
         errorPresentation: 'local',
+        retry: false,
+        signal,
+      }),
+    generatePriceQuotationSheet: (data: PriceQuotationSheetRequestDto, signal: AbortSignal) =>
+      client.post<Blob>('purchase-orders/price-quotation-sheet', data, {
+        errorPresentation: 'local',
+        responseType: 'blob',
         retry: false,
         signal,
       }),

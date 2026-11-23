@@ -98,9 +98,9 @@ test('收款页签按有效实际收款与待审申请统计', () => {
   ]), 1)
   assert.equal(countValidSalesOrderPayments([]), 0)
 
-  const counts = { PENDING_REVIEW: 1, APPROVED: 2, REJECTED: 1, VOIDED: 1 }
-  assert.equal(countPendingReceiptRequests(counts), 1)
-  assert.equal(countTotalReceiptRequests(counts), 5)
+  const counts = { PENDING_REVIEW: 1, PENDING_CONFIRM: 2, PENDING_POSTING: 3, APPROVED: 2, REJECTED: 1, VOIDED: 1 }
+  assert.equal(countPendingReceiptRequests(counts), 6)
+  assert.equal(countTotalReceiptRequests(counts), 10)
 })
 
 test('货物签收请求接收一个有效签收单媒体 ID 与选填备注', () => {

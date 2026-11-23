@@ -26,6 +26,8 @@ import {
   type StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
 import { buildShippingMarkSuffix } from './shipping-mark-label'
+import { resolveExcludedProductIds } from './product-shipping-mark-exclusion'
+import { readPurchaseOrderAmountRevisionLineChanges } from './purchase-order-amount-revision'
 import {
   formatPurchaseOrderAmountUnits,
   normalizePurchaseOrderSnapshotAmount,
@@ -216,6 +218,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       oldDepositDueAmount: true, oldBalanceDueAmount: true,
       newLineSubtotalAmount: true, newPurchaseTotalAmount: true,
       newDepositDueAmount: true, newBalanceDueAmount: true,
+      lineChanges: true,
       changedBy: { select: PERSON_REFERENCE_SELECT },
     },
   },
@@ -996,6 +999,10 @@ export class PurchaseOrderQueryService {
       catalogProductIds,
       transaction ?? this.prisma,
     )
+    const excludedProductIds = await resolveExcludedProductIds(
+      transaction ?? this.prisma,
+      catalogProductIds,
+    )
     return {
       ...summary,
       paymentRecipientProfile: await this.recipients.getForOrder(transaction ?? this.prisma, row),
@@ -1024,6 +1031,7 @@ export class PurchaseOrderQueryService {
               products,
               aliases: aliasesByProduct,
               defaultAliases: defaultAliasesByProduct,
+              excludedProductIds,
             }),
           }),
           shippedAt: part.shippedAt?.toISOString() ?? null,
@@ -1125,6 +1133,7 @@ export class PurchaseOrderQueryService {
         newPurchaseTotalAmount: decimalToFixed4(revision.newPurchaseTotalAmount),
         newDepositDueAmount: decimalToFixed4(revision.newDepositDueAmount),
         newBalanceDueAmount: decimalToFixed4(revision.newBalanceDueAmount),
+        lineChanges: readPurchaseOrderAmountRevisionLineChanges(revision.lineChanges),
         reason: revision.reason,
         changedBy: actor(revision.changedBy),
         changedAt: revision.changedAt.toISOString(),

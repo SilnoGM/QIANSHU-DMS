@@ -1,4 +1,5 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
+import { adAccountBadgeCounts } from '../../store/modules/app/ad-account-badge-counts'
 import { proxyNodeBadgeCounts } from '../../store/modules/app/proxy-node-badge-counts'
 import FundAccountManagement from './fund-account.management'
 import {
@@ -348,6 +349,18 @@ export const purchaseTransportWorkbench: RouteRecordMainRaw = {
         singleMenu: true,
         auth: 'proxy-nodes:manage',
         badge: [() => proxyNodeBadgeCounts.all.value, 'destructive'],
+      },
+    },
+    {
+      path: '/qs-purchase-transport/leopard-ad-accounts',
+      name: 'qsPurchaseTransportLeopardAdAccounts',
+      component: () => import('@/views/workbenches/leopard-ad-accounts/index.vue'),
+      meta: {
+        title: '猎豹广告户管理',
+        icon: 'qs-ad-account',
+        singleMenu: true,
+        auth: 'ad-accounts:manage',
+        badge: [() => adAccountBadgeCounts.all.value, 'destructive'],
       },
     },
   ],

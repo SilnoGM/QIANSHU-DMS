@@ -26,7 +26,7 @@
 3. 公司号已加入财务群、运营群；两个群都已保存到通讯录，否则 `fetchContactsList` 同步不到。
 4. 财务群、运营群标记为 `internalOnly = true`，成员均为有权查看金额与客户名称的内部员工。
 5. 审核人、测试员工已添加公司号为好友；非好友不可发送。
-6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`、`NOTIFICATION_MEDIA_URL_SECRET`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）。Token 与签名密钥只放环境变量或密钥服务，不写文档、日志、示例。
+6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`、`NOTIFICATION_MEDIA_URL_SECRET`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）与 `ASSISTANT_SEND_INTERVAL_JITTER_MS`（默认 2000，实际冷却 3000~5000ms 随机）。Token 与签名密钥只放环境变量或密钥服务，不写文档、日志、示例。
 7. 管理端可以打开「通知中心 > 千树小助理」，账号状态显示 `ONLINE`。
 
 ## 3. 日常检查
@@ -162,7 +162,7 @@
 3. 租约空窗超过 1 分钟：确认 `ASSISTANT_WORKER_ENABLED` 与进程存活。
 4. 检查 `assistant_send_gates` 的 `next_allowed_at`、`lock_owner`、`lock_expires_at`；发送租约到期会自动接管，不要在没有确认发送已停止时手工清锁。
 5. 超时仍为 `SENDING` 的交付会在下一轮按“结果未知”重新排队（`SENDING_RECOVERED`），可能极小概率重复发送；调查时结合上游 `msgId` 与实际收件情况判断。
-6. 积压过多时先停发，避免恢复后集中轰炸；按事件优先级恢复，并通过 `ASSISTANT_MIN_SEND_INTERVAL_MS` 调整全局发送间隔。
+6. 积压过多时先停发，避免恢复后集中轰炸；按事件优先级恢复，并通过 `ASSISTANT_MIN_SEND_INTERVAL_MS` 调整全局发送间隔（需要固定节奏时把 `ASSISTANT_SEND_INTERVAL_JITTER_MS` 设为 `0`）。
 
 ### 9.4 大面积失败
 
@@ -195,5 +195,6 @@
 - 管理员不能查看他人的站内消息；需要排查时只核对聚合数量与事件策略。
 - 保留期清理：每日低峰执行 `pnpm -C server notifications:cleanup`。未归档 180 天、已归档 1 年、交付 90 天；通知只有在没有剩余收件箱条目和交付时才删除。命令输出 `kind=notification_cleanup` 与四类删除计数。
 - 业务扫描：`pnpm -C server notifications:scan`，只在上海时间 09:00–22:00 执行；按 09:05/13:05/17:05/21:05 运行。窗口外输出 `skipped/outside_window`；并发扫描由 advisory lock 跳过。先跑 `--dry-run` 核对静态节点到期与两类日汇总。
+- 看机预约扫描：`pnpm -C server notifications:machine-viewing-scan`，每天上海时间 08:30 后执行，只处理当天仍为 `PENDING_APPOINTMENT` 的预约；通知成功后推进 `APPOINTED`。先跑 `--dry-run` 核对当天待通知数。
 - 静默时段：千树小助理默认 22:00–09:00 不发送 `NORMAL`；`HIGH` 仍可突破。检查策略的 `quietHours` 是否显式覆盖了渠道默认值。
 - 桌面通知：仅桌面端显示开关；由 Web Locks 主标签轮询 `inbox/new`，其他标签通过 BroadcastChannel 同步未读数；页面关闭后不推送。

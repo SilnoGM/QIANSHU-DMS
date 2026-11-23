@@ -6,12 +6,15 @@ import { getApiClientFailureMessage } from '@/api/errors'
 import advertisingRechargesApi from '@/api/modules/advertising-recharges'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import {
   ADVERTISING_RECHARGE_STATUS_FILTER_OPTIONS,
+  advertisingRechargeProofUrl,
+  advertisingRechargeQrUrl,
   advertisingRechargeStatusMeta,
 } from '../network-ads/advertising-recharges/logic'
 import { sumAdvertisingRechargeCounts } from '../network-ads/advertising-recharges/recharge-form'
@@ -45,14 +48,41 @@ const toolbarItems = computed(() => ADVERTISING_RECHARGE_STATUS_FILTER_OPTIONS.m
 })))
 const columns = computed<QsGenericTableColumn<AdvertisingRechargeDto>[]>(() => [
   { id: 'rechargeNo', accessorKey: 'rechargeNo', title: t('advertisingRecharge.field.rechargeNo'), minWidth: 170, fixed: 'left', cellClass: 'qs-type-data-emphasis', mobileCellClass: 'qs-type-data-emphasis' },
-  { id: 'applicant', accessorFn: row => row.applicant.name, title: t('advertisingRecharge.field.applicant'), minWidth: 140 },
   { id: 'adAccountName', accessorKey: 'adAccountName', title: t('advertisingRecharge.field.adAccountName'), minWidth: 180 },
   { id: 'adAccountNo', accessorKey: 'adAccountNo', title: t('advertisingRecharge.field.adAccountNo'), minWidth: 160 },
   { id: 'rechargeAmount', accessorKey: 'rechargeAmount', title: t('advertisingRecharge.field.rechargeAmount'), minWidth: 150, align: 'right' },
+  { id: 'paymentQr', title: t('advertisingRecharge.field.paymentQr'), minWidth: 104 },
+  { id: 'paymentProof', title: t('advertisingRecharge.field.paymentProof'), minWidth: 104 },
   { id: 'paymentAmount', accessorFn: row => row.payment?.amountCny ?? '', title: t('advertisingRecharge.field.paymentAmount'), minWidth: 150, align: 'right' },
   { id: 'status', accessorKey: 'status', title: t('advertisingRecharge.field.status'), minWidth: 110 },
-  { id: 'submittedAt', accessorKey: 'submittedAt', title: t('advertisingRecharge.field.submittedAt'), minWidth: 185 },
+  // 申请人 + 提交时间合并为最后一列：上面申请人、下面提交时间。
+  { id: 'applicantSubmittedAt', accessorFn: row => row.applicant.name, title: t('advertisingRecharge.field.applicantAndSubmittedAt'), minWidth: 185 },
 ])
+
+/** 财务侧列表缩略图：走全量内容路由，仅持 read 权限可见。 */
+function qrCellItems(row: AdvertisingRechargeDto) {
+  const qr = row.paymentQr
+
+  if (!qr) {
+    return []
+  }
+
+  const src = advertisingRechargeQrUrl(row.id, 'finance')
+
+  return [{ alt: t('advertisingRecharge.field.paymentQr'), key: qr.mediaAssetId, src, previewSrc: src, tooltip: qr.fileName }]
+}
+
+function proofCellItems(row: AdvertisingRechargeDto) {
+  const proof = row.payment?.proof ?? null
+
+  if (!proof) {
+    return []
+  }
+
+  const src = advertisingRechargeProofUrl(row.id, 'finance')
+
+  return [{ alt: t('advertisingRecharge.field.paymentProof'), key: proof.mediaAssetId, src, previewSrc: src, tooltip: proof.fileName }]
+}
 
 async function load(): Promise<void> {
   controller?.abort()
@@ -174,8 +204,17 @@ onBeforeUnmount(() => {
         @pagination-change="load"
         @retry="load"
       >
-        <template #cell-applicant="{ row }">
-          <QsPersonDisplay :display-name="row.original.applicant.name" size="md" :avatar-url="row.original.applicant.avatarUrl" />
+        <template #cell-applicantSubmittedAt="{ row }">
+          <div class="flex flex-col gap-0.5">
+            <QsPersonDisplay
+              :display-name="row.original.applicant.name"
+              size="sm"
+              :avatar-url="row.original.applicant.avatarUrl"
+            />
+            <span class="qs-type-meta text-muted-foreground tabular-nums">
+              <DateTimeDisplay :value="row.original.submittedAt" format="datetime" />
+            </span>
+          </div>
         </template>
 
         <template #cell-rechargeAmount="{ row }">
@@ -184,6 +223,28 @@ onBeforeUnmount(() => {
             :currency="row.original.rechargeCurrency"
             :currencies="currencyCatalog.currencies.value"
           />
+        </template>
+
+        <template #cell-paymentQr="{ row }">
+          <ImageGroup
+            v-if="row.original.paymentQr"
+            :items="qrCellItems(row.original)"
+            :max-count="1"
+            size="sm"
+            tooltip-mode="native"
+          />
+          <span v-else class="text-muted-foreground">—</span>
+        </template>
+
+        <template #cell-paymentProof="{ row }">
+          <ImageGroup
+            v-if="row.original.payment?.proof"
+            :items="proofCellItems(row.original)"
+            :max-count="1"
+            size="sm"
+            tooltip-mode="native"
+          />
+          <span v-else class="text-muted-foreground">—</span>
         </template>
 
         <template #cell-paymentAmount="{ row }">
@@ -200,10 +261,6 @@ onBeforeUnmount(() => {
           <span class="qs-type-tag px-2 py-0.5 border rounded-md" :class="advertisingRechargeStatusMeta(row.original.status).tagClass">
             {{ t(advertisingRechargeStatusMeta(row.original.status).labelKey) }}
           </span>
-        </template>
-
-        <template #cell-submittedAt="{ row }">
-          <DateTimeDisplay :value="row.original.submittedAt" format="datetime" />
         </template>
 
         <template #actions="{ row }">

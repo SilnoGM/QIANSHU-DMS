@@ -22,8 +22,11 @@ import {
 } from '../numbering/numbering.errors'
 import { noopSystemNotifications } from '../notifications/noop-system-notification'
 import { SystemNotificationService } from '../notifications/system-notification.service'
+import { ProductAliasService, noopProductAliasService } from '../product-aliases/product-alias.service'
+import { buildShippingMarkProductBlock } from '../purchase-orders/shipping-mark-label'
 import { normalizeSalesOrderAddress } from './domain/sales-order-address'
 import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
+import { requireSalesOrderRegionPath } from './domain/sales-order-region'
 import {
   isCanonicalSalesOrderActorId,
   normalizeSalesOrderCreateCommand,
@@ -83,6 +86,8 @@ interface CatalogProductSnapshot {
   readonly name: string
   readonly attributes: Prisma.InputJsonValue
   readonly standardUnitPriceAmount: string | null
+  readonly defaultAlias: string | null
+  readonly excludeFromShippingMark: boolean
 }
 
 interface EffectiveCreateDependencies {
@@ -176,33 +181,6 @@ function normalizeAttributes(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue
 }
 
-function requireRegionPath(
-  rows: readonly RegionSnapshot[],
-  command: NormalizedSalesOrderCreateCommand,
-): Pick<
-  EffectiveCreateDependencies,
-  'countryRegion' | 'provinceState' | 'city'
-> {
-  const byId = new Map(rows.map(row => [row.id, row]))
-  const countryRegion = byId.get(command.customer.countryRegionId)
-  const provinceState = byId.get(command.customer.provinceStateId)
-  const city = byId.get(command.customer.cityId)
-  if (
-    countryRegion?.level !== 'COUNTRY_REGION'
-    || countryRegion.parentId !== null
-    || provinceState?.level !== 'PROVINCE_STATE'
-    || provinceState.parentId !== countryRegion.id
-    || city?.level !== 'CITY'
-    || city.parentId !== provinceState.id
-  ) {
-    throw dependencyError(
-      'SALES_ORDER_REGION_UNAVAILABLE',
-      '所选客户地区当前不可用或层级无效',
-    )
-  }
-  return { countryRegion, provinceState, city }
-}
-
 function standardPriceFor(
   row: {
     readonly twdSalePriceAmount: { toFixed(decimalPlaces: number): string } | null
@@ -230,6 +208,7 @@ export class SalesOrderCommandService {
     @Inject(SALES_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderCommandServiceDependencies> = {},
     private readonly notifications: SystemNotificationService = noopSystemNotifications,
+    private readonly aliases: ProductAliasService = noopProductAliasService,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -404,6 +383,18 @@ export class SalesOrderCommandService {
           where: { id: trusted.actorUserId },
           select: { displayName: true },
         })
+        const catalogProductIds = [...effective.catalogProductsById.keys()]
+        const salesProducts = this.salesProductsBlock(
+          command,
+          effective.catalogProductsById,
+          catalogProductIds.length === 0
+            ? new Map()
+            : await this.aliases.resolveForIssuer(
+                trusted.actorUserId,
+                catalogProductIds,
+                transaction,
+              ),
+        )
         await this.notifications.publish({
           eventType: 'SALES_ORDER_SUBMITTED',
           source: { type: 'SALES_ORDER', id: created.id },
@@ -421,6 +412,7 @@ export class SalesOrderCommandService {
             issuerName: issuer?.displayName ?? '—',
             customerFbName: command.customer.fbName ?? '',
             customerLineName: command.customer.lineName ?? '',
+            salesProducts,
           },
           // 出单凭证在同一事务内先激活为 READY，这里只传资产与来源键。
           media: [{
@@ -479,7 +471,11 @@ export class SalesOrderCommandService {
         parentId: true,
       },
     })
-    const regionPath = requireRegionPath(regionRows, command)
+    const regionPath = requireSalesOrderRegionPath(regionRows, {
+      countryRegionId: command.customer.countryRegionId,
+      provinceStateId: command.customer.provinceStateId,
+      cityId: command.customer.cityId,
+    })
     // 在读到稳定 UUID 后再次做地址规则，确保重复地区不会进入发号阶段。
     normalizeSalesOrderAddress({
       countryRegionName: regionPath.countryRegion.name,
@@ -507,6 +503,8 @@ export class SalesOrderCommandService {
             attributes: true,
             twdSalePriceAmount: true,
             myrSalePriceAmount: true,
+            defaultAlias: true,
+            excludeFromShippingMark: true,
           },
         })
     const catalogProductsById = new Map<string, CatalogProductSnapshot>()
@@ -521,6 +519,8 @@ export class SalesOrderCommandService {
         name: product.name,
         attributes: normalizeAttributes(product.attributes),
         standardUnitPriceAmount,
+        defaultAlias: product.defaultAlias,
+        excludeFromShippingMark: product.excludeFromShippingMark,
       })
     }
     if (catalogProductsById.size !== productIds.length) {
@@ -548,6 +548,38 @@ export class SalesOrderCommandService {
       )
     }
     return Object.freeze({ ...regionPath, catalogProductsById })
+  }
+
+  /**
+   * 销售产品名块与唛头后缀同口径：个人别名取销售单出单人（即创建人），
+   * 目录行按产品聚合数量，自定义行独立，补差价整行排除。
+   * 产品名称已在依赖校验阶段确认存在，这里不再重复判空。
+   */
+  private salesProductsBlock(
+    command: NormalizedSalesOrderCreateCommand,
+    catalogProductsById: ReadonlyMap<string, CatalogProductSnapshot>,
+    aliases: ReadonlyMap<string, string>,
+  ): string {
+    const defaultAliases = new Map<string, string>()
+    const excludedProductIds = new Set<string>()
+    for (const product of catalogProductsById.values()) {
+      const alias = product.defaultAlias?.trim()
+      if (alias) defaultAliases.set(product.id, alias)
+      if (product.excludeFromShippingMark) excludedProductIds.add(product.id)
+    }
+    return buildShippingMarkProductBlock({
+      products: command.lines.map(line => ({
+        lineNumber: line.lineNumber,
+        productId: line.lineType === 'CATALOG' ? line.productId : null,
+        productName: line.lineType === 'CATALOG'
+          ? catalogProductsById.get(line.productId)?.name ?? ''
+          : line.name,
+        quantity: line.quantity,
+      })),
+      aliases,
+      defaultAliases,
+      excludedProductIds,
+    })
   }
 
   private lineData(

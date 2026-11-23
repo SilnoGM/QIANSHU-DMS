@@ -5,15 +5,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   createMachineViewingDraft,
+  createMachineViewingEditDraft,
   daysInMonth,
   formatMachineViewingFullTime,
   formatMachineViewingTime,
-
+  isMachineViewingDateToday,
   previewMachineViewingTime,
+  resolveMachineViewingEditDate,
+  resolveMachineViewingEditYear,
   resolveViewingYear,
   shanghaiDateParts,
   toMachineViewingCreatePayload,
+  toMachineViewingUpdatePayload,
   validateMachineViewingDraft,
+  validateMachineViewingEditDraft,
   viewingDayOptions,
 } from '../../src/utils/machine-viewing-schedule'
 
@@ -166,4 +171,72 @@ test('详情抽屉展示含年份的完整日期', () => {
     formatMachineViewingFullTime(translate, { appointmentDate: '2026-11-06', period: 'PM', hour: 3 }),
     '2026-11-06 下午 3点',
   )
+})
+
+function record(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: '9f8e7d6c-5b4a-4392-8170-6f5e4d3c2b1a',
+    appointmentNo: 'MV/20261105-0001',
+    site: 'NEW_TAIPEI_LINKOU',
+    machineType: 'MINI_TILLER',
+    appointmentDate: '2027-01-05',
+    period: 'AM',
+    hour: null,
+    customerName: '陈先生',
+    customerPhone: '0912-345-678',
+    contactPerson: '李华',
+    status: 'PENDING_APPOINTMENT',
+    feedback: null,
+    createdBy: { id: 'c1a2b3c4-d5e6-47f8-9a0b-c1d2e3f4a5b6', name: '测试运营', avatarUrl: null },
+    createdAt: '2026-11-05T02:00:00.000Z',
+    ...overrides,
+  } as never
+}
+
+test('手动标记只认上海今天', () => {
+  assert.equal(isMachineViewingDateToday('2026-11-05', NOW), true)
+  assert.equal(isMachineViewingDateToday('2026-11-04', NOW), false)
+  // UTC 还是 11-05 时，上海已经跨到 11-06。
+  assert.equal(isMachineViewingDateToday('2026-11-06', new Date('2026-11-05T16:30:00.000Z').getTime()), true)
+})
+
+test('编辑草稿从原记录回填，未改月/日时保留原年份', () => {
+  const editDraft = createMachineViewingEditDraft(record())
+  assert.equal(editDraft.month, 1)
+  assert.equal(editDraft.day, 5)
+  assert.equal(editDraft.customerPhone, '0912-345-678')
+
+  assert.equal(resolveMachineViewingEditYear('2027-01-05', 1, 5, NOW), 2027)
+  assert.equal(resolveMachineViewingEditDate('2027-01-05', { month: 1, day: 5 }, NOW), '2027-01-05')
+  // 改过月/日才重新推断：12/31 不早于今天，因此留在 2026。
+  assert.equal(resolveMachineViewingEditYear('2027-01-05', 12, 31, NOW), 2026)
+})
+
+test('编辑校验拒绝早于今天和超出今年/明年的日期', () => {
+  assert.equal(
+    validateMachineViewingEditDraft(draft({ month: 11, day: 4 }), '2026-11-04', NOW).appointmentTime,
+    'machineViewing.validation.appointmentDatePast',
+  )
+  assert.equal(
+    validateMachineViewingEditDraft(draft({ month: 1, day: 5 }), '2028-01-05', NOW).appointmentTime,
+    'machineViewing.validation.appointmentDateOutOfRange',
+  )
+  // 今天仍可编辑并保存。
+  assert.deepEqual(validateMachineViewingEditDraft(draft({ month: 11, day: 5 }), '2026-11-05', NOW), {})
+})
+
+test('编辑载荷发送完整日期并省略空选填字段', () => {
+  const payload = toMachineViewingUpdatePayload(
+    draft({ month: 1, day: 5, hour: null, customerName: ' 陈先生 ', customerPhone: '  ' }),
+    '2027-01-05',
+    NOW,
+  )
+  assert.deepEqual(payload, {
+    site: 'NEW_TAIPEI_LINKOU',
+    machineType: 'MINI_TILLER',
+    appointmentDate: '2027-01-05',
+    period: 'PM',
+    customerName: '陈先生',
+    contactPerson: '李华',
+  })
 })

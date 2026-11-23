@@ -6,7 +6,12 @@ import { getRequestId, requestIdMiddleware } from '../../infrastructure/http/req
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { MachineViewingController } from './machine-viewing.controller'
-import type { CreateMachineViewingDto, MachineViewingDto } from './machine-viewing.dto'
+import type {
+  CreateMachineViewingDto,
+  MachineViewingDto,
+  MachineViewingStatusTransitionDto,
+  UpdateMachineViewingDto,
+} from './machine-viewing.dto'
 import type { MachineViewingQueryService } from './machine-viewing-query.service'
 import type { MachineViewingService } from './machine-viewing.service'
 
@@ -72,6 +77,19 @@ describe('MachineViewingController', () => {
     expect(permissionsOf('list')).toEqual(['machine-viewings:read'])
   })
 
+  it('returns status counts under machine-viewings:read', async () => {
+    const counts = [{ value: 'ALL' as const, count: 1 }]
+    const queries = { statusCounts: jest.fn().mockResolvedValue({ statuses: counts }) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      { create: jest.fn() } as unknown as MachineViewingService,
+    )
+
+    await expect(controller.statusCounts({ keyword: '陈先生' }, ACTOR)).resolves.toEqual({ statuses: counts })
+    expect(queries.statusCounts).toHaveBeenCalledWith(ACTOR, { keyword: '陈先生' })
+    expect(permissionsOf('statusCounts')).toEqual(['machine-viewings:read'])
+  })
+
   it('creates under machine-viewings:create only', async () => {
     const input: CreateMachineViewingDto = {
       site: 'TAICHUNG_LONGJING',
@@ -100,5 +118,79 @@ describe('MachineViewingController', () => {
     expect(permissionsOf('create')).toEqual(['machine-viewings:create'])
     expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.create))
       .toBe(HttpStatus.CREATED)
+  })
+
+  it('updates through machine-viewings:update and keeps create separate', async () => {
+    const input: UpdateMachineViewingDto = {
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      customerName: '陈先生',
+      contactPerson: '李华',
+    }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = { update: jest.fn().mockResolvedValue(RESULT) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.update({ id: RESULT.id }, input, request)).resolves.toEqual(RESULT)
+    expect(service.update).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+      input,
+    )
+    expect(permissionsOf('update')).toEqual(['machine-viewings:update'])
+  })
+
+  it('transitions status through machine-viewings:update and returns 200', async () => {
+    const input: MachineViewingStatusTransitionDto = { status: 'APPOINTED' }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = { transition: jest.fn().mockResolvedValue(RESULT) }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.transition({ id: RESULT.id }, input, request)).resolves.toEqual(RESULT)
+    expect(service.transition).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+      input,
+    )
+    expect(permissionsOf('transition')).toEqual(['machine-viewings:update'])
+    expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.transition))
+      .toBe(HttpStatus.OK)
+  })
+
+  it('reads manual notification text and marks it with machine-viewings:update', async () => {
+    const text = { title: '看机预约 MV/20261105-0001', body: '时间：2026-11-05 上午' }
+    const request = createRequest()
+    const queries = { listForActor: jest.fn() }
+    const service = {
+      manualNotificationText: jest.fn().mockResolvedValue(text),
+      markManuallyNotified: jest.fn().mockResolvedValue(RESULT),
+    }
+    const controller = new MachineViewingController(
+      queries as unknown as MachineViewingQueryService,
+      service as unknown as MachineViewingService,
+    )
+
+    await expect(controller.manualNotificationText({ id: RESULT.id }, ACTOR)).resolves.toEqual(text)
+    expect(service.manualNotificationText).toHaveBeenCalledWith(ACTOR, RESULT.id)
+    expect(permissionsOf('manualNotificationText')).toEqual(['machine-viewings:update'])
+
+    await expect(controller.markManuallyNotified({ id: RESULT.id }, request)).resolves.toEqual(RESULT)
+    expect(service.markManuallyNotified).toHaveBeenCalledWith(
+      { actorUserId: ACTOR, requestId: getRequestId(request) },
+      RESULT.id,
+    )
+    expect(permissionsOf('markManuallyNotified')).toEqual(['machine-viewings:update'])
+    expect(new Reflector().get(HTTP_CODE_METADATA, MachineViewingController.prototype.markManuallyNotified))
+      .toBe(HttpStatus.OK)
   })
 })

@@ -38,6 +38,7 @@ export interface ProductQueryRow {
   readonly productHead: ProductHeadRow | null
   readonly productNo: string
   readonly defaultAlias: string | null
+  readonly excludeFromShippingMark: boolean
   readonly status: ProductStatusValue
   readonly supplierValue: string
   readonly sortOrder: number
@@ -88,6 +89,7 @@ export const PRODUCT_RESPONSE_SELECT = {
   productHead: { select: { id: true, name: true } },
   productNo: true,
   defaultAlias: true,
+  excludeFromShippingMark: true,
   status: true,
   supplierValue: true,
   sortOrder: true,
@@ -115,6 +117,7 @@ export interface ProductListItem {
   readonly productHeadName: string | null
   readonly productNo: string
   readonly defaultAlias: string | null
+  readonly excludeFromShippingMark: boolean
   readonly status: ProductStatusValue
   readonly supplier: ProductSupplier | null
   readonly sortOrder: number
@@ -156,6 +159,7 @@ export function mapProductListItem(
     productHeadName: row.productHead?.name ?? null,
     productNo: row.productNo,
     defaultAlias: row.defaultAlias,
+    excludeFromShippingMark: row.excludeFromShippingMark,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),
     sortOrder: row.sortOrder,

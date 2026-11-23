@@ -31,12 +31,40 @@ export interface ShippingMarkLabelSource {
   readonly products: readonly ShippingMarkLabelProduct[]
   readonly aliases: ReadonlyMap<string, string>
   readonly defaultAliases: ReadonlyMap<string, string>
+  /**
+   * 产品级排除集合：命中即不进入唛头后缀。目录行以产品标记为唯一真相源；
+   * 自定义行没有产品记录，只能按名称兜底（见 SUPPLEMENT_PRICE_NAME）。
+   */
+  readonly excludedProductIds: ReadonlySet<string>
 }
+
+/** 只含产品名的部分；销售单提交通知等处不重复出单前缀与客户名。 */
+export type ShippingMarkProductBlockSource = Omit<
+  ShippingMarkLabelSource,
+  'issuerPrefix' | 'customerName'
+>
 
 interface AliasEntry {
   readonly lineNumber: number
   readonly name: string
   quantity: number
+}
+
+/** 自定义产品行没有 products 记录，按补差价占位名称兜底排除。 */
+const SUPPLEMENT_PRICE_NAME = /补差价|補差價/u
+
+function isSupplementPriceName(value: string): boolean {
+  return SUPPLEMENT_PRICE_NAME.test(normalizeShippingMarkLabel(value))
+}
+
+function isExcludedProduct(
+  product: ShippingMarkLabelProduct,
+  excludedProductIds: ReadonlySet<string>,
+): boolean {
+  if (product.productId === null) {
+    return isSupplementPriceName(product.productName)
+  }
+  return excludedProductIds.has(product.productId)
 }
 
 function productNameOf(
@@ -58,17 +86,22 @@ function productNameOf(
 /**
  * 目录产品在同一货件内按 productId 聚合数量；自定义产品每行独立，
  * 因此同名自定义行可以同时出现。排序始终取第一次出现的采购行号。
+ * 被排除的产品整行跳过，不参与数量聚合并让出截断预算。
  */
 function buildAliasEntries(
   products: readonly ShippingMarkLabelProduct[],
   aliases: ReadonlyMap<string, string>,
   defaultAliases: ReadonlyMap<string, string>,
+  excludedProductIds: ReadonlySet<string>,
 ): readonly AliasEntry[] {
   const catalog = new Map<string, AliasEntry>()
   const custom: AliasEntry[] = []
   for (const product of products) {
     if (!Number.isSafeInteger(product.lineNumber) || product.lineNumber < 1
       || !Number.isSafeInteger(product.quantity) || product.quantity < 1) {
+      continue
+    }
+    if (isExcludedProduct(product, excludedProductIds)) {
       continue
     }
     const name = productNameOf(product, aliases, defaultAliases)
@@ -134,6 +167,23 @@ function buildParenthetical(source: ShippingMarkLabelSource): string {
 }
 
 /**
+ * 只拼产品名块（别名优先级、数量聚合、排除与截断与唛头后缀完全一致），
+ * 不含「（出单前缀-客户名）」。销售单提交通知直接复用这一口径。
+ */
+export function buildShippingMarkProductBlock(
+  source: ShippingMarkProductBlockSource,
+): string {
+  return joinAliasItems(
+    buildAliasEntries(
+      source.products,
+      source.aliases,
+      source.defaultAliases,
+      source.excludedProductIds,
+    ).map(aliasItem),
+  )
+}
+
+/**
  * 生成货件级后缀：
  * - SALES_LINKED：`个人别名或默认别名或产品名+…（出单前缀-客户名）`
  * - STOCK：`默认别名或产品名+…（公司囤货采购）`，不读个人别名
@@ -143,18 +193,15 @@ export function buildShippingMarkSuffix(
   source: ShippingMarkLabelSource | null,
 ): string {
   if (purchaseType === 'STOCK') {
-    const items = source === null
-      ? []
-      : buildAliasEntries(source.products, new Map(), source.defaultAliases)
-    return `${joinAliasItems(items.map(aliasItem))}（${STOCK_SHIPPING_MARK_SUFFIX}）`
+    const block = source === null
+      ? ''
+      : buildShippingMarkProductBlock({ ...source, aliases: new Map() })
+    return `${block}（${STOCK_SHIPPING_MARK_SUFFIX}）`
   }
   if (source === null) {
     return ''
   }
-  const block = joinAliasItems(
-    buildAliasEntries(source.products, source.aliases, source.defaultAliases).map(aliasItem),
-  )
-  return `${block}${buildParenthetical(source)}`
+  return `${buildShippingMarkProductBlock(source)}${buildParenthetical(source)}`
 }
 
 /** 括号只包住货件唛头，后缀在括号外；与采购单图片的贴标文案完全一致。 */

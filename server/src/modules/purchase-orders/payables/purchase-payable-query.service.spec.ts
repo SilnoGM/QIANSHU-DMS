@@ -35,6 +35,7 @@ function setup() {
   const tx = {
     purchaseOrder: { findMany: jest.fn().mockResolvedValue([order]), count: jest.fn().mockResolvedValue(5), findUnique: jest.fn().mockResolvedValue(order), findFirst: jest.fn().mockResolvedValue(order) },
     purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue({ purchaseOrder: order }), findFirst: jest.fn().mockResolvedValue({ purchaseOrder: order }) },
+    product: { findMany: jest.fn().mockResolvedValue([]) },
   }
   const prisma = { $transaction: jest.fn((action: (tx: unknown) => Promise<unknown>) => action(tx)) }
   ;(tx.purchaseOrder as Record<string, unknown>).findFirst = tx.purchaseOrder.findUnique

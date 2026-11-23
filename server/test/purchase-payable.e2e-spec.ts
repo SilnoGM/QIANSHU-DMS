@@ -317,6 +317,16 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     expect((await queries.getOrder(group.id)).items[0]).toMatchObject({ status: 'PAID', paidAmount: '3.00' })
   })
 
+  it('keeps the paid deposit payable amount immutable at the database boundary', async () => {
+    const group = await reviewed('3', '7')
+    const deposit = group.items.find(item => item.paymentType === 'DEPOSIT')!
+    await pay(deposit.id)
+    await expectDatabaseConstraint(h.prisma.purchaseOrderPayable.update({
+      where: { id: deposit.id },
+      data: { dueAmount: '4.00', version: { increment: 1 } },
+    }))
+  })
+
   it('rejects an orphan controlled fund posting and leaves balances unchanged', async () => {
     const group = await reviewed()
     const before = await financialFacts(group.id)
@@ -427,12 +437,21 @@ describe('Purchase payables with isolated PostgreSQL', () => {
       newBalance: '16.00',
       reason: '采购价格录入错误',
     })
+    expect(revision.lineChanges).toEqual([
+      expect.objectContaining({
+        lineId: line.id,
+        oldUnitPriceAmount: '10.00',
+        newUnitPriceAmount: '20.00',
+        oldLineTotalAmount: '10.00',
+        newLineTotalAmount: '20.00',
+      }),
+    ])
     expect(await h.prisma.auditEvent.findFirst({
       where: { eventType: 'PURCHASE_ORDER_AMOUNT_REVISED', targetId: orderId },
     })).not.toBeNull()
   })
 
-  it('blocks amount revision while an active payment exists', async () => {
+  it('allows amount revision after the deposit is paid and only updates the balance', async () => {
     const group = await reviewed('3', '7')
     const deposit = group.items.find(item => item.paymentType === 'DEPOSIT')!
     await pay(deposit.id)
@@ -444,10 +463,69 @@ describe('Purchase payables with isolated PostgreSQL', () => {
       where: { id: group.id },
       select: { version: true },
     })
+    const revised = await createReviewMutations(h).reviseAmount(h.context(), group.id, {
+      expectedVersion: order.version,
+      reason: '定金已付后供应商调整尾款',
+      depositDueAmount: '3',
+      lines: [{ lineId: line.id, actualUnitPriceAmount: '20' }],
+    })
+    expect(revised.amounts).toMatchObject({
+      lineSubtotalAmount: '20.00',
+      purchaseTotalAmount: '20.00',
+      depositDueAmount: '3.00',
+      balanceDueAmount: '17.00',
+      paidAmount: '3.00',
+      outstandingAmount: '17.00',
+    })
+    const payables = await h.prisma.purchaseOrderPayable.findMany({
+      where: { purchaseOrderId: group.id },
+      orderBy: { paymentType: 'asc' },
+      select: { paymentType: true, dueAmount: true, version: true },
+    })
+    expect(payables.map(item => [
+      item.paymentType,
+      item.dueAmount.toFixed(2),
+      item.version,
+    ])).toEqual([
+      ['DEPOSIT', '3.00', 2],
+      ['BALANCE', '17.00', 2],
+    ])
+    const revision = await h.prisma.purchaseOrderAmountRevision.findFirstOrThrow({
+      where: { purchaseOrderId: group.id },
+      orderBy: { changedAt: 'desc' },
+    })
+    expect({
+      oldDeposit: revision.oldDepositDueAmount.toFixed(2),
+      newDeposit: revision.newDepositDueAmount.toFixed(2),
+      oldBalance: revision.oldBalanceDueAmount.toFixed(2),
+      newBalance: revision.newBalanceDueAmount.toFixed(2),
+    }).toEqual({
+      oldDeposit: '3.00',
+      newDeposit: '3.00',
+      oldBalance: '7.00',
+      newBalance: '17.00',
+    })
+    expect(revision.lineChanges).toHaveLength(1)
+  })
+
+  it('blocks amount revision after the balance is paid', async () => {
+    const group = await reviewed('3', '7')
+    const deposit = group.items.find(item => item.paymentType === 'DEPOSIT')!
+    const balance = group.items.find(item => item.paymentType === 'BALANCE')!
+    await pay(deposit.id)
+    await pay(balance.id)
+    const line = await h.prisma.purchaseOrderLine.findFirstOrThrow({
+      where: { purchaseOrderId: group.id },
+      select: { id: true },
+    })
+    const order = await h.prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: group.id },
+      select: { version: true },
+    })
     await expect(createReviewMutations(h).reviseAmount(h.context(), group.id, {
       expectedVersion: order.version,
-      reason: '有效付款存在时不允许改价',
-      depositDueAmount: '4',
+      reason: '尾款已付时不允许改价',
+      depositDueAmount: '3',
       lines: [{ lineId: line.id, actualUnitPriceAmount: '20' }],
     })).rejects.toMatchObject({
       code: 'PURCHASE_ORDER_AMOUNT_REVISION_HAS_PAYMENTS',

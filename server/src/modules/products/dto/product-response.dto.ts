@@ -130,6 +130,9 @@ export class ProductListItemDto {
   @ApiProperty({ type: 'string', nullable: true, maxLength: 36 })
   readonly defaultAlias!: string | null
 
+  @ApiProperty({ type: 'boolean', description: '为 true 时该产品不进入货件唛头后缀' })
+  readonly excludeFromShippingMark!: boolean
+
   @ApiProperty({ enum: ProductStatus })
   readonly status!: ProductStatus
 

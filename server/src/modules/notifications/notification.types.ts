@@ -15,6 +15,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'PACKAGING_COST_PAYMENT_PENDING',
   'PURCHASE_PAYABLE_PENDING',
   'SALES_RECEIPT_REVIEW_PENDING',
+  'SALES_RECEIPT_VOUCHER_SENT',
   'SALES_RECEIPT_APPROVED',
   'SALES_RECEIPT_REJECTED',
   'PURCHASE_REVIEW_APPROVED',
@@ -33,8 +34,10 @@ export const NOTIFICATION_EVENT_TYPES = [
   'INVOICE_REQUEST_SETTLED',
   'INVOICE_REQUEST_CANCELLED',
   'MACHINE_VIEWING_APPOINTMENT_CREATED',
+  'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED',
   'PROXY_NODE_EXPIRING',
-  'ADVERTISING_RECHARGE_PAYMENT_PENDING',
+  'ADVERTISING_RECHARGE_PENDING',
+  'ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED',
   'ADVERTISING_RECHARGE_PAID',
   'ADVERTISING_RECHARGE_REJECTED',
   'ADVERTISING_RECHARGE_VOIDED',
@@ -47,6 +50,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
+  'AD_ACCOUNT_BALANCE_LOW',
 ] as const
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
@@ -89,6 +93,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   PACKAGING_COST_PAYMENT_PENDING: 'finance',
   PURCHASE_PAYABLE_PENDING: 'finance',
   SALES_RECEIPT_REVIEW_PENDING: 'sales',
+  SALES_RECEIPT_VOUCHER_SENT: 'sales',
   SALES_RECEIPT_APPROVED: 'sales',
   SALES_RECEIPT_REJECTED: 'sales',
   PURCHASE_REVIEW_APPROVED: 'purchase',
@@ -107,8 +112,10 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   INVOICE_REQUEST_SETTLED: 'invoice',
   INVOICE_REQUEST_CANCELLED: 'invoice',
   MACHINE_VIEWING_APPOINTMENT_CREATED: 'operations',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: 'operations',
   PROXY_NODE_EXPIRING: 'operations',
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: 'operations',
+  ADVERTISING_RECHARGE_PENDING: 'operations',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: 'operations',
   ADVERTISING_RECHARGE_PAID: 'operations',
   ADVERTISING_RECHARGE_REJECTED: 'operations',
   ADVERTISING_RECHARGE_VOIDED: 'operations',
@@ -121,6 +128,7 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   PROXY_NODE_EXPIRED: 'operations',
   ASSISTANT_ACCOUNT_OFFLINE: 'system',
   FUND_ACCOUNT_REVERSED: 'finance',
+  AD_ACCOUNT_BALANCE_LOW: 'operations',
 })
 
 export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
@@ -132,6 +140,7 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   PACKAGING_COST_PAYMENT_PENDING: '包装待付款',
   PURCHASE_PAYABLE_PENDING: '采购待付款',
   SALES_RECEIPT_REVIEW_PENDING: '收款审核',
+  SALES_RECEIPT_VOUCHER_SENT: '表外水单发送',
   SALES_RECEIPT_APPROVED: '收款通过',
   SALES_RECEIPT_REJECTED: '收款驳回',
   PURCHASE_REVIEW_APPROVED: '采购审核通过',
@@ -150,8 +159,10 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   INVOICE_REQUEST_SETTLED: '开票已结算',
   INVOICE_REQUEST_CANCELLED: '开票取消',
   MACHINE_VIEWING_APPOINTMENT_CREATED: '看机预约',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: '看机预约改期',
   PROXY_NODE_EXPIRING: '节点即将到期',
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: '广告充值待付款',
+  ADVERTISING_RECHARGE_PENDING: '广告户充值',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: '广告户充值补充付款码',
   ADVERTISING_RECHARGE_PAID: '广告充值已付款',
   ADVERTISING_RECHARGE_REJECTED: '广告充值驳回',
   ADVERTISING_RECHARGE_VOIDED: '广告充值作废',
@@ -164,6 +175,7 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   PROXY_NODE_EXPIRED: '节点已过期',
   ASSISTANT_ACCOUNT_OFFLINE: '小助理离线',
   FUND_ACCOUNT_REVERSED: '资金冲账',
+  AD_ACCOUNT_BALANCE_LOW: '广告户余额预警',
 })
 
 /** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
@@ -176,6 +188,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   PACKAGING_COST_PAYMENT_PENDING: 'FINANCE',
   PURCHASE_PAYABLE_PENDING: 'FINANCE',
   SALES_RECEIPT_REVIEW_PENDING: 'SALES',
+  SALES_RECEIPT_VOUCHER_SENT: 'SALES',
   SALES_RECEIPT_APPROVED: 'SALES',
   SALES_RECEIPT_REJECTED: 'SALES',
   PURCHASE_REVIEW_APPROVED: 'PURCHASE',
@@ -194,8 +207,10 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   INVOICE_REQUEST_SETTLED: 'INVOICE',
   INVOICE_REQUEST_CANCELLED: 'INVOICE',
   MACHINE_VIEWING_APPOINTMENT_CREATED: 'OPERATIONS',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: 'OPERATIONS',
   PROXY_NODE_EXPIRING: 'OPERATIONS',
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: 'OPERATIONS',
+  ADVERTISING_RECHARGE_PENDING: 'OPERATIONS',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: 'OPERATIONS',
   ADVERTISING_RECHARGE_PAID: 'OPERATIONS',
   ADVERTISING_RECHARGE_REJECTED: 'OPERATIONS',
   ADVERTISING_RECHARGE_VOIDED: 'OPERATIONS',
@@ -208,6 +223,7 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   PROXY_NODE_EXPIRED: 'OPERATIONS',
   ASSISTANT_ACCOUNT_OFFLINE: 'SYSTEM',
   FUND_ACCOUNT_REVERSED: 'FINANCE',
+  AD_ACCOUNT_BALANCE_LOW: 'OPERATIONS',
 })
 
 /** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
@@ -220,6 +236,7 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'PACKAGING_COST_PAYMENT_PENDING',
   'PURCHASE_PAYABLE_PENDING',
   'SALES_RECEIPT_REVIEW_PENDING',
+  'SALES_RECEIPT_VOUCHER_SENT',
   'SALES_RECEIPT_APPROVED',
   'SALES_RECEIPT_REJECTED',
   'PURCHASE_REVIEW_APPROVED',
@@ -238,8 +255,10 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'INVOICE_REQUEST_SETTLED',
   'INVOICE_REQUEST_CANCELLED',
   'MACHINE_VIEWING_APPOINTMENT_CREATED',
+  'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED',
   'PROXY_NODE_EXPIRING',
-  'ADVERTISING_RECHARGE_PAYMENT_PENDING',
+  'ADVERTISING_RECHARGE_PENDING',
+  'ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED',
   'ADVERTISING_RECHARGE_PAID',
   'ADVERTISING_RECHARGE_REJECTED',
   'ADVERTISING_RECHARGE_VOIDED',
@@ -252,6 +271,7 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'PROXY_NODE_EXPIRED',
   'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
+  'AD_ACCOUNT_BALANCE_LOW',
 ])
 
 /** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
@@ -264,6 +284,7 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   PURCHASE_REVIEW_REJECTED: 'purchase.review.rejected',
   PURCHASE_ORDER_CANCELLED: 'purchase.order.cancelled',
   SALES_RECEIPT_REVIEW_PENDING: 'sales.receipt.pending',
+  SALES_RECEIPT_VOUCHER_SENT: 'sales.receipt.voucher-sent',
   SALES_RECEIPT_APPROVED: 'sales.receipt.approved',
   SALES_RECEIPT_REJECTED: 'sales.receipt.rejected',
   STORAGE_CLAIM_REQUEST_PENDING: 'shipment.storage-claim.pending',
@@ -282,8 +303,10 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   INVOICE_REQUEST_SETTLED: 'invoice.settled',
   INVOICE_REQUEST_CANCELLED: 'invoice.cancelled',
   MACHINE_VIEWING_APPOINTMENT_CREATED: 'operations.machine-viewing.created',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: 'operations.machine-viewing.rescheduled',
   PROXY_NODE_EXPIRING: 'operations.proxy-node.expiring',
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: 'operations.advertising-recharge.pending',
+  ADVERTISING_RECHARGE_PENDING: 'operations.advertising-recharge.pending',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: 'operations.advertising-recharge.payment-code',
   ADVERTISING_RECHARGE_PAID: 'operations.advertising-recharge.paid',
   ADVERTISING_RECHARGE_REJECTED: 'operations.advertising-recharge.rejected',
   ADVERTISING_RECHARGE_VOIDED: 'operations.advertising-recharge.voided',
@@ -296,6 +319,7 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
   ASSISTANT_ACCOUNT_OFFLINE: 'system.assistant-account.offline',
   FUND_ACCOUNT_REVERSED: 'fund.account.reversed',
+  AD_ACCOUNT_BALANCE_LOW: 'operations.ad-account.balance-low',
 })
 
 /**
@@ -341,10 +365,11 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
     'fundPostingCount',
     'completedAt',
   ],
-  FUND_WITHDRAWAL_REVIEW_PENDING: ['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt'],
+  FUND_WITHDRAWAL_REVIEW_PENDING: ['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt', 'reviewUrl'],
   PACKAGING_COST_PAYMENT_PENDING: ['requestCount', 'totalAmountCny'],
   PURCHASE_PAYABLE_PENDING: ['orderCount', 'totalDueAmountCny'],
   SALES_RECEIPT_REVIEW_PENDING: ['collectionNo', 'orderNo', 'customerName', 'amount', 'currencyCode', 'paymentType', 'paymentMethod', 'receivedAt', 'remark'],
+  SALES_RECEIPT_VOUCHER_SENT: ['collectionNo', 'orderNo', 'customerName', 'amount', 'currencyCode', 'paymentType', 'paymentMethod', 'receivedAt', 'remark'],
   SALES_RECEIPT_APPROVED: ['collectionNo', 'orderNo', 'amount', 'currencyCode', 'paymentType', 'paymentMethod', 'receivedAt', 'remark'],
   SALES_RECEIPT_REJECTED: ['collectionNo', 'orderNo', 'amount', 'currencyCode', 'paymentType', 'reason', 'paymentMethod', 'receivedAt', 'remark'],
   PURCHASE_REVIEW_APPROVED: ['orderNo', 'vendorName', 'totalAmount', 'currencyCode', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate', 'productLines', 'partMarks', 'depositAmount', 'balanceAmount', 'orderRemark'],
@@ -363,12 +388,14 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   INVOICE_REQUEST_SETTLED: ['invoiceNo', 'invoiceRequestId', 'settleAmountCny', 'occurredAt'],
   INVOICE_REQUEST_CANCELLED: ['invoiceNo', 'invoiceRequestId', 'reason', 'occurredAt'],
   MACHINE_VIEWING_APPOINTMENT_CREATED: ['appointmentNo', 'appointmentDate', 'period', 'hour', 'site', 'machineType', 'customerName', 'customerPhone', 'contactPerson', 'status'],
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: ['appointmentNo', 'previousAppointmentTime', 'appointmentTime', 'site', 'machineType', 'customerName', 'contactPerson'],
   PROXY_NODE_EXPIRING: ['nodeLabel', 'host', 'expiresAt', 'daysRemaining', 'assignedUserName'],
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status'],
+  ADVERTISING_RECHARGE_PENDING: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status'],
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: ['rechargeNo', 'applicantName', 'accountType', 'adAccountName', 'rechargeAmount', 'rechargeCurrency', 'adAccountNo', 'status', 'rechargeUrl'],
   ADVERTISING_RECHARGE_PAID: ['rechargeNo', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_REJECTED: ['rechargeNo', 'reason', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
   ADVERTISING_RECHARGE_VOIDED: ['rechargeNo', 'reason', 'paymentAmountCny', 'occurredAt', 'adAccountNo', 'status', 'paidAt'],
-  SALES_ORDER_SUBMITTED: ['orderNo', 'orderId', 'customerName', 'customerFbName', 'customerLineName', 'orderDate', 'agreedTotalAmount', 'currencyCode', 'lineCount', 'issuerName'],
+  SALES_ORDER_SUBMITTED: ['orderNo', 'orderId', 'customerName', 'customerFbName', 'customerLineName', 'orderDate', 'agreedTotalAmount', 'currencyCode', 'lineCount', 'salesProducts', 'issuerName'],
   SALES_ORDER_COMPLETED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
   PURCHASE_ORDER_COMPLETED: ['orderNo', 'vendorName', 'occurredAt', 'orderStatus', 'paymentStatus', 'shippingMark', 'orderDate'],
   SHIPMENT_SIGNED: ['orderNo', 'customerName', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
@@ -377,6 +404,7 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   PROXY_NODE_EXPIRED: ['nodeLabel', 'host', 'expiresAt', 'assignedUserName'],
   ASSISTANT_ACCOUNT_OFFLINE: ['accountName', 'occurredAt', 'reason'],
   FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
+  AD_ACCOUNT_BALANCE_LOW: ['adAccountName', 'adAccountNo', 'availableBalance', 'balanceThreshold', 'sevenDayAverage', 'expectedDays', 'companyName'],
 })
 
 /**
@@ -410,6 +438,11 @@ const ADVERTISING_SOURCES: readonly NotificationEventMediaSource[] = Object.free
 
 export const NOTIFICATION_EVENT_MEDIA: Readonly<Partial<Record<NotificationEventType, NotificationEventMediaCapability>>> = Object.freeze({
   SALES_RECEIPT_REVIEW_PENDING: Object.freeze({
+    maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
+    kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
+    sources: SALES_RECEIPT_VOUCHER_SOURCE,
+  }),
+  SALES_RECEIPT_VOUCHER_SENT: Object.freeze({
     maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
     kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
     sources: SALES_RECEIPT_VOUCHER_SOURCE,
@@ -457,7 +490,7 @@ export const NOTIFICATION_EVENT_MEDIA: Readonly<Partial<Record<NotificationEvent
       Object.freeze({ key: 'packaging.quotationImage', label: '报价图片' }),
     ]),
   }),
-  ADVERTISING_RECHARGE_PAYMENT_PENDING: Object.freeze({
+  ADVERTISING_RECHARGE_PENDING: Object.freeze({
     maxCount: MAX_NOTIFICATION_MEDIA_ATTACHMENTS,
     kinds: NOTIFICATION_MEDIA_ALLOWED_KINDS,
     sources: Object.freeze([
@@ -757,6 +790,24 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     maxLength: 64,
     required: true,
   },
+  reviewUrl: {
+    name: 'reviewUrl',
+    label: '审批链接',
+    description: '财务处理提款申请的 DMS 页面地址；站内哈希路由，已包含申请 ID。',
+    example: 'https://dms.example.com/#/qs-finance/fund-accounts/withdrawal-approvals/5f0c2d8e-8d0f-4f0e-9a7a-0f1b2c3d4e5f',
+    sensitive: false,
+    maxLength: 512,
+    required: true,
+  },
+  rechargeUrl: {
+    name: 'rechargeUrl',
+    label: '充值申请链接',
+    description: '财务侧广告充值详情页地址；站内哈希路由，已包含申请 ID，可直接补付款码或付款。',
+    example: 'https://dms.example.com/#/qs-finance/realtime-payments/advertising-recharges/5f0c2d8e-8d0f-4f0e-9a7a-0f1b2c3d4e5f',
+    sensitive: false,
+    maxLength: 512,
+    required: true,
+  },
   applicantName: {
     name: 'applicantName',
     label: '申请人',
@@ -791,6 +842,16 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     example: 'wangxm',
     sensitive: false,
     maxLength: 128,
+    required: false,
+  },
+  salesProducts: {
+    name: 'salesProducts',
+    label: '销售产品',
+    description: '销售单产品名块，按唛头后缀口径拼接：个人别名优先于产品默认别名与产品名快照，数量大于 1 时附 ×数量，用 + 连接，不含补差价。',
+    example: '木桌×2+靠椅',
+    sensitive: false,
+    // 与 shipping-mark-label 的别名块预算一致；业务侧已按 438 整项截断。
+    maxLength: 438,
     required: false,
   },
   requestCount: {
@@ -846,6 +907,24 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     sensitive: false,
     maxLength: 32,
     required: true,
+  },
+  previousAppointmentTime: {
+    name: 'previousAppointmentTime',
+    label: '原预约时间',
+    description: '改期前的预约时间，已格式化为「今日 / M月D日 + 时段 + 小时」。',
+    example: '11月20日 上午 10点',
+    sensitive: false,
+    maxLength: 64,
+    required: false,
+  },
+  appointmentTime: {
+    name: 'appointmentTime',
+    label: '新预约时间',
+    description: '改期后的预约时间，已格式化为「今日 / M月D日 + 时段 + 小时」。',
+    example: '今日 下午 3点',
+    sensitive: false,
+    maxLength: 64,
+    required: false,
   },
   period: {
     name: 'period',
@@ -1260,6 +1339,51 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     sensitive: false,
     maxLength: 128,
     required: false,
+  },
+  availableBalance: {
+    name: 'availableBalance',
+    label: '可用余额',
+    description: '广告账户可用余额（USD），按花费上限减已花费金额与封户取款金额计算。',
+    example: '78.42',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  balanceThreshold: {
+    name: 'balanceThreshold',
+    label: '预警阈值',
+    description: '触发广告户余额预警的可用余额阈值（USD）。',
+    example: '30.00',
+    sensitive: false,
+    maxLength: 32,
+    required: true,
+  },
+  sevenDayAverage: {
+    name: 'sevenDayAverage',
+    label: '7 天日均消耗',
+    description: '广告账户最近 7 个完整自然日的日均消耗（USD）。',
+    example: '2.94',
+    sensitive: true,
+    maxLength: 32,
+    required: true,
+  },
+  expectedDays: {
+    name: 'expectedDays',
+    label: '预计可用天数',
+    description: '按可用余额与日均消耗估算的剩余可用天数；无法估算时为「—」。',
+    example: '26',
+    sensitive: false,
+    maxLength: 16,
+    required: true,
+  },
+  companyName: {
+    name: 'companyName',
+    label: '开户主体',
+    description: '广告账户所属的开户主体（营业执照名称）。',
+    example: '聊城千树文化传媒有限公司',
+    sensitive: false,
+    maxLength: 255,
+    required: true,
   },
 })
 

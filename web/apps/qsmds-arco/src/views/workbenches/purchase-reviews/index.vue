@@ -15,12 +15,12 @@ import QsCopyableText from '@/components/business/QsGenericTable/QsCopyableText.
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsPurchaseOrderAmountRevisionModal from '@/components/business/QsPurchaseOrderAmountRevisionModal/index.vue'
 import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
-import PurchaseAmountRevisionModal from './amount-revision-modal.vue'
 import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection, resolvePurchaseBatchPageSelection, resolvePurchaseBatchSelectedPageIds } from './batch-review.logic'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
@@ -246,7 +246,7 @@ function openCancellation(row: PurchaseOrderListItemDto): void {
 }
 const canReviseAmount = computed(() => (
   status.value === 'APPROVED'
-  && canReview.value
+  && auth('purchase-orders:price-revision')
   && detail.value !== null
 ))
 function openAmountRevision(): void {
@@ -520,7 +520,7 @@ onBeforeUnmount(() => {
       @closed="handleBatchClosed"
     />
     <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
-    <PurchaseAmountRevisionModal
+    <QsPurchaseOrderAmountRevisionModal
       v-model="amountRevisionVisible"
       :detail="detail"
       :currencies="currencyCatalog.currencies.value"

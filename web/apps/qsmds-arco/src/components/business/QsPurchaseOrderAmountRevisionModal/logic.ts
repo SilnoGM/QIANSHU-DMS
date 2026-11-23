@@ -1,22 +1,26 @@
-import type { PurchaseOrderAmountRevisionRequestDto, PurchaseOrderDetailDto } from '../../../api/generated/types.gen'
+import type {
+  PurchaseOrderAmountRevisionRequestDto,
+  PurchaseOrderDetailDto,
+} from '../../../api/generated/types.gen'
 
 import Decimal from 'decimal.js'
 import {
   normalizeMoneyString,
   sumMoneyValues,
   validateMoneyString,
-} from '../../../components/base/MoneyInput/logic'
-import { QS_GENERIC_MODAL_DEFAULT_Z_INDEX } from '../../../components/business/QsGenericModal/logic'
+} from '../../base/MoneyInput/logic'
+import {
+  QS_GENERIC_MODAL_DEFAULT_Z_INDEX,
+} from '../QsGenericModal/logic'
 
 /**
- * 本弹窗从采购详情抽屉（FaDrawer，默认 2000）内部打开，必须压在抽屉及其遮罩之上。
+ * 本弹窗可能从采购详情抽屉（FaDrawer，默认 2000）内部打开，必须压在抽屉及其
+ * 遮罩之上。全站浮层默认同为 2000，平级时的绘制顺序由 Teleport 在页面加载时的
+ * 挂载顺序决定，与本弹窗、抽屉谁先打开无关；这里显式抬高 100 层，不再依赖模板
+ * 声明顺序。
  *
- * 全站浮层默认同为 2000，平级时的绘制顺序由 Teleport 在页面加载时的挂载顺序决定，
- * 与本弹窗、抽屉谁先打开无关；本弹窗在页面模板中比抽屉先挂载，会被抽屉压住并被
- * 抽屉遮罩压暗。这里显式抬高 100 层，不再依赖模板声明顺序。
- *
- * 因此该弹窗内不要再放 FaSelect、FaDropdown 等同样是 2000 的浮层，否则它们会掉到
- * 弹窗下面。
+ * 因此该弹窗内不要再放 FaSelect、FaDropdown 等同样是 2000 的浮层，否则它们会
+ * 掉到弹窗下面。
  */
 export const PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX
   = QS_GENERIC_MODAL_DEFAULT_Z_INDEX + 100
@@ -24,6 +28,7 @@ export const PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX
 export interface PurchaseAmountRevisionPreview {
   readonly balanceDueAmount: string
   readonly changed: boolean
+  readonly changedLineCount: number
   readonly depositDueAmount: string
   readonly lineSubtotalAmount: string
   readonly lineTotals: Readonly<Record<string, string>>
@@ -34,6 +39,14 @@ export interface PurchaseAmountRevisionRequestResult {
   readonly fieldError?: string
   readonly request?: PurchaseOrderAmountRevisionRequestDto
   readonly valid: boolean
+}
+
+export interface PurchaseAmountRevisionOptions {
+  /**
+   * 定金已有有效付款时必须锁定为服务端当前定金：单价可以调整，但总价不得低于
+   * 已付定金。此时错误提示不再引导用户改定金，而是调整单价或先作废付款。
+   */
+  readonly depositLocked?: boolean
 }
 
 const MONEY_OPTIONS = { precision: 2 } as const
@@ -51,14 +64,19 @@ function requireMoney(
 
 /**
  * 前端实时预览与提交共用同一套计算：行小计、产品合计、总价、尾款全部
- * 由新单价和手工定金推导，不读取或信任可被篡改的订单总额。
+ * 由新单价和定金推导，不读取或信任可被篡改的订单总额。
+ *
+ * 行间调价可能保持订单总额、定金和尾款完全不变；这仍然是有效修订，
+ * 由服务端写入行级变更快照，因此这里不再拒绝"仅行单价变化"。
  */
 export function calculatePurchaseAmountRevisionPreview(
   detail: PurchaseOrderDetailDto,
   linePrices: Readonly<Record<string, string | null>>,
   deposit: string | null,
+  options: PurchaseAmountRevisionOptions = {},
 ): PurchaseAmountRevisionPreview {
   const lineTotals: Record<string, string> = {}
+  let changedLineCount = 0
   for (const line of detail.lines) {
     const price = requireMoney(
       linePrices[line.id] ?? null,
@@ -67,49 +85,45 @@ export function calculatePurchaseAmountRevisionPreview(
     lineTotals[line.id] = new Decimal(price)
       .times(line.quantity)
       .toFixed(2, Decimal.ROUND_HALF_UP)
+    if (price !== normalizeMoneyString(
+      line.actualPurchaseUnitPriceAmount,
+      MONEY_OPTIONS,
+    )) {
+      changedLineCount += 1
+    }
   }
   const lineSubtotalAmount = sumMoneyValues(
     Object.values(lineTotals),
     MONEY_OPTIONS,
   )
   const purchaseTotalAmount = lineSubtotalAmount
-  const depositDueAmount = requireMoney(deposit, '请填写有效的定金')
+  const depositDueAmount = requireMoney(
+    deposit,
+    options.depositLocked
+      ? '已付定金无效，请刷新后重试'
+      : '请填写有效的定金',
+  )
   const total = new Decimal(purchaseTotalAmount)
   const depositValue = new Decimal(depositDueAmount)
   if (depositValue.greaterThan(total)) {
-    throw new RangeError('定金不能超过采购总价')
+    throw new RangeError(
+      options.depositLocked
+        ? '新采购总价不能低于已付定金；请调整单价，或先作废定金付款后再改价'
+        : '定金不能超过采购总价',
+    )
   }
   const balanceDueAmount = total
     .minus(depositValue)
     .toFixed(2, Decimal.ROUND_HALF_UP)
-  const changed = detail.lines.some(line => (
-    requireMoney(linePrices[line.id] ?? null, '采购单价无效')
-    !== normalizeMoneyString(line.actualPurchaseUnitPriceAmount, MONEY_OPTIONS)
-  )) || depositDueAmount !== normalizeMoneyString(
+  const depositChanged = depositDueAmount !== normalizeMoneyString(
     detail.amounts.depositDueAmount,
     MONEY_OPTIONS,
   )
-  const orderAmountsChanged = lineSubtotalAmount !== normalizeMoneyString(
-    detail.amounts.lineSubtotalAmount,
-    MONEY_OPTIONS,
-  ) || purchaseTotalAmount !== normalizeMoneyString(
-    detail.amounts.purchaseTotalAmount,
-    MONEY_OPTIONS,
-  ) || depositDueAmount !== normalizeMoneyString(
-    detail.amounts.depositDueAmount,
-    MONEY_OPTIONS,
-  ) || balanceDueAmount !== normalizeMoneyString(
-    detail.amounts.balanceDueAmount,
-    MONEY_OPTIONS,
-  )
-  if (changed && !orderAmountsChanged) {
-    throw new RangeError(
-      '行间调价但订单总额、定金和尾款未变化，当前修订记录无法保存；请调整总额或定金',
-    )
-  }
+  const changed = changedLineCount > 0 || depositChanged
   return {
     balanceDueAmount,
     changed,
+    changedLineCount,
     depositDueAmount,
     lineSubtotalAmount,
     lineTotals,
@@ -122,6 +136,7 @@ export function buildPurchaseAmountRevisionRequest(
   linePrices: Readonly<Record<string, string | null>>,
   deposit: string | null,
   reason: string,
+  options: PurchaseAmountRevisionOptions = {},
 ): PurchaseAmountRevisionRequestResult {
   const normalizedReason = reason.trim()
   if (normalizedReason.length === 0) {
@@ -135,6 +150,7 @@ export function buildPurchaseAmountRevisionRequest(
       detail,
       linePrices,
       deposit,
+      options,
     )
     if (!preview.changed) {
       return { fieldError: '采购金额没有变化，无需提交', valid: false }

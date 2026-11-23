@@ -34,6 +34,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
       { title: '产地', value: '中国台湾' },
     ],
     remark: null,
+    excludeFromShippingMark: false,
   }
 }
 

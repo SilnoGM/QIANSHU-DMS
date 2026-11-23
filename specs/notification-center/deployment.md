@@ -28,7 +28,8 @@
 | `ASSISTANT_WORKER_POLL_MS` | 否 | `5000` | 轮询间隔 |
 | `ASSISTANT_WORKER_BATCH` | 否 | `20` | 单轮领取上限 |
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | `10000` | GeWe 请求超时 |
-| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔；`0` 仅用于本地关闭节流 |
+| `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | `3000` | 所有 sendText 的全局最小间隔（冷却下限）；`0` 仅用于本地关闭节流 |
+| `ASSISTANT_SEND_INTERVAL_JITTER_MS` | 否 | `2000` | 在最小间隔之上叠加 `[0, 抖动]` 均匀随机，默认实际冷却 3000~5000ms；最小间隔为 `0` 时抖动不生效 |
 | `NOTIFICATION_MEDIA_URL_SECRET` | 是（生产） | — | 32 字节 base64url；图片取流地址签名密钥，必须与认证域三个 key 不同。缺失时生产拒绝启动 |
 | `NOTIFICATION_INTERNAL_API_ENABLED` | 否 | `false` | 内部 HTTP 发布入口，阶段 1 关闭 |
 | `NOTIFICATION_INTERNAL_TOKEN` | 否 | — | 内部入口令牌；关闭时不使用 |
@@ -383,6 +384,26 @@ sudo docker compose -f /srv/qianshu-dms/docker-compose.yml \
 ```
 
 定时器按上海时间 `09:05/13:05/17:05/21:05` 运行。`Persistent=true` 可能在主机夜间恢复时补跑，命令自身的时间守卫会拒绝窗口外执行。
+
+#### 看机预约 08:30 扫描
+
+看机预约使用独立命令，不与上面的通用业务扫描合并：
+
+```bash
+pnpm -C server notifications:machine-viewing-scan
+pnpm -C server notifications:machine-viewing-scan --dry-run
+```
+
+命令在 08:30 前输出 `skipped/before_notification_time`；08:30 后扫描当天仍为 `PENDING_APPOINTMENT` 的预约，通知触发成功后推进为 `APPOINTED` 并写系统审计。去重键为 `预约 ID + schedule_revision`，同一天补跑不会重复发送。
+
+按通知中心现行约定，迁移只创建 `MACHINE_VIEWING_APPOINTMENT_RESCHEDULED` 的策略行，不内置模板；上线前需在通知策略页为 `operations.machine-viewing.rescheduled` 配置站内/小助理正文。`operations.machine-viewing.created` 沿用既有已配置模板；迁移会把该事件小助理渠道的静默时间覆盖为 `22:00–08:30`，确保 08:30 批次不再被延后到 09:00。
+
+仓库资产：
+
+- [`qianshu-dms-machine-viewing-notification-scan.service`](../../deploy/docker/systemd/qianshu-dms-machine-viewing-notification-scan.service)
+- [`qianshu-dms-machine-viewing-notification-scan.timer`](../../deploy/docker/systemd/qianshu-dms-machine-viewing-notification-scan.timer)
+
+按与通用扫描相同的方式安装并启用 08:30 timer。`Persistent=true` 允许当天补跑；若需要限制最晚补跑时间，可在宿主侧另行约束。
 
 ### 10.4 告警阈值
 

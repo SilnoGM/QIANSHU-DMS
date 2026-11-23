@@ -137,6 +137,12 @@ const imageItems = computed(() => props.product === null
               <dd class="qs-type-meta text-muted-foreground m-0">
                 {{ aliasDisplay.sourceLabel }}
               </dd>
+              <dt class="qs-type-compact-label m-0">
+                唛头显示
+              </dt>
+              <dd class="qs-type-meta text-muted-foreground m-0">
+                {{ product.excludeFromShippingMark ? '不参与拼接' : '按别名规则参与' }}
+              </dd>
             </dl>
             <FaButton
               v-if="canManageAlias"

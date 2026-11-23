@@ -13,6 +13,7 @@ function configuration(overrides: Partial<AssistantConfiguration> = {}): Assista
     batchSize: 20,
     requestTimeoutMs: 1_000,
     minSendIntervalMs: 3_000,
+    sendIntervalJitterMs: 0,
     ...overrides,
   }
 }

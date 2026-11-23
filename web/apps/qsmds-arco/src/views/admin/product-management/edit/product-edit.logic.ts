@@ -47,6 +47,7 @@ export function createProductEditFormModel(
       attribute.value,
     )),
     categoryName: product.categoryName,
+    excludeFromShippingMark: product.excludeFromShippingMark,
     myrSalePriceAmount: product.myrSalePrice.amount,
     name: product.name,
     productHeadName: product.productHeadName,
@@ -131,6 +132,10 @@ export function buildProductUpdateRequest(
   }
   if (currentBody.remark !== baselineBody.remark) {
     request.remark = currentBody.remark
+  }
+  // 唛头排除标记不属于创建契约，因此不在 ProductFormRequest 里，直接对比表单与详情快照。
+  if (model.excludeFromShippingMark !== source.excludeFromShippingMark) {
+    request.excludeFromShippingMark = model.excludeFromShippingMark
   }
 
   return Object.keys(request).length === 1
@@ -240,6 +245,12 @@ export function reconcileProductUpdateResult(
     return 'unknown'
   }
   if (request.remark !== undefined && actual.remark !== request.remark) {
+    return 'unknown'
+  }
+  if (
+    request.excludeFromShippingMark !== undefined
+    && actual.excludeFromShippingMark !== request.excludeFromShippingMark
+  ) {
     return 'unknown'
   }
   return 'success'

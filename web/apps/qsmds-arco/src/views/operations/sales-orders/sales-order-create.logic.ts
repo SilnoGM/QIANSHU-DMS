@@ -898,8 +898,8 @@ function readFirstMessage(value: unknown): string | undefined {
 }
 
 function allowedFieldPath(path: string): boolean {
-  return /^(?:orderDate|currencyCode|agreedTotalAmount|depositDueAmount|balanceDueAmount|remark|lines|issuanceVoucher)$/u.test(path)
-    || /^customer\.(?:name|phone|countryRegionId|provinceStateId|cityId|addressDetail)$/u.test(path)
+  return /^(?:orderDate|currencyCode|agreedTotalAmount|depositDueAmount|balanceDueAmount|remark|reason|lines|issuanceVoucher)$/u.test(path)
+    || /^customer\.(?:name|phone|fbName|lineName|countryRegionId|provinceStateId|cityId|addressDetail)$/u.test(path)
     || /^lines\.(?:\d|[1-9]\d)\.(?:lineType|productId|name|description|actualUnitPriceAmount|quantity)$/u.test(path)
     || /^issuanceVoucher\.mediaAssetId$/u.test(path)
 }

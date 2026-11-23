@@ -6,7 +6,7 @@ import { ApiContractResponse } from '../../../openapi/contract-response.decorato
 import { getRequestAuthContext } from '../../auth/auth-context'
 import { RequirePermissions } from '../../auth/decorators/auth.decorators'
 import { CurrentUserId, resolveDataScopeActor } from '../../auth/decorators/current-user-id.decorator'
-import { SalesReceiptApprovalContextDto, SalesReceiptApproveDto, SalesReceiptIdDto, SalesReceiptListQueryDto, SalesReceiptOrderIdDto, SalesReceiptOrderVoucherIdDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptRequestDetailDto, SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
+import { SalesReceiptActionDto, SalesReceiptApprovalContextDto, SalesReceiptApproveDto, SalesReceiptIdDto, SalesReceiptListQueryDto, SalesReceiptOrderIdDto, SalesReceiptOrderVoucherIdDto, SalesReceiptRejectDto, SalesReceiptRequestCreateDto, SalesReceiptRequestDetailDto, SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
 import { SalesReceiptService } from './sales-receipt.service'
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
 import { SalesReceiptVoucherService } from './sales-receipt-voucher.service'
@@ -18,7 +18,7 @@ function contract(operationId: string, mutation = false) {
       { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED', ...(mutation ? ['CSRF_REJECTED'] : [])] },
       { status: 404, codes: ['SALES_RECEIPT_NOT_FOUND', 'SALES_ORDER_NOT_FOUND', 'SALES_ORDER_DOCUMENT_NOT_FOUND'] },
       { status: 409, codes: ['SALES_RECEIPT_STATE_CHANGED', 'SALES_RECEIPT_CONTEXT_CHANGED', 'SALES_RECEIPT_IDEMPOTENCY_CONFLICT', 'SALES_RECEIPT_REVERSAL_CONFLICT', 'SALES_RECEIPT_NUMBERING_UNAVAILABLE', 'SALES_RECEIPT_NUMBER_CONFLICT'] },
-      { status: 422, codes: ['VALIDATION_FAILED', 'SALES_ORDER_CANCELLED', 'SALES_ORDER_COMPLETED', 'SALES_ORDER_PAYMENT_AMOUNT_INVALID', 'SALES_ORDER_AMOUNT_INVALID', 'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE', 'SALES_ORDER_DOCUMENT_UNAVAILABLE', 'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE', 'SALES_RECEIPT_RATE_UNAVAILABLE', 'SALES_RECEIPT_CNY_AMOUNT_INVALID', 'SALES_RECEIPT_POSTING_UNAVAILABLE'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'SALES_ORDER_CANCELLED', 'SALES_ORDER_COMPLETED', 'SALES_ORDER_PAYMENT_AMOUNT_INVALID', 'SALES_ORDER_AMOUNT_INVALID', 'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE', 'SALES_ORDER_DOCUMENT_UNAVAILABLE', 'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE', 'SALES_RECEIPT_RATE_UNAVAILABLE', 'SALES_RECEIPT_CNY_AMOUNT_INVALID', 'SALES_RECEIPT_POSTING_UNAVAILABLE', 'SALES_RECEIPT_VOUCHER_NOT_IMAGE', 'SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE'] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ] })
 }
@@ -43,6 +43,10 @@ export class SalesReceiptController {
   detail(@Param() params: SalesReceiptIdDto, @CurrentUserId() actorUserId: string = resolveDataScopeActor()) { return this.queries.getById(params.id, actorUserId) }
   @Get(':id/approval-context') @RequirePermissions('sales-receipts:read', 'sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptApprovalContextDto }) @contract('sales_receipts_approval_context')
   preview(@Param() params: SalesReceiptIdDto, @Req() request: object) { return this.commands.approvalContext(context(request), params.id) }
+  @Post(':id/send-voucher') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_send_voucher', true)
+  sendVoucher(@Param() params: SalesReceiptIdDto, @Body() body: SalesReceiptActionDto, @Req() request: object) { return this.commands.sendVoucher(context(request), params.id, body) }
+  @Post(':id/confirm') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_confirm', true)
+  confirm(@Param() params: SalesReceiptIdDto, @Body() body: SalesReceiptActionDto, @Req() request: object) { return this.commands.confirm(context(request), params.id, body) }
   @Post(':id/approve') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_approve', true)
   approve(@Param() params: SalesReceiptIdDto, @Body() body: SalesReceiptApproveDto, @Req() request: object) { return this.commands.approve(context(request), params.id, body) }
   @Post(':id/reject') @HttpCode(HttpStatus.OK) @RequirePermissions('sales-receipts:review') @ApiContractResponse({ status: 200, type: SalesReceiptRequestDetailDto }) @contract('sales_receipts_reject', true)

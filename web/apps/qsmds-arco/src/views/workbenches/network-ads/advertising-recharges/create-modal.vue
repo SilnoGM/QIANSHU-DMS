@@ -4,15 +4,9 @@ import type { RechargeImageUploadFile } from './use-recharge-image-upload'
 import type { AdvertisingRechargeDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import type { MoneyAmount } from '@/components/base/MoneyInput/logic'
-import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-import {
-  ADVERTISING_RECHARGE_ACCOUNT_TYPE_OPTIONS,
-  buildAdvertisingRechargeCopyText,
-  buildAdvertisingRechargeDetailLink,
-} from './logic'
+import { ADVERTISING_RECHARGE_ACCOUNT_TYPE_OPTIONS } from './logic'
 import { parseAdvertisingRechargePaste, resolveAdvertisingRechargeMissingFields } from './recharge-form'
 import RechargeImageUpload from './recharge-image-upload.vue'
 
@@ -27,16 +21,17 @@ export interface AdvertisingRechargeCreatePayload {
 }
 
 const props = withDefaults(defineProps<{
-  created?: AdvertisingRechargeDto | null
   currencies: readonly CurrencyDescriptor[]
   enabled: boolean
   error?: null | string
+  /** 从广告户卡片「充值」跳转而来时带入的识别文本，打开弹窗时自动解析。 */
+  initialPaste?: string
   modelValue: boolean
   submitting?: boolean
   upload: RechargeImageUploadFile
 }>(), {
-  created: null,
   error: null,
+  initialPaste: '',
   submitting: false,
 })
 
@@ -46,9 +41,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const router = useRouter()
-const toast = useQsToast()
-const step = ref<'form' | 'copy'>('form')
 const accountType = ref<AdvertisingRechargeDto['accountType']>('PERSONAL')
 const adAccountName = ref('')
 const adAccountNo = ref('')
@@ -62,10 +54,6 @@ const pasteConflict = ref(false)
 const qrMediaAssetId = ref<string | null>(null)
 const qrBusy = ref(false)
 const attempted = ref(false)
-const copyError = ref('')
-const copyPending = ref(false)
-const copied = ref(false)
-const closeArmed = ref(false)
 const nameWrap = ref<HTMLElement | null>(null)
 const noWrap = ref<HTMLElement | null>(null)
 const amountWrap = ref<HTMLElement | null>(null)
@@ -105,9 +93,6 @@ const footerMessage = computed(() => {
   }
   return ''
 })
-const stepText = computed(() => t(step.value === 'form'
-  ? 'advertisingRecharge.create.stepOne'
-  : 'advertisingRecharge.create.stepTwo'))
 /** 币种默认跟随账户类型：个人户人民币、非个人户美元；切换类型时强制重置。 */
 const currencyHint = computed(() => t(rechargeCurrency.value === 'CNY'
   ? 'advertisingRecharge.field.rechargeAmountHintCny'
@@ -138,25 +123,7 @@ const pasteStatusClass = computed(() => {
   }
   return 'text-primary dark:text-emerald-300'
 })
-const copyText = computed(() => props.created === null
-  ? ''
-  : buildAdvertisingRechargeCopyText({
-      adAccountName: props.created.adAccountName,
-      adAccountNo: props.created.adAccountNo,
-      link: detailLink(props.created.id),
-    }))
-
-function detailLink(id: string): string {
-  // 财务详情路由对所有已登录用户都注册，运营只需复制链接、不进入该页。
-  const href = router.resolve({
-    name: 'qsFinanceRealtimeAdvertisingRechargeDetail',
-    params: { id },
-  }).href
-  return buildAdvertisingRechargeDetailLink(window.location.origin, href)
-}
-
 function reset(): void {
-  step.value = 'form'
   accountType.value = 'PERSONAL'
   adAccountName.value = ''
   adAccountNo.value = ''
@@ -169,17 +136,7 @@ function reset(): void {
   pasteConflict.value = false
   qrMediaAssetId.value = null
   attempted.value = false
-  copyError.value = ''
-  copyPending.value = false
-  copied.value = false
-  closeArmed.value = false
 }
-
-watch(() => props.modelValue, (visible) => {
-  if (visible) {
-    reset()
-  }
-})
 
 // 币种强制跟随账户类型，不保留用户上一次的手选结果。
 watch(accountType, (value) => {
@@ -228,11 +185,29 @@ function clearPastedText(): void {
   pasteConflict.value = false
 }
 
-watch(() => props.created, (created) => {
-  if (created !== null) {
-    step.value = 'copy'
-    attempted.value = false
+/**
+ * 外部带入的识别文本：先写进粘贴框再走同一条解析路径，
+ * 这样「识别成功 / 只识别到编号 / 识别失败」的提示与手动粘贴完全一致。
+ */
+function applyInitialPaste(): void {
+  const text = props.initialPaste.trim()
+
+  if (text.length === 0) {
+    return
   }
+
+  pasteText.value = text
+  applyPastedText()
+}
+
+/** 打开时才重置并应用初始粘贴；顺序固定为 reset → apply，避免被重置清掉。 */
+watch(() => props.modelValue, (visible) => {
+  if (!visible) {
+    return
+  }
+
+  reset()
+  applyInitialPaste()
 })
 
 function focusField(field: AdvertisingRechargeRequiredField): void {
@@ -247,11 +222,6 @@ function focusField(field: AdvertisingRechargeRequiredField): void {
 
 function close(): void {
   if (busy.value) {
-    return
-  }
-  // 复制步骤先确认一次再关闭，避免还没复制就把唯一一份文案关掉。
-  if (step.value === 'copy' && !copied.value && !closeArmed.value) {
-    closeArmed.value = true
     return
   }
   emit('update:modelValue', false)
@@ -288,58 +258,20 @@ async function submit(): Promise<void> {
     ...(remark.value.trim().length === 0 ? {} : { remark: remark.value.trim() }),
   })
 }
-
-async function copyToClipboard(): Promise<boolean> {
-  if (copyText.value.length === 0 || copyPending.value) {
-    return false
-  }
-  copyPending.value = true
-  try {
-    await navigator.clipboard.writeText(copyText.value)
-    copyError.value = ''
-    copied.value = true
-    closeArmed.value = false
-    return true
-  }
-  catch {
-    copyError.value = t('advertisingRecharge.create.copyFailed')
-    return false
-  }
-  finally {
-    copyPending.value = false
-  }
-}
-
-async function copyOnly(): Promise<void> {
-  if (await copyToClipboard()) {
-    toast.success(t('advertisingRecharge.create.copied'))
-  }
-}
-
-async function copyAndClose(): Promise<void> {
-  if (await copyToClipboard()) {
-    toast.success(t('advertisingRecharge.create.copied'))
-    emit('update:modelValue', false)
-  }
-}
 </script>
 
 <template>
   <QsGenericModal
     :model-value="modelValue"
-    :title="t(step === 'form' ? 'advertisingRecharge.create.title' : 'advertisingRecharge.create.submittedTitle')"
-    :description="t(step === 'form' ? 'advertisingRecharge.create.description' : 'advertisingRecharge.create.copyDescription')"
+    :title="t('advertisingRecharge.create.title')"
+    :description="t('advertisingRecharge.create.description')"
     size="lg"
     :submitting="busy"
     :dismiss-on-escape="!busy"
     :dismiss-on-overlay="!busy"
     @update:model-value="updateVisible"
   >
-    <template #header-extra>
-      <span class="qs-type-meta text-muted-foreground pt-0.5 whitespace-nowrap">{{ stepText }}</span>
-    </template>
-
-    <FaForm v-if="step === 'form'" :disabled="busy" class="min-w-0">
+    <FaForm :disabled="busy" class="min-w-0">
       <!-- 粘贴识别放在最上方：一次粘贴即可填好下面两行的账户信息。 -->
       <div class="gap-1.5 grid min-w-0">
         <div class="flex flex-wrap gap-2 items-center justify-between">
@@ -527,45 +459,6 @@ async function copyAndClose(): Promise<void> {
       </div>
     </FaForm>
 
-    <template v-else>
-      <FaAlert v-if="copyError" :description="copyError" variant="destructive" class="mb-4" />
-      <dl v-if="created" class="m-0 mb-4 gap-x-6 gap-y-4 grid grid-cols-2">
-        <div class="min-w-0">
-          <dt class="qs-type-meta text-muted-foreground mb-1">
-            {{ t('advertisingRecharge.field.rechargeNo') }}
-          </dt>
-          <dd class="qs-type-data-emphasis m-0 break-all">
-            {{ created.rechargeNo }}
-          </dd>
-        </div>
-        <div class="min-w-0">
-          <dt class="qs-type-meta text-muted-foreground mb-1">
-            {{ t('advertisingRecharge.field.rechargeAmount') }}
-          </dt>
-          <dd class="m-0">
-            <AmountDisplay :value="created.rechargeAmount" :currency="created.rechargeCurrency" :currencies="currencies" />
-          </dd>
-        </div>
-      </dl>
-      <div class="border border-border rounded-xl overflow-hidden">
-        <div class="px-3 py-2 border-b border-border bg-muted/30 flex gap-2 items-center justify-between">
-          <span class="qs-type-meta text-muted-foreground">{{ t('advertisingRecharge.create.copyHint') }}</span>
-          <FaButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="shrink-0 min-h-9"
-            :loading="copyPending"
-            @click="copyOnly"
-          >
-            <FaIcon :name="copied ? 'i-lucide:check' : 'i-lucide:copy'" class="size-4" aria-hidden="true" />
-            {{ t(copied ? 'advertisingRecharge.create.copiedShort' : 'advertisingRecharge.create.copy') }}
-          </FaButton>
-        </div>
-        <pre class="text-sm m-0 p-4 select-all whitespace-pre-wrap break-words">{{ copyText }}</pre>
-      </div>
-    </template>
-
     <template #footer>
       <p
         v-if="footerMessage"
@@ -574,30 +467,12 @@ async function copyAndClose(): Promise<void> {
       >
         {{ footerMessage }}
       </p>
-      <p
-        v-else-if="step === 'copy' && closeArmed"
-        role="status"
-        class="qs-type-meta text-amber-700 m-0 dark:text-amber-300 sm:mr-auto"
-      >
-        {{ t('advertisingRecharge.create.closeUncopied') }}
-      </p>
-      <template v-if="step === 'form'">
-        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :disabled="busy" @click="close">
-          {{ t('advertisingRecharge.create.cancel') }}
-        </FaButton>
-        <FaButton type="button" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :loading="submitting" :disabled="busy" @click="submit">
-          {{ t('advertisingRecharge.create.submit') }}
-        </FaButton>
-      </template>
-      <template v-else>
-        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" @click="close">
-          {{ t(closeArmed ? 'advertisingRecharge.create.confirmClose' : 'advertisingRecharge.create.close') }}
-        </FaButton>
-        <FaButton type="button" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :loading="copyPending" @click="copyAndClose">
-          <FaIcon name="i-lucide:copy" class="size-4" aria-hidden="true" />
-          {{ t('advertisingRecharge.create.copy') }}
-        </FaButton>
-      </template>
+      <FaButton type="button" variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :disabled="busy" @click="close">
+        {{ t('advertisingRecharge.create.cancel') }}
+      </FaButton>
+      <FaButton type="button" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :loading="submitting" :disabled="busy" @click="submit">
+        {{ t('advertisingRecharge.create.submit') }}
+      </FaButton>
     </template>
   </QsGenericModal>
 </template>

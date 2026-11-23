@@ -11,12 +11,15 @@ import { salesOrderScopeWhere } from '../sales-order-access'
 import { salesReceiptScopeWhere } from './sales-receipt-access'
 import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptListQueryDto, type SalesReceiptRequestDetailDto, type SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
 import { receiptFailure } from './sales-receipt-money'
+import { SALES_RECEIPT_IN_FLIGHT_STATUSES } from './sales-receipt-status'
 
 const detailInclude = {
   voucherMediaAsset: { select: { mediaType: true, mimeType: true } },
   salesOrder: { select: { id: true, orderNo: true, version: true, customerName: true, orderStatus: true } },
   accountOwner: { select: PERSON_REFERENCE_SELECT },
   submittedBy: { select: PERSON_REFERENCE_SELECT },
+  voucherSentBy: { select: PERSON_REFERENCE_SELECT },
+  confirmedBy: { select: PERSON_REFERENCE_SELECT },
   reviewedBy: { select: PERSON_REFERENCE_SELECT },
   approvedPayment: { include: { fundReversalBatch: { include: { entries: { orderBy: { lineNo: 'asc' as const } } } }, fundPostingBatch: { include: { entries: { orderBy: { lineNo: 'asc' as const } } } } } },
 } satisfies Prisma.SalesReceiptRequestInclude
@@ -34,9 +37,13 @@ function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
     amount: row.amount.toFixed(2), currencyCode: row.currencyCode, receivedAt: row.receivedAt.toISOString(),
     paymentMethod: row.paymentMethod, paymentMethodNameSnapshot: row.paymentMethodNameSnapshot,
     remark: row.remark, status: row.status as SalesReceiptStatusDto, submittedAt: row.submittedAt.toISOString(),
+    voucherSentAt: row.voucherSentAt?.toISOString() ?? null, confirmedAt: row.confirmedAt?.toISOString() ?? null,
     reviewedAt: row.reviewedAt?.toISOString() ?? null, reviewRemark: row.reviewRemark, version: row.version,
     resubmittedFromId: row.resubmittedFromId, salesOrder: row.salesOrder,
-    accountOwner: person(row.accountOwner), submittedBy: person(row.submittedBy), reviewedBy: row.reviewedBy ? person(row.reviewedBy) : null,
+    accountOwner: person(row.accountOwner), submittedBy: person(row.submittedBy),
+    voucherSentBy: row.voucherSentBy ? person(row.voucherSentBy) : null,
+    confirmedBy: row.confirmedBy ? person(row.confirmedBy) : null,
+    reviewedBy: row.reviewedBy ? person(row.reviewedBy) : null,
     voucher: { ...row.voucherMediaAsset, mediaAssetId: row.voucherMediaAssetId, title: row.voucherTitle },
     approvedPayment: payment ? {
       exchangeRateId: payment.exchangeRateId, exchangeRateVersionSnapshot: payment.exchangeRateVersionSnapshot,
@@ -108,13 +115,13 @@ export class SalesReceiptQueryService {
         receiptFailure('SALES_ORDER_NOT_FOUND', '销售订单不存在', HttpStatus.NOT_FOUND)
       }
       const where = { ...common, ...(input.view ? viewWhere(input.view) : input.status ? { status: input.status } : {}) }
-      const [rows, total, pendingCount, approvedCount, rejectedCount, voidedCount] = await Promise.all([
+      const [rows, total, pendingCount, confirmCount, postingCount, approvedCount, rejectedCount, voidedCount] = await Promise.all([
         tx.salesReceiptRequest.findMany({ where, include: detailInclude, orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
         tx.salesReceiptRequest.count({ where }),
         ...Object.values(SalesReceiptViewDto).map(view => tx.salesReceiptRequest.count({ where: { ...common, ...viewWhere(view) } })),
       ])
-      const statusCounts = { PENDING_REVIEW: pendingCount, APPROVED: approvedCount, REJECTED: rejectedCount, VOIDED: voidedCount }
-      const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { ...common, salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }) : null
+      const statusCounts = { PENDING_REVIEW: pendingCount, PENDING_CONFIRM: confirmCount, PENDING_POSTING: postingCount, APPROVED: approvedCount, REJECTED: rejectedCount, VOIDED: voidedCount }
+      const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { ...common, salesOrderId, status: { in: [...SALES_RECEIPT_IN_FLIGHT_STATUSES] } }, _sum: { amount: true } }) : null
       return { items: rows.map(mapDetail), total, page, pageSize, statusCounts, pendingAmount: salesOrderId ? pending?._sum.amount?.toFixed(2) ?? '0.00' : null }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }

@@ -7,11 +7,14 @@ import type {
   PurchaseCorrectionResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
+  SalesOrderEditContextDto,
   SalesOrderFactoryShipmentContextDto,
   SalesOrderFactoryShipmentRequestDto,
+  SalesOrderInfoUpdateRequestDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
+  SalesOrderPaymentTermsRequestDto,
   SalesOrderPaymentVoidRequestDto,
   SalesOrderPendingPurchaseProductsDto,
   SalesOrderProductEditContextDto,
@@ -87,6 +90,21 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,
         { errorPresentation: 'local', signal },
       ),
+    editContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderEditContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/edit-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    updateInfo: (
+      salesOrderId: string,
+      data: SalesOrderInfoUpdateRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderEditContextDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/info`,
+      data,
+      // 订单信息一次原子保存并携带版本号，但没有幂等键；网络结果未知时禁止自动重放。
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     factoryShipmentContext: (salesOrderId: string, signal: AbortSignal) =>
       client.get<SalesOrderFactoryShipmentContextDto>(
         `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipment-context`,
@@ -178,6 +196,15 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}`,
         { errorPresentation: 'local', signal },
       ),
+    updatePaymentTerms: (
+      salesOrderId: string,
+      data: SalesOrderPaymentTermsRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/payment-terms`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     updateOrderStatus: (
       salesOrderId: string,
       data: SalesOrderStatusRequestDto,

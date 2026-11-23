@@ -1,0 +1,12 @@
+[Unit]
+Description=Qianshu DMS Machine Viewing Notification Scan (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 每天 08:30 发送「今天 + 待预约」的看机预约通知；命令自身拒绝 08:30 前执行。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/machine-viewing-notification-scan.js
+TimeoutStartSec=180s

@@ -1,0 +1,13 @@
+[Unit]
+Description=Qianshu DMS Ad Account Sync (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 每 15 分钟同步一次猎豹广告账户；上游数据本身约小时级刷新，更短的间隔没有收益。
+# 缺少 CHEETAHGO_APPID/CHEETAHGO_SECRET 时命令以非零退出码结束，便于 systemd 记录失败。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/ad-account-sync.js
+TimeoutStartSec=180s

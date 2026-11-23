@@ -4,7 +4,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
-import { buildPurchaseOrderTimeline, revisionAmounts } from './logic'
+import { buildPurchaseOrderTimeline, revisionAmounts, revisionHasOrderAmountChanges, revisionLineChanges } from './logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[] }>()
 const { t, te } = useI18n()
@@ -40,7 +40,7 @@ function statusLabel(value: string) {
               {{ statusLabel(entry.record.toStatus) }}
             </FaTag>
           </p>
-          <dl v-else class="text-sm m-0 mt-3 px-3 py-2 rounded-lg bg-muted/25 space-y-2">
+          <dl v-if="entry.kind === 'amount' && revisionHasOrderAmountChanges(entry.record)" class="text-sm m-0 mt-3 px-3 py-2 rounded-lg bg-muted/25 space-y-2">
             <div v-for="amount in revisionAmounts(entry.record)" :key="amount.label" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline justify-between">
               <dt class="text-muted-foreground">
                 {{ t(`purchaseOrderDrawer.amountFields.${amount.label}`) }}
@@ -52,6 +52,33 @@ function statusLabel(value: string) {
               </dd>
             </div>
           </dl>
+          <p v-else-if="entry.kind === 'amount'" class="qs-type-meta text-muted-foreground m-0 mt-3">
+            {{ t('purchaseOrderDrawer.orderAmountUnchanged') }}
+          </p>
+          <div v-if="entry.kind === 'amount' && revisionLineChanges(entry.record).length > 0" class="mt-3">
+            <p class="qs-type-compact-label m-0">
+              {{ t('purchaseOrderDrawer.lineChanges') }}
+            </p>
+            <div
+              v-for="change in revisionLineChanges(entry.record)"
+              :key="change.lineId"
+              class="mt-2 p-3 border border-border/70 rounded-lg bg-muted/15 min-w-0"
+            >
+              <div class="flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                <span class="font-medium break-words">{{ change.productName }}</span>
+                <span class="qs-type-meta text-muted-foreground">× {{ change.quantity }}</span>
+              </div>
+              <div class="text-sm mt-2 flex flex-wrap gap-2 items-center">
+                <AmountDisplay :value="change.oldUnitPriceAmount" :currency="detail.currencyCode" :currencies="currencies" class="max-w-full overflow-x-auto" />
+                <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-4" aria-hidden="true" />
+                <AmountDisplay :value="change.newUnitPriceAmount" :currency="detail.currencyCode" :currencies="currencies" class="text-primary max-w-full overflow-x-auto dark:text-foreground" />
+                <span class="qs-type-meta text-muted-foreground">{{ t('purchaseOrderDrawer.lineTotal') }}</span>
+                <AmountDisplay :value="change.oldLineTotalAmount" :currency="detail.currencyCode" :currencies="currencies" class="max-w-full overflow-x-auto" />
+                <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-4" aria-hidden="true" />
+                <AmountDisplay :value="change.newLineTotalAmount" :currency="detail.currencyCode" :currencies="currencies" class="text-primary max-w-full overflow-x-auto dark:text-foreground" />
+              </div>
+            </div>
+          </div>
           <p class="qs-type-description m-0 mt-3 whitespace-pre-wrap [overflow-wrap:anywhere]">
             {{ t('purchaseOrderDrawer.reason') }}：{{ entry.record.reason?.trim() || t('purchaseOrderDrawer.reasonNotRecorded') }}
           </p>

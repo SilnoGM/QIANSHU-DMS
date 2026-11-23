@@ -1,17 +1,22 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return -- Jest 匹配器与 catch 结果用于断言。 */
 import { randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 
 import { AppModule } from '../src/app.module'
+import { scanMachineViewingNotifications } from '../src/commands/machine-viewing-notification-scan'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
+import { AuditService } from '../src/modules/audit/audit.service'
 import { MachineViewingQueryService } from '../src/modules/machine-viewings/machine-viewing-query.service'
 import { MachineViewingService } from '../src/modules/machine-viewings/machine-viewing.service'
+import { SystemNotificationService } from '../src/modules/notifications/system-notification.service'
 
 jest.setTimeout(60_000)
 
 const USER_PREFIX = 'machine_viewing_e2e_'
-const NOW = new Date('2026-11-05T02:00:00.000Z')
+const NOW = new Date('2026-11-05T02:00:00.000Z') // 10:00 上海
+const BEFORE_NOTIFICATION_TIME = new Date('2026-11-05T00:00:00.000Z') // 08:00 上海
 
 describe('machine viewing appointments against PostgreSQL', () => {
   let application: INestApplication
@@ -21,6 +26,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
   let operationsId: string
   let otherOperationsId: string
   let purchasingId: string
+  let notificationRecipientId: string
   let roleIds: string[] = []
 
   beforeAll(async () => {
@@ -32,7 +38,17 @@ describe('machine viewing appointments against PostgreSQL', () => {
     queries = application.get(MachineViewingQueryService)
 
     const permissions = await prisma.permission.findMany({
-      where: { code: { in: ['machine-viewings:read', 'machine-viewings:create', 'data-scope:self', 'data-scope:all'] } },
+      where: {
+        code: {
+          in: [
+            'machine-viewings:read',
+            'machine-viewings:create',
+            'machine-viewings:update',
+            'data-scope:self',
+            'data-scope:all',
+          ],
+        },
+      },
       select: { id: true, code: true },
     })
     const permissionId = (code: string): string => {
@@ -49,6 +65,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
           create: [
             { permissionId: permissionId('machine-viewings:read') },
             { permissionId: permissionId('machine-viewings:create') },
+            { permissionId: permissionId('machine-viewings:update') },
             { permissionId: permissionId('data-scope:self') },
           ],
         },
@@ -62,22 +79,101 @@ describe('machine viewing appointments against PostgreSQL', () => {
         permissions: {
           create: [
             { permissionId: permissionId('machine-viewings:read') },
+            { permissionId: permissionId('machine-viewings:update') },
             { permissionId: permissionId('data-scope:all') },
           ],
         },
       },
       select: { id: true },
     })
-    roleIds = [operationsRole.id, purchasingRole.id]
+    // 通知目标按真实角色 code `purchasing_staff` 解析；E2E 临时库不跑 seed，这里补一个收件角色。
+    const notificationRole = await prisma.role.create({
+      data: {
+        code: 'purchasing_staff',
+        name: '看机预约 E2E 通知收件角色',
+      },
+      select: { id: true },
+    })
+    roleIds = [operationsRole.id, purchasingRole.id, notificationRole.id]
 
     operationsId = await createUser('ops', operationsRole.id)
     otherOperationsId = await createUser('ops_other', operationsRole.id)
     purchasingId = await createUser('purchasing', purchasingRole.id)
+    notificationRecipientId = await createUser('notification', notificationRole.id)
+
+    // 生产默认模板会被 purge，通知模板由管理员配置；E2E 需要自己补一份可渲染的站内模板。
+    const variables = [
+      'appointmentNo',
+      'appointmentDate',
+      'period',
+      'hour',
+      'site',
+      'machineType',
+      'customerName',
+      'customerPhone',
+      'contactPerson',
+      'status',
+    ].map(name => ({
+      name,
+      required: false,
+      maxLength: 200,
+      sensitive: name === 'customerName',
+    }))
+    await prisma.notificationTemplate.createMany({
+      data: [
+        {
+          key: 'operations.machine-viewing.created',
+          channel: 'IN_APP',
+          name: '看机预约',
+          domain: 'OPERATIONS',
+          titleTemplate: '看机预约 {{appointmentNo}}',
+          bodyTemplate: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
+          variables,
+          maxLength: 2000,
+          enabled: true,
+        },
+        {
+          key: 'operations.machine-viewing.created',
+          channel: 'ASSISTANT',
+          name: '看机预约',
+          domain: 'OPERATIONS',
+          titleTemplate: null,
+          bodyTemplate: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
+          variables,
+          maxLength: 2000,
+          enabled: true,
+        },
+        {
+          key: 'operations.machine-viewing.rescheduled',
+          channel: 'IN_APP',
+          name: '看机预约改期',
+          domain: 'OPERATIONS',
+          titleTemplate: '看机预约改期 {{appointmentNo}}',
+          bodyTemplate: '原时间：{{previousAppointmentTime}}\n新时间：{{appointmentTime}}\n客户：{{customerName}}',
+          variables: [
+            'appointmentNo',
+            'previousAppointmentTime',
+            'appointmentTime',
+            'site',
+            'machineType',
+            'customerName',
+            'contactPerson',
+          ].map(name => ({
+            name,
+            required: false,
+            maxLength: 200,
+            sensitive: name === 'customerName',
+          })),
+          maxLength: 2000,
+          enabled: true,
+        },
+      ],
+    })
   })
 
   afterAll(async () => {
     try {
-      const userIds = [operationsId, otherOperationsId, purchasingId].filter(Boolean)
+      const userIds = [operationsId, otherOperationsId, purchasingId, notificationRecipientId].filter(Boolean)
       await prisma.machineViewingAppointment.deleteMany({ where: { createdByUserId: { in: userIds } } })
       await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: userIds } } })
       await prisma.user.deleteMany({ where: { id: { in: userIds } } })
@@ -138,7 +234,8 @@ describe('machine viewing appointments against PostgreSQL', () => {
       customerName: '陈先生',
       customerPhone: '0912-345-678',
       contactPerson: '李华',
-      status: 'PENDING_APPOINTMENT',
+      // 今天 08:30 后创建：立即通知并把状态推进到已预约。
+      status: 'APPOINTED',
       feedback: null,
       createdBy: { id: operationsId },
     })
@@ -157,6 +254,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
     )
     expect(withoutHour.hour).toBeNull()
     expect(withoutHour.appointmentDate).toBe('2026-11-20')
+    expect(withoutHour.status).toBe('PENDING_APPOINTMENT')
     expect(withoutHour.appointmentNo).toMatch(/^MV\/\d{8}-\d{4}$/u)
     expect(withoutHour.appointmentNo).not.toBe(created.appointmentNo)
   })
@@ -226,7 +324,7 @@ describe('machine viewing appointments against PostgreSQL', () => {
   })
 
   it('reads back a manually recorded status and feedback', async () => {
-    // 状态流转入口尚未开放，这里直接写库验证迁移与序列化链路。
+    // 旧数据可能由脚本直接写入；序列化链路仍需兼容任意已存在状态。
     const created = await service.create(
       commandContext(operationsId),
       input({ customerName: '反馈读取' }),
@@ -244,5 +342,294 @@ describe('machine viewing appointments against PostgreSQL', () => {
       status: 'FEEDBACK_GIVEN',
       feedback: '客户到场，已看过微耕机，倾向年底下单。',
     })
+  })
+
+  it('updates editable content without changing the appointment number', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '编辑前' }),
+      randomUUID(),
+      NOW,
+    )
+    const updated = await service.update(commandContext(operationsId), created.id, {
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      customerName: '编辑后',
+      contactPerson: '王五',
+    }, NOW)
+
+    expect(updated).toMatchObject({
+      id: created.id,
+      appointmentNo: created.appointmentNo,
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      hour: null,
+      customerName: '编辑后',
+      customerPhone: null,
+      contactPerson: '王五',
+      status: 'PENDING_APPOINTMENT',
+    })
+    const audit = await prisma.auditEvent.findFirst({
+      where: { eventType: 'MACHINE_VIEWING_APPOINTMENT_UPDATED', targetId: created.id },
+      orderBy: { occurredAt: 'desc' },
+    })
+    expect(audit?.metadata).toMatchObject({ changedFields: expect.stringContaining('customerName') })
+  })
+
+  it('runs the strict status flow, edits feedback in place and locks cancellation afterwards', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '状态流转' }),
+      randomUUID(),
+      BEFORE_NOTIFICATION_TIME,
+    )
+
+    await expect(service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '跳步' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+
+    const appointed = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'APPOINTED' },
+      NOW,
+    )
+    expect(appointed.status).toBe('APPOINTED')
+
+    const fedBack = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机。' },
+    )
+    expect(fedBack).toMatchObject({ status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机。' })
+
+    const edited = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'FEEDBACK_GIVEN', feedback: '客户到场，已看过微耕机，倾向年底下单。' },
+    )
+    expect(edited.feedback).toBe('客户到场，已看过微耕机，倾向年底下单。')
+    expect(edited.status).toBe('FEEDBACK_GIVEN')
+
+    await expect(service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'CANCELLED' },
+    )).rejects.toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+
+    const lockedEdit = await service.update(commandContext(operationsId), created.id, {
+      site: created.site,
+      machineType: created.machineType,
+      appointmentDate: created.appointmentDate,
+      period: created.period,
+      hour: created.hour ?? undefined,
+      customerName: '改名',
+      customerPhone: created.customerPhone ?? undefined,
+      contactPerson: created.contactPerson,
+    }, NOW).catch(error => error)
+    expect(lockedEdit).toMatchObject({ code: 'MACHINE_VIEWING_STATE_CHANGED', status: 409 })
+  })
+
+  it('cancels before feedback and records the optional reason only in audit', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '取消预约' }),
+      randomUUID(),
+      BEFORE_NOTIFICATION_TIME,
+    )
+    const cancelled = await service.transition(
+      commandContext(operationsId),
+      created.id,
+      { status: 'CANCELLED', cancelReason: '客户临时有事' },
+    )
+    expect(cancelled).toMatchObject({ status: 'CANCELLED', feedback: null })
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: { eventType: 'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED', targetId: created.id },
+      orderBy: { occurredAt: 'desc' },
+    })
+    expect(audit?.metadata).toMatchObject({
+      fromStatus: 'PENDING_APPOINTMENT',
+      toStatus: 'CANCELLED',
+      cancelReason: '客户临时有事',
+    })
+  })
+
+  it('scopes updates by data scope: operations cannot touch another operator row, purchasing can', async () => {
+    const created = await service.create(
+      commandContext(otherOperationsId),
+      input({ customerName: '他人预约' }),
+      randomUUID(),
+      NOW,
+    )
+    const update = {
+      site: 'NEW_TAIPEI_LINKOU' as const,
+      machineType: 'MINI_TILLER' as const,
+      appointmentDate: '2026-11-20',
+      period: 'PM' as const,
+      customerName: '被改名字',
+      contactPerson: '李华',
+    }
+
+    await expect(service.update(commandContext(operationsId), created.id, update, NOW))
+      .rejects.toMatchObject({ code: 'MACHINE_VIEWING_NOT_FOUND', status: 404 })
+
+    const updatedByPurchasing = await service.update(commandContext(purchasingId), created.id, update, NOW)
+    expect(updatedByPurchasing.customerName).toBe('被改名字')
+  })
+
+  it('runs the 08:30 scan for today PENDING appointments and advances them', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ customerName: '批次客户' }),
+      randomUUID(),
+      BEFORE_NOTIFICATION_TIME,
+    )
+    expect(created.status).toBe('PENDING_APPOINTMENT')
+
+    const result = await scanMachineViewingNotifications(
+      prisma,
+      application.get(SystemNotificationService),
+      new AuditService(),
+      { now: () => NOW },
+    )
+    expect(result.status).toBe('completed')
+    expect(result.advanced).toBeGreaterThanOrEqual(1)
+
+    const row = await prisma.machineViewingAppointment.findUnique({
+      where: { id: created.id },
+      select: { status: true },
+    })
+    expect(row?.status).toBe('APPOINTED')
+
+    const notification = await prisma.notification.findFirst({
+      where: {
+        eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
+        sourceId: created.id,
+      },
+      select: { id: true },
+    })
+    expect(notification).not.toBeNull()
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        actorType: 'SYSTEM',
+        eventType: 'MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED',
+        targetId: created.id,
+      },
+      select: { id: true },
+    })
+    expect(audit).not.toBeNull()
+  })
+
+  it('only sends the reschedule event for an APPOINTED future appointment and returns it to PENDING', async () => {
+    const created = await service.create(
+      commandContext(operationsId),
+      input({ appointmentDay: 5, customerName: '未来改期' }),
+      randomUUID(),
+      NOW,
+    )
+    expect(created.status).toBe('APPOINTED')
+
+    const updated = await service.update(commandContext(operationsId), created.id, {
+      site: created.site,
+      machineType: created.machineType,
+      appointmentDate: '2026-11-20',
+      period: 'AM',
+      customerName: created.customerName,
+      customerPhone: created.customerPhone ?? undefined,
+      contactPerson: created.contactPerson,
+    }, NOW)
+    expect(updated).toMatchObject({
+      appointmentDate: '2026-11-20',
+      status: 'PENDING_APPOINTMENT',
+    })
+
+    const rescheduleNotification = await prisma.notification.findFirst({
+      where: {
+        eventType: 'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED',
+        sourceId: created.id,
+      },
+      select: { id: true },
+    })
+    expect(rescheduleNotification).not.toBeNull()
+
+    const appointmentNotification = await prisma.notification.findFirst({
+      where: {
+        eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
+        dedupeKey: { contains: ':r2' },
+        sourceId: created.id,
+      },
+      select: { id: true },
+    })
+    expect(appointmentNotification).toBeNull()
+  })
+
+  it('returns status counts that keep non-status filters and ignore the selected status', async () => {
+    await service.create(
+      commandContext(purchasingId),
+      input({ customerName: '计数客户' }),
+      randomUUID(),
+      BEFORE_NOTIFICATION_TIME,
+    )
+
+    await expect(queries.statusCounts(purchasingId, { keyword: '计数客户' })).resolves.toEqual({
+      statuses: [
+        { value: 'ALL', count: 1 },
+        { value: 'PENDING_APPOINTMENT', count: 1 },
+        { value: 'APPOINTED', count: 0 },
+        { value: 'FEEDBACK_GIVEN', count: 0 },
+        { value: 'CANCELLED', count: 0 },
+      ],
+    })
+  })
+
+  it('filters by keyword, status, site, machine type and appointment date range', async () => {
+    const earlier = await service.create(
+      commandContext(purchasingId),
+      input({ appointmentDay: 5, customerName: '筛选甲', site: 'NEW_TAIPEI_LINKOU', machineType: 'MINI_TILLER' }),
+      randomUUID(),
+      NOW,
+    )
+    const later = await service.create(
+      commandContext(purchasingId),
+      input({ appointmentDay: 20, customerName: '筛选乙', site: 'TAICHUNG_LONGJING', machineType: 'SHREDDER' }),
+      randomUUID(),
+      NOW,
+    )
+
+    const keyword = await queries.listForActor(purchasingId, { page: 1, pageSize: 100, keyword: '筛选甲' })
+    expect(keyword.items.map(item => item.id)).toEqual([earlier.id])
+
+    const byStatus = await queries.listForActor(purchasingId, { page: 1, pageSize: 100, status: 'APPOINTED' })
+    expect(byStatus.items.some(item => item.id === earlier.id)).toBe(true)
+    expect(byStatus.items.some(item => item.id === later.id)).toBe(false)
+
+    const bySiteAndType = await queries.listForActor(purchasingId, {
+      page: 1,
+      pageSize: 100,
+      site: 'TAICHUNG_LONGJING',
+      machineType: 'SHREDDER',
+    })
+    expect(bySiteAndType.items.some(item => item.id === later.id)).toBe(true)
+    expect(bySiteAndType.items.some(item => item.id === earlier.id)).toBe(false)
+
+    const byDate = await queries.listForActor(purchasingId, {
+      page: 1,
+      pageSize: 100,
+      dateFrom: '2026-11-20',
+      dateTo: '2026-11-20',
+    })
+    expect(byDate.items.some(item => item.id === later.id)).toBe(true)
+    expect(byDate.items.some(item => item.id === earlier.id)).toBe(false)
+
+    await expect(queries.listForActor(purchasingId, { page: 1, pageSize: 100, dateFrom: '2026-02-31' }))
+      .rejects.toMatchObject({ code: 'MACHINE_VIEWING_VALIDATION_FAILED', status: 422 })
   })
 })

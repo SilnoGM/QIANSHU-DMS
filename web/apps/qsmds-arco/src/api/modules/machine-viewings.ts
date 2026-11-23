@@ -2,12 +2,18 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateMachineViewingDto,
   MachineViewingDto,
+  MachineViewingManualNotificationTextDto,
   MachineViewingPageDto,
   MachineViewingsListData,
+  MachineViewingsStatusCountsData,
+  MachineViewingStatusCountsDto,
+  MachineViewingStatusTransitionDto,
+  UpdateMachineViewingDto,
 } from '../generated/types.gen'
 import api from '../index'
 
 export type MachineViewingListQuery = NonNullable<MachineViewingsListData['query']>
+export type MachineViewingStatusCountsQuery = NonNullable<MachineViewingsStatusCountsData['query']>
 
 const read = (signal: AbortSignal) => ({ signal, errorPresentation: 'local' as const })
 const write = (signal: AbortSignal) => ({ ...read(signal), retry: false as const })
@@ -21,11 +27,21 @@ export function createMachineViewingsApi(client: AxiosInstance) {
   return {
     list: (query: MachineViewingListQuery, signal: AbortSignal) =>
       client.get<MachineViewingPageDto>('machine-viewings', { ...read(signal), params: query }),
+    statusCounts: (query: MachineViewingStatusCountsQuery, signal: AbortSignal) =>
+      client.get<MachineViewingStatusCountsDto>('machine-viewings/status-counts', { ...read(signal), params: query }),
     create: (data: CreateMachineViewingDto, key: string, signal: AbortSignal) =>
       client.post<MachineViewingDto>('machine-viewings', data, {
         ...write(signal),
         headers: { 'Idempotency-Key': key },
       }),
+    update: (id: string, data: UpdateMachineViewingDto, signal: AbortSignal) =>
+      client.patch<MachineViewingDto>(`machine-viewings/${id}`, data, write(signal)),
+    transitionStatus: (id: string, data: MachineViewingStatusTransitionDto, signal: AbortSignal) =>
+      client.post<MachineViewingDto>(`machine-viewings/${id}/status-transitions`, data, write(signal)),
+    manualNotificationText: (id: string, signal: AbortSignal) =>
+      client.get<MachineViewingManualNotificationTextDto>(`machine-viewings/${id}/manual-notification-text`, read(signal)),
+    markManuallyNotified: (id: string, signal: AbortSignal) =>
+      client.post<MachineViewingDto>(`machine-viewings/${id}/manual-notifications`, undefined, write(signal)),
   }
 }
 

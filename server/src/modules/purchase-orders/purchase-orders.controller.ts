@@ -753,7 +753,7 @@ export class PurchaseOrdersController {
   }
 
   @Post(':purchaseOrderId/amount-revisions')
-  @RequirePermissions('purchase-orders:review')
+  @RequirePermissions('purchase-orders:price-revision')
   @HttpCode(HttpStatus.OK)
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
   @ApiApplicationContract({

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { StepsItem } from '@fantastic-admin/components'
 import type {
+  PriceQuotationSheetSource,
   PurchaseOrderCreateStep,
   PurchaseOrderFormStep,
   PurchaseOrderSubmissionState,
@@ -47,6 +48,7 @@ import { formatNumberingRuleStructure, numberingResetPolicyLabel } from '../../s
 import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
+  buildPriceQuotationSheetRequest,
   buildPurchaseOrderCreateRequest,
   calculatePurchaseOrderDraftTotal,
   createPurchaseOrderEditingState,
@@ -68,6 +70,7 @@ import {
   resolvePurchaseOrderIssuerLabel,
 } from './purchase-order-desc.logic'
 
+import { PurchaseOrderImageClipboardError } from './purchase-order-image-copy.logic'
 import {
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -76,6 +79,7 @@ import PurchaseOrderPartsReview from './purchase-order-parts-review.vue'
 import { freezePurchaseOrderPartReview, mapPurchaseOrderPartProducts, reconcilePurchaseOrderParts } from './purchase-order-parts.logic'
 import PurchaseOrderPaymentRecipients from './purchase-order-payment-recipients.vue'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
+import PurchaseOrderPriceQuotationSheetModal from './purchase-order-price-quotation-sheet-modal.vue'
 import PurchaseOrderShippingMarkSummary from './purchase-order-shipping-mark-summary.vue'
 import {
   createPurchaseOrderShippingMarkResolver,
@@ -84,6 +88,7 @@ import {
   PURCHASE_SHIPPING_MARK_DISPATCH_HINT,
 } from './purchase-order-shipping-mark.logic'
 import PurchaseSourceSalesOrderSelector from './purchase-source-sales-order-selector.vue'
+import { usePriceQuotationSheet } from './use-price-quotation-sheet'
 
 defineOptions({ name: 'OperationsPurchaseOrderCreate' })
 
@@ -314,6 +319,82 @@ const submitReady = computed(() => (
   && shippingMarkAvailable.value
   && furthestReachedStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
 ))
+
+const {
+  visible: priceQuotationSheetVisible,
+  generating: priceQuotationSheetGenerating,
+  previewUrl: priceQuotationSheetPreviewUrl,
+  imageLoaded: priceQuotationSheetImageLoaded,
+  imageFailed: priceQuotationSheetImageFailed,
+  error: priceQuotationSheetError,
+  open: openPriceQuotationSheetPreview,
+  close: closePriceQuotationSheet,
+  invalidate: invalidatePriceQuotationSheet,
+  markLoaded: markPriceQuotationSheetLoaded,
+  markFailed: markPriceQuotationSheetFailed,
+  copy: copyPriceQuotationSheetImage,
+  download: downloadPriceQuotationSheet,
+} = usePriceQuotationSheet({
+  epoch: computed(() => appAccountStore.authEpoch),
+})
+
+const priceQuotationSheetSource = computed<PriceQuotationSheetSource | null>(() => (
+  productMode === null
+    ? null
+    : {
+        customSupplierName: formModel.customSupplierName,
+        lines: formModel.lines,
+        orderDate: formModel.orderDate,
+        productMode,
+        supplierValue: formModel.supplierValue,
+        today: businessToday(),
+      }
+))
+const priceQuotationSheetBuild = computed(() => (
+  priceQuotationSheetSource.value === null
+    ? null
+    : buildPriceQuotationSheetRequest(priceQuotationSheetSource.value)
+))
+const canGeneratePriceQuotationSheet = computed(() => (
+  !submitLocked.value && priceQuotationSheetBuild.value?.valid === true
+))
+const priceQuotationSheetFingerprint = computed(() => {
+  const build = priceQuotationSheetBuild.value
+  return build?.valid === true ? JSON.stringify(build.request) : null
+})
+// 任何影响图片内容的表单修改都立即作废旧预览，避免把旧价格发给供应商。
+watch(priceQuotationSheetFingerprint, () => invalidatePriceQuotationSheet())
+
+function openPriceQuotationSheet(): void {
+  const result = priceQuotationSheetBuild.value
+  if (result === null || !result.valid) {
+    if (result !== null) {
+      fieldErrors.value = { ...fieldErrors.value, ...result.fieldErrors }
+      toast.warning('请先填写完整的产品明细与价格')
+      focusFirstInvalidField(result.fieldErrors)
+    }
+    return
+  }
+  void openPriceQuotationSheetPreview(result.request)
+}
+
+function handlePriceQuotationSheetVisibility(value: boolean): void {
+  if (!value) {
+    closePriceQuotationSheet()
+  }
+}
+
+async function copyPriceQuotationSheet(): Promise<void> {
+  try {
+    await copyPriceQuotationSheetImage()
+    toast.success('核价单图片已复制')
+  }
+  catch (error) {
+    toast.error(error instanceof PurchaseOrderImageClipboardError && error.code === 'UNAVAILABLE'
+      ? '当前浏览器不支持复制图片，请使用下载'
+      : '复制图片失败，请重试')
+  }
+}
 
 const loadPurchaseProducts: ProductPageLoader = async (query, signal) => {
   if (productMode !== 'CATALOG') {
@@ -1547,7 +1628,25 @@ onBeforeUnmount(() => {
                     :temporary-line-initial-actual-unit-price-amount="null"
                     product-selection-description="采购定价读取产品档案采购成本；本单采购价必须确认填写。"
                     @update:model-value="handleLinesUpdate"
-                  />
+                  >
+                    <template #footer-leading>
+                      <div class="flex flex-col gap-1 items-start">
+                        <FaButton
+                          type="button"
+                          variant="outline"
+                          class="min-h-11 sm:min-h-9"
+                          :disabled="!canGeneratePriceQuotationSheet"
+                          :loading="priceQuotationSheetGenerating"
+                          @click="openPriceQuotationSheet"
+                        >
+                          <FaIcon name="i-lucide:image-plus" aria-hidden="true" />生成核价单
+                        </FaButton>
+                        <span v-if="!canGeneratePriceQuotationSheet" class="qs-type-meta text-muted-foreground">
+                          填写有效的产品与价格后可生成
+                        </span>
+                      </div>
+                    </template>
+                  </QsOrderProductLineEditor>
                 </FaCard>
 
                 <PurchaseOrderPaymentTerms
@@ -2024,6 +2123,20 @@ onBeforeUnmount(() => {
         </FaButton>
       </template>
     </QsGenericModal>
+
+    <PurchaseOrderPriceQuotationSheetModal
+      :model-value="priceQuotationSheetVisible"
+      :preview-url="priceQuotationSheetPreviewUrl"
+      :image-loaded="priceQuotationSheetImageLoaded"
+      :image-failed="priceQuotationSheetImageFailed"
+      :generating="priceQuotationSheetGenerating"
+      :error="priceQuotationSheetError"
+      @update:model-value="handlePriceQuotationSheetVisibility"
+      @download="downloadPriceQuotationSheet"
+      @copy="copyPriceQuotationSheet"
+      @image-load="markPriceQuotationSheetLoaded"
+      @image-error="markPriceQuotationSheetFailed"
+    />
   </div>
 </template>
 

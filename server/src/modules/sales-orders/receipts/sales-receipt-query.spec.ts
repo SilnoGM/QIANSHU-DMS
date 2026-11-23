@@ -28,6 +28,8 @@ describe('sales receipt finance views', () => {
     ['APPROVED', { status: 'APPROVED', approvedPayment: { is: { voidedAt: null } } }],
     ['VOIDED', { status: 'APPROVED', approvedPayment: { is: { voidedAt: { not: null } } } }],
     ['PENDING_REVIEW', { status: 'PENDING_REVIEW' }],
+    ['PENDING_CONFIRM', { status: 'PENDING_CONFIRM' }],
+    ['PENDING_POSTING', { status: 'PENDING_POSTING' }],
     ['REJECTED', { status: 'REJECTED' }],
   ])('%s view filters rows and page total before pagination and overrides legacy status', async (view, expected) => {
     const { service, findMany, count, transaction } = fixture()
@@ -39,9 +41,9 @@ describe('sales receipt finance views', () => {
     expect(transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   })
 
-  it('counts four disjoint views with the same common filters independently of selected view', async () => {
-    const { service, count } = fixture()
-    count.mockReset().mockResolvedValueOnce(5).mockResolvedValueOnce(1).mockResolvedValueOnce(2).mockResolvedValueOnce(3).mockResolvedValueOnce(4)
+  it('counts the six disjoint views with the same common filters independently of selected view', async () => {
+    const { service, count, tx } = fixture()
+    count.mockReset().mockResolvedValueOnce(9).mockResolvedValueOnce(5).mockResolvedValueOnce(1).mockResolvedValueOnce(2).mockResolvedValueOnce(3).mockResolvedValueOnce(4).mockResolvedValue(6)
     const submittedFrom = '2026-09-01T00:00:00.000Z'
     const submittedTo = '2026-09-09T00:00:00.000Z'
     const query = plainToInstance(SalesReceiptListQueryDto, { view: 'VOIDED', currencyCode: 'TWD', accountOwnerUserId: 'owner', keyword: 'SC001', submittedFrom, submittedTo })
@@ -53,11 +55,18 @@ describe('sales receipt finance views', () => {
     }
     expect(count.mock.calls.slice(1)).toEqual([
       [{ where: { ...common, status: 'PENDING_REVIEW' } }],
+      [{ where: { ...common, status: 'PENDING_CONFIRM' } }],
+      [{ where: { ...common, status: 'PENDING_POSTING' } }],
       [{ where: { ...common, status: 'APPROVED', approvedPayment: { is: { voidedAt: null } } } }],
       [{ where: { ...common, status: 'REJECTED' } }],
       [{ where: { ...common, status: 'APPROVED', approvedPayment: { is: { voidedAt: { not: null } } } } }],
     ])
-    expect(result.statusCounts).toEqual({ PENDING_REVIEW: 1, APPROVED: 2, REJECTED: 3, VOIDED: 4 })
+    expect(result.statusCounts).toEqual({ PENDING_REVIEW: 5, PENDING_CONFIRM: 1, PENDING_POSTING: 2, APPROVED: 3, REJECTED: 4, VOIDED: 6 })
+    // 待处理金额必须覆盖三步流转的全部在途状态，否则已发群或已确认到账的款项会脱离占用。
+    expect(tx.salesReceiptRequest.aggregate).toHaveBeenCalledWith({
+      where: { ...common, salesOrderId: 'order', status: { in: ['PENDING_REVIEW', 'PENDING_CONFIRM', 'PENDING_POSTING'] } },
+      _sum: { amount: true },
+    })
     expect(result.pendingAmount).toBe('3.00')
   })
 

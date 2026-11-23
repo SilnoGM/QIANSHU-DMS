@@ -12,9 +12,11 @@ import { AuthModule } from '../auth/auth.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
+import { ProductAliasesModule } from '../product-aliases/product-alias.module'
 import { ProductsModule } from '../products/products.module'
 import { ShipmentStorageModule } from '../shipment-storage/shipment-storage.module'
 import { SalesOrderCommandService } from './sales-order-command.service'
+import { SalesOrderEditService } from './sales-order-edit.service'
 import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
 import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
 import { SalesOrderProductEditService } from './sales-order-product-edit.service'
@@ -35,6 +37,7 @@ import { SalesOrdersController } from './sales-orders.controller'
     MediaModule,
     NumberingModule,
     ProductsModule,
+    ProductAliasesModule,
     ShipmentStorageModule,
   ],
   controllers: [SalesOrderPendingPurchaseController, SalesOrdersController, SalesReceiptController, SalesReceiptOrderController],
@@ -46,6 +49,7 @@ import { SalesOrdersController } from './sales-orders.controller'
     SalesOrderPendingPurchaseQueryService,
     SalesOrderProductEditQueryService,
     SalesOrderProductEditService,
+    SalesOrderEditService,
     SalesOrderCommandService,
     SalesOrderAutomaticStateService,
     SalesOrderMutationService,

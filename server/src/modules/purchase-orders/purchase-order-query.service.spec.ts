@@ -127,6 +127,9 @@ function setup() {
     purchaseOrderStatusHistory: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     },
+    product: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
         quantity: 2,

@@ -4,6 +4,7 @@ import type { AuditService } from '../audit/audit.service'
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import type { SystemNotificationService } from '../notifications/system-notification.service'
+import type { ProductAliasService } from '../product-aliases/product-alias.service'
 import { normalizeSalesOrderCreateCommand } from './sales-order-command.normalizer'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { calculateSalesOrderCreateFingerprint } from './sales-order-create-fingerprint'
@@ -87,6 +88,8 @@ function setup() {
         attributes: [{ title: '颜色', value: '红' }],
         twdSalePriceAmount: { toFixed: () => '60.00' },
         myrSalePriceAmount: null,
+        defaultAlias: null,
+        excludeFromShippingMark: false,
       }]),
     },
     mediaAsset: {
@@ -145,6 +148,12 @@ function setup() {
   const notifications = {
     publish: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
+  const aliases = {
+    resolveForIssuer: jest.fn<
+      Promise<ReadonlyMap<string, string>>,
+      [string, readonly string[], unknown]
+    >().mockResolvedValue(new Map()),
+  }
   const service = new SalesOrderCommandService(
     prisma as unknown as PrismaService,
     numbering as unknown as NumberingGeneratorService,
@@ -156,8 +165,9 @@ function setup() {
       now: () => new Date('2026-08-20T01:02:03.004Z'),
     },
     notifications as unknown as SystemNotificationService,
+    aliases as unknown as ProductAliasService,
   )
-  return { audit, detail, media, notifications, numbering, prisma, query, service, transaction }
+  return { aliases, audit, detail, media, notifications, numbering, prisma, query, service, transaction }
 }
 
 describe('SalesOrderCommandService', () => {
@@ -199,6 +209,7 @@ describe('SalesOrderCommandService', () => {
           issuerName: '张三',
           customerFbName: '',
           customerLineName: '',
+          salesProducts: '标准产品×2',
         }),
       }),
       { transaction: expect.anything() },
@@ -419,6 +430,63 @@ describe('SalesOrderCommandService', () => {
         variables: expect.objectContaining({
           customerFbName: 'Wang FB',
           customerLineName: 'wangline',
+        }),
+      }),
+      { transaction: expect.anything() },
+    )
+  })
+
+  it('builds the sales product block with issuer aliases and supplement-price exclusion', async () => {
+    const fixture = setup()
+    const PRODUCT_A = '44444444-4444-4444-8444-444444444444'
+    const PRODUCT_B = '66666666-6666-4666-8666-666666666666'
+    const PRODUCT_C = '77777777-7777-4777-8777-777777777777'
+    const productRow = (id: string, no: string, name: string, extra: Record<string, unknown>) => ({
+      id,
+      productNo: no,
+      name,
+      status: 'ACTIVE',
+      attributes: [],
+      twdSalePriceAmount: { toFixed: () => '60.00' },
+      myrSalePriceAmount: null,
+      defaultAlias: null,
+      excludeFromShippingMark: false,
+      ...extra,
+    })
+    fixture.transaction.product.findMany.mockResolvedValue([
+      productRow(PRODUCT_A, 'P-001', '木桌', {}),
+      productRow(PRODUCT_B, 'P-002', '椅子', { defaultAlias: '靠椅' }),
+      productRow(PRODUCT_C, 'P-003', '❗️补差价', { excludeFromShippingMark: true }),
+    ])
+    fixture.aliases.resolveForIssuer.mockResolvedValue(new Map([[PRODUCT_A, '个人木桌']]))
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-sales-products',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, input({
+      lines: [
+        { lineType: 'CATALOG', productId: PRODUCT_A, actualUnitPriceAmount: '50', quantity: 2 },
+        { lineType: 'CUSTOM', name: '定制架', description: null, actualUnitPriceAmount: '10', quantity: 1 },
+        { lineType: 'CATALOG', productId: PRODUCT_B, actualUnitPriceAmount: '50', quantity: 1 },
+        { lineType: 'CUSTOM', name: '补差价-运费', description: null, actualUnitPriceAmount: '5', quantity: 1 },
+        { lineType: 'CATALOG', productId: PRODUCT_C, actualUnitPriceAmount: '5', quantity: 1 },
+        { lineType: 'CATALOG', productId: PRODUCT_A, actualUnitPriceAmount: '40', quantity: 1 },
+      ],
+      agreedTotalAmount: '210',
+      depositDueAmount: '60',
+      balanceDueAmount: '150',
+    }))).resolves.toEqual(fixture.detail)
+
+    expect(fixture.aliases.resolveForIssuer).toHaveBeenCalledWith(
+      ACTOR_ID,
+      expect.arrayContaining([PRODUCT_A, PRODUCT_B, PRODUCT_C]),
+      expect.anything(),
+    )
+    expect(fixture.notifications.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({
+          salesProducts: '个人木桌×3+定制架+靠椅',
         }),
       }),
       { transaction: expect.anything() },

@@ -364,6 +364,31 @@ test('销售订单取消使用订单状态接口，局部呈错且禁止自动�
   }])
 })
 
+test('修改收款约定使用独立接口，局部呈错且禁止自动重试', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const request = {
+    agreedTotalAmount: '1000.00',
+    depositDueAmount: '250.00',
+    balanceDueAmount: '750.00',
+    reason: '客户协商下调定金',
+  }
+
+  await api.updatePaymentTerms('order/id', request, controller.signal)
+
+  assert.deepEqual(calls, [{
+    config: {
+      errorPresentation: 'local',
+      retry: false,
+      signal: controller.signal,
+    },
+    data: request,
+    method: 'patch',
+    url: 'sales-orders/order%2Fid/payment-terms',
+  }])
+})
+
 test('待采购产品查询使用订单级只读接口并传递取消信号', async () => {
   const calls: Call[] = []
   const api = createSalesOrdersApi(createRecorder(calls))
@@ -374,4 +399,43 @@ test('待采购产品查询使用订单级只读接口并传递取消信号', as
     url: 'sales-orders/order%2F1/pending-purchase-products',
     config: { errorPresentation: 'local', signal },
   }])
+})
+
+test('编辑上下文与订单信息保存固定使用订单级接口并禁止自动重放', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const infoRequest = {
+    expectedVersion: 3,
+    reason: '客户更正电话与出单日期',
+    customer: {
+      name: '王小明',
+      phone: '0912345678',
+      countryRegionId: 'region-country',
+      provinceStateId: 'region-province',
+      cityId: 'region-city',
+      addressDetail: '中正一路100号',
+      fbName: null,
+      lineName: null,
+    },
+    orderDate: '2026-11-20',
+    remark: null,
+  }
+
+  await api.editContext('order/1', controller.signal)
+  await api.updateInfo('order/1', infoRequest, controller.signal)
+
+  assert.deepEqual(calls, [
+    {
+      method: 'get',
+      url: 'sales-orders/order%2F1/edit-context',
+      config: { errorPresentation: 'local', signal: controller.signal },
+    },
+    {
+      method: 'patch',
+      url: 'sales-orders/order%2F1/info',
+      data: infoRequest,
+      config: { errorPresentation: 'local', retry: false, signal: controller.signal },
+    },
+  ])
 })

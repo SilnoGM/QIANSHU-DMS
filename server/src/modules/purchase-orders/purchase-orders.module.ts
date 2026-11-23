@@ -24,6 +24,9 @@ import { PurchaseOrderDocumentService } from './documents/purchase-order-documen
 import { PurchaseOrderImageDraftController } from './order-images/purchase-order-image-draft.controller'
 import { PurchaseOrderImageDraftService } from './order-images/purchase-order-image-draft.service'
 import { PurchaseOrderImageRenderer } from './order-images/purchase-order-image-renderer'
+import { PriceQuotationSheetController } from './price-quotation-sheet/price-quotation-sheet.controller'
+import { PriceQuotationSheetService } from './price-quotation-sheet/price-quotation-sheet.service'
+import { PriceQuotationSheetRenderer } from './price-quotation-sheet/price-quotation-sheet-renderer'
 import {
   PurchaseOrderFactoryShipmentController,
   SalesOrderFactoryShipmentController,
@@ -76,6 +79,7 @@ import { PurchaseCorrectionService } from './corrections/purchase-correction.ser
     PurchasePaymentController,
     PurchaseOrdersController,
     PurchaseOrderImageDraftController,
+    PriceQuotationSheetController,
     PurchaseOrderReviewContextController,
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
@@ -101,6 +105,8 @@ import { PurchaseCorrectionService } from './corrections/purchase-correction.ser
     PurchaseOrderDocumentService,
     PurchaseOrderImageDraftService,
     PurchaseOrderImageRenderer,
+    PriceQuotationSheetService,
+    PriceQuotationSheetRenderer,
     PurchaseOrderProductImageService,
     PurchaseShipmentQueryService,
     PurchaseShipmentDeliveryService,

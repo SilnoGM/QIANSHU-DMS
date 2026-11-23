@@ -1,6 +1,6 @@
 {
   "name": "@qianshu-dms/server",
-  "version": "1.6.13",
+  "version": "1.7.0",
   "private": true,
   "files": [
     "deploy/",
@@ -35,6 +35,8 @@
     "auth:cleanup": "node dist/commands/auth-cleanup.js",
     "notifications:cleanup": "node dist/commands/notification-operations.js cleanup",
     "notifications:scan": "node dist/commands/notification-scan.js",
+    "ad-accounts:sync": "node dist/commands/ad-account-sync.js",
+    "notifications:machine-viewing-scan": "node dist/commands/machine-viewing-notification-scan.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
     "media:accept:cos": "MEDIA_STORAGE_DRIVER=cos node ./scripts/cos-acceptance.cjs",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",

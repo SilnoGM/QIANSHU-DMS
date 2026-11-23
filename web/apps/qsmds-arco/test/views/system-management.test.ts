@@ -281,6 +281,7 @@ test('权限目录以中文展示现有业务资源', () => {
   // 资源目录采用精确集合，避免已经退役的领域继续以孤立中文标签残留在权限 UI。
   // 2026-10-01 决策：权限分配抽屉的分组标题必须全部可读，因此补齐了后建领域的标签。
   assert.deepEqual(resourceKeys, [
+    'ad-accounts',
     'audit',
     'container-batches',
     'currencies',

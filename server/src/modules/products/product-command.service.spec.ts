@@ -56,6 +56,7 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
     productHead: { id: 'head-1', name: '产品头' },
     productNo: 'P202608120001',
     defaultAlias: null,
+    excludeFromShippingMark: false,
     status: ProductStatus.INACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,

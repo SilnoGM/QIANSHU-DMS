@@ -64,13 +64,14 @@ export function countValidSalesOrderPayments(
 export function countPendingReceiptRequests(
   counts: SalesReceiptStatusCountsDto,
 ): number {
-  return counts.PENDING_REVIEW
+  // 三步流转都占用订单额度，待处理数必须合计三态，否则订单抽屉会漏算已发群与已确认的款项。
+  return counts.PENDING_REVIEW + counts.PENDING_CONFIRM + counts.PENDING_POSTING
 }
 
 export function countTotalReceiptRequests(
   counts: SalesReceiptStatusCountsDto,
 ): number {
-  return counts.PENDING_REVIEW
+  return countPendingReceiptRequests(counts)
     + counts.APPROVED
     + counts.REJECTED
     + counts.VOIDED

@@ -38,17 +38,11 @@ import type {
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
-import type { OrderProductLineModel } from '@/components/business/QsOrderProductLineEditor/types'
-import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import type {
   PurchaseStartPresetSalesOrder,
   PurchaseStartPresetValidationResult,
   PurchaseStartSelection,
 } from '@/components/business/QsPurchaseStartModal/types'
-import type {
-  SalesOrderProductEditIntent,
-  SalesOrderProductEditModalContext,
-} from '@/components/business/QsSalesOrderProductsEditorModal/types'
 
 import { getLocalTimeZone, today } from '@internationalized/date'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
@@ -72,11 +66,6 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsPurchaseStartModal from '@/components/business/QsPurchaseStartModal/index.vue'
 import { buildPurchaseStartRouteQuery } from '@/components/business/QsPurchaseStartModal/logic'
 import PendingPurchaseProducts from '@/components/business/QsPurchaseStartModal/pending-purchase-products.vue'
-import QsSalesOrderProductsEditorModal from '@/components/business/QsSalesOrderProductsEditorModal/index.vue'
-import {
-  createSalesOrderProductEditLines,
-  reconcileSalesOrderProductEditLines,
-} from '@/components/business/QsSalesOrderProductsEditorModal/logic'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
@@ -88,6 +77,7 @@ import SalesOrderCancelModal from './sales-order-cancel-modal.vue'
 import { getSalesOrderCancelBlockedReason } from './sales-order-cancel.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
+import SalesOrderEditModal from './sales-order-edit-modal.vue'
 import {
   buildSalesOrderStatusCountsQuery,
   formatSalesFactoryShipmentSuccess,
@@ -202,16 +192,10 @@ const terminateModalVisible = ref(false)
 const terminateOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const correctionModalVisible = ref(false)
 const correctionOrder = shallowRef<SalesOrderListItemDto | null>(null)
-const productEditVisible = ref(false)
+const editModalVisible = ref(false)
+const editOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
-const productEditOrder = shallowRef<SalesOrderListItemDto | null>(null)
-const productEditContext = shallowRef<SalesOrderProductEditModalContext | null>(null)
-const productEditLines = ref<readonly OrderProductLineModel[]>([])
-const productEditReason = ref('客户调整产品')
-const productEditLoading = ref(false)
-const productEditSubmitting = ref(false)
-const productEditError = ref<string | null>(null)
 const shipmentVisible = ref(false)
 const shipmentOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
@@ -222,8 +206,6 @@ let requestVersion = 0
 let countRequestVersion = 0
 let listAbortController: AbortController | null = null
 let countAbortController: AbortController | null = null
-let productEditAbortController: AbortController | null = null
-let productEditSubmitAbortController: AbortController | null = null
 let shipmentContextAbortController: AbortController | null = null
 let shipmentSubmitAbortController: AbortController | null = null
 let queryRefreshPending = false
@@ -647,188 +629,22 @@ function detailMenuItems(order: SalesOrderListItemDto): ActionMenuItem[][] {
   return [items]
 }
 
-const PRODUCT_EDIT_FULFILLMENT_STATUSES = new Set([
-  'PENDING',
-  'PREPARING',
-  'LAND_TRANSIT',
-  'WAREHOUSE_ARRIVED',
-])
-
-function salesOrderProductEditBlockedReason(order: SalesOrderListItemDto): string | null {
-  if (props.viewMode !== 'all') {
-    return '待办视图不提供修改产品入口'
-  }
-  if (!canUpdateProducts.value) {
-    return '当前账号无权修改销售订单产品'
-  }
-  if (order.orderStatus !== 'CONFIRMED') {
-    return '只有已确认订单可以修改产品'
-  }
-  return PRODUCT_EDIT_FULFILLMENT_STATUSES.has(order.fulfillmentStatus)
-    ? null
-    : '订单已进入海运或已签收，不能修改产品'
+/** 行内“编辑”打开统一编辑弹窗；客户、出单信息与产品都在同一弹窗内完成。 */
+function openSalesOrderEdit(order: SalesOrderListItemDto): void {
+  editOrder.value = { ...order }
+  editModalVisible.value = true
 }
 
-function copyProductEditContext(
-  context: import('@/api/generated/types.gen').SalesOrderProductEditContextDto,
-): SalesOrderProductEditModalContext {
-  return {
-    ...context,
-    salesOrder: { ...context.salesOrder },
-    amounts: { ...context.amounts },
-    existingLines: context.existingLines.map(line => ({
-      ...line,
-      mainImage: line.mainImage ?? null,
-    })),
-  }
+function handleSalesOrderEditSaved(): void {
+  scheduleQueryRefresh(true)
 }
 
-async function loadProductEditContext(preserveDraft = false): Promise<void> {
-  const order = productEditOrder.value
-  if (order === null) {
-    return
+function handleSalesOrderEditFromDrawer(): void {
+  const order = detailOrder.value
+  detailVisible.value = false
+  if (order !== null) {
+    openSalesOrderEdit(order)
   }
-  productEditAbortController?.abort()
-  const controller = new AbortController()
-  productEditAbortController = controller
-  productEditLoading.value = true
-  productEditError.value = null
-  const previousContext = productEditContext.value
-  const previousLines = productEditLines.value
-  try {
-    const response = await salesOrdersApi.productEditContext(order.id, controller.signal)
-    if (controller.signal.aborted || productEditOrder.value?.id !== order.id) {
-      return
-    }
-    const nextContext = copyProductEditContext(response.data)
-    const freshLines = createSalesOrderProductEditLines(nextContext)
-    productEditContext.value = nextContext
-    productEditLines.value = preserveDraft && previousContext !== null
-      ? reconcileSalesOrderProductEditLines({
-          previousContext,
-          nextContext,
-          previousLines,
-        })
-      : freshLines
-  }
-  catch (error) {
-    if (isSalesOrderAbortError(error)) {
-      return
-    }
-    const failure = getSalesOrderApiFailure(error)
-    productEditError.value = failure.requestId === undefined
-      ? failure.message
-      : `${failure.message}（requestId: ${failure.requestId}）`
-  }
-  finally {
-    if (productEditAbortController === controller) {
-      productEditAbortController = null
-      productEditLoading.value = false
-    }
-  }
-}
-
-function openProductEdit(order: SalesOrderListItemDto): void {
-  const blockedReason = salesOrderProductEditBlockedReason(order)
-  if (blockedReason !== null) {
-    toast.info(blockedReason)
-    return
-  }
-  productEditOrder.value = { ...order }
-  productEditContext.value = null
-  productEditLines.value = []
-  productEditReason.value = '客户调整产品'
-  productEditError.value = null
-  productEditVisible.value = true
-  void loadProductEditContext()
-}
-
-const loadProductEditProducts: ProductPageLoader = async (query, signal) => {
-  const order = productEditOrder.value
-  if (order === null || query.currencyCode === 'CNY') {
-    return {
-      items: [],
-      categories: [],
-      unclassifiedCount: 0,
-      page: query.page,
-      pageSize: query.pageSize,
-      total: 0,
-    }
-  }
-  const response = await salesOrdersApi.productEditOptions(order.id, {
-    ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
-    supplierValue: query.supplierValue,
-    ...(query.categoryName === undefined ? {} : { categoryName: query.categoryName }),
-    ...(query.productHeadName === undefined ? {} : { productHeadName: query.productHeadName }),
-    ...(query.unclassified === true ? { unclassified: true } : {}),
-    page: query.page,
-    pageSize: query.pageSize,
-  }, signal)
-  return {
-    ...response.data,
-    items: response.data.items.map(item => ({
-      ...item,
-      mainImage: item.mainImage ?? null,
-    })),
-  }
-}
-
-async function submitProductEdit(intent: SalesOrderProductEditIntent): Promise<void> {
-  const order = productEditOrder.value
-  if (order === null || productEditSubmitting.value) {
-    return
-  }
-  productEditSubmitAbortController?.abort()
-  const controller = new AbortController()
-  productEditSubmitAbortController = controller
-  productEditSubmitting.value = true
-  productEditError.value = null
-  try {
-    await salesOrdersApi.updateProducts(order.id, {
-      expectedVersion: intent.expectedVersion,
-      reason: intent.reason,
-      confirmDepositReduction: intent.confirmDepositReduction,
-      existingLines: intent.existingLines.map(line => ({ ...line })),
-      newLines: intent.newLines.map(line => ({ ...line })),
-    }, controller.signal)
-    if (controller.signal.aborted || productEditOrder.value?.id !== order.id) {
-      return
-    }
-    productEditVisible.value = false
-    productEditOrder.value = null
-    productEditContext.value = null
-    productEditLines.value = []
-    toast.success('销售订单产品已更新')
-    scheduleQueryRefresh(true)
-  }
-  catch (error) {
-    if (isSalesOrderAbortError(error)) {
-      return
-    }
-    const failure = getSalesOrderApiFailure(error)
-    productEditError.value = failure.requestId === undefined
-      ? failure.message
-      : `${failure.message}（requestId: ${failure.requestId}）`
-  }
-  finally {
-    if (productEditSubmitAbortController === controller) {
-      productEditSubmitAbortController = null
-      productEditSubmitting.value = false
-    }
-  }
-}
-
-function handleProductEditVisibility(value: boolean): void {
-  productEditVisible.value = value
-  if (value) {
-    return
-  }
-  productEditAbortController?.abort()
-  productEditSubmitAbortController?.abort()
-  productEditOrder.value = null
-  productEditContext.value = null
-  productEditLines.value = []
-  productEditError.value = null
 }
 
 function handleSalesOrderDetailClosed(): void {
@@ -1546,8 +1362,6 @@ onBeforeUnmount(() => {
   countRequestVersion += 1
   listAbortController?.abort()
   countAbortController?.abort()
-  productEditAbortController?.abort()
-  productEditSubmitAbortController?.abort()
   shipmentContextAbortController?.abort()
   shipmentSubmitAbortController?.abort()
 })
@@ -1634,7 +1448,7 @@ onBeforeUnmount(() => {
                 size="sm"
                 class="min-h-11 sm:min-h-8"
                 :aria-label="`${row.orderNo}：编辑`"
-                @click="openProductEdit(row)"
+                @click="openSalesOrderEdit(row)"
               >
                 编辑
               </FaButton>
@@ -2469,7 +2283,15 @@ onBeforeUnmount(() => {
       :order="detailOrder"
       :currencies="currencyCatalog.currencies.value"
       @correct-purchase="openPurchaseCorrection"
+      @edit="handleSalesOrderEditFromDrawer"
       @closed="handleSalesOrderDetailClosed"
+    />
+
+    <SalesOrderEditModal
+      v-model="editModalVisible"
+      :order="editOrder"
+      :currencies="currencyCatalog.currencies.value"
+      @saved="handleSalesOrderEditSaved"
     />
 
     <PurchaseCorrectionModal
@@ -2499,24 +2321,6 @@ onBeforeUnmount(() => {
       v-model="terminateModalVisible"
       :order="terminateOrder"
       @terminated="handleSalesOrderTerminated"
-    />
-
-    <QsSalesOrderProductsEditorModal
-      :model-value="productEditVisible"
-      :context="productEditContext"
-      :lines="productEditLines"
-      :reason="productEditReason"
-      :currencies="currencyCatalog.currencies.value"
-      :load-products="loadProductEditProducts"
-      :loading="productEditLoading"
-      :error="productEditError"
-      :submitting="productEditSubmitting"
-      @update:model-value="handleProductEditVisibility"
-      @update:lines="productEditLines = $event"
-      @update:reason="productEditReason = $event"
-      @validation-error="toast.warning($event)"
-      @retry="loadProductEditContext(true)"
-      @confirm="submitProductEdit"
     />
 
     <QsFactoryShipmentModal

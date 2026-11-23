@@ -20,6 +20,7 @@ import { PurchaseShippingMarksModule } from './modules/purchase-shipping-marks/p
 import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { ProxyNodesModule } from './modules/proxy-nodes/proxy-node.module'
+import { AdAccountsModule } from './modules/ad-accounts/ad-account.module'
 import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module'
 import { ShipmentStorageModule } from './modules/shipment-storage/shipment-storage.module'
 import { SlhBillModule } from './modules/slh-bills/slh-bill.module'
@@ -63,4 +64,5 @@ export const HTTP_MODULES = [
   MachineViewingModule,
   NotificationModule,
   SystemStatusModule,
+  AdAccountsModule,
 ] as const

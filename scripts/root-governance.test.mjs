@@ -313,6 +313,9 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-source-sales-order-selector.vue',
   'web/apps/qsmds-arco/src/views/operations/sales-orders/index.vue',
+  // 编辑弹窗调用产品编辑候选接口时原样透传既有的 supplierValue 过滤参数，
+  // 不新增供应商主数据读取或维护入口。
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/sales-order-edit-modal.vue',
   'web/apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue',
   'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
   'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
@@ -480,6 +483,20 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/fund-transaction-detail-modal.vue',
   'web/apps/qsmds-arco/src/views/operations/personal-finance/fund-accounts/index.vue',
   'web/apps/qsmds-arco/test/views/personal-finance-ledger.test.ts',
+  // 采购第二步核价单只读取既有供应商字典与产品供应商快照，不新增 Supplier
+  // 主数据、维护入口或持久化结构；服务端与前端测试属于同一只读展示边界。
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.controller.spec.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.controller.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.dto.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.normalizer.spec.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.normalizer.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet-renderer.spec.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet-renderer.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.service.spec.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.service.ts',
+  'server/src/modules/purchase-orders/price-quotation-sheet/price-quotation-sheet.snapshot.ts',
+  'web/apps/qsmds-arco/test/views/price-quotation-sheet.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/use-price-quotation-sheet.test.ts',
 ].sort())
 
 const currentGlobalDocuments = Object.freeze([

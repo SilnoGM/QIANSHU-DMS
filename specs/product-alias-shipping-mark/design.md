@@ -282,6 +282,17 @@ suffix = aliasBlock + `（${STOCK_SHIPPING_MARK_SUFFIX}）`
 
 `formatShippingMark` 保持 `【mark】suffix` 的职责，但 suffix 现在由上述算法生成。
 
+### 7.4.1 产品级唛头排除
+
+`products.exclude_from_shipping_mark` 为 `true` 时，该产品的目录采购行不进入 `aliasBlock`：
+
+- 只影响唛头后缀，不改变金额、数量、货件构成、产品清单或采购单图片快照结构；
+- 目录行以产品标记为唯一真相源：标记关闭后即使产品名仍是「❗️补差价」也会恢复；
+- 自定义行没有产品记录，按名称兜底排除（`补差价` / `補差價`），避免手写行漏网；
+- 排除项不参与数量聚合，也让出 438 截断预算；
+- 整件货件的产品都被排除时，后缀退化为 `（出单前缀-客户名）`（STOCK 为 `（公司囤货采购）`）；
+- 维护入口在管理端产品编辑，复用 `products:update` 与 `PRODUCT_UPDATED` 审计的 `changedFields`；历史采购单的后缀是实时计算的，标记变更立即生效，已生成的采购单图片草稿会因快照 hash 变化标记为非当前。
+
 ### 7.5 438 截断算法
 
 ```ts

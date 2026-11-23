@@ -58,6 +58,13 @@ function expectValidationField(input: unknown, field: string): void {
 }
 
 describe('normalizeProductCreateCommand', () => {
+  it('rejects a non-boolean shipping mark exclusion flag', () => {
+    expectValidationField(
+      { ...validInput(), excludeFromShippingMark: 'yes' },
+      'excludeFromShippingMark',
+    )
+  })
+
   it('normalizes text and decimal scale while preserving ordered duplicates', () => {
     const source = validInput()
     source.name = ' Cafe\u0301 '
@@ -90,6 +97,7 @@ describe('normalizeProductCreateCommand', () => {
         { title: 'Color', value: 'Blue' },
       ],
       remark: null,
+      excludeFromShippingMark: false,
     })
     expect(Object.isFrozen(normalized)).toBe(true)
     expect(Object.isFrozen(normalized.twdSalePrice)).toBe(true)

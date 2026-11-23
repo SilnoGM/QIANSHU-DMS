@@ -16,6 +16,7 @@ const configuration: AssistantConfiguration = {
   batchSize: 20,
   requestTimeoutMs: 1_000,
   minSendIntervalMs: 3_000,
+  sendIntervalJitterMs: 0,
 }
 
 function service(prisma: Record<string, unknown>) {
@@ -102,12 +103,17 @@ describe('NotificationAdminService', () => {
       variablesKnown: true,
       defaultTemplateKey: 'fund.withdrawal.pending',
     })
-    expect(withdrawal?.variables).toEqual(expect.arrayContaining(['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt']))
+    expect(withdrawal?.variables).toEqual(expect.arrayContaining(['withdrawalNo', 'applicantName', 'amount', 'currencyCode', 'occurredAt', 'reviewUrl']))
     expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'amount')).toMatchObject({
       sensitive: true,
     })
+    // 链接变量不脱敏，且模板渲染按声明长度截断，必须给足 URL 空间。
+    expect(withdrawal?.variableDefinitions.find(variable => variable.name === 'reviewUrl')).toMatchObject({
+      sensitive: false,
+      maxLength: 512,
+    })
     expect(withdrawal?.media).toBeNull()
-    expect(result).toHaveLength(40)
+    expect(result).toHaveLength(44)
     for (const event of result) {
       expect(event.variablesKnown).toBe(true)
       expect(event.defaultTemplateKey).not.toBeNull()
@@ -523,7 +529,7 @@ describe('NotificationAdminService', () => {
   it('lists record event options without exposing template variables', () => {
     const options = service({}).listRecordOptions()
 
-    expect(options.events).toHaveLength(40)
+    expect(options.events).toHaveLength(44)
     expect(options.events.find(event => event.eventType === 'PURCHASE_REVIEW_PENDING')).toEqual({
       eventType: 'PURCHASE_REVIEW_PENDING',
       label: '采购审核',

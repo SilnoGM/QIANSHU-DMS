@@ -24,6 +24,7 @@ import {
   CreateAdvertisingRechargeDto,
   PayAdvertisingRechargeDto,
   RejectAdvertisingRechargeDto,
+  SupplementAdvertisingRechargePaymentCodeDto,
   VoidAdvertisingRechargeDto,
 } from './advertising-recharge.dto'
 import {
@@ -173,6 +174,21 @@ export class AdvertisingRechargeController {
     return this.documents.stageQr(actorUserId(request), request)
   }
 
+  /** 非个人户补付款码的图片上传：复用付款权限，与 qr-uploads 同一媒体用途。 */
+  @Post('payment-code-uploads')
+  @HttpCode(201)
+  @RequirePermissions(ADVERTISING_RECHARGE_PERMISSION_PAY)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', required: ['mediaType', 'file'], additionalProperties: false, properties: { mediaType: { type: 'string', enum: ['IMAGE'] }, file: { type: 'string', format: 'binary' } } } })
+  @ApiContractResponse({ status: 201, type: AdvertisingRechargeMediaUploadDto })
+  @contract('advertising_recharges_upload_payment_code', true, [
+    { status: 422, codes: ['VALIDATION_FAILED', 'ADVERTISING_RECHARGE_QR_INVALID', 'ADVERTISING_RECHARGE_QR_TOO_LARGE'] },
+    { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
+  ])
+  uploadPaymentCode(@Req() request: SalesOrderDocumentMultipartRequest) {
+    return this.documents.stageQr(actorUserId(request), request)
+  }
+
   @Post(':id/withdrawals')
   @HttpCode(200)
   @RequirePermissions(ADVERTISING_RECHARGE_PERMISSION_CREATE)
@@ -180,6 +196,36 @@ export class AdvertisingRechargeController {
   @contract('advertising_recharges_withdraw', true, [notFound, ...transitionErrors])
   withdraw(@Param() params: AdvertisingRechargeIdDto, @Body() body: AdvertisingRechargeVersionDto, @Req() request: object) {
     return this.commands.withdraw(context(request), params.id, body.expectedVersion)
+  }
+
+  /**
+   * 非个人户补付款码：复用付款权限（超管与财务都持有），
+   * 上传成功即转入待付款并触发「广告户充值」通知。
+   */
+  @Post(':id/payment-code')
+  @HttpCode(200)
+  @RequirePermissions(ADVERTISING_RECHARGE_PERMISSION_PAY)
+  @ApiContractResponse({ status: 200, type: AdvertisingRechargeDto })
+  @contract('advertising_recharges_supplement_payment_code', true, [
+    notFound,
+    {
+      status: 409,
+      codes: [
+        'ADVERTISING_RECHARGE_STATE_CHANGED',
+        'ADVERTISING_RECHARGE_STATUS_NOT_ALLOWED',
+        'ADVERTISING_RECHARGE_QR_INVALID',
+        'ADVERTISING_RECHARGE_QR_UNAVAILABLE',
+      ],
+    },
+    { status: 422, codes: ['VALIDATION_FAILED', 'ADVERTISING_RECHARGE_QR_INVALID'] },
+    { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
+  ])
+  supplementPaymentCode(
+    @Param() params: AdvertisingRechargeIdDto,
+    @Body() body: SupplementAdvertisingRechargePaymentCodeDto,
+    @Req() request: object,
+  ) {
+    return this.commands.supplementPaymentCode(context(request), params.id, body)
   }
 
   // 财务侧：全量列表与详情；本人权限码不能读取这里，反之亦然。

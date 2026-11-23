@@ -577,6 +577,44 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
+  it('publishes one non-retrying order-info edit operation and removes the split writes', () => {
+    const context: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/{salesOrderId}/edit-context'
+    ]?.get
+    expect(context).toMatchObject({ operationId: 'sales_orders_get_edit_context' })
+    expect(context?.security).toEqual([{ sessionCookie: [] }])
+    expect(context?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      resourceLocator: true,
+    })
+    expect(context?.['x-qianshu-contract']).not.toMatchObject({ csrf: true })
+
+    const info: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/{salesOrderId}/info'
+    ]?.patch
+    expect(info).toMatchObject({ operationId: 'sales_orders_update_info' })
+    expect(info?.security).toEqual([{ sessionCookie: [] }])
+    expect(info?.responses).toHaveProperty('200')
+    expect(info?.requestBody).toBeDefined()
+    expect(info?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      csrf: true,
+      conflict: true,
+      privateNoStore: true,
+      resourceLocator: true,
+      validation: true,
+      retry: false,
+    })
+    const contract = JSON.stringify(readOperationContract(info))
+    expect(contract).toContain('SALES_ORDER_EDIT_VERSION_CONFLICT')
+    expect(contract).toContain('ADDRESS_DETAIL_CONTAINS_SELECTED_REGION')
+    expect(contract).toContain('SALES_ORDER_REGION_UNAVAILABLE')
+
+    expect(document.paths['/api/sales-orders/{salesOrderId}/customer']).toBeUndefined()
+    expect(document.paths['/api/sales-orders/{salesOrderId}/sales-info']).toBeUndefined()
+  })
+
   it('publishes the dedicated receipt operation and removes general document writes', () => {
     expect(document.paths['/api/sales-orders/{salesOrderId}/delivery-receipts']?.post)
       .toMatchObject({ operationId: 'sales_orders_submit_delivery_receipt' })

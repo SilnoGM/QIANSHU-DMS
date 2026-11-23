@@ -11,9 +11,6 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import FundWithdrawalApproveModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-approve-modal.vue'
-import FundWithdrawalDetailDrawer from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-detail-drawer.vue'
-import FundWithdrawalRejectModal from '@/views/operations/personal-finance/withdrawals/fund-withdrawal-reject-modal.vue'
 import {
   FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS,
   withdrawalStatusMeta,
@@ -21,6 +18,7 @@ import {
 
 defineOptions({ name: 'FinanceFundWithdrawalApprovals' })
 
+const router = useRouter()
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const currencyCatalog = useCurrencyCatalog()
@@ -34,11 +32,6 @@ const items = ref<FundWithdrawalDto[]>([])
 const counts = ref<Record<string, number>>({})
 const loading = ref(false)
 const loadError = ref('')
-const detailOpen = ref(false)
-const detail = ref<FundWithdrawalDto | null>(null)
-const approveOpen = ref(false)
-const rejectOpen = ref(false)
-const reviewTarget = ref<FundWithdrawalDto | null>(null)
 let controller: AbortController | null = null
 
 const enabled = computed(() => active.value && canReview.value)
@@ -57,7 +50,10 @@ const columns = computed<QsGenericTableColumn<FundWithdrawalDto>[]>(() => [
   { id: 'reviewedAt', accessorKey: 'reviewedAt', title: t('fundWithdrawal.column.reviewedAt'), minWidth: 190 },
 ])
 
-/** 与运营页同口径：当前状态取整页，其余三个视图各取一页 total 作为工具栏计数。 */
+/**
+ * 列表与各状态计数来自同一个服务端快照，不再为其余状态各发一次列表请求。
+ * 审批动作已迁到独立审批页，列表只负责筛选与导航。
+ */
 async function load(): Promise<void> {
   controller?.abort()
   if (!enabled.value) {
@@ -67,31 +63,23 @@ async function load(): Promise<void> {
   controller = request
   loading.value = true
   loadError.value = ''
-  const selectedStatus = status.value
-  const countStatuses = FUND_WITHDRAWAL_STATUS_FILTER_OPTIONS.filter(
-    item => item.value !== selectedStatus,
-  )
   try {
     const query: FundWithdrawalListQuery = {
       page: page.value,
       pageSize: pageSize.value,
-      status: selectedStatus,
+      status: status.value,
     }
-    const [list, ...countResponses] = await Promise.all([
-      fundWithdrawalsApi.list(query, request.signal),
-      ...countStatuses.map(item => fundWithdrawalsApi.list({
-        page: 1,
-        pageSize: 1,
-        status: item.value,
-      }, request.signal)),
-    ])
+    const response = await fundWithdrawalsApi.list(query, request.signal)
     if (!request.signal.aborted && controller === request) {
-      items.value = list.data.items
-      total.value = list.data.total
-      const nextCounts: Record<string, number> = { [selectedStatus]: list.data.total }
-      countStatuses.forEach((item, index) => {
-        nextCounts[item.value] = countResponses[index]?.data.total ?? 0
-      })
+      items.value = response.data.items
+      total.value = response.data.total
+      const nextCounts: Record<string, number> = {}
+      let allCount = 0
+      for (const entry of response.data.statusCounts) {
+        nextCounts[entry.status] = entry.count
+        allCount += entry.count
+      }
+      nextCounts.ALL = allCount
       counts.value = nextCounts
     }
   }
@@ -136,23 +124,12 @@ onBeforeUnmount(() => {
   controller = null
 })
 
-function openDetail(row: FundWithdrawalDto): void {
-  detail.value = row
-  detailOpen.value = true
-}
-
-function openApprove(row: FundWithdrawalDto): void {
-  reviewTarget.value = row
-  approveOpen.value = true
-}
-
-function openReject(row: FundWithdrawalDto): void {
-  reviewTarget.value = row
-  rejectOpen.value = true
-}
-
-function completed(): void {
-  void load()
+/** 待审批与已处理都进入同一个审批页，页面按状态决定可操作或只读。 */
+function openReview(row: FundWithdrawalDto): void {
+  if (!enabled.value) {
+    return
+  }
+  void router.push({ name: 'qsFinanceFundWithdrawalApproval', params: { id: row.id } })
 }
 </script>
 
@@ -184,7 +161,7 @@ function completed(): void {
         :page-size-options="[20, 50, 100]"
         :empty-title="t('fundWithdrawal.empty.review')"
         :empty-description="t('fundWithdrawal.empty.reviewHint')"
-        :action-column="{ fixed: 'right', minWidth: 140, width: 140, title: t('fundWithdrawal.column.action') }"
+        :action-column="{ fixed: 'right', minWidth: 100, width: 100, title: t('fundWithdrawal.column.action') }"
         table-class="w-max min-w-full"
         :aria-label="t('fundWithdrawal.approvalPageTitle')"
         @pagination-change="load"
@@ -226,51 +203,17 @@ function completed(): void {
         </template>
 
         <template #actions="{ row }">
-          <div v-if="row.status === 'PENDING'" class="flex gap-1">
-            <FaButton
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              @click="openApprove(row)"
-            >
-              通过
-            </FaButton>
-            <FaButton
-              variant="ghost"
-              size="sm"
-              class="text-destructive min-h-11 sm:min-h-8"
-              @click="openReject(row)"
-            >
-              驳回
-            </FaButton>
-          </div>
           <FaButton
-            v-else
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-8"
-            @click="openDetail(row)"
+            :aria-label="`${row.withdrawalNo}：${t('fundWithdrawal.approvalDetailTitle')}`"
+            @click="openReview(row)"
           >
-            详情
+            {{ row.status === 'PENDING' ? t('fundWithdrawal.action.review') : '详情' }}
           </FaButton>
         </template>
       </QsGenericTable>
     </FaPageMain>
-
-    <FundWithdrawalDetailDrawer
-      v-model="detailOpen"
-      :request="detail"
-      scope="review"
-    />
-    <FundWithdrawalApproveModal
-      v-model="approveOpen"
-      :request="reviewTarget"
-      @completed="completed"
-    />
-    <FundWithdrawalRejectModal
-      v-model="rejectOpen"
-      :request="reviewTarget"
-      @completed="completed"
-    />
   </div>
 </template>

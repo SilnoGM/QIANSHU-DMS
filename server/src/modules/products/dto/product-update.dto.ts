@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer'
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -95,6 +96,7 @@ export class UpdateProductRequestDto {
       && object.purchaseCost === undefined
       && object.attributes === undefined
       && object.remark === undefined
+      && object.excludeFromShippingMark === undefined
     ),
   )
   @IsString({ message: '必须是字符串' })
@@ -195,6 +197,15 @@ export class UpdateProductRequestDto {
   @IsUnicodeCodePointLength(1, 512, { message: '长度必须为 1 到 512 个字符' })
   @Matches(/\S/u, { message: '不能为空白文本' })
   remark?: string | null
+
+  @ApiPropertyOptional({
+    type: 'boolean',
+    description: '为 true 时该产品的采购行不进入货件唛头后缀',
+  })
+  @ValidateIf((_object: UpdateProductRequestDto, value: unknown) =>
+    value !== undefined)
+  @IsBoolean({ message: '必须是布尔值' })
+  excludeFromShippingMark?: boolean
 
   @ApiProperty({ type: 'integer', minimum: 1, maximum: MAX_INT32 })
   @IsInt({ message: '必须是整数' })

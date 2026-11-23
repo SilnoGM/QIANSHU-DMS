@@ -23,6 +23,7 @@ function createRow(
     productHead: null,
     productNo: `NO-${id}`,
     defaultAlias: null,
+    excludeFromShippingMark: false,
     status: ProductStatus.INACTIVE,
     supplierValue,
     sortOrder: 10,

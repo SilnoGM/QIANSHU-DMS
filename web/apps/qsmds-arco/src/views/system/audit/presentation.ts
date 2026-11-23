@@ -101,6 +101,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PROXY_NODE_ASSIGNED: '静态节点已绑定',
   PROXY_NODE_RELEASED: '静态节点已解绑',
   SALES_RECEIPT_SUBMITTED: '销售收款申请已提交',
+  SALES_RECEIPT_VOUCHER_SENT: '表外水单已发送到财务群',
+  SALES_RECEIPT_CONFIRMED: '销售收款已确认到账',
   SALES_RECEIPT_APPROVED: '销售收款审核已通过',
   SALES_RECEIPT_REJECTED: '销售收款申请已驳回',
   SALES_ORDER_CREATED: '销售订单已创建',
@@ -114,6 +116,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
   SALES_ORDER_PRODUCT_APPENDED: '销售订单产品已追加',
   SALES_ORDER_PRODUCTS_CHANGED: '销售订单产品已修改',
+  SALES_ORDER_CUSTOMER_UPDATED: '销售订单客户信息已修改',
+  SALES_ORDER_SALES_INFO_UPDATED: '销售订单出单信息已修改',
   PACKAGING_COST_SUBMITTED: '打木架费用已提报',
   PACKAGING_COST_PAID: '打木架费用已付款',
   PACKAGING_COST_AMOUNT_UPDATED: '打木架费用金额已修改',
@@ -160,6 +164,9 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PURCHASE_SHIPMENT_LOAD_GROUP_CREATED: '装柜合并组已创建',
   PURCHASE_SHIPMENT_LOAD_GROUP_RELEASED: '装柜合并组已释放',
   MACHINE_VIEWING_APPOINTMENT_CREATED: '看机预约已登记',
+  MACHINE_VIEWING_APPOINTMENT_UPDATED: '看机预约已修改',
+  MACHINE_VIEWING_APPOINTMENT_STATUS_CHANGED: '看机预约状态已变更',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: '看机预约已改期',
   NOTIFICATION_TEMPLATE_UPDATED: '通知模板已更新',
   NOTIFICATION_POLICY_UPDATED: '通知策略已更新',
   NOTIFICATION_CANCELLED: '通知已取消',
@@ -178,6 +185,10 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   ASSISTANT_TARGET_MESSAGE_SENT: '群目标 @消息已发送',
   PURCHASE_ORDER_CORRECTION_APPLIED: '误建采购链已纠正',
   PACKAGING_COST_CANCELLED: '打木架费用已取消',
+  AD_ACCOUNT_SYNCED: '猎豹广告户已同步',
+  AD_ACCOUNT_ASSIGNED: '猎豹广告户已绑定',
+  AD_ACCOUNT_RELEASED: '猎豹广告户已解绑',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED: '广告充值付款码已补充',
 }
 
 export function auditMetadataEntries(

@@ -100,7 +100,7 @@ test('发票管理入口排在账单对账之后、账户管理之前，审批�
 
 test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，货件与审核菜单保留既有授权', () => {
   const routes = purchaseTransportWorkbench.children
-  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportMachineViewings', 'qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes'])
+  assert.deepEqual(routes.filter(route => route.meta?.menu !== false).map(route => route.name), ['qsPurchaseTransportMachineViewings', 'qsPurchaseTransportReviews', 'qsPurchaseTransportShipments', 'qsPurchaseTransportContainers', 'qsPurchaseTransportStorage', 'qsPurchaseTransportProxyNodes', 'qsPurchaseTransportLeopardAdAccounts'])
   assert.equal(purchaseTransportWorkbench.meta?.title, 'workbench.purchaseTransport')
   const containers = routes.find(route => route.name === 'qsPurchaseTransportContainers')
   const storage = routes.find(route => route.name === 'qsPurchaseTransportStorage')
@@ -120,6 +120,12 @@ test('柜次、寄仓、静态节点、看机预约菜单使用独立权限，�
   assert.equal(proxyNodes?.meta?.title, 'IPFoxy静态节点')
   assert.equal(proxyNodes?.meta?.icon, 'qs-static-node')
   assert.match(String(proxyNodes?.component), /workbenches\/proxy-nodes\/index\.vue/u)
+  const adAccounts = routes.find(route => route.name === 'qsPurchaseTransportLeopardAdAccounts')
+  assert.equal(adAccounts?.meta?.auth, 'ad-accounts:manage')
+  assert.equal(adAccounts?.meta?.title, '猎豹广告户管理')
+  assert.equal(adAccounts?.meta?.icon, 'qs-ad-account')
+  assert.equal(adAccounts?.meta?.singleMenu, true)
+  assert.match(String(adAccounts?.component), /workbenches\/leopard-ad-accounts\/index\.vue/u)
   assert.equal(containers?.meta?.auth, 'container-batches:read')
   assert.equal(containers?.meta?.title, 'workbench.containers')
   assert.equal(containers?.meta?.icon, 'qs-container-management')
@@ -132,9 +138,9 @@ test('财务分为实时收付、账单对账、发票管理和账户管理，�
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
   // 账单对账分组新增导入与详情两个隐藏叶子；对账分组新增对账详情一个隐藏叶子；
   // 发票管理分组只有一个可见叶子：只读详情并入了共用抽屉，不占独立路由；
-  // 账户管理分组新增账户提款审批一个可见叶子；采购付款新增记录页隐藏叶子；
+  // 账户管理分组新增账户提款审批可见叶子与审批详情隐藏叶子；采购付款新增记录页隐藏叶子；
   // 实收实付新增广告充值列表与隐藏详情两个叶子。
-  assert.equal(new Set(routes.map(route => route.name)).size, 19)
+  assert.equal(new Set(routes.map(route => route.name)).size, 20)
   const advertisingRecharges = routes.find(route => route.name === 'qsFinanceRealtimeAdvertisingRecharges')
   assert.equal(advertisingRecharges?.path, 'advertising-recharges')
   assert.equal(advertisingRecharges?.meta?.auth, 'advertising-recharges:read')

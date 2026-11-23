@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 
+import type { AuthConfiguration } from '../../config/auth.config'
 import { Prisma } from '../../generated/prisma/client'
 import { AuditEventType } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -34,11 +36,13 @@ import type {
   CreateAdvertisingRechargeDto,
   PayAdvertisingRechargeDto,
   RejectAdvertisingRechargeDto,
+  SupplementAdvertisingRechargePaymentCodeDto,
   VoidAdvertisingRechargeDto,
 } from './advertising-recharge.dto'
 import { AdvertisingRechargeDocumentService } from './advertising-recharge-document.service'
 import { AdvertisingRechargeQueryService } from './advertising-recharge-query.service'
 import {
+  buildAdvertisingRechargeDetailUrl,
   hashAdvertisingRechargeNumberFingerprint,
   hashAdvertisingRechargeRequestKey,
   normalizeAdvertisingAccountText,
@@ -83,6 +87,22 @@ interface LockedRow {
   readonly paymentProofMediaAssetId: string | null
 }
 
+interface PendingNotificationInput {
+  readonly id: string
+  readonly rechargeNo: string
+  readonly version: number
+  readonly applicantUserId: string
+  readonly applicantName: string
+  readonly accountType: AdvertisingAccountTypeValue
+  readonly adAccountName: string
+  readonly adAccountNo: string
+  readonly rechargeAmount: string
+  readonly rechargeCurrency: string
+  readonly qrMediaAssetId: string | null
+}
+
+type PaymentCodeRequiredNotificationInput = Omit<PendingNotificationInput, 'qrMediaAssetId'>
+
 @Injectable()
 export class AdvertisingRechargeService {
   constructor(
@@ -92,8 +112,13 @@ export class AdvertisingRechargeService {
     private readonly funds: FundPostingService,
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService,
     private readonly notifications: SystemNotificationService = noopSystemNotifications,
   ) {}
+
+  private get appOrigin(): string {
+    return this.config.getOrThrow<AuthConfiguration>('auth').appOrigin
+  }
 
   /**
    * 提交只产生 PENDING 申请，不动资金。提交前先确认申请人有资金账户与分成比例，
@@ -232,7 +257,8 @@ export class AdvertisingRechargeService {
             rechargeCurrency: currency,
             paymentQrMediaAssetId: qrMediaAssetId,
             remark,
-            status: 'PENDING',
+            // 个人户提交即可付款；非个人户先由超管补付款码。
+            status: input.accountType === 'PERSONAL' ? 'PENDING' : 'PENDING_PAYMENT_CODE',
             requestKeyHash,
           },
           select: { id: true, rechargeNo: true, version: true },
@@ -254,25 +280,35 @@ export class AdvertisingRechargeService {
             rechargeCurrency: currency,
           },
         })
-        await this.notifications.publish({
-          eventType: 'ADVERTISING_RECHARGE_PAYMENT_PENDING',
-          source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: created.id },
-          target: { kind: 'PERMISSION', permissionCode: 'advertising-recharges:pay' },
-          templateKey: 'operations.advertising-recharge.pending',
-          variables: {
-            accountType: accountTypeLabel(input.accountType),
+        if (input.accountType === 'PERSONAL') {
+          await this.publishPending(transaction, {
+            id: created.id,
+            rechargeNo: created.rechargeNo,
+            version: created.version,
+            applicantUserId: context.actorUserId,
+            applicantName: applicant?.displayName ?? '—',
+            accountType: input.accountType,
             adAccountName,
             adAccountNo,
-            applicantName: applicant?.displayName ?? '—',
             rechargeAmount: amount,
             rechargeCurrency: currency,
+            qrMediaAssetId,
+          })
+        }
+        else {
+          await this.publishPaymentCodeRequired(transaction, {
+            id: created.id,
             rechargeNo: created.rechargeNo,
-            status: advertisingRechargeStatusLabel('PENDING'),
-          },
-          media: qrMediaAssetId === null ? [] : [{ assetId: qrMediaAssetId, sourceKey: 'advertising.qr' }],
-          dedupeKey: `advertising-recharge-pending:${created.id}:v${created.version}`,
-          requestedByUserId: context.actorUserId,
-        }, { transaction })
+            version: created.version,
+            applicantUserId: context.actorUserId,
+            applicantName: applicant?.displayName ?? '—',
+            accountType: input.accountType,
+            adAccountName,
+            adAccountNo,
+            rechargeAmount: amount,
+            rechargeCurrency: currency,
+          })
+        }
         return created.id
       }, { timeout: 60_000 })
       return await this.queries.getOwn(context.actorUserId, id)
@@ -283,6 +319,102 @@ export class AdvertisingRechargeService {
   }
 
   /** 撤回只允许申请人本人在待付款阶段操作，不触碰资金。 */
+  /**
+   * 非个人户：超级管理员补付款码后转入待付款，并触发「广告户充值」通知。
+   * 数据库触发器只允许这条边回填一次二维码，且必须带上图片。
+   */
+  async supplementPaymentCode(
+    context: AdvertisingRechargeCommandContext,
+    id: string,
+    input: SupplementAdvertisingRechargePaymentCodeDto,
+  ): Promise<AdvertisingRechargeDto> {
+    let qrMediaAssetId: string
+    try {
+      qrMediaAssetId = requireAdvertisingRechargeMediaId(input.paymentQrMediaAssetId)
+    }
+    catch {
+      advertisingRechargeFailure(ADVERTISING_RECHARGE_ERROR_CODES.QR_INVALID, '付款码图片无效，请重新上传')
+    }
+
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const row = await this.lock(transaction, id)
+
+        if (row.version !== input.expectedVersion) {
+          advertisingRechargeFailure(
+            ADVERTISING_RECHARGE_ERROR_CODES.STATE_CHANGED,
+            '广告充值申请已被其他人处理，请刷新后重试',
+            409,
+          )
+        }
+        if (row.status !== 'PENDING_PAYMENT_CODE') {
+          advertisingRechargeFailure(
+            ADVERTISING_RECHARGE_ERROR_CODES.STATUS_NOT_ALLOWED,
+            '只有补充付款码的申请可以上传付款码',
+            409,
+          )
+        }
+        if (row.paymentQrMediaAssetId !== null) {
+          advertisingRechargeFailure(
+            ADVERTISING_RECHARGE_ERROR_CODES.QR_INVALID,
+            '该申请已有付款码，不能重复上传',
+            409,
+          )
+        }
+
+        await this.documents.attach(transaction, {
+          actorUserId: context.actorUserId,
+          mediaAssetId: qrMediaAssetId,
+          purpose: ADVERTISING_RECHARGE_QR_UPLOAD_PURPOSE,
+          unavailableCode: ADVERTISING_RECHARGE_ERROR_CODES.QR_UNAVAILABLE,
+          label: '付款码',
+        })
+
+        await transaction.advertisingRechargeRequest.update({
+          where: { id },
+          data: {
+            paymentQrMediaAssetId: qrMediaAssetId,
+            status: 'PENDING',
+            version: { increment: 1 },
+          },
+        })
+
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED,
+          outcome: 'SUCCESS',
+          actorType: 'USER',
+          actorUserId: context.actorUserId,
+          requestId: context.requestId,
+          targetType: 'ADVERTISING_RECHARGE_REQUEST',
+          targetId: id,
+          metadata: {
+            rechargeNo: row.rechargeNo,
+            applicantUserId: row.applicantUserId,
+          },
+        })
+
+        await this.publishPending(transaction, {
+          id,
+          rechargeNo: row.rechargeNo,
+          version: row.version + 1,
+          applicantUserId: row.applicantUserId,
+          applicantName: row.applicantName,
+          accountType: row.accountType,
+          adAccountName: row.adAccountName,
+          adAccountNo: row.adAccountNo,
+          rechargeAmount: row.rechargeAmount.toFixed(2),
+          rechargeCurrency: row.rechargeCurrency,
+          qrMediaAssetId,
+        })
+      }, { timeout: 60_000 })
+      return await this.queries.getAll(id)
+    }
+    catch (error) {
+      return mapAdvertisingRechargeError(error)
+    }
+  }
+
   async withdraw(context: AdvertisingRechargeCommandContext, id: string, expectedVersion: number): Promise<AdvertisingRechargeDto> {
     try {
       await this.prisma.$transaction(async (transaction) => {
@@ -616,6 +748,58 @@ export class AdvertisingRechargeService {
     catch (error) {
       return mapAdvertisingRechargeError(error)
     }
+  }
+
+  /** 「广告户充值」：财务付款前提醒，个人户带收款二维码图片。 */
+  private async publishPending(
+    transaction: Prisma.TransactionClient,
+    input: PendingNotificationInput,
+  ): Promise<void> {
+    await this.notifications.publish({
+      eventType: 'ADVERTISING_RECHARGE_PENDING',
+      source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: input.id },
+      target: { kind: 'PERMISSION', permissionCode: 'advertising-recharges:pay' },
+      templateKey: 'operations.advertising-recharge.pending',
+      variables: {
+        accountType: accountTypeLabel(input.accountType),
+        adAccountName: input.adAccountName,
+        adAccountNo: input.adAccountNo,
+        applicantName: input.applicantName,
+        rechargeAmount: input.rechargeAmount,
+        rechargeCurrency: input.rechargeCurrency,
+        rechargeNo: input.rechargeNo,
+        status: advertisingRechargeStatusLabel('PENDING'),
+      },
+      media: input.qrMediaAssetId === null ? [] : [{ assetId: input.qrMediaAssetId, sourceKey: 'advertising.qr' }],
+      dedupeKey: `advertising-recharge-pending:${input.id}:v${input.version}`,
+      requestedByUserId: input.applicantUserId,
+    }, { transaction })
+  }
+
+  /** 「广告户充值补充付款码」：只发给超级管理员，纯文字 + 详情链接。 */
+  private async publishPaymentCodeRequired(
+    transaction: Prisma.TransactionClient,
+    input: PaymentCodeRequiredNotificationInput,
+  ): Promise<void> {
+    await this.notifications.publish({
+      eventType: 'ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED',
+      source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: input.id },
+      target: { kind: 'ROLE', roleCodes: ['system_admin'] },
+      templateKey: 'operations.advertising-recharge.payment-code',
+      variables: {
+        accountType: accountTypeLabel(input.accountType),
+        adAccountName: input.adAccountName,
+        adAccountNo: input.adAccountNo,
+        applicantName: input.applicantName,
+        rechargeAmount: input.rechargeAmount,
+        rechargeCurrency: input.rechargeCurrency,
+        rechargeNo: input.rechargeNo,
+        status: advertisingRechargeStatusLabel('PENDING_PAYMENT_CODE'),
+        rechargeUrl: buildAdvertisingRechargeDetailUrl(this.appOrigin, input.id),
+      },
+      dedupeKey: `advertising-recharge-payment-code:${input.id}:v${input.version}`,
+      requestedByUserId: input.applicantUserId,
+    }, { transaction })
   }
 
   private async lock(transaction: Prisma.TransactionClient, id: string): Promise<LockedRow> {

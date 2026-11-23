@@ -8,7 +8,7 @@ import {
   buildPurchaseAmountRevisionRequest,
   calculatePurchaseAmountRevisionPreview,
   PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX,
-} from '../../src/views/workbenches/purchase-reviews/amount-revision.logic'
+} from '../../src/components/business/QsPurchaseOrderAmountRevisionModal/logic'
 
 function detail(): PurchaseOrderDetailDto {
   return {
@@ -99,14 +99,43 @@ test('没有变化时提示无需提交', () => {
   assert.equal(result.fieldError, '采购金额没有变化，无需提交')
 })
 
-test('行间调价但订单四个金额都不变时拒绝', () => {
+test('行间调价但订单四个金额都不变时仍允许提交并记录行级变更', () => {
+  const preview = calculatePurchaseAmountRevisionPreview(
+    detail(),
+    { 'line-a': '50.00', 'line-b': '25.00' },
+    '30.00',
+  )
+  assert.equal(preview.purchaseTotalAmount, '100.00')
+  assert.equal(preview.depositDueAmount, '30.00')
+  assert.equal(preview.balanceDueAmount, '70.00')
+  assert.equal(preview.changedLineCount, 2)
+  assert.equal(preview.changed, true)
+  const result = buildPurchaseAmountRevisionRequest(
+    detail(),
+    { 'line-a': '50.00', 'line-b': '25.00' },
+    '30.00',
+    '两行单价互换修正',
+  )
+  assert.equal(result.valid, true)
+})
+
+test('定金已付时锁定定金，总价低于定金必须拒绝', () => {
+  const locked = calculatePurchaseAmountRevisionPreview(
+    detail(),
+    { 'line-a': '30.00', 'line-b': '60.00' },
+    '30.00',
+    { depositLocked: true },
+  )
+  assert.equal(locked.depositDueAmount, '30.00')
+  assert.equal(locked.balanceDueAmount, '120.00')
   assert.throws(
     () => calculatePurchaseAmountRevisionPreview(
       detail(),
-      { 'line-a': '50.00', 'line-b': '25.00' },
+      { 'line-a': '10.00', 'line-b': '5.00' },
       '30.00',
+      { depositLocked: true },
     ),
-    /行间调价但订单总额、定金和尾款未变化/u,
+    /新采购总价不能低于已付定金/u,
   )
 })
 
@@ -148,24 +177,33 @@ test('金额修订弹窗显式压在采购详情抽屉之上，不依赖模板�
   )
 })
 
-test('采购审核已通过详情接入了金额修订抽屉动作和弹窗', async () => {
+test('采购审核与全部采购都接入金额修订弹窗，运营使用专用改价权限', async () => {
   const read = (path: string) => readFile(
     new URL(`../../src/${path}`, import.meta.url),
     'utf8',
   )
-  const [page, drawer, modal, api] = await Promise.all([
+  const [reviewPage, drawer, modal, api, operationsPage, operationsDrawer] = await Promise.all([
     read('views/workbenches/purchase-reviews/index.vue'),
     read('components/business/QsPurchaseOrderDrawer/index.vue'),
-    read('views/workbenches/purchase-reviews/amount-revision-modal.vue'),
+    read('components/business/QsPurchaseOrderAmountRevisionModal/index.vue'),
     read('api/modules/purchase-orders.ts'),
+    read('views/operations/purchase-orders/index.vue'),
+    read('views/operations/purchase-orders/purchase-order-detail-drawer.vue'),
   ])
-  assert.match(page, /:can-revise-amount="canReviseAmount"/u)
-  assert.match(page, /@revise-amount="openAmountRevision"/u)
-  assert.match(page, /<PurchaseAmountRevisionModal/u)
+  assert.match(reviewPage, /:can-revise-amount="canReviseAmount"/u)
+  assert.match(reviewPage, /@revise-amount="openAmountRevision"/u)
+  assert.match(reviewPage, /<QsPurchaseOrderAmountRevisionModal/u)
+  assert.match(reviewPage, /purchase-orders:price-revision/u)
   assert.match(drawer, /canReviseAmount/u)
   assert.match(drawer, /emit\('reviseAmount'\)/u)
   assert.match(modal, /purchaseOrdersApi\.reviseAmount/u)
-  assert.match(modal, /hasActivePayments/u)
+  assert.match(modal, /blockingPayments/u)
+  assert.match(modal, /depositLocked/u)
   assert.match(modal, /:z-index="PURCHASE_AMOUNT_REVISION_MODAL_Z_INDEX"/u)
   assert.match(api, /amount-revisions/u)
+  assert.match(operationsPage, /purchase-orders:price-revision/u)
+  assert.match(operationsPage, /修改金额/u)
+  assert.match(operationsPage, /<QsPurchaseOrderAmountRevisionModal/u)
+  assert.match(operationsPage, /@revise-amount="openAmountRevision"/u)
+  assert.match(operationsDrawer, /can-revise-amount="canReviseAmount"/u)
 })

@@ -8,6 +8,7 @@ import type {
   CreateAdvertisingRechargeDto,
   PayAdvertisingRechargeDto,
   RejectAdvertisingRechargeDto,
+  SupplementAdvertisingRechargePaymentCodeDto,
   VoidAdvertisingRechargeDto,
 } from '../generated/types.gen'
 import api from '../index'
@@ -57,6 +58,11 @@ export function createAdvertisingRechargesApi(client: AxiosInstance) {
       client.post<AdvertisingRechargeDto>(`${path(id)}/voids`, data, write(signal)),
     uploadProof: (id: string, file: File, signal: AbortSignal) =>
       client.post<AdvertisingRechargeMediaUploadDto>(`${path(id)}/payment-proofs`, upload(file), write(signal)),
+    /** 非个人户补付款码：图片上传与提交分开，提交后申请转入待付款。 */
+    uploadPaymentCode: (file: File, signal: AbortSignal) =>
+      client.post<AdvertisingRechargeMediaUploadDto>('advertising-recharges/payment-code-uploads', upload(file), write(signal)),
+    supplementPaymentCode: (id: string, data: SupplementAdvertisingRechargePaymentCodeDto, signal: AbortSignal) =>
+      client.post<AdvertisingRechargeDto>(`${path(id)}/payment-code`, data, write(signal)),
   }
 }
 

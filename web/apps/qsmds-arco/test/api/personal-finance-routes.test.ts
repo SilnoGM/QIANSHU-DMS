@@ -49,11 +49,14 @@ function canEnter(permissions: string[], path: string) {
 }
 
 function visibleLeafPaths(group: unknown, permissions: string[]) {
-  return filterAccessibleMenus(
+  // 菜单过滤只按权限裁剪，隐藏叶子（meta.menu === false）由菜单装配阶段剔除，这里同口径过滤。
+  return (filterAccessibleMenus(
     [group] as Parameters<typeof filterAccessibleMenus>[0],
     value => matchesAuthorization(permissions, value),
     () => true,
-  )[0]?.children?.map(leaf => leaf.path) ?? []
+  )[0]?.children ?? [])
+    .filter(leaf => leaf.meta?.menu !== false)
+    .map(leaf => leaf.path)
 }
 
 test('运营工作台新增个人财务分组，两个叶子各用独立权限', () => {
@@ -104,7 +107,7 @@ test('运营工作台新增个人财务分组，两个叶子各用独立权限',
   assert.equal(operationsWorkbenchRoutes.at(-1)?.name, 'qsOperationsNetworkAds')
 })
 
-test('运营工作台网络与广告分组：广告充值用本人读取码，静态节点用 proxy-nodes:read', () => {
+test('运营工作台网络与广告分组：静态代理、猎豹广告户、广告户充值各自独立授权', () => {
   const networkAdsGroup = operationsWorkbenchRoutes.find(
     route => route.name === 'qsOperationsNetworkAds',
   )
@@ -113,9 +116,10 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
   assert.equal(networkAdsGroup?.meta?.icon, 'qs-network-ads')
   assert.deepEqual(networkAdsGroup?.meta?.auth, [
     'proxy-nodes:read',
+    'ad-accounts:read',
     'advertising-recharges:read-self',
   ])
-  // 两个叶子权限互不覆盖，分组不设固定 redirect，交给 Route Store 回退。
+  // 三个叶子权限互不覆盖，分组不设固定 redirect，交给 Route Store 回退。
   assert.equal(networkAdsGroup?.redirect, undefined)
   assert.deepEqual(
     networkAdsGroup?.children?.map(route => ({
@@ -131,19 +135,27 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
         icon: 'qs-static-node',
         name: 'qsOperationsNetworkAdsStaticNodes',
         path: 'static-nodes',
-        title: '静态节点',
+        title: '静态代理',
+      },
+      {
+        auth: 'ad-accounts:read',
+        icon: 'qs-ad-account',
+        name: 'qsOperationsNetworkAdsLeopardAdAccounts',
+        path: 'leopard-ad-accounts',
+        title: '猎豹广告户',
       },
       {
         auth: 'advertising-recharges:read-self',
         icon: 'qs-advertising-recharge',
         name: 'qsOperationsNetworkAdsAdvertisingRecharges',
         path: 'advertising-recharges',
-        title: '广告充值',
+        title: '广告户充值',
       },
     ],
   )
   assert.match(String(networkAdsGroup?.children?.[0]?.component), /views\/operations\/network-ads\/static-nodes\/index\.vue/u)
-  assert.match(String(networkAdsGroup?.children?.[1]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[1]?.component), /views\/operations\/network-ads\/leopard-ad-accounts\/index\.vue/u)
+  assert.match(String(networkAdsGroup?.children?.[2]?.component), /workbenches\/network-ads\/advertising-recharges\/index\.vue/u)
 
   assert.deepEqual(
     visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self']),
@@ -153,6 +165,10 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
     visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read']),
     ['static-nodes'],
   )
+  assert.deepEqual(
+    visibleLeafPaths(networkAdsGroup, [OPERATIONS_WORKBENCH_PERMISSION, 'ad-accounts:read']),
+    ['leopard-ad-accounts'],
+  )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'advertising-recharges:read-self'], '/qs-operations/network-ads/advertising-recharges'),
     true,
@@ -160,6 +176,15 @@ test('运营工作台网络与广告分组：广告充值用本人读取码，�
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read'], '/qs-operations/network-ads/static-nodes'),
     true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'ad-accounts:read'], '/qs-operations/network-ads/leopard-ad-accounts'),
+    true,
+  )
+  assert.equal(
+    canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'proxy-nodes:read'], '/qs-operations/network-ads/leopard-ad-accounts'),
+    false,
+    '静态代理读取权限不能进入猎豹广告户页',
   )
   assert.equal(
     canEnter([OPERATIONS_WORKBENCH_PERMISSION, 'network-nodes:read'], '/qs-operations/network-ads/static-nodes'),
@@ -193,13 +218,23 @@ test('财务账户管理新增账户提款审批叶子，分组菜单过滤并�
   assert.equal(approval?.meta?.icon, 'qs-fund-withdrawal')
   assert.equal(approval?.meta?.auth, 'fund-withdrawals:review')
   assert.match(String(approval?.component), /admin\/fund-account-management\/withdrawal-approvals\/index\.vue/u)
-  // 叶子顺序：两个既有账户页之后追加，既有页面契约不变。
+  // 审批详情页是列表的隐藏兄弟叶子：URL 可直达，面包屑回到列表。
+  const detail = fundAccountManagementRoutes.children?.find(
+    route => route.name === 'qsFinanceFundWithdrawalApproval',
+  )
+  assert.equal(detail?.path, 'withdrawal-approvals/:id')
+  assert.equal(detail?.meta?.menu, false)
+  assert.equal(detail?.meta?.activeMenu, '/qs-finance/fund-accounts/withdrawal-approvals')
+  assert.equal(detail?.meta?.auth, 'fund-withdrawals:review')
+  assert.match(String(detail?.component), /admin\/fund-account-management\/withdrawal-approvals\/approval-page\.vue/u)
+  // 叶子顺序：两个既有账户页之后追加列表与详情，既有页面契约不变。
   assert.deepEqual(
     fundAccountManagementRoutes.children?.map(route => route.name),
     [
       'qsFinanceFundAccountList',
       'qsFinanceFundAccountTransactions',
       'qsFinanceFundWithdrawalApprovals',
+      'qsFinanceFundWithdrawalApproval',
     ],
   )
   assert.ok(financeWorkbench.children.includes(fundAccountManagementRoutes))
@@ -245,22 +280,27 @@ test('直接 URL 准入与菜单一致：跨工作台被拦截，本工作台可
       `缺少业务码不得进入 ${path}`,
     )
   }
-  assert.equal(
-    canEnter(financeStaff, '/qs-finance/fund-accounts/withdrawal-approvals'),
-    true,
-    '财务角色应能进入账户提款审批',
-  )
-  for (const permissions of [
-    operationsStaff,
-    [FINANCE_WORKBENCH_PERMISSION],
-    ['fund-withdrawals:review'],
-    [],
+  for (const path of [
+    '/qs-finance/fund-accounts/withdrawal-approvals',
+    '/qs-finance/fund-accounts/withdrawal-approvals/6f2d0f7a-21c4-4b68-8c82-9a5fe2ac4cf5',
   ]) {
     assert.equal(
-      canEnter(permissions, '/qs-finance/fund-accounts/withdrawal-approvals'),
-      false,
-      `非财务角色不得进入账户提款审批：${permissions.join(',') || '无权限'}`,
+      canEnter(financeStaff, path),
+      true,
+      `财务角色应能进入账户提款审批：${path}`,
     )
+    for (const permissions of [
+      operationsStaff,
+      [FINANCE_WORKBENCH_PERMISSION],
+      ['fund-withdrawals:review'],
+      [],
+    ]) {
+      assert.equal(
+        canEnter(permissions, path),
+        false,
+        `非财务角色不得进入账户提款审批：${permissions.join(',') || '无权限'}`,
+      )
+    }
   }
 })
 
@@ -303,7 +343,7 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
       '../../src/views/admin/fund-account-management/withdrawal-approvals/index.vue',
       'FinanceFundWithdrawalApprovals',
       [
-        'FundWithdrawalDetailDrawer',
+        'qsFinanceFundWithdrawalApproval',
         'QsPersonDisplay',
         'fundWithdrawalsApi.list(',
       ],
@@ -321,15 +361,9 @@ test('提款申请与审批页面接入状态切换、序号和业务表格', ()
     assert.match(source, /<FaPageMain/u)
     assert.match(source, /<QsGenericTable/u)
     assert.match(source, /<QsStatusSwitchToolbar/u)
-    if (componentName === 'FinanceFundWithdrawalApprovals') {
-      assert.match(source, /countStatuses/u)
-      assert.match(source, /pageSize: 1/u)
-    }
-    else {
-      // 个人提款页的计数随列表响应一起返回，不再逐状态补发列表请求。
-      assert.match(source, /statusCounts/u)
-      assert.doesNotMatch(source, /pageSize: 1/u)
-    }
+    // 两侧计数都由列表响应的 statusCounts 一次带回，不再逐状态补发列表请求。
+    assert.match(source, /statusCounts/u)
+    assert.doesNotMatch(source, /pageSize: 1/u)
     assert.match(source, /详情/u)
     assert.doesNotMatch(source, /FundWithdrawalDetailModal|fund-withdrawal-detail-modal/u)
     assert.doesNotMatch(source, /:show-row-number="false"/u)

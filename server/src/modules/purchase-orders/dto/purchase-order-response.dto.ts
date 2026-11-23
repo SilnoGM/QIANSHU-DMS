@@ -123,6 +123,22 @@ export class PurchaseOrderStatusHistoryDto {
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly changedAt!: string
 }
 
+export class PurchaseOrderAmountRevisionLineChangeDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly lineNumber!: number
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' })
+  readonly oldUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' })
+  readonly newUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' })
+  readonly oldLineTotalAmount!: string
+  @ApiProperty({ type: 'string', pattern: '^\\d+\\.\\d{2}$', description: '两位小数的人民币金额' })
+  readonly newLineTotalAmount!: string
+}
+
 export class PurchaseOrderAmountRevisionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly oldLineSubtotalAmount!: string
@@ -133,6 +149,8 @@ export class PurchaseOrderAmountRevisionDto {
   @ApiProperty({ type: 'string' }) readonly newPurchaseTotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly newDepositDueAmount!: string
   @ApiProperty({ type: 'string' }) readonly newBalanceDueAmount!: string
+  @ApiProperty({ type: () => [PurchaseOrderAmountRevisionLineChangeDto] })
+  readonly lineChanges!: readonly PurchaseOrderAmountRevisionLineChangeDto[]
   @ApiProperty({ type: 'string' }) readonly reason!: string
   @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly changedBy!: PurchaseOrderActorDto
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly changedAt!: string

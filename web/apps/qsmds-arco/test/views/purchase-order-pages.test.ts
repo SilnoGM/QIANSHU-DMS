@@ -235,15 +235,15 @@ test('全部采购为 update 或 review 提供固定槽位取消入口', async (
   )
   assert.match(
     source,
-    /canUpdate\.value && canCancel\.value[\s\S]*?\{ kind: 'icon' \}/u,
+    /showActionMenu\.value[\s\S]*?\{ kind: 'icon' \}/u,
   )
   assert.match(
     source,
-    /v-if="canUpdate && canCancel"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：更多操作`"/u,
+    /v-if="showActionMenu"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：更多操作`"/u,
   )
   assert.match(
     source,
-    /v-if="!\(canUpdate && canCancel\)"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：详情`"/u,
+    /v-if="!showActionMenu"[\s\S]*?:aria-label="`\$\{row\.orderNo\}：详情`"/u,
   )
 })
 

@@ -3,14 +3,21 @@ import {
   formatMachineViewingDate,
   hashMachineViewingRequestKey,
   MachineViewingValidationError,
+  machineViewingChangeEntries,
+  machineViewingChangedFields,
   normalizeMachineViewingCreate,
   normalizeMachineViewingOptionalText,
+  normalizeMachineViewingStatusTransition,
   normalizeMachineViewingText,
+  normalizeMachineViewingUpdate,
+  parseMachineViewingDateOnly,
   requireMachineViewingRequestKey,
   resolveMachineViewingDate,
+  resolveMachineViewingTransition,
   sameMachineViewingPayload,
   shanghaiCalendarDate,
   type MachineViewingCreateInput,
+  type MachineViewingUpdateInput,
 } from './machine-viewing.logic'
 
 const CREATE_INPUT: MachineViewingCreateInput = {
@@ -152,5 +159,99 @@ describe('machine viewing idempotency helpers', () => {
     expect(sameMachineViewingPayload({ ...previous, customerName: '林小姐' }, normalized)).toBe(false)
     expect(sameMachineViewingPayload({ ...previous, hour: null }, normalized)).toBe(false)
     expect(sameMachineViewingPayload({ ...previous, appointmentDate: new Date('2026-11-06T00:00:00.000Z') }, normalized)).toBe(false)
+  })
+})
+
+const UPDATE_INPUT: MachineViewingUpdateInput = {
+  site: 'NEW_TAIPEI_LINKOU',
+  machineType: 'MINI_TILLER',
+  appointmentDate: '2026-11-20',
+  period: 'PM',
+  hour: 3,
+  customerName: '陈先生',
+  customerPhone: '0912-345-678',
+  contactPerson: '李华',
+}
+
+function updateInput(overrides: Partial<MachineViewingUpdateInput> = {}): MachineViewingUpdateInput {
+  return { ...UPDATE_INPUT, ...overrides }
+}
+
+const NOW = new Date('2026-11-05T02:00:00.000Z')
+
+describe('machine viewing update normalization', () => {
+  it('parses only real calendar dates', () => {
+    expect(formatMachineViewingDate(parseMachineViewingDateOnly('2026-11-20', '预约日期'))).toBe('2026-11-20')
+    for (const value of ['2026-02-31', '2026-13-01', '2026-1-1', '20261120', '2026-11-20T00:00:00Z']) {
+      expect(() => parseMachineViewingDateOnly(value, '预约日期')).toThrow(MachineViewingValidationError)
+    }
+  })
+
+  it('keeps an unchanged cross-year date and rejects past dates', () => {
+    const normalized = normalizeMachineViewingUpdate(updateInput({ appointmentDate: '2027-01-05' }), NOW)
+    expect(formatMachineViewingDate(normalized.appointmentDate)).toBe('2027-01-05')
+
+    expect(() => normalizeMachineViewingUpdate(updateInput({ appointmentDate: '2026-11-04' }), NOW))
+      .toThrow('预约日期不能早于今天')
+    // 只允许今年或明年，避免手工请求写入远期预约。
+    expect(() => normalizeMachineViewingUpdate(updateInput({ appointmentDate: '2028-01-05' }), NOW))
+      .toThrow('预约日期只能选择今年或明年')
+  })
+
+  it('re-derives changed fields from before/after values', () => {
+    const normalized = normalizeMachineViewingUpdate(
+      updateInput({ customerName: ' 林小姐 ', hour: undefined }),
+      NOW,
+    )
+    const previous = {
+      site: 'NEW_TAIPEI_LINKOU',
+      machineType: 'MINI_TILLER',
+      appointmentDate: new Date('2026-11-20T00:00:00.000Z'),
+      period: 'PM',
+      hour: 3,
+      customerName: '陈先生',
+      customerPhone: '0912-345-678',
+      contactPerson: '李华',
+    }
+    expect(machineViewingChangedFields(previous, normalized)).toEqual(['hour', 'customerName'])
+    expect(machineViewingChangeEntries(previous, normalized)).toEqual([
+      { field: 'hour', from: '3', to: null },
+      { field: 'customerName', from: '陈先生', to: '林小姐' },
+    ])
+  })
+})
+
+describe('machine viewing status transitions', () => {
+  it('requires feedback for FEEDBACK_GIVEN and rejects cross-field noise', () => {
+    expect(normalizeMachineViewingStatusTransition({ status: 'FEEDBACK_GIVEN', feedback: ' 客户已到场 ' }))
+      .toEqual({ status: 'FEEDBACK_GIVEN', feedback: '客户已到场', cancelReason: null })
+
+    expect(() => normalizeMachineViewingStatusTransition({ status: 'FEEDBACK_GIVEN' }))
+      .toThrow('反馈内容不能为空')
+    expect(() => normalizeMachineViewingStatusTransition({ status: 'FEEDBACK_GIVEN', feedback: 'ok', cancelReason: '不想看' }))
+      .toThrow(MachineViewingValidationError)
+    expect(() => normalizeMachineViewingStatusTransition({ status: 'APPOINTED', feedback: 'ok' }))
+      .toThrow(MachineViewingValidationError)
+    expect(() => normalizeMachineViewingStatusTransition({ status: 'CANCELLED', feedback: 'ok' }))
+      .toThrow(MachineViewingValidationError)
+    expect(() => normalizeMachineViewingStatusTransition({ status: 'PENDING_APPOINTMENT' }))
+      .toThrow('预约状态无效')
+    expect(normalizeMachineViewingStatusTransition({ status: 'CANCELLED', cancelReason: '   ' }))
+      .toEqual({ status: 'CANCELLED', feedback: null, cancelReason: null })
+  })
+
+  it('allows only the strict forward path and cancellation before feedback', () => {
+    expect(resolveMachineViewingTransition('PENDING_APPOINTMENT', 'APPOINTED')).toBe('TRANSITION')
+    expect(resolveMachineViewingTransition('APPOINTED', 'FEEDBACK_GIVEN')).toBe('TRANSITION')
+    expect(resolveMachineViewingTransition('PENDING_APPOINTMENT', 'CANCELLED')).toBe('TRANSITION')
+    expect(resolveMachineViewingTransition('APPOINTED', 'CANCELLED')).toBe('TRANSITION')
+    expect(resolveMachineViewingTransition('FEEDBACK_GIVEN', 'FEEDBACK_GIVEN')).toBe('FEEDBACK_EDIT')
+    expect(resolveMachineViewingTransition('APPOINTED', 'APPOINTED')).toBe('NOOP')
+    expect(resolveMachineViewingTransition('CANCELLED', 'CANCELLED')).toBe('NOOP')
+
+    expect(resolveMachineViewingTransition('PENDING_APPOINTMENT', 'FEEDBACK_GIVEN')).toBe('INVALID')
+    expect(resolveMachineViewingTransition('CANCELLED', 'APPOINTED')).toBe('INVALID')
+    expect(resolveMachineViewingTransition('FEEDBACK_GIVEN', 'CANCELLED')).toBe('INVALID')
+    expect(resolveMachineViewingTransition('FEEDBACK_GIVEN', 'APPOINTED')).toBe('INVALID')
   })
 })

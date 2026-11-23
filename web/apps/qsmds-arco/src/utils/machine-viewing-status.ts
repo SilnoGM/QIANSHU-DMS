@@ -17,6 +17,13 @@ export const MACHINE_VIEWING_STATUS_META: Readonly<Record<
   CANCELLED: { labelKey: 'machineViewing.status.CANCELLED', tone: 'neutral' },
 }
 
+export const MACHINE_VIEWING_STATUS_OPTIONS = [
+  'PENDING_APPOINTMENT',
+  'APPOINTED',
+  'FEEDBACK_GIVEN',
+  'CANCELLED',
+] as const satisfies readonly MachineViewingStatusValue[]
+
 export function machineViewingStatusMeta(status: MachineViewingStatusValue) {
   return MACHINE_VIEWING_STATUS_META[status]
 }

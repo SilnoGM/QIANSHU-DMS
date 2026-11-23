@@ -38,6 +38,7 @@ function createLock(
     productHeadName: '原产品头',
     productNo: 'P202608130001',
     defaultAlias: null,
+    excludeFromShippingMark: false,
     status: ProductStatus.INACTIVE,
     supplierValue: 'HISTORICAL',
     sortOrder: 10,
@@ -64,6 +65,7 @@ function createResponse(
     productHead: { id: 'head-1', name: '原产品头' },
     productNo: 'P202608130001',
     defaultAlias: null,
+    excludeFromShippingMark: false,
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',
     sortOrder: 10,
@@ -325,6 +327,26 @@ describe('ProductUpdateService', () => {
     })
     expect(JSON.stringify(auditInput)).not.toContain('SUPPLIER_A')
     expect(JSON.stringify(auditInput)).not.toContain('新产品')
+  })
+
+  it('writes and audits the shipping mark exclusion flag on its own', async () => {
+    const fixture = createFixture()
+
+    await expect(updateProduct(fixture, {
+      excludeFromShippingMark: true,
+      expectedVersion: 1,
+    })).resolves.toMatchObject({ version: 2 })
+
+    const updateCalls = fixture.productUpdate.mock.calls as unknown as Array<
+      readonly [Record<string, unknown>]
+    >
+    expect(updateCalls[0]?.[0]).toMatchObject({
+      data: { excludeFromShippingMark: true },
+    })
+    expect(fixture.auditRecord.mock.calls[0]?.[1]).toMatchObject({
+      eventType: AuditEventType.PRODUCT_UPDATED,
+      metadata: { changedFields: 'excludeFromShippingMark' },
+    })
   })
 
   it('rejects stale expectedVersion before no-op comparison and dependencies', async () => {
