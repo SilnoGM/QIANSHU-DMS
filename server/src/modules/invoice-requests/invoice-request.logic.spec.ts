@@ -9,6 +9,7 @@ import {
   resolveInvoiceAmounts,
   resolveInvoiceDocumentVariant,
   resolveSettleableAt,
+  sumBatchSettleAmountsCny,
   sumLineAmounts,
 } from './invoice-request.logic'
 
@@ -101,6 +102,17 @@ describe('invoice request amounts and settle window', () => {
     // 顺序敏感：先加 30 再向上取整，向上取整发生在最后一步。
     expect(calculateSettleAmountCny(520_000n, new Prisma.Decimal('5.2'))).toBe('6030.00')
     expect(describeSettleFormula(283_500n, new Prisma.Decimal('5.2'))).toBe('总计 283500 ÷ 汇率 5.2 × 0.06 + 30 = 3302.00')
+  })
+
+  it('sums batch settlement amounts per document before adding them up', () => {
+    // 每单各自向上取整：1000 ÷ 4.5 × 0.06 + 30 = 43.33… → 44。
+    const one = calculateSettleAmountCny(1_000n, new Prisma.Decimal('4.5'))
+    expect(one).toBe('44.00')
+    expect(sumBatchSettleAmountsCny([one, one])).toBe('88.00')
+    // 合并成 2000 再套一次公式会得到 57：向上取整必须逐单发生，批量合计只能相加。
+    expect(calculateSettleAmountCny(2_000n, new Prisma.Decimal('4.5'))).toBe('57.00')
+    expect(sumBatchSettleAmountsCny(['3302.00', '31.00'])).toBe('3333.00')
+    expect(sumBatchSettleAmountsCny([])).toBe('0.00')
   })
 
   it('accepts only the thumb variant and rejects unknown values instead of degrading to the original', () => {

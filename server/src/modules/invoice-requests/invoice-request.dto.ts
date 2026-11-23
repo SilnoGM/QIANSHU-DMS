@@ -3,6 +3,7 @@ import { Type } from 'class-transformer'
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator'
 import { IsUnicodeCodePointLength } from '../auth/dto/unicode-code-point-length.validator'
 import {
+  INVOICE_REQUEST_BATCH_SETTLE_LIMIT,
   INVOICE_REQUEST_LINE_LIMIT,
   INVOICE_REQUEST_STATUS_VALUES,
   type InvoiceRequestStatusValue,
@@ -80,6 +81,34 @@ export class InvoiceRequestSettleDto {
   @ApiProperty({ type: 'integer', minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number
   @ApiProperty({ format: 'uuid', description: '客户端展示时使用的汇率记录 id。' }) @IsUUID('4') exchangeRateId!: string
   @ApiProperty({ type: 'integer', minimum: 1, description: '客户端展示时使用的汇率版本号。' }) @Type(() => Number) @IsInt() @Min(1) exchangeRateVersion!: number
+}
+
+/** 批量结算的一项：只带单据与乐观锁版本，汇率整批共享一份。 */
+export class InvoiceRequestBatchSettleItemDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID('4') id!: string
+  @ApiProperty({ type: 'integer', minimum: 1, description: '客户端读到的单据版本号。' }) @Type(() => Number) @IsInt() @Min(1) expectedVersion!: number
+}
+
+export class InvoiceRequestBatchSettleDto {
+  @ApiProperty({ type: [InvoiceRequestBatchSettleItemDto], description: `待结算单据，1–${INVOICE_REQUEST_BATCH_SETTLE_LIMIT} 张；同一 id 不能重复。` })
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(INVOICE_REQUEST_BATCH_SETTLE_LIMIT) @ValidateNested({ each: true }) @Type(() => InvoiceRequestBatchSettleItemDto)
+  items!: InvoiceRequestBatchSettleItemDto[]
+  @ApiProperty({ format: 'uuid', description: '客户端展示时使用的汇率记录 id。' }) @IsUUID('4') exchangeRateId!: string
+  @ApiProperty({ type: 'integer', minimum: 1, description: '客户端展示时使用的汇率版本号。' }) @Type(() => Number) @IsInt() @Min(1) exchangeRateVersion!: number
+}
+
+export class InvoiceRequestBatchSettleItemResultDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty() invoiceNo!: string
+  @ApiProperty({ type: 'string', description: '该单入账成本（人民币，两位小数）。' }) settleAmountCny!: string
+  @ApiProperty({ format: 'uuid' }) fundPostingBatchId!: string
+}
+
+export class InvoiceRequestBatchSettleResultDto {
+  @ApiProperty({ type: [InvoiceRequestBatchSettleItemResultDto] }) items!: InvoiceRequestBatchSettleItemResultDto[]
+  @ApiProperty({ type: 'string', description: '逐单向上取整后相加的合计（人民币，两位小数）。' }) totalAmountCny!: string
+  @ApiProperty({ type: 'string', description: '本次整批共享并冻结的汇率（1 人民币 = 多少台币）。' }) foreignUnitsPerCny!: string
+  @ApiProperty({ type: 'string', description: '结算时刻，ISO 8601。' }) settledAt!: string
 }
 
 export class InvoiceRequestListQueryDto {

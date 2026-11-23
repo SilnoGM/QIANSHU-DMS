@@ -145,6 +145,18 @@ export function calculateSettleAmountCny(
     .toFixed(2)
 }
 
+/**
+ * 批量结算合计：每张单各自向上取整后再相加。
+ *
+ * 不能先合计台币总额再套一次公式——`ceil` 是按单发生的，合并会把各单的小数部分
+ * 凑成整数，少收手续费；批量确认弹窗展示的合计必须与服务端这个口径一致。
+ */
+export function sumBatchSettleAmountsCny(amounts: readonly string[]): string {
+  return amounts
+    .reduce((total, amount) => total.plus(new Prisma.Decimal(amount)), new Prisma.Decimal(0))
+    .toFixed(2)
+}
+
 /** 完整算式文本，供结算弹窗与审计说明使用（保留计算顺序，便于人工复核）。 */
 export function describeSettleFormula(
   totalAmount: bigint | Prisma.Decimal,

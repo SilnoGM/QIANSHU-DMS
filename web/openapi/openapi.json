@@ -104352,6 +104352,265 @@
         }
       }
     },
+    "/api/invoice-requests/batch-settlements": {
+      "post": {
+        "operationId": "invoice_requests_batch_settle",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceRequestBatchSettleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceRequestBatchSettleResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "invoice-requests"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "INVOICE_REQUEST_OWNER_ONLY",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "INVOICE_REQUEST_BATCH_SETTLE_INVALID",
+                "INVOICE_REQUEST_POSTING_ACCOUNT_UNAVAILABLE",
+                "INVOICE_REQUEST_POSTING_UNAVAILABLE",
+                "INVOICE_REQUEST_RATE_CHANGED",
+                "INVOICE_REQUEST_RATE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/invoice-requests/{id}/document-uploads": {
       "post": {
         "operationId": "invoice_requests_upload_document",
@@ -143180,6 +143439,106 @@
           "expectedVersion",
           "exchangeRateId",
           "exchangeRateVersion"
+        ]
+      },
+      "InvoiceRequestBatchSettleItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "客户端读到的单据版本号。"
+          }
+        },
+        "required": [
+          "id",
+          "expectedVersion"
+        ]
+      },
+      "InvoiceRequestBatchSettleDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "待结算单据，1–50 张；同一 id 不能重复。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestBatchSettleItemDto"
+            }
+          },
+          "exchangeRateId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "客户端展示时使用的汇率记录 id。"
+          },
+          "exchangeRateVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "客户端展示时使用的汇率版本号。"
+          }
+        },
+        "required": [
+          "items",
+          "exchangeRateId",
+          "exchangeRateVersion"
+        ]
+      },
+      "InvoiceRequestBatchSettleItemResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "invoiceNo": {
+            "type": "string"
+          },
+          "settleAmountCny": {
+            "type": "string",
+            "description": "该单入账成本（人民币，两位小数）。"
+          },
+          "fundPostingBatchId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNo",
+          "settleAmountCny",
+          "fundPostingBatchId"
+        ]
+      },
+      "InvoiceRequestBatchSettleResultDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceRequestBatchSettleItemResultDto"
+            }
+          },
+          "totalAmountCny": {
+            "type": "string",
+            "description": "逐单向上取整后相加的合计（人民币，两位小数）。"
+          },
+          "foreignUnitsPerCny": {
+            "type": "string",
+            "description": "本次整批共享并冻结的汇率（1 人民币 = 多少台币）。"
+          },
+          "settledAt": {
+            "type": "string",
+            "description": "结算时刻，ISO 8601。"
+          }
+        },
+        "required": [
+          "items",
+          "totalAmountCny",
+          "foreignUnitsPerCny",
+          "settledAt"
         ]
       },
       "AdvertisingRechargePersonDto": {
