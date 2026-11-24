@@ -108,4 +108,52 @@ describe('WecomAppHttpTransport', () => {
     expect(result).toMatchObject({ ok: false, code: 'WECOM_TEXT_TOO_LONG' })
     expect(fetchSpy).not.toHaveBeenCalled()
   })
+
+  it('uploads an image and returns media_id', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ errcode: 0, errmsg: 'ok', media_id: 'media-1' }))
+    const transport = new WecomAppHttpTransport(configService())
+
+    const result = await transport.uploadImage({
+      accessToken: 'token-1',
+      buffer: Buffer.from('image'),
+      mimeType: 'image/png',
+      filename: 'proof.png',
+    })
+
+    expect(result).toEqual({ ok: true, mediaId: 'media-1' })
+    const [url, init] = fetchSpy.mock.calls[0] ?? []
+    expect(url).toBeInstanceOf(URL)
+    if (url instanceof URL) {
+      expect(url.pathname).toBe('/cgi-bin/media/upload')
+      expect(url.searchParams.get('type')).toBe('image')
+    }
+    expect(init?.body).toBeInstanceOf(FormData)
+  })
+
+  it('sends an image message with media_id', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ errcode: 0, errmsg: 'ok', msgid: 'msg-2' }))
+    const transport = new WecomAppHttpTransport(configService())
+
+    const result = await transport.sendImage({
+      accessToken: 'token-1',
+      agentId: 1000001,
+      toUser: 'zhangsan',
+      mediaId: 'media-1',
+    })
+
+    expect(result).toEqual({ ok: true, msgId: 'msg-2' })
+    const [, init] = fetchSpy.mock.calls[0] ?? []
+    const body = init?.body
+    expect(typeof body).toBe('string')
+    if (typeof body === 'string') {
+      expect(JSON.parse(body)).toEqual({
+        touser: 'zhangsan',
+        agentid: 1000001,
+        msgtype: 'image',
+        image: { media_id: 'media-1' },
+      })
+    }
+  })
 })

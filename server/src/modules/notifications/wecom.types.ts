@@ -24,12 +24,33 @@ export type WecomTransportResult =
     readonly invalidUserIds?: readonly string[]
   }
 
+export type WecomMediaUploadResult =
+  | { readonly ok: true, readonly mediaId: string }
+  | {
+    readonly ok: false
+    readonly kind: WecomTransportFailureKind
+    readonly code: string
+    readonly message: string
+  }
+
 export interface WecomAppTransport {
   sendText(input: {
     readonly accessToken: string
     readonly agentId: number
     readonly toUser: string
     readonly content: string
+  }): Promise<WecomTransportResult>
+  uploadImage(input: {
+    readonly accessToken: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult>
+  sendImage(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly mediaId: string
   }): Promise<WecomTransportResult>
 }
 
@@ -38,6 +59,11 @@ export interface WecomRobotTransport {
     readonly webhookKey: string
     readonly content: string
     readonly mentionedUserIds?: readonly string[]
+  }): Promise<WecomTransportResult>
+  sendImage(input: {
+    readonly webhookKey: string
+    readonly base64: string
+    readonly md5: string
   }): Promise<WecomTransportResult>
 }
 

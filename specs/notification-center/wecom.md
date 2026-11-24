@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 一期服务端核心与管理端页面已实施；图片、真实 POC 与页面验收未完成 |
+| 文档状态 | 一期服务端核心、管理端页面、图片投递与记录页 WECOM 计数已实施；真实 POC 与页面验收未完成 |
 | 适用范围 | 在现有 `IN_APP`、`ASSISTANT` 之外新增独立渠道 `WECOM`；一期单应用，数据模型按多应用预留 |
 | 真相源 | 本文与现有[通知中心文档](./README.md)；冲突时以本文的 WECOM 决策为准 |
 | 关联文档 | [落地设计](./design.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md) |
@@ -983,23 +983,25 @@ WECOM 失败时：
 - 迁移 `20261124102000_wecom_permissions_and_audit`：10 项 `wecom-*` 权限仅授 `system_admin`；11 项 WECOM 审计枚举。
 - 服务端：`wecom.config.ts`、`wecom-secret.service.ts`、`wecom-token.service.ts`、应用 text 传输、群机器人 text/@ 传输、`wecom-dispatch.service.ts`、`system-notification.service.ts` 的 WECOM 文本分支。
 - 管理端：`wecom-admin.controller/service/dto`，覆盖渠道开关、应用 CRUD/Secret/测试、事件分配、员工绑定/验证、应用成员、群目标 CRUD/测试；页面 `/system/notifications/wecom`。
+- 图片投递：应用消息 media_id 上传（≤10MB）、群机器人图片 Sharp 压缩（≤2MB）、`wecom_delivery_media` 写入、正文成功后逐张发送与 PARTIAL 汇总。
+- 通知记录：按渠道统计 WECOM 投递、详情合并展示 WECOM 投递与附件计数。
 - 通知偏好、模板/策略 DTO、权限目录与既有通知派发状态汇总已兼容 WECOM。
-- 单元测试：6 个 WECOM 套件 26 个用例；Server 全量 471 套件 5,001 用例通过；Web 2,316 用例通过；类型检查、ESLint、构建、契约检查、根治理通过。
+- 单元测试：7 个 WECOM 套件；Server 全量 472 套件 5,007 用例通过；Web 2,316 用例通过；类型检查、ESLint、构建、契约检查、根治理通过。
 - 迁移验证：一次性 PostgreSQL 16 空库 214 条迁移首次部署成功，二次部署无待执行项，`migrate status` 最新。
 
 ### 17.2 未完成
 
-- 图片投递：应用消息 media_id 上传、机器人 2MB 压缩/文件兜底、`wecom_delivery_media` 实际写入。
 - 模板/策略种子与试点事件；真实微信插件、群机器人、2048 字节截断、@ 行为 POC。
 - 二期多应用 `agent/get` 同步、不同可见范围的应用级成员管理。
-- 记录页 WECOM 投递明细、取消/重试、通知清理任务覆盖。
+- 群图片压缩后仍 >2MB 时的文件兜底；当前直接落 PARTIAL/FAILED。
+- 记录页 WECOM 投递的手动重发、通知清理任务覆盖。
 - 模板编辑器 `max_bytes` 输入；当前 WECOM 模板创建默认 2048，页面暂不能改。
 - 部署与页面级验收；生产环境 `WECOM_APP_SECRET_KEY` / `WECOM_WORKER_ENABLED` 配置。
 
 ### 17.3 已知限制
 
-- WECOM 图片尚未投递；当前业务传附件时，WECOM 只发正文。
-- 管理端已支持应用/绑定/群目标配置，但记录页仍未统计 WECOM 投递计数。
+- 群图片按 2MB 目标压缩；压缩后仍超限时暂不转文件，直接标记附件失败。
+- 应用图片按 10MB 目标压缩；压缩后仍超限时标记附件失败。
 - 群 @ 的成员不在群内时无法通过机器人 API 校验，可能静默无效。
 - 尚未做真实微信插件与真机验收。
 

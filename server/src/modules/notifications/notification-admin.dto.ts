@@ -198,6 +198,7 @@ export class NotificationRecordOptionsDto {
 
 export class NotificationDeliveryDto {
   @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiPropertyOptional({ enum: ['ASSISTANT', 'WECOM'], description: '历史记录未标记时按 ASSISTANT 处理' }) channel?: string
   @ApiProperty({ type: 'string', nullable: true }) recipientName!: string | null
   @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
   @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
@@ -248,6 +249,7 @@ export class NotificationRecordDto {
   @ApiProperty({ type: 'integer', description: '站内收件箱条目数' }) inAppItemCount!: number
   @ApiProperty({ type: 'integer', description: '站内未读条目数' }) inAppUnreadCount!: number
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '小助理 AssistantDelivery 按状态计数' }) deliveryCounts!: Record<string, number>
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'integer' }, description: '企业微信 WecomDelivery 按状态计数' }) wecomDeliveryCounts?: Record<string, number>
   @ApiProperty({ type: 'integer', description: '业务附件数量（含被策略拦截的）' }) mediaCount!: number
 }
 

@@ -50,7 +50,7 @@ export function canCancelRecord(record: Pick<NotificationRecordDto, 'deliveryCou
  * 完整状态分布留在详情抽屉，避免列表单元格变成状态字典。
  */
 export function recordDeliverySummary(
-  record: Pick<NotificationRecordDto, 'channels' | 'deliveryCounts' | 'inAppItemCount' | 'inAppUnreadCount'>,
+  record: Pick<NotificationRecordDto, 'channels' | 'deliveryCounts' | 'wecomDeliveryCounts' | 'inAppItemCount' | 'inAppUnreadCount'>,
 ): RecordDeliverySummaryItem[] {
   const items: RecordDeliverySummaryItem[] = []
 
@@ -70,6 +70,18 @@ export function recordDeliverySummary(
     items.push({
       channel: 'ASSISTANT',
       label: `小助理 ${total} 人`,
+      tone: failed > 0 ? 'danger' : 'normal',
+      detail: total === 0 ? '未生成交付' : failed > 0 ? `失败 ${failed}` : null,
+    })
+  }
+
+  if (record.channels.includes('WECOM')) {
+    const counts = record.wecomDeliveryCounts ?? {}
+    const total = deliveryTotal(counts)
+    const failed = counts.FAILED ?? 0
+    items.push({
+      channel: 'WECOM',
+      label: `企业微信 ${total} 人`,
       tone: failed > 0 ? 'danger' : 'normal',
       detail: total === 0 ? '未生成交付' : failed > 0 ? `失败 ${failed}` : null,
     })

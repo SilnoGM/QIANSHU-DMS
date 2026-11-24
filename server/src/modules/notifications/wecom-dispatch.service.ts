@@ -18,9 +18,9 @@ import {
   WECOM_ROBOT_TRANSPORT,
   type WecomAppTransport,
   type WecomRobotTransport,
-  type WecomTransportResult,
 } from './wecom.types'
 import { WecomSecretService } from './wecom-secret.service'
+import { WecomMediaService } from './wecom-media.service'
 import { WecomTokenService } from './wecom-token.service'
 
 const LEASE_ID = 'wecom-dispatch'
@@ -40,6 +40,7 @@ interface ClaimedDelivery {
   readonly attempt_count: number
   readonly rendered_content: string
   readonly mention_mode: string | null
+  readonly content_sent_at: Date | null
 }
 
 function sleep(ms: number): Promise<void> {
@@ -72,6 +73,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     private readonly configService: ConfigService,
     private readonly secretService: WecomSecretService,
     private readonly tokenService: WecomTokenService,
+    private readonly mediaService: WecomMediaService,
     @Inject(WECOM_APP_TRANSPORT) private readonly appTransport: WecomAppTransport,
     @Inject(WECOM_ROBOT_TRANSPORT) private readonly robotTransport: WecomRobotTransport,
   ) {}
@@ -168,7 +170,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
                 d."target_id",
                 d."attempt_count",
                 d."rendered_content",
-                d."mention_mode"
+                d."mention_mode",
+                d."content_sent_at"
     `)
   }
 
@@ -324,10 +327,24 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       toUser: binding.wecomUserId,
       content: delivery.rendered_content,
     })
-    if (!result.ok && result.kind === 'TOKEN_INVALID') {
-      this.tokenService.invalidate(app.key)
+    if (!result.ok) {
+      if (result.kind === 'TOKEN_INVALID') {
+        this.tokenService.invalidate(app.key)
+      }
+      await this.failDelivery(delivery, result.code, result.message, notification.id, result.invalidUserIds)
+      return
     }
-    await this.handleResult(delivery, result, notification.id)
+    await this.prisma.wecomDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        contentSentAt: new Date(),
+        providerMsgId: result.msgId,
+        failureCode: null,
+        failureMessage: null,
+      },
+    })
+    const mediaFailed = await this.sendAppMedia(delivery, token.accessToken, app.agentId, binding.wecomUserId)
+    await this.finalizeDelivery(delivery.id, mediaFailed)
   }
 
   private async deliverRobotMessage(
@@ -366,9 +383,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       await this.prisma.wecomDelivery.update({
         where: { id: delivery.id },
         data: {
-          status: 'ACCEPTED',
           contentSentAt: new Date(),
-          acceptedAt: new Date(),
           mentionMode: mention.mode,
           mentionedCount: mention.userIds.length,
           mentionSkipped: mention.skipped,
@@ -376,6 +391,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           failureMessage: null,
         },
       })
+      const mediaFailed = await this.sendRobotMedia(delivery, webhookKey)
+      await this.finalizeDelivery(delivery.id, mediaFailed)
       return
     }
     await this.failDelivery(delivery, result.code, result.message, notification.id)
@@ -411,26 +428,202 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     }
   }
 
-  private async handleResult(
+  private async sendAppMedia(
     delivery: ClaimedDelivery,
-    result: WecomTransportResult,
-    notificationId: string,
-  ): Promise<void> {
-    if (result.ok) {
-      await this.prisma.wecomDelivery.update({
-        where: { id: delivery.id },
+    accessToken: string,
+    agentId: number,
+    toUser: string,
+  ): Promise<boolean> {
+    const items = await this.prisma.wecomDeliveryMedia.findMany({
+      where: { deliveryId: delivery.id, status: 'PENDING' },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mediaAsset: {
+          select: {
+            mediaType: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+            mimeType: true,
+            originalFilename: true,
+          },
+        },
+      },
+    })
+    let failed = false
+    const now = new Date()
+    for (const item of items) {
+      const asset = item.mediaAsset
+      if (
+        asset.status !== 'READY'
+        || asset.deletedAt !== null
+        || asset.objectKey === null
+        || asset.mediaType !== 'IMAGE'
+      ) {
+        await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
+        failed = true
+        continue
+      }
+      let buffer: Buffer
+      try {
+        buffer = await this.mediaService.read(asset.objectKey)
+      }
+      catch {
+        await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+        failed = true
+        continue
+      }
+      const prepared = await this.mediaService.prepareAppImage({
+        buffer,
+        mimeType: asset.mimeType,
+        filename: asset.originalFilename ?? 'image.png',
+      })
+      if (!prepared.ok) {
+        await this.markMediaFailure(item.id, prepared.code, prepared.message)
+        failed = true
+        continue
+      }
+      let mediaId = item.mediaId
+      if (mediaId === null || item.mediaIdExpiresAt === null || item.mediaIdExpiresAt.getTime() <= now.getTime()) {
+        const upload = await this.appTransport.uploadImage({
+          accessToken,
+          buffer: prepared.buffer,
+          mimeType: prepared.mimeType,
+          filename: prepared.filename,
+        })
+        if (!upload.ok) {
+          await this.markMediaFailure(item.id, upload.code, upload.message)
+          failed = true
+          continue
+        }
+        mediaId = upload.mediaId
+        await this.prisma.wecomDeliveryMedia.update({
+          where: { id: item.id },
+          data: {
+            mediaId,
+            mediaIdExpiresAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1_000),
+          },
+        })
+      }
+      const sent = await this.appTransport.sendImage({
+        accessToken,
+        agentId,
+        toUser,
+        mediaId,
+      })
+      if (!sent.ok) {
+        await this.markMediaFailure(item.id, sent.code, sent.message)
+        failed = true
+        continue
+      }
+      await this.prisma.wecomDeliveryMedia.update({
+        where: { id: item.id },
         data: {
           status: 'ACCEPTED',
-          contentSentAt: new Date(),
+          attemptCount: { increment: 1 },
           acceptedAt: new Date(),
-          providerMsgId: result.msgId,
           failureCode: null,
           failureMessage: null,
         },
       })
-      return
     }
-    await this.failDelivery(delivery, result.code, result.message, notificationId, result.invalidUserIds)
+    return failed
+  }
+
+  private async sendRobotMedia(delivery: ClaimedDelivery, webhookKey: string): Promise<boolean> {
+    const items = await this.prisma.wecomDeliveryMedia.findMany({
+      where: { deliveryId: delivery.id, status: 'PENDING' },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mediaAsset: {
+          select: {
+            mediaType: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+          },
+        },
+      },
+    })
+    let failed = false
+    for (const item of items) {
+      const asset = item.mediaAsset
+      if (
+        asset.status !== 'READY'
+        || asset.deletedAt !== null
+        || asset.objectKey === null
+        || asset.mediaType !== 'IMAGE'
+      ) {
+        await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
+        failed = true
+        continue
+      }
+      let buffer: Buffer
+      try {
+        buffer = await this.mediaService.read(asset.objectKey)
+      }
+      catch {
+        await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+        failed = true
+        continue
+      }
+      const prepared = await this.mediaService.prepareRobotImage(buffer)
+      if (!prepared.ok) {
+        await this.markMediaFailure(item.id, prepared.code, prepared.message)
+        failed = true
+        continue
+      }
+      const sent = await this.robotTransport.sendImage({
+        webhookKey,
+        base64: prepared.base64,
+        md5: prepared.md5,
+      })
+      if (!sent.ok) {
+        await this.markMediaFailure(item.id, sent.code, sent.message)
+        failed = true
+        continue
+      }
+      await this.prisma.wecomDeliveryMedia.update({
+        where: { id: item.id },
+        data: {
+          status: 'ACCEPTED',
+          attemptCount: { increment: 1 },
+          acceptedAt: new Date(),
+          failureCode: null,
+          failureMessage: null,
+        },
+      })
+    }
+    return failed
+  }
+
+  private async markMediaFailure(id: string, code: string, message: string): Promise<void> {
+    await this.prisma.wecomDeliveryMedia.update({
+      where: { id },
+      data: {
+        status: 'FAILED',
+        attemptCount: { increment: 1 },
+        failureCode: code,
+        failureMessage: message.slice(0, 255),
+      },
+    })
+  }
+
+  private async finalizeDelivery(deliveryId: string, mediaFailed: boolean): Promise<void> {
+    const media = await this.prisma.wecomDeliveryMedia.findMany({
+      where: { deliveryId },
+      select: { status: true },
+    })
+    const failed = mediaFailed || media.some(item => item.status === 'FAILED')
+    await this.prisma.wecomDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status: failed ? 'PARTIAL' : 'ACCEPTED',
+        acceptedAt: failed ? null : new Date(),
+        failureCode: failed ? 'WECOM_MEDIA_PARTIAL' : null,
+        failureMessage: failed ? '正文已发送，但至少一个附件发送失败' : null,
+      },
+    })
   }
 
   private async failDelivery(

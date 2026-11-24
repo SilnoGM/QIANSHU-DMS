@@ -29,6 +29,7 @@ import { WecomAdminController } from './wecom-admin.controller'
 import { WecomAdminService } from './wecom-admin.service'
 import { WecomAppHttpTransport } from './wecom-app.transport'
 import { WecomDispatchService } from './wecom-dispatch.service'
+import { WecomMediaService } from './wecom-media.service'
 import { WecomRobotHttpTransport } from './wecom-robot.transport'
 import { WECOM_SECRET_KEY, WecomSecretService } from './wecom-secret.service'
 import { WECOM_TOKEN_FETCH, WecomTokenService } from './wecom-token.service'
@@ -83,6 +84,7 @@ import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
       useValue: globalThis.fetch,
     },
     WecomSecretService,
+    WecomMediaService,
     WecomTokenService,
     WecomAppHttpTransport,
     WecomRobotHttpTransport,

@@ -141290,6 +141290,13 @@
             },
             "description": "小助理 AssistantDelivery 按状态计数"
           },
+          "wecomDeliveryCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "企业微信 WecomDelivery 按状态计数"
+          },
           "mediaCount": {
             "type": "integer",
             "description": "业务附件数量（含被策略拦截的）"
@@ -141392,6 +141399,14 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ASSISTANT",
+              "WECOM"
+            ],
+            "description": "历史记录未标记时按 ASSISTANT 处理"
           },
           "recipientName": {
             "type": "string",
@@ -141620,6 +141635,13 @@
               "type": "integer"
             },
             "description": "小助理 AssistantDelivery 按状态计数"
+          },
+          "wecomDeliveryCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "企业微信 WecomDelivery 按状态计数"
           },
           "mediaCount": {
             "type": "integer",

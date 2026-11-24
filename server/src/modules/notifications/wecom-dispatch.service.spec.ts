@@ -43,6 +43,7 @@ function robotDelivery(overrides: Record<string, unknown> = {}) {
     attempt_count: 0,
     rendered_content: '正文',
     mention_mode: null,
+    content_sent_at: null,
     ...overrides,
   }
 }
@@ -58,6 +59,7 @@ function appDelivery(overrides: Record<string, unknown> = {}) {
     attempt_count: 0,
     rendered_content: '正文',
     mention_mode: null,
+    content_sent_at: null,
     ...overrides,
   }
 }
@@ -81,6 +83,10 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
       groupBy: jest.fn().mockResolvedValue([{ _count: { _all: 1 }, status: 'ACCEPTED' }]),
       update: jest.fn().mockResolvedValue({}),
     },
+    wecomDeliveryMedia: {
+      findMany: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({}),
+    },
     ...overrides,
   }
 }
@@ -88,13 +94,23 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
 function service(
   prisma: Record<string, unknown>,
   robotTransport: WecomRobotTransport,
-  appTransport: WecomAppTransport = { sendText: jest.fn() },
+  appTransport: WecomAppTransport = {
+    sendText: jest.fn(),
+    uploadImage: jest.fn(),
+    sendImage: jest.fn(),
+  },
 ): WecomDispatchService {
+  const mediaService = {
+    read: jest.fn(),
+    prepareAppImage: jest.fn(),
+    prepareRobotImage: jest.fn(),
+  }
   return new WecomDispatchService(
     prisma as unknown as PrismaService,
     configService(),
     secretService,
     tokenService,
+    mediaService as unknown as import('./wecom-media.service').WecomMediaService,
     appTransport,
     robotTransport,
   )
@@ -128,7 +144,10 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const robot = { sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }) }
+    const robot = {
+      sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
+      sendImage: jest.fn(),
+    }
     const instance = service(prisma, robot)
 
     await runDelivery(instance, robotDelivery())
@@ -137,13 +156,17 @@ describe('WecomDispatchService', () => {
       webhookKey: 'plain-secret',
       content: '正文',
     })
-    expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
+    expect(prisma.wecomDelivery.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'delivery-1' },
       data: expect.objectContaining({
-        status: 'ACCEPTED',
+        contentSentAt: expect.any(Date),
         mentionMode: 'NONE',
         failureCode: null,
       }),
+    })
+    expect(prisma.wecomDelivery.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'delivery-1' },
+      data: expect.objectContaining({ status: 'ACCEPTED' }),
     })
     expect(prisma.notification.update).toHaveBeenCalledWith({
       where: { id: 'notification-1' },
@@ -166,7 +189,10 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const robot = { sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }) }
+    const robot = {
+      sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
+      sendImage: jest.fn(),
+    }
     const instance = service(prisma, robot)
 
     await runDelivery(instance, robotDelivery())
@@ -208,8 +234,12 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const app = { sendText: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-1' }) }
-    const instance = service(prisma, { sendText: jest.fn() }, app)
+    const app = {
+      sendText: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-1' }),
+      uploadImage: jest.fn(),
+      sendImage: jest.fn(),
+    }
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -224,9 +254,13 @@ describe('WecomDispatchService', () => {
       toUser: 'zhangsan',
       content: '正文',
     })
-    expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
+    expect(prisma.wecomDelivery.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'delivery-2' },
-      data: expect.objectContaining({ status: 'ACCEPTED', providerMsgId: 'msg-1' }),
+      data: expect.objectContaining({ contentSentAt: expect.any(Date), providerMsgId: 'msg-1' }),
+    })
+    expect(prisma.wecomDelivery.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'delivery-2' },
+      data: expect.objectContaining({ status: 'ACCEPTED' }),
     })
   })
 
@@ -256,8 +290,8 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const app = { sendText: jest.fn() }
-    const instance = service(prisma, { sendText: jest.fn() }, app)
+    const app = { sendText: jest.fn(), uploadImage: jest.fn(), sendImage: jest.fn() }
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -290,7 +324,7 @@ describe('WecomDispatchService', () => {
           }),
         },
       })
-      const robot = { sendText: jest.fn() }
+      const robot = { sendText: jest.fn(), sendImage: jest.fn() }
       const instance = service(prisma, robot)
 
       await runDelivery(instance, robotDelivery())

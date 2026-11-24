@@ -772,23 +772,29 @@ export class SystemNotificationService {
         input.warnings.push({ code: 'NO_RECIPIENT', message: '企业微信群目标不存在、已停用或不是内部群' })
         return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
       }
-      await transaction.wecomDelivery.createMany({
-        data: targets.map(target => ({
-          id: randomUUID(),
-          notificationId: input.notificationId,
-          appId: null,
-          transport: 'ROBOT' as const,
-          recipientUserId: null,
-          targetId: target.id,
-          status: 'PENDING' as const,
-          templateKey: input.templateKey,
-          templateVersion: template.version,
-          renderedContent: content,
-          nextAttemptAt: input.now,
-          mentionMode: mention.mode,
-          mentionedCount: 0,
-          mentionSkipped: 0,
-        })),
+      const deliveryRows = targets.map(target => ({
+        id: randomUUID(),
+        notificationId: input.notificationId,
+        appId: null,
+        transport: 'ROBOT' as const,
+        recipientUserId: null,
+        targetId: target.id,
+        status: 'PENDING' as const,
+        templateKey: input.templateKey,
+        templateVersion: template.version,
+        renderedContent: content,
+        nextAttemptAt: input.now,
+        mentionMode: mention.mode,
+        mentionedCount: 0,
+        mentionSkipped: 0,
+      }))
+      await transaction.wecomDelivery.createMany({ data: deliveryRows })
+      await this.createWecomMediaRows(transaction, {
+        notificationId: input.notificationId,
+        template,
+        policy: input.policy,
+        command: input.command,
+        deliveries: deliveryRows,
       })
       return { channel: 'WECOM', status: 'PENDING', recipientCount: targets.length, skippedCount: 0 }
     }
@@ -865,6 +871,13 @@ export class SystemNotificationService {
       }
     })
     await transaction.wecomDelivery.createMany({ data: deliveries })
+    await this.createWecomMediaRows(transaction, {
+      notificationId: input.notificationId,
+      template,
+      policy: input.policy,
+      command: input.command,
+      deliveries,
+    })
     const skipped = muted + deliveries.filter(delivery => delivery.status === 'SKIPPED').length
     if (skipped >= userIds.length + muted) {
       const reason = deliveries.every(delivery => delivery.failureCode === 'NOT_IN_APP_SCOPE')
@@ -874,6 +887,75 @@ export class SystemNotificationService {
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: skipped, skipReason: reason }
     }
     return { channel: 'WECOM', status: 'PENDING', recipientCount: userIds.length, skippedCount: skipped }
+  }
+
+  private async createWecomMediaRows(
+    transaction: Transaction,
+    input: {
+      readonly notificationId: string
+      readonly template: { readonly mediaPolicy: Prisma.JsonValue }
+      readonly policy: { readonly allowSensitive: boolean }
+      readonly command: SystemNotificationPublishCommand
+      readonly deliveries: readonly { readonly id: string, readonly status: 'PENDING' | 'SKIPPED' }[]
+    },
+  ): Promise<void> {
+    const sendable = input.deliveries.filter(delivery => delivery.status === 'PENDING')
+    if (sendable.length === 0 || !input.policy.allowSensitive) {
+      return
+    }
+    const mediaPolicy = parseNotificationMediaPolicy(input.template.mediaPolicy)
+    if (!mediaPolicy.enabled) {
+      return
+    }
+    const declaredSources = new Set(
+      (notificationEventMediaCapability(input.command.eventType)?.sources ?? []).map(source => source.key),
+    )
+    const selectedSources = new Set(mediaPolicy.sources)
+    const rows = await transaction.notificationMedia.findMany({
+      where: { notificationId: input.notificationId },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        mediaAsset: {
+          select: {
+            mediaType: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+          },
+        },
+      },
+    })
+    const allowed: Array<{ readonly mediaAssetId: string, readonly sortOrder: number }> = []
+    for (const row of rows) {
+      if (allowed.length >= mediaPolicy.maxCount) {
+        break
+      }
+      const sourceKey = row.sourceKey
+      if (sourceKey !== null && !declaredSources.has(sourceKey)) {
+        continue
+      }
+      if (selectedSources.size > 0 && (sourceKey === null || !selectedSources.has(sourceKey))) {
+        continue
+      }
+      const asset = row.mediaAsset
+      if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+        continue
+      }
+      if (!(mediaPolicy.kinds as readonly string[]).includes(asset.mediaType)) {
+        continue
+      }
+      allowed.push({ mediaAssetId: row.mediaAssetId, sortOrder: row.sortOrder })
+    }
+    if (allowed.length === 0) {
+      return
+    }
+    await transaction.wecomDeliveryMedia.createMany({
+      data: sendable.flatMap(delivery => allowed.map(item => ({
+        deliveryId: delivery.id,
+        mediaAssetId: item.mediaAssetId,
+        sortOrder: item.sortOrder,
+      }))),
+    })
   }
 
   private async resolveWecomApp(

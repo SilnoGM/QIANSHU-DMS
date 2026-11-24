@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
-import type { WecomAppTransport, WecomTransportResult } from './wecom.types'
+import type { WecomAppTransport, WecomMediaUploadResult, WecomTransportResult } from './wecom.types'
 import { utf8Bytes } from './wecom.types'
 
 const MAX_RESPONSE_BYTES = 64 * 1024
@@ -108,6 +108,135 @@ export class WecomAppHttpTransport implements WecomAppTransport {
       }
     }
 
+    return classifyAppFailure(errcode, errmsg, response.status, payload)
+  }
+
+  async uploadImage(input: {
+    readonly accessToken: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    const url = new URL('/cgi-bin/media/upload', config.baseUrl)
+    url.searchParams.set('access_token', input.accessToken)
+    url.searchParams.set('type', 'image')
+    const form = new FormData()
+    form.append('media', new Blob([new Uint8Array(input.buffer)], { type: input.mimeType }), input.filename)
+
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        body: form,
+        redirect: 'error',
+      })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: 'WECOM_MEDIA_TIMEOUT', message: '企业微信图片上传超时' }
+        : { ok: false, kind: 'NETWORK', code: 'WECOM_MEDIA_NETWORK', message: '企业微信图片上传网络请求失败' }
+    }
+
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MEDIA_RESPONSE_TOO_LARGE', message: '企业微信图片上传响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: 'WECOM_MEDIA_INVALID_JSON', message: '企业微信图片上传返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      const mediaId = typeof payload?.media_id === 'string' ? payload.media_id : ''
+      if (mediaId.length === 0) {
+        return { ok: false, kind: 'UNKNOWN', code: 'WECOM_MEDIA_INVALID_RESPONSE', message: '企业微信未返回 media_id' }
+      }
+      return { ok: true, mediaId }
+    }
+    if (errcode === 40006) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MEDIA_TOO_LARGE', message: errmsg || '企业微信图片超过 10MB' }
+    }
+    if (errcode === 40007) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MEDIA_INVALID', message: errmsg || '企业微信 media_id 无效' }
+    }
+    if (errcode === 45009) {
+      return { ok: false, kind: 'RATE_LIMITED', code: 'WECOM_MEDIA_RATE_LIMITED', message: '企业微信图片上传被限流' }
+    }
+    if (errcode === 40001 || errcode === 42001 || errcode === 40014) {
+      return { ok: false, kind: 'TOKEN_INVALID', code: 'WECOM_MEDIA_TOKEN_INVALID', message: errmsg || '企业微信 access_token 无效' }
+    }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: `WECOM_MEDIA_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
+      message: errmsg || '企业微信图片上传被拒绝',
+    }
+  }
+
+  async sendImage(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly mediaId: string
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    const url = new URL('/cgi-bin/message/send', config.baseUrl)
+    url.searchParams.set('access_token', input.accessToken)
+
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          touser: input.toUser,
+          agentid: input.agentId,
+          msgtype: 'image',
+          image: { media_id: input.mediaId },
+        }),
+        redirect: 'error',
+      })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: 'WECOM_IMAGE_TIMEOUT', message: '企业微信图片消息超时' }
+        : { ok: false, kind: 'NETWORK', code: 'WECOM_IMAGE_NETWORK', message: '企业微信图片消息网络请求失败' }
+    }
+
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_IMAGE_RESPONSE_TOO_LARGE', message: '企业微信图片消息响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: 'WECOM_IMAGE_INVALID_JSON', message: '企业微信图片消息返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      return {
+        ok: true,
+        msgId: typeof payload?.msgid === 'string' && payload.msgid.length > 0 ? payload.msgid : null,
+      }
+    }
     return classifyAppFailure(errcode, errmsg, response.status, payload)
   }
 }

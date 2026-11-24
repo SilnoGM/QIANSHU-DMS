@@ -474,6 +474,7 @@ describe('NotificationAdminService', () => {
     const prisma = {
       notification: { count, findMany },
       assistantDelivery: { groupBy: deliveryGroupBy },
+      wecomDelivery: { groupBy: jest.fn().mockResolvedValue([]) },
       notificationInboxItem: { groupBy: inboxGroupBy },
       notificationMedia: {
         groupBy: jest.fn().mockResolvedValue([{ notificationId: row.id, _count: { _all: 2 } }]),
@@ -565,6 +566,12 @@ describe('NotificationAdminService', () => {
       assistantDelivery: {
         findMany: jest.fn().mockResolvedValue([delivery]),
       },
+      wecomDelivery: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      wecomDeliveryMedia: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       assistantDeliveryMedia: {
         groupBy: jest.fn().mockResolvedValue([
           { deliveryId: delivery.id, status: 'ACCEPTED', _count: { _all: 1 } },
@@ -639,6 +646,10 @@ describe('NotificationAdminService', () => {
         groupBy: jest.fn().mockResolvedValue([
           { status: 'CANCELLED', _count: { _all: 2 } },
         ]),
+      },
+      wecomDelivery: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       notification: { update },
     }

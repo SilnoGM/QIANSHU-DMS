@@ -363,13 +363,23 @@ defineExpose({ reload })
                 </span>
                 <span v-else class="text-muted-foreground">—</span>
               </div>
-              <FaTag
-                variant="outline"
-                class="qs-type-status-tag"
-                :class="deliveryStatusClass(delivery.status)"
-              >
-                {{ deliveryStatusLabel(delivery.status) }}
-              </FaTag>
+              <div class="flex flex-wrap gap-2 items-center">
+                <FaTag
+                  v-if="delivery.channel !== undefined"
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="channelClass(delivery.channel)"
+                >
+                  {{ channelLabel(delivery.channel) }}
+                </FaTag>
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="deliveryStatusClass(delivery.status)"
+                >
+                  {{ deliveryStatusLabel(delivery.status) }}
+                </FaTag>
+              </div>
             </div>
             <div class="qs-type-meta text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1">
               <span>尝试 {{ delivery.attemptCount }} 次</span>

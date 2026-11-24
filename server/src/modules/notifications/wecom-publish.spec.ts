@@ -68,6 +68,12 @@ function baseTransaction(overrides: Record<string, unknown> = {}) {
     notificationTemplate: { findUnique: jest.fn().mockResolvedValue(wecomTemplate()) },
     notificationUserMute: { findMany: jest.fn().mockResolvedValue([]) },
     notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
+    notificationMedia: {
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    mediaAsset: { findMany: jest.fn().mockResolvedValue([]) },
+    wecomDeliveryMedia: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
     wecomDelivery: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -196,5 +202,74 @@ describe('SystemNotificationService WECOM branch', () => {
       expect.objectContaining({ channel: 'WECOM', status: 'SKIPPED', skipReason: 'APP_DISABLED' }),
     ])
     expect(transaction.wecomDelivery.createMany).not.toHaveBeenCalled()
+  })
+
+  it('creates wecom delivery media from the WECOM template media policy', async () => {
+    const mediaCommand: SystemNotificationPublishCommand = {
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      source: { type: 'PURCHASE_ORDER', id: 'order-2' },
+      target: { kind: 'USERS', userIds: ['11111111-1111-4111-8111-111111111111'] },
+      templateKey: 'purchase.review.approved',
+      variables: { orderNo: 'CG-2' },
+      media: [{ assetId: '22222222-2222-4222-8222-222222222222', sourceKey: 'purchase.orderImage' }],
+    }
+    const transaction = baseTransaction({
+      notificationChannelPolicy: {
+        findMany: jest.fn().mockResolvedValue([wecomPolicy({
+          targetMode: 'GROUP',
+          targetConfig: { targetKeys: ['finance'] },
+        })]),
+      },
+      notificationTemplate: {
+        findUnique: jest.fn().mockResolvedValue(wecomTemplate({
+          key: 'purchase.review.approved',
+          bodyTemplate: '采购单 {{orderNo}} 已通过',
+          mediaPolicy: {
+            enabled: true,
+            maxCount: 3,
+            kinds: ['IMAGE'],
+            sources: ['purchase.orderImage'],
+          },
+        })),
+      },
+      wecomTarget: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'target-1' }]),
+      },
+      mediaAsset: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: '22222222-2222-4222-8222-222222222222',
+          mediaType: 'IMAGE',
+          status: 'READY',
+          deletedAt: null,
+          objectKey: 'assets/2026/11/proof.png',
+        }]),
+      },
+      notificationMedia: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([{
+          mediaAssetId: '22222222-2222-4222-8222-222222222222',
+          sortOrder: 0,
+          sourceKey: 'purchase.orderImage',
+          mediaAsset: {
+            mediaType: 'IMAGE',
+            status: 'READY',
+            deletedAt: null,
+            objectKey: 'assets/2026/11/proof.png',
+          },
+        }]),
+      },
+    })
+
+    const result = await service().publish(mediaCommand, { transaction: transaction as never })
+
+    expect(result.channels).toEqual([
+      expect.objectContaining({ channel: 'WECOM', status: 'PENDING' }),
+    ])
+    expect(transaction.wecomDeliveryMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: '22222222-2222-4222-8222-222222222222',
+        sortOrder: 0,
+      })],
+    })
   })
 })

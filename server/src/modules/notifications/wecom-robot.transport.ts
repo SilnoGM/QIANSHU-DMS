@@ -119,4 +119,69 @@ export class WecomRobotHttpTransport implements WecomRobotTransport {
       message: errmsg || '企业微信群机器人请求被拒绝',
     }
   }
+
+  async sendImage(input: {
+    readonly webhookKey: string
+    readonly base64: string
+    readonly md5: string
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    if (input.webhookKey.trim().length === 0) {
+      return { ok: false, kind: 'WEBHOOK_INVALID', code: 'WECOM_ROBOT_KEY_MISSING', message: '群机器人 webhook key 为空' }
+    }
+    const url = new URL('/cgi-bin/webhook/send', config.baseUrl)
+    url.searchParams.set('key', input.webhookKey)
+
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          msgtype: 'image',
+          image: { base64: input.base64, md5: input.md5 },
+        }),
+        redirect: 'error',
+      })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: 'WECOM_ROBOT_IMAGE_TIMEOUT', message: '群机器人图片消息超时' }
+        : { ok: false, kind: 'NETWORK', code: 'WECOM_ROBOT_IMAGE_NETWORK', message: '群机器人图片消息网络请求失败' }
+    }
+
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_ROBOT_IMAGE_RESPONSE_TOO_LARGE', message: '群机器人图片响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: 'WECOM_ROBOT_IMAGE_INVALID_JSON', message: '群机器人图片返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      return { ok: true, msgId: null }
+    }
+    if (errcode === 45009 || response.status === 429) {
+      return { ok: false, kind: 'RATE_LIMITED', code: 'WECOM_ROBOT_RATE_LIMITED', message: '群机器人图片被限流' }
+    }
+    if (errcode === 93000) {
+      return { ok: false, kind: 'WEBHOOK_INVALID', code: 'WECOM_ROBOT_WEBHOOK_INVALID', message: errmsg || '群机器人 webhook 无效' }
+    }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: `WECOM_ROBOT_IMAGE_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
+      message: errmsg || '群机器人图片被拒绝',
+    }
+  }
 }

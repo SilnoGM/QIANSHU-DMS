@@ -98,4 +98,30 @@ describe('WecomRobotHttpTransport', () => {
       content: 'x',
     })).resolves.toMatchObject({ ok: false, kind: 'RATE_LIMITED' })
   })
+
+  it('sends an image message with base64 and md5', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ errcode: 0, errmsg: 'ok' }))
+    const transport = new WecomRobotHttpTransport(configService())
+
+    const result = await transport.sendImage({
+      webhookKey: 'webhook-key-1',
+      base64: 'aW1hZ2U=',
+      md5: '0123456789abcdef0123456789abcdef',
+    })
+
+    expect(result).toEqual({ ok: true, msgId: null })
+    const [, init] = fetchSpy.mock.calls[0] ?? []
+    const body = init?.body
+    expect(typeof body).toBe('string')
+    if (typeof body === 'string') {
+      expect(JSON.parse(body)).toEqual({
+        msgtype: 'image',
+        image: {
+          base64: 'aW1hZ2U=',
+          md5: '0123456789abcdef0123456789abcdef',
+        },
+      })
+    }
+  })
 })

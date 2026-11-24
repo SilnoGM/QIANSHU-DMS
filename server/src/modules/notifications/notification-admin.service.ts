@@ -87,6 +87,7 @@ function resolveRecordChannels(
   value: Prisma.JsonValue,
   inAppCount: number,
   deliveryCounts: Record<string, number>,
+  wecomDeliveryCounts: Record<string, number>,
 ): NotificationRecordChannel[] {
   const requested = requestedRecordChannels(value)
   if (requested.length > 0) {
@@ -100,12 +101,16 @@ function resolveRecordChannels(
   if (Object.values(deliveryCounts).some(count => count > 0)) {
     derived.push('ASSISTANT')
   }
+  if (Object.values(wecomDeliveryCounts).some(count => count > 0)) {
+    derived.push('WECOM')
+  }
   return derived
 }
 
 function toRecordDto(
   row: NotificationRecordRow,
   deliveryCounts: Record<string, number>,
+  wecomDeliveryCounts: Record<string, number>,
   inApp: InAppRecordCounts,
   mediaCount: number,
 ): NotificationRecordDto {
@@ -124,10 +129,11 @@ function toRecordDto(
     publishedAt: row.publishedAt.toISOString(),
     completedAt: iso(row.completedAt),
     requestedByName: row.requestedBy?.displayName ?? null,
-    channels: resolveRecordChannels(row.requestedChannels, inApp.total, deliveryCounts),
+    channels: resolveRecordChannels(row.requestedChannels, inApp.total, deliveryCounts, wecomDeliveryCounts),
     inAppItemCount: inApp.total,
     inAppUnreadCount: inApp.unread,
     deliveryCounts,
+    wecomDeliveryCounts,
     mediaCount,
   }
 }
@@ -717,6 +723,24 @@ export class NotificationAdminService {
     return result
   }
 
+  private async wecomDeliveryCounts(notificationIds: readonly string[]): Promise<Map<string, Record<string, number>>> {
+    if (notificationIds.length === 0) {
+      return new Map()
+    }
+    const rows = await this.prisma.wecomDelivery.groupBy({
+      by: ['notificationId', 'status'],
+      where: { notificationId: { in: [...notificationIds] } },
+      _count: { _all: true },
+    })
+    const result = new Map<string, Record<string, number>>()
+    for (const row of rows) {
+      const counts = result.get(row.notificationId) ?? {}
+      counts[row.status] = row._count._all
+      result.set(row.notificationId, counts)
+    }
+    return result
+  }
+
   private async inAppCounts(notificationIds: readonly string[]): Promise<Map<string, InAppRecordCounts>> {
     if (notificationIds.length === 0) {
       return new Map()
@@ -833,8 +857,9 @@ export class NotificationAdminService {
       }),
     ])
     const ids = rows.map(row => row.id)
-    const [deliveryCounts, inAppCounts, mediaCounts] = await Promise.all([
+    const [deliveryCounts, wecomDeliveryCounts, inAppCounts, mediaCounts] = await Promise.all([
       this.deliveryCounts(ids),
+      this.wecomDeliveryCounts(ids),
       this.inAppCounts(ids),
       this.mediaCounts(ids),
     ])
@@ -842,6 +867,7 @@ export class NotificationAdminService {
       items: rows.map(row => toRecordDto(
         row,
         deliveryCounts.get(row.id) ?? {},
+        wecomDeliveryCounts.get(row.id) ?? {},
         inAppCounts.get(row.id) ?? { total: 0, unread: 0 },
         mediaCounts.get(row.id) ?? 0,
       )),
@@ -859,8 +885,16 @@ export class NotificationAdminService {
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
-    const [deliveries, inAppCounts, media] = await Promise.all([
+    const [assistantDeliveries, wecomDeliveries, inAppCounts, media] = await Promise.all([
       this.prisma.assistantDelivery.findMany({
+        where: { notificationId: id },
+        include: {
+          recipientUser: { select: { displayName: true } },
+          target: { select: { name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      this.prisma.wecomDelivery.findMany({
         where: { notificationId: id },
         include: {
           recipientUser: { select: { displayName: true } },
@@ -883,23 +917,38 @@ export class NotificationAdminService {
         },
       }),
     ])
-    const mediaByDelivery = await this.deliveryMediaCounts(deliveries.map(delivery => delivery.id))
+    const [mediaByDelivery, wecomMediaByDelivery] = await Promise.all([
+      this.deliveryMediaCounts(assistantDeliveries.map(delivery => delivery.id)),
+      this.wecomDeliveryMediaCounts(wecomDeliveries.map(delivery => delivery.id)),
+    ])
     const counts: Record<string, number> = {}
-    for (const delivery of deliveries) {
+    for (const delivery of assistantDeliveries) {
       counts[delivery.status] = (counts[delivery.status] ?? 0) + 1
     }
+    const wecomCounts: Record<string, number> = {}
+    for (const delivery of wecomDeliveries) {
+      wecomCounts[delivery.status] = (wecomCounts[delivery.status] ?? 0) + 1
+    }
+    const deliveries = [
+      ...assistantDeliveries.map(delivery => ({ ...delivery, channel: 'ASSISTANT' as const })),
+      ...wecomDeliveries.map(delivery => ({ ...delivery, channel: 'WECOM' as const })),
+    ].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id))
     const record = toRecordDto(
       notification,
       counts,
+      wecomCounts,
       inAppCounts.get(id) ?? { total: 0, unread: 0 },
       media.length,
     )
     return {
       ...record,
-      deliveries: deliveries.map(delivery => {
-        const mediaCounts = mediaByDelivery.get(delivery.id) ?? { accepted: 0, failed: 0, total: 0 }
+      deliveries: deliveries.map((delivery) => {
+        const mediaCounts = (delivery.channel === 'WECOM'
+          ? wecomMediaByDelivery.get(delivery.id)
+          : mediaByDelivery.get(delivery.id)) ?? { accepted: 0, failed: 0, total: 0 }
         return {
           id: delivery.id,
+          channel: delivery.channel,
           recipientName: delivery.recipientUser?.displayName ?? null,
           targetName: delivery.target?.name ?? null,
           status: delivery.status,
@@ -966,22 +1015,64 @@ export class NotificationAdminService {
     return result
   }
 
+  private async wecomDeliveryMediaCounts(
+    deliveryIds: readonly string[],
+  ): Promise<Map<string, { readonly total: number, readonly accepted: number, readonly failed: number }>> {
+    if (deliveryIds.length === 0) {
+      return new Map()
+    }
+    const rows = await this.prisma.wecomDeliveryMedia.groupBy({
+      by: ['deliveryId', 'status'],
+      where: { deliveryId: { in: [...deliveryIds] } },
+      _count: { _all: true },
+    })
+    const result = new Map<string, { total: number, accepted: number, failed: number }>()
+    for (const row of rows) {
+      const entry = result.get(row.deliveryId) ?? { accepted: 0, failed: 0, total: 0 }
+      entry.total += row._count._all
+      if (row.status === 'ACCEPTED') {
+        entry.accepted += row._count._all
+      }
+      if (row.status === 'FAILED' || row.status === 'EXPIRED') {
+        entry.failed += row._count._all
+      }
+      result.set(row.deliveryId, entry)
+    }
+    return result
+  }
+
   async cancelRecord(context: NotificationAdminContext, id: string): Promise<NotificationCancelResultDto> {
     const notification = await this.prisma.notification.findUnique({ where: { id }, select: { id: true, status: true } })
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
     const result = await this.prisma.$transaction(async transaction => {
-      const updated = await transaction.assistantDelivery.updateMany({
-        where: { notificationId: id, status: 'PENDING' },
-        data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
-      })
-      const grouped = await transaction.assistantDelivery.groupBy({
-        by: ['status'],
-        where: { notificationId: id },
-        _count: { _all: true },
-      })
-      const counts = new Map(grouped.map(row => [row.status, row._count._all]))
+      const [updated, wecomUpdated] = await Promise.all([
+        transaction.assistantDelivery.updateMany({
+          where: { notificationId: id, status: 'PENDING' },
+          data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
+        }),
+        transaction.wecomDelivery.updateMany({
+          where: { notificationId: id, status: 'PENDING' },
+          data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
+        }),
+      ])
+      const [grouped, wecomGrouped] = await Promise.all([
+        transaction.assistantDelivery.groupBy({
+          by: ['status'],
+          where: { notificationId: id },
+          _count: { _all: true },
+        }),
+        transaction.wecomDelivery.groupBy({
+          by: ['status'],
+          where: { notificationId: id },
+          _count: { _all: true },
+        }),
+      ])
+      const counts = new Map<string, number>()
+      for (const row of [...grouped, ...wecomGrouped]) {
+        counts.set(row.status, (counts.get(row.status) ?? 0) + row._count._all)
+      }
       const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)
       const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
       const accepted = counts.get('ACCEPTED') ?? 0
@@ -1008,9 +1099,9 @@ export class NotificationAdminService {
         requestId: context.requestId,
         targetType: 'NOTIFICATION',
         targetId: id,
-        metadata: { cancelledCount: updated.count },
+        metadata: { cancelledCount: updated.count + wecomUpdated.count },
       })
-      return { cancelled: updated.count, status }
+      return { cancelled: updated.count + wecomUpdated.count, status }
     })
     return result
   }
