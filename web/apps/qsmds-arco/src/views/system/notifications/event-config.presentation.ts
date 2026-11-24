@@ -21,6 +21,7 @@ export const CHANNEL_STATE_LABELS: Record<EventChannelState, string> = {
 
 export const IN_APP_ACTION_CLASS = 'text-sky-700 border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 dark:text-sky-300'
 export const ASSISTANT_ACTION_CLASS = 'text-primary border-primary/30 bg-primary/10 hover:bg-primary/20'
+export const WECOM_ACTION_CLASS = 'text-emerald-700 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 dark:text-emerald-300'
 
 export type DisplayEventState = EventCoverageState | 'UNIMPLEMENTED'
 
@@ -77,7 +78,9 @@ export function channelStateClass(state: EventChannelState): string {
 }
 
 export function channelSummary(item: EventCoverage, channel: NotificationChannelValue): ChannelSummary {
-  const effective = channel === 'IN_APP' ? item.inApp : item.assistant
+  const effective = channel === 'IN_APP'
+    ? item.inApp
+    : channel === 'ASSISTANT' ? item.assistant : item.wecom
   return {
     key: effective.key,
     label: CHANNEL_STATE_LABELS[effective.state],

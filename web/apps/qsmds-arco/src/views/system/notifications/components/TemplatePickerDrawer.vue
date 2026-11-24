@@ -11,7 +11,7 @@ const props = defineProps<{
   busy: boolean
   canUpdatePolicy: boolean
   canUpdateTemplate: boolean
-  channel: 'IN_APP' | 'ASSISTANT'
+  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
   event: NotificationEventDto
   selectedKey: string | null
   templates: readonly NotificationTemplateDto[]

@@ -82,9 +82,9 @@ export function createNotificationsApi(client: AxiosInstance) {
         client.post<AssistantTestSendDto>(path('notifications', 'templates', id, 'test'), input, { errorPresentation: 'local', retry: false }),
     },
     policies: {
-      list: (query: { eventType?: string, channel?: 'IN_APP' | 'ASSISTANT' }, signal: AbortSignal) =>
+      list: (query: { eventType?: string, channel?: 'IN_APP' | 'ASSISTANT' | 'WECOM' }, signal: AbortSignal) =>
         client.get<NotificationChannelPolicyDto[]>('notifications/channel-policies', { errorPresentation: 'local', params: query, signal }),
-      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT', input: NotificationChannelPolicyUpdateDto) =>
+      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT' | 'WECOM', input: NotificationChannelPolicyUpdateDto) =>
         client.put<NotificationChannelPolicyDto>(path('notifications', 'channel-policies', eventType, channel), input, { errorPresentation: 'local', retry: false }),
     },
     records: {
@@ -120,7 +120,7 @@ export function createNotificationsApi(client: AxiosInstance) {
     preferences: {
       list: (signal: AbortSignal) =>
         client.get<NotificationPreferenceListDto>('notifications/me/preferences', { errorPresentation: 'local', signal }),
-      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT', muted: boolean) =>
+      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT' | 'WECOM', muted: boolean) =>
         client.put<NotificationPreferenceUpdateResultDto>(
           path('notifications', 'me', 'preferences', eventType, channel),
           { muted },

@@ -106,6 +106,17 @@ watch(() => props.search, (value) => {
                 小助理
               </FaTag>
               <FaTag
+                v-if="keyGroup.wecom !== null"
+                variant="outline"
+                class="text-[11px]! leading-4! px-1.5! py-0!"
+                :class="keyGroup.wecom.enabled
+                  ? 'text-emerald-700 border-emerald-500/30 bg-emerald-500/10 dark:text-emerald-300'
+                  : 'text-muted-foreground border-border bg-muted'"
+                :title="`企业微信：${keyGroup.wecom.enabled ? '已启用' : '已停用'}`"
+              >
+                企微
+              </FaTag>
+              <FaTag
                 v-if="keyGroup.inApp !== null"
                 variant="outline"
                 class="text-[11px]! leading-4! px-1.5! py-0!"

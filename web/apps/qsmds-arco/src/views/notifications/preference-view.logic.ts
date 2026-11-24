@@ -22,12 +22,13 @@ const DOMAIN_LABELS: Record<string, string> = {
   system: '系统',
 }
 
-export const PREFERENCE_CHANNEL_LABELS: Record<'IN_APP' | 'ASSISTANT', string> = {
+export const PREFERENCE_CHANNEL_LABELS: Record<'IN_APP' | 'ASSISTANT' | 'WECOM', string> = {
   IN_APP: '站内通知',
   ASSISTANT: '千树小助理',
+  WECOM: '企业微信',
 }
 
-export const PREFERENCE_CHANNEL_ORDER = ['IN_APP', 'ASSISTANT'] as const
+export const PREFERENCE_CHANNEL_ORDER = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
 
 export type PreferenceChannel = (typeof PREFERENCE_CHANNEL_ORDER)[number]
 

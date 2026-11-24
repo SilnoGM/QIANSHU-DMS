@@ -3,7 +3,7 @@ import type {
   NotificationChannelPolicyUpdateDto,
 } from '@/api/generated/types.gen'
 
-export type NotificationChannelValue = 'IN_APP' | 'ASSISTANT'
+export type NotificationChannelValue = 'IN_APP' | 'ASSISTANT' | 'WECOM'
 
 export type PolicyTargetMode = 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
 
@@ -145,7 +145,7 @@ export function canSavePolicyDraft(
   if (channel === 'IN_APP' && draft.targetMode === 'GROUP') {
     return false
   }
-  if (channel === 'ASSISTANT') {
+  if (channel === 'ASSISTANT' || channel === 'WECOM') {
     const ttl = draft.ttlSeconds
     return Number.isInteger(ttl) && ttl !== null && ttl >= 60 && ttl <= 604_800
   }

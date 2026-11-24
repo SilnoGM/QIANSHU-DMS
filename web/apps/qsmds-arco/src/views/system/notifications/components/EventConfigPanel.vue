@@ -123,6 +123,12 @@ const tableColumns: QsGenericTableColumn<TableRow>[] = [
     accessorFn: row => eventRow(row)?.coverage.assistant.key ?? '',
   },
   {
+    id: 'wecom',
+    title: '企业微信',
+    minWidth: 130,
+    accessorFn: row => eventRow(row)?.coverage.wecom.key ?? '',
+  },
+  {
     id: 'updatedAt',
     title: '策略更新',
     width: 145,
@@ -278,6 +284,20 @@ defineExpose({
           <span class="qs-type-meta text-muted-foreground break-all">
             <template v-if="channelSummary(row.original, 'ASSISTANT').key !== null">
               {{ channelSummary(row.original, 'ASSISTANT').source }} · {{ channelSummary(row.original, 'ASSISTANT').key }}
+            </template>
+            <template v-else>未指定模板</template>
+          </span>
+        </div>
+      </template>
+
+      <template #cell-wecom="{ row }">
+        <div class="flex flex-col gap-1 min-w-0">
+          <FaTag variant="outline" class="w-fit" :class="channelStateClass(channelSummary(row.original, 'WECOM').state)">
+            {{ channelSummary(row.original, 'WECOM').label }}
+          </FaTag>
+          <span class="qs-type-meta text-muted-foreground break-all">
+            <template v-if="channelSummary(row.original, 'WECOM').key !== null">
+              {{ channelSummary(row.original, 'WECOM').source }} · {{ channelSummary(row.original, 'WECOM').key }}
             </template>
             <template v-else>未指定模板</template>
           </span>

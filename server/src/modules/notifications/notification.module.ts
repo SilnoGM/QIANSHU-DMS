@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 
 import { AuthModule } from '../auth/auth.module'
 import { MediaModule } from '../media/media.module'
@@ -24,6 +25,12 @@ import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
 import { ASSISTANT_ADMIN_TRANSPORT, ASSISTANT_TRANSPORT, ASSISTANT_TRANSPORT_OPTIONS } from './notification.types'
 import { SystemNotificationService } from './system-notification.service'
+import { WecomAppHttpTransport } from './wecom-app.transport'
+import { WecomDispatchService } from './wecom-dispatch.service'
+import { WecomRobotHttpTransport } from './wecom-robot.transport'
+import { WECOM_SECRET_KEY, WecomSecretService } from './wecom-secret.service'
+import { WECOM_TOKEN_FETCH, WecomTokenService } from './wecom-token.service'
+import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
 
 /**
  * 通知中心基础模块。
@@ -62,6 +69,29 @@ import { SystemNotificationService } from './system-notification.service'
       useValue: {},
     },
     AssistantDispatchService,
+    {
+      provide: WECOM_SECRET_KEY,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService): string | null =>
+        config.get<string>('WECOM_APP_SECRET_KEY') ?? null,
+    },
+    {
+      provide: WECOM_TOKEN_FETCH,
+      useValue: globalThis.fetch,
+    },
+    WecomSecretService,
+    WecomTokenService,
+    WecomAppHttpTransport,
+    WecomRobotHttpTransport,
+    {
+      provide: WECOM_APP_TRANSPORT,
+      useExisting: WecomAppHttpTransport,
+    },
+    {
+      provide: WECOM_ROBOT_TRANSPORT,
+      useExisting: WecomRobotHttpTransport,
+    },
+    WecomDispatchService,
   ],
   exports: [SystemNotificationService],
 })

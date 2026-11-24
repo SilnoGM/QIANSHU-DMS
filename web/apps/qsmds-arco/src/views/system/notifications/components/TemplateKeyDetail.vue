@@ -19,7 +19,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  add: [channel: 'ASSISTANT' | 'IN_APP']
+  add: [channel: 'ASSISTANT' | 'IN_APP' | 'WECOM']
   edit: [template: NotificationTemplateDto]
   preview: [template: NotificationTemplateDto]
   toggle: [template: NotificationTemplateDto, enabled: boolean]
@@ -43,11 +43,20 @@ async function copyKey(): Promise<void> {
   }
 }
 
-const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
-  if (props.group === null || (props.group.assistant !== null && props.group.inApp !== null)) {
+const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP' | 'WECOM'>(() => {
+  if (props.group === null) {
     return ''
   }
-  return props.group.assistant === null ? 'ASSISTANT' : 'IN_APP'
+  if (props.group.assistant === null) {
+    return 'ASSISTANT'
+  }
+  if (props.group.inApp === null) {
+    return 'IN_APP'
+  }
+  if (props.group.wecom === null) {
+    return 'WECOM'
+  }
+  return ''
 })
 </script>
 
@@ -74,11 +83,11 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
           </FaButton>
         </div>
         <p class="qs-type-meta text-muted-foreground m-0 mt-1.5">
-          <template v-if="group.channelCount === 2">
-            该模板键下共配置了 2 个发送渠道，调用接口时将按启用状态自动路由。
+          <template v-if="group.channelCount === 3">
+            该模板键下共配置了 3 个发送渠道，调用接口时将按启用状态自动路由。
           </template>
           <template v-else>
-            该模板键下已配置 1 个发送渠道，可补齐另一渠道。
+            该模板键下已配置 {{ group.channelCount }} 个发送渠道，可继续补齐。
           </template>
           <template v-if="(usageCount ?? 0) > 0">
             · 被 {{ usageCount }} 个事件使用
@@ -87,18 +96,18 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
       </div>
       <div class="flex flex-wrap gap-2 items-center">
         <span
-          v-if="group.channelCount === 2"
+          v-if="group.channelCount === 3"
           class="qs-type-meta text-muted-foreground inline-flex gap-1 items-center"
         >
           <FaIcon name="i-lucide:check" class="text-emerald-600 size-3.5 dark:text-emerald-400" aria-hidden="true" />
-          渠道已配齐 (2/2)
+          渠道已配齐 (3/3)
         </span>
         <FaTag
           v-else
           variant="outline"
           class="text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300"
         >
-          缺少 1 个渠道
+          缺少 {{ 3 - group.channelCount }} 个渠道
         </FaTag>
         <FaButton
           v-if="missingChannel !== ''"
@@ -114,7 +123,7 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
       </div>
     </div>
 
-    <div class="gap-4 grid lg:grid-cols-2">
+    <div class="gap-4 grid lg:grid-cols-3">
       <TemplateChannelCard
         channel="ASSISTANT"
         :template="group.assistant"
@@ -128,6 +137,16 @@ const missingChannel = computed<'' | 'ASSISTANT' | 'IN_APP'>(() => {
       <TemplateChannelCard
         channel="IN_APP"
         :template="group.inApp"
+        :can-update="canUpdate"
+        :busy="busy"
+        @add="emit('add', $event)"
+        @edit="emit('edit', $event)"
+        @preview="emit('preview', $event)"
+        @toggle="(template, enabled) => emit('toggle', template, enabled)"
+      />
+      <TemplateChannelCard
+        channel="WECOM"
+        :template="group.wecom"
         :can-update="canUpdate"
         :busy="busy"
         @add="emit('add', $event)"

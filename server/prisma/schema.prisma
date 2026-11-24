@@ -240,6 +240,18 @@ enum AuditEventType {
   AD_ACCOUNT_RELEASED
   /// 非个人户充值补付款码。追加在末尾。
   ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED
+  /// 企业微信通知渠道配置、应用、路由、成员与群目标。追加在末尾。
+  WECOM_CHANNEL_UPDATED
+  WECOM_APP_CREATED
+  WECOM_APP_UPDATED
+  WECOM_APP_DISABLED
+  WECOM_APP_SECRET_UPDATED
+  WECOM_EVENT_ROUTE_UPDATED
+  WECOM_MEMBERSHIP_UPDATED
+  WECOM_MEMBERSHIP_VERIFIED
+  WECOM_TARGET_CREATED
+  WECOM_TARGET_UPDATED
+  WECOM_TARGET_TESTED
 
   @@map("audit_event_type")
 }
@@ -843,6 +855,14 @@ model User {
   assistantBindingsCreated          AssistantBinding[]            @relation("AssistantBindingBoundBy")
   assistantBindingsVerified         AssistantBinding[]            @relation("AssistantBindingVerifiedBy")
   assistantDeliveries               AssistantDelivery[]           @relation("AssistantDeliveryRecipient")
+  wecomBinding                      WecomBinding?                  @relation("WecomBindingUser")
+  wecomBindingsCreated              WecomBinding[]                 @relation("WecomBindingBoundBy")
+  wecomBindingsVerified             WecomBinding[]                 @relation("WecomBindingVerifiedBy")
+  wecomAppMemberships               WecomAppMembership[]           @relation("WecomAppMembershipUser")
+  wecomMembershipsVerified          WecomAppMembership[]           @relation("WecomMembershipVerifiedBy")
+  wecomAppsSecretUpdated            WecomApp[]                     @relation("WecomAppSecretUpdatedBy")
+  wecomEventRoutesUpdated           WecomAppEventRoute[]           @relation("WecomEventRouteUpdatedBy")
+  wecomDeliveries                   WecomDelivery[]                @relation("WecomDeliveryRecipient")
   notificationInboxItems            NotificationInboxItem[]       @relation("NotificationInboxItemUser")
   notificationMutes                 NotificationUserMute[]        @relation("NotificationUserMuteUser")
 
@@ -1243,6 +1263,7 @@ model MediaAsset {
   avatarProfile UserProfile? @relation("UserProfileAvatar")
   notificationMedia NotificationMedia[] @relation("NotificationMediaAsset")
   assistantDeliveryMedia AssistantDeliveryMedia[] @relation("AssistantDeliveryMediaAsset")
+  wecomDeliveryMedia WecomDeliveryMedia[] @relation("WecomDeliveryMediaAsset")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -3455,6 +3476,7 @@ model MachineViewingAppointment {
 enum NotificationChannel {
   IN_APP
   ASSISTANT
+  WECOM
 
   @@map("notification_channel")
 }
@@ -3532,6 +3554,62 @@ enum AssistantDeliveryStatus {
   @@map("assistant_delivery_status")
 }
 
+// ---------------------------------------------------------------------------
+// 企业微信通知渠道：应用、事件路由、绑定、应用成员、群目标与投递。
+// ---------------------------------------------------------------------------
+
+enum WecomAppStatus {
+  PENDING
+  ACTIVE
+  INVALID
+  DISABLED
+
+  @@map("wecom_app_status")
+}
+
+enum WecomBindingStatus {
+  ACTIVE
+  INVALID
+  DISABLED
+
+  @@map("wecom_binding_status")
+}
+
+enum WecomMembershipStatus {
+  ACTIVE
+  INVALID
+  DISABLED
+
+  @@map("wecom_membership_status")
+}
+
+enum WecomMembershipSource {
+  MANUAL
+  AGENT_GET
+
+  @@map("wecom_membership_source")
+}
+
+enum WecomDeliveryTransport {
+  APP
+  ROBOT
+
+  @@map("wecom_delivery_transport")
+}
+
+enum WecomDeliveryStatus {
+  PENDING
+  SENDING
+  ACCEPTED
+  PARTIAL
+  FAILED
+  SKIPPED
+  EXPIRED
+  CANCELLED
+
+  @@map("wecom_delivery_status")
+}
+
 /// 一条逻辑通知。站内条目与站外交付都挂在它下面。
 model Notification {
   id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -3557,6 +3635,7 @@ model Notification {
   requestedBy        User?                @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   deliveries         AssistantDelivery[]
+  wecomDeliveries    WecomDelivery[]
   inboxItems         NotificationInboxItem[]
   media              NotificationMedia[]
 
@@ -3604,6 +3683,8 @@ model NotificationTemplate {
   /// 附件策略：{ enabled, maxCount, kinds }；空对象表示该模板不发送业务附件。
   mediaPolicy     Json                     @default("{}") @map("media_policy") @db.JsonB
   maxLength       Int                      @default(2000) @map("max_length")
+  /// WECOM 文本模板的 UTF-8 字节上限；其他渠道为空，继续使用 max_length 字符限制。
+  maxBytes        Int?                     @map("max_bytes")
   enabled         Boolean                  @default(true)
   version         Int                      @default(1)
   createdByUserId String?                  @map("created_by_user_id") @db.Uuid
@@ -3879,4 +3960,195 @@ model AssistantSendGate {
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("assistant_send_gates")
+}
+
+/// 企业微信自建应用。一期只有 `default`，多应用靠同一张表扩展。
+model WecomApp {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                    String          @unique(map: "wecom_apps_key_key") @db.VarChar(32)
+  name                   String          @db.VarChar(32)
+  corpId                 String?         @map("corp_id") @db.VarChar(64)
+  agentId                Int?            @map("agent_id")
+  /// AES-256-GCM 密文，格式 v1.<iv>.<tag>.<ciphertext>；密钥只来自环境变量。
+  secretEncrypted        String?         @map("secret_encrypted") @db.Text
+  secretUpdatedAt        DateTime?       @map("secret_updated_at") @db.Timestamptz(6)
+  secretUpdatedByUserId  String?         @map("secret_updated_by_user_id") @db.Uuid
+  isDefault              Boolean         @default(false) @map("is_default")
+  enabled                Boolean         @default(false)
+  status                 WecomAppStatus  @default(PENDING)
+  lastCheckedAt          DateTime?       @map("last_checked_at") @db.Timestamptz(6)
+  lastErrorCode          String?         @map("last_error_code") @db.VarChar(64)
+  lastErrorMessage       String?         @map("last_error_message") @db.VarChar(255)
+  version                Int             @default(1)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  secretUpdatedBy User?                 @relation("WecomAppSecretUpdatedBy", fields: [secretUpdatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  eventRoutes     WecomAppEventRoute[]
+  memberships     WecomAppMembership[]
+  deliveries      WecomDelivery[]
+
+  @@unique([corpId, agentId], map: "wecom_apps_corp_agent_key")
+  @@index([enabled, status], map: "wecom_apps_enabled_status_idx")
+  @@map("wecom_apps")
+}
+
+/// 事件到应用的唯一路由；一个事件同一时间只能属于一个应用。
+model WecomAppEventRoute {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appId             String   @map("app_id") @db.Uuid
+  eventType         String   @map("event_type") @db.VarChar(64)
+  enabled           Boolean  @default(true)
+  updatedByUserId   String?  @map("updated_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  app       WecomApp @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  updatedBy User?    @relation("WecomEventRouteUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([eventType], map: "wecom_app_event_routes_event_type_key")
+  @@index([appId], map: "wecom_app_event_routes_app_idx")
+  @@map("wecom_app_event_routes")
+}
+
+/// DMS 用户与企业微信 userid 的全局映射。
+model WecomBinding {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String             @unique(map: "wecom_bindings_user_id_key") @map("user_id") @db.Uuid
+  wecomUserId      String             @unique(map: "wecom_bindings_wecom_user_id_key") @map("wecom_user_id") @db.VarChar(128)
+  displayName      String?            @map("display_name") @db.VarChar(128)
+  status           WecomBindingStatus @default(ACTIVE)
+  boundByUserId    String             @map("bound_by_user_id") @db.Uuid
+  verifiedAt       DateTime?          @map("verified_at") @db.Timestamptz(6)
+  verifiedByUserId String?            @map("verified_by_user_id") @db.Uuid
+  lastTestSentAt   DateTime?          @map("last_test_sent_at") @db.Timestamptz(6)
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User  @relation("WecomBindingUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  boundBy    User  @relation("WecomBindingBoundBy", fields: [boundByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  verifiedBy User? @relation("WecomBindingVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status], map: "wecom_bindings_status_idx")
+  @@map("wecom_bindings")
+}
+
+/// 应用级可见/验证关系；各应用可见范围不同，不能只依赖全局绑定。
+model WecomAppMembership {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  appId            String                @map("app_id") @db.Uuid
+  userId           String                @map("user_id") @db.Uuid
+  status           WecomMembershipStatus @default(ACTIVE)
+  source           WecomMembershipSource @default(MANUAL)
+  verifiedAt       DateTime?             @map("verified_at") @db.Timestamptz(6)
+  verifiedByUserId String?               @map("verified_by_user_id") @db.Uuid
+  lastTestSentAt   DateTime?             @map("last_test_sent_at") @db.Timestamptz(6)
+  lastSyncedAt     DateTime?             @map("last_synced_at") @db.Timestamptz(6)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  app        WecomApp @relation(fields: [appId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  user       User     @relation("WecomAppMembershipUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  verifiedBy User?    @relation("WecomMembershipVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([appId, userId], map: "wecom_app_memberships_app_user_key")
+  @@index([userId], map: "wecom_app_memberships_user_idx")
+  @@index([status], map: "wecom_app_memberships_status_idx")
+  @@map("wecom_app_memberships")
+}
+
+/// 已登记的企业微信内部群机器人目标；webhook key 加密存储。
+model WecomTarget {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key                 String    @unique(map: "wecom_targets_key_key") @db.VarChar(64)
+  name                String    @db.VarChar(128)
+  purpose             String?   @db.VarChar(255)
+  webhookKeyEncrypted String    @map("webhook_key_encrypted") @db.Text
+  internalOnly        Boolean   @default(true) @map("internal_only")
+  enabled             Boolean   @default(true)
+  lastTestedAt        DateTime? @map("last_tested_at") @db.Timestamptz(6)
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  deliveries WecomDelivery[]
+
+  @@index([enabled, internalOnly], map: "wecom_targets_enabled_internal_idx")
+  @@map("wecom_targets")
+}
+
+/// 一次 WECOM 投递尝试：应用消息或群机器人二选一。
+model WecomDelivery {
+  id               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId   String                @map("notification_id") @db.Uuid
+  appId            String?               @map("app_id") @db.Uuid
+  transport        WecomDeliveryTransport
+  recipientUserId  String?               @map("recipient_user_id") @db.Uuid
+  targetId         String?               @map("target_id") @db.Uuid
+  status           WecomDeliveryStatus   @default(PENDING)
+  attemptCount     Int                   @default(0) @map("attempt_count")
+  nextAttemptAt    DateTime              @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  templateKey      String                @map("template_key") @db.VarChar(64)
+  templateVersion  Int                   @map("template_version")
+  renderedContent  String                @map("rendered_content") @db.Text
+  contentSentAt    DateTime?             @map("content_sent_at") @db.Timestamptz(6)
+  mentionMode      String?               @map("mention_mode") @db.VarChar(16)
+  mentionedCount   Int                   @default(0) @map("mentioned_count")
+  mentionSkipped   Int                   @default(0) @map("mention_skipped")
+  providerMsgId    String?               @map("provider_msg_id") @db.VarChar(64)
+  failureCode      String?               @map("failure_code") @db.VarChar(64)
+  failureMessage   String?               @map("failure_message") @db.VarChar(255)
+  acceptedAt       DateTime?             @map("accepted_at") @db.Timestamptz(6)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  notification  Notification     @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  app           WecomApp?        @relation(fields: [appId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  recipientUser User?            @relation("WecomDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  target        WecomTarget?     @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  media         WecomDeliveryMedia[]
+
+  @@index([status, nextAttemptAt], map: "wecom_deliveries_status_next_attempt_idx")
+  @@index([notificationId], map: "wecom_deliveries_notification_idx")
+  @@index([appId, status], map: "wecom_deliveries_app_status_idx")
+  @@index([recipientUserId, createdAt(sort: Desc)], map: "wecom_deliveries_recipient_created_idx")
+  @@index([targetId, createdAt(sort: Desc)], map: "wecom_deliveries_target_created_idx")
+  @@map("wecom_deliveries")
+}
+
+/// WECOM 单条投递的附件事实；一期文本路径不写入，图片路径预留。
+model WecomDeliveryMedia {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryId       String              @map("delivery_id") @db.Uuid
+  mediaAssetId     String              @map("media_asset_id") @db.Uuid
+  sortOrder        Int                 @map("sort_order")
+  status           WecomDeliveryStatus @default(PENDING)
+  attemptCount     Int                 @default(0) @map("attempt_count")
+  nextAttemptAt    DateTime            @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  mediaId          String?             @map("media_id") @db.VarChar(128)
+  mediaIdExpiresAt DateTime?           @map("media_id_expires_at") @db.Timestamptz(6)
+  failureCode      String?             @map("failure_code") @db.VarChar(64)
+  failureMessage   String?             @map("failure_message") @db.VarChar(255)
+  acceptedAt       DateTime?           @map("accepted_at") @db.Timestamptz(6)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  delivery   WecomDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset MediaAsset    @relation("WecomDeliveryMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([deliveryId, sortOrder], map: "wecom_delivery_media_delivery_sort_key")
+  @@index([status, nextAttemptAt], map: "wecom_delivery_media_status_next_idx")
+  @@index([mediaAssetId], map: "wecom_delivery_media_asset_idx")
+  @@map("wecom_delivery_media")
+}
+
+/// WECOM 派发器单实例租约，固定 id = 'wecom-dispatch'。
+model WecomDispatchLease {
+  id        String    @id @db.VarChar(64)
+  ownerId   String?   @map("owner_id") @db.Uuid
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("wecom_dispatch_leases")
 }

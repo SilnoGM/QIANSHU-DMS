@@ -66,6 +66,7 @@ export const PRIORITY_OPTIONS = [
 export const CHANNEL_OPTIONS = [
   { label: '站内', value: 'IN_APP' },
   { label: '小助理', value: 'ASSISTANT' },
+  { label: '企业微信', value: 'WECOM' },
 ] as const
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -112,14 +113,20 @@ export function priorityClass(priority: string): string {
   return priority === 'HIGH' ? TONE_CLASSES.warning : TONE_CLASSES.muted
 }
 
-export function channelLabel(channel: 'IN_APP' | 'ASSISTANT'): string {
-  return channel === 'IN_APP' ? '站内' : '小助理'
+export function channelLabel(channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'): string {
+  if (channel === 'IN_APP') {
+    return '站内'
+  }
+  return channel === 'ASSISTANT' ? '小助理' : '企业微信'
 }
 
-export function channelClass(channel: 'IN_APP' | 'ASSISTANT'): string {
-  return channel === 'IN_APP'
-    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-    : 'border-primary/30 bg-primary/10 text-primary'
+export function channelClass(channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'): string {
+  if (channel === 'IN_APP') {
+    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+  }
+  return channel === 'ASSISTANT'
+    ? 'border-primary/30 bg-primary/10 text-primary'
+    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
 }
 
 export function domainLabel(domain: string): string {

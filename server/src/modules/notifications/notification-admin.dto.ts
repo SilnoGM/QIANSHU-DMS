@@ -76,10 +76,13 @@ export class NotificationTemplateVariableDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() sensitive?: boolean
 }
 
+export const NOTIFICATION_CHANNEL_VALUES = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
+export type NotificationChannelValue = (typeof NOTIFICATION_CHANNEL_VALUES)[number]
+
 export class NotificationTemplateDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() key!: string
-  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
   @ApiProperty() name!: string
   @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
   @ApiProperty({ type: 'string', nullable: true }) titleTemplate!: string | null
@@ -88,6 +91,7 @@ export class NotificationTemplateDto {
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) variables!: NotificationTemplateVariableDto[]
   @ApiProperty({ type: () => NotificationTemplateMediaPolicyDto }) mediaPolicy!: NotificationTemplateMediaPolicyDto
   @ApiProperty({ type: 'integer' }) maxLength!: number
+  @ApiProperty({ type: 'integer', nullable: true }) maxBytes!: number | null
   @ApiProperty() enabled!: boolean
   @ApiProperty({ type: 'integer' }) version!: number
   @ApiProperty({ format: 'date-time' }) updatedAt!: string
@@ -96,7 +100,7 @@ export class NotificationTemplateDto {
 
 export class NotificationTemplateCreateDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/^[a-zA-Z0-9._-]+$/u) key!: string
-  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) @IsIn(['IN_APP', 'ASSISTANT']) channel!: 'IN_APP' | 'ASSISTANT'
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: NotificationChannelValue
   @ApiProperty({ maxLength: 128 }) @IsString() @Matches(/\S/u) name!: string
   @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS, default: 'SYSTEM' }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
   @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
@@ -105,6 +109,7 @@ export class NotificationTemplateCreateDto {
   @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables!: NotificationTemplateVariableDto[]
   @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000, default: 2000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 4096, description: 'WECOM 文本模板的 UTF-8 字节上限' }) @IsOptional() @IsInt() @Min(1) @Max(4096) maxBytes?: number
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() enabled?: boolean
 }
 
@@ -117,6 +122,7 @@ export class NotificationTemplateUpdateDto {
   @ApiPropertyOptional({ type: () => [NotificationTemplateVariableDto] }) @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables?: NotificationTemplateVariableDto[]
   @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 4096 }) @IsOptional() @IsInt() @Min(1) @Max(4096) maxBytes?: number
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
   @ApiProperty({ type: 'integer', minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
 }
@@ -135,7 +141,7 @@ export class NotificationTemplatePreviewResultDto {
 export class NotificationChannelPolicyDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty() eventType!: string
-  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
   @ApiProperty({ enum: ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] }) targetMode!: string
   @ApiProperty({ type: 'object', additionalProperties: true }) targetConfig!: Record<string, unknown>
   @ApiProperty({ type: 'string', nullable: true }) templateKey!: string | null
@@ -163,13 +169,13 @@ export class NotificationChannelPolicyUpdateDto {
 
 export class NotificationChannelPolicyPathDto {
   @ApiProperty() @IsString() @Matches(/\S/u) eventType!: string
-  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'] }) @IsIn(['IN_APP', 'ASSISTANT']) channel!: 'IN_APP' | 'ASSISTANT'
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: NotificationChannelValue
 }
 
 export class NotificationRecordQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(64) eventType?: string
   @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
-  @ApiPropertyOptional({ enum: ['IN_APP', 'ASSISTANT'] }) @IsOptional() @IsIn(['IN_APP', 'ASSISTANT']) channel?: string
+  @ApiPropertyOptional({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsOptional() @IsIn(NOTIFICATION_CHANNEL_VALUES) channel?: string
   @ApiPropertyOptional({ enum: ['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] })
   @IsOptional() @IsIn(['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED']) status?: string
   @ApiPropertyOptional({ enum: ['NORMAL', 'HIGH'] }) @IsOptional() @IsIn(['NORMAL', 'HIGH']) priority?: string
@@ -238,7 +244,7 @@ export class NotificationRecordDto {
   @ApiProperty({ format: 'date-time' }) publishedAt!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) completedAt!: string | null
   @ApiProperty({ type: 'string', nullable: true }) requestedByName!: string | null
-  @ApiProperty({ enum: ['IN_APP', 'ASSISTANT'], isArray: true }) channels!: Array<'IN_APP' | 'ASSISTANT'>
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES, isArray: true }) channels!: NotificationChannelValue[]
   @ApiProperty({ type: 'integer', description: '站内收件箱条目数' }) inAppItemCount!: number
   @ApiProperty({ type: 'integer', description: '站内未读条目数' }) inAppUnreadCount!: number
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '小助理 AssistantDelivery 按状态计数' }) deliveryCounts!: Record<string, number>

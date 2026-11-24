@@ -163,10 +163,20 @@ describe('permission constants', () => {
       'assistant-target:read',
       'assistant-target:manage',
       'assistant-delivery:resend',
+      'wecom-channel:read',
+      'wecom-channel:update',
+      'wecom-app:read',
+      'wecom-app:manage',
+      'wecom-app-secret:update',
+      'wecom-membership:read',
+      'wecom-membership:manage',
+      'wecom-target:read',
+      'wecom-target:manage',
+      'wecom-delivery:resend',
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 134)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 144)
   })
 })
 

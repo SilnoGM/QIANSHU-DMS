@@ -81,10 +81,12 @@ describe('NotificationPreferenceService', () => {
     expect(event?.channels).toEqual([
       { channel: 'IN_APP', available: true, muted: true, unavailableReason: null },
       { channel: 'ASSISTANT', available: false, muted: false, unavailableReason: 'CHANNEL_DISABLED' },
+      { channel: 'WECOM', available: false, muted: false, unavailableReason: 'NOT_CONFIGURED' },
     ])
     expect(view.channels).toEqual([
       { channel: 'IN_APP', enabled: true },
       { channel: 'ASSISTANT', enabled: false },
+      { channel: 'WECOM', enabled: false },
     ])
     expect(view.assistantBound).toBe(false)
   })

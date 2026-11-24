@@ -55,7 +55,7 @@ export const NOTIFICATION_EVENT_TYPES = [
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
 
-export type NotificationChannel = 'IN_APP' | 'ASSISTANT'
+export type NotificationChannel = 'IN_APP' | 'ASSISTANT' | 'WECOM'
 
 export type NotificationPriority = 'NORMAL' | 'HIGH'
 
@@ -1468,12 +1468,17 @@ export interface SystemNotificationPublishOptions {
 
 export type NotificationSkipReason =
   | 'NOT_BOUND'
+  | 'NOT_VERIFIED'
+  | 'NOT_IN_APP_SCOPE'
   | 'USER_DISABLED'
   | 'USER_MUTED'
   | 'NO_RECIPIENT'
   | 'TARGET_DISABLED'
   | 'CHANNEL_DISABLED'
   | 'CHANNEL_NOT_CONFIGURED'
+  | 'APP_DISABLED'
+  | 'APP_NOT_CONFIGURED'
+  | 'TEXT_TOO_LONG'
   | 'QUIET_HOURS_EXPIRED'
 
 export type NotificationPublishWarningCode =
@@ -1486,6 +1491,7 @@ export type NotificationPublishWarningCode =
   | 'USER_MUTED'
   | 'DUPLICATE_IGNORED'
   | 'MEDIA_ATTACHMENT_BLOCKED'
+  | 'TEXT_TOO_LONG'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel

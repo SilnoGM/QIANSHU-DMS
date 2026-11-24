@@ -7,7 +7,7 @@ import type {
 } from '@/api/generated/types.gen'
 import { TEMPLATE_DOMAIN_OPTIONS } from './template-key-grouping.logic'
 
-export type NotificationChannelValue = 'IN_APP' | 'ASSISTANT'
+export type NotificationChannelValue = 'IN_APP' | 'ASSISTANT' | 'WECOM'
 
 export type EventChannelState = 'READY' | 'MISSING_TEMPLATE' | 'UNCONFIGURED' | 'DISABLED' | 'UNKNOWN'
 
@@ -29,6 +29,7 @@ export interface EventCoverage {
   event: NotificationEventDto
   inApp: EffectiveTemplate
   assistant: EffectiveTemplate
+  wecom: EffectiveTemplate
   state: EventCoverageState
 }
 
@@ -137,8 +138,16 @@ export function resolveChannelTemplate(
   return { key, source, template, state: 'READY', missingReason: null }
 }
 
-function deriveEventState(inApp: EffectiveTemplate, assistant: EffectiveTemplate): EventCoverageState {
+function deriveEventState(
+  inApp: EffectiveTemplate,
+  assistant: EffectiveTemplate,
+  wecom: EffectiveTemplate,
+): EventCoverageState {
   const channels = [inApp, assistant]
+  // WECOM 是增量渠道：未配置时不把已有事件拖成 PARTIAL；一旦有策略就参与状态判定。
+  if (wecom.state !== 'UNCONFIGURED') {
+    channels.push(wecom)
+  }
   const configured = channels.filter(channel => channel.state !== 'UNCONFIGURED')
   if (configured.length === 0) {
     return 'UNCONFIGURED'
@@ -146,10 +155,10 @@ function deriveEventState(inApp: EffectiveTemplate, assistant: EffectiveTemplate
   if (channels.every(channel => channel.state === 'READY')) {
     return 'READY'
   }
-  if (channels.some(channel => channel.state === 'MISSING_TEMPLATE')) {
+  if (configured.some(channel => channel.state === 'MISSING_TEMPLATE')) {
     return 'MISSING_TEMPLATE'
   }
-  if (channels.some(channel => channel.state === 'UNKNOWN')) {
+  if (configured.some(channel => channel.state === 'UNKNOWN')) {
     return 'UNKNOWN'
   }
   if (configured.every(channel => channel.state === 'DISABLED')) {
@@ -176,7 +185,13 @@ export function buildEventCoverage(
       findChannelPolicy(policies, event.eventType, 'ASSISTANT'),
       templates,
     )
-    return { event, inApp, assistant, state: deriveEventState(inApp, assistant) }
+    const wecom = resolveChannelTemplate(
+      event,
+      'WECOM',
+      findChannelPolicy(policies, event.eventType, 'WECOM'),
+      templates,
+    )
+    return { event, inApp, assistant, wecom, state: deriveEventState(inApp, assistant, wecom) }
   })
 }
 
@@ -248,8 +263,10 @@ function matchesTableKeyword(item: EventCoverage, normalized: string): boolean {
     item.event.eventType,
     item.inApp.key ?? '',
     item.assistant.key ?? '',
+    item.wecom.key ?? '',
     item.inApp.template?.name ?? '',
     item.assistant.template?.name ?? '',
+    item.wecom.template?.name ?? '',
   ].join(' ').toLowerCase()
   return haystack.includes(normalized)
 }

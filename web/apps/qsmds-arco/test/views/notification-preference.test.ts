@@ -84,12 +84,12 @@ test('渠道与不可设置原因使用中文文案', () => {
   assert.equal(preferenceUnavailableLabel(null), '')
 })
 
-test('接收设置单元格固定按站内、小助理排序并保留缺失列', () => {
+test('接收设置单元格固定按站内、小助理、企业微信排序并保留缺失列', () => {
   const cells = preferenceCells(preferenceEvent('ASSISTANT_ACCOUNT_OFFLINE', 'system', [
     { channel: 'ASSISTANT', available: true },
   ]))
 
-  assert.deepEqual(cells.map(cell => cell.channel), ['IN_APP', 'ASSISTANT'])
+  assert.deepEqual(cells.map(cell => cell.channel), ['IN_APP', 'ASSISTANT', 'WECOM'])
   assert.equal(cells[0]?.dto, null)
   assert.equal(cells[1]?.dto?.available, true)
 })
@@ -156,8 +156,8 @@ test('隐藏渠道后只保留仍有可见渠道的事件', () => {
 })
 
 test('渠道启停状态缺失时退回展示全部列', () => {
-  assert.deepEqual(enabledPreferenceChannels(undefined), ['IN_APP', 'ASSISTANT'])
-  assert.deepEqual(enabledPreferenceChannels([]), ['IN_APP', 'ASSISTANT'])
+  assert.deepEqual(enabledPreferenceChannels(undefined), ['IN_APP', 'ASSISTANT', 'WECOM'])
+  assert.deepEqual(enabledPreferenceChannels([]), ['IN_APP', 'ASSISTANT', 'WECOM'])
   assert.deepEqual(enabledPreferenceChannels([
     { channel: 'IN_APP', enabled: true },
     { channel: 'ASSISTANT', enabled: false },

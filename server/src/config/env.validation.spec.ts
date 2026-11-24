@@ -37,6 +37,7 @@ describe('validateEnvironment', () => {
       IPFOXY_API_ID: null,
       IPFOXY_API_TOKEN: null,
       PROXY_NODE_SECRET_KEY: null,
+      WECOM_APP_SECRET_KEY: null,
     })
   })
 
@@ -82,6 +83,7 @@ describe('validateEnvironment', () => {
       IPFOXY_API_ID: null,
       IPFOXY_API_TOKEN: null,
       PROXY_NODE_SECRET_KEY: null,
+      WECOM_APP_SECRET_KEY: null,
       CUSTOM_SETTING: 'kept',
     })
   })

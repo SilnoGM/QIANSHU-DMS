@@ -32,6 +32,12 @@ import {
   type SystemNotificationPublishOptions,
   type SystemNotificationPublishResult,
 } from './notification.types'
+import {
+  parseWecomMentionConfig,
+  utf8Bytes,
+  WECOM_DEFAULT_MAX_BYTES,
+  type WecomMentionConfig,
+} from './wecom.types'
 
 type Transaction = Prisma.TransactionClient
 
@@ -189,8 +195,10 @@ export class SystemNotificationService {
     const selectedPolicies = requestedChannels === null
       ? policies
       : policies.filter(policy => requestedChannels.has(policy.channel))
-    const primaryPolicy = selectedPolicies.find(policy => policy.channel === 'ASSISTANT') ?? selectedPolicies[0]
-    const expiresAt = primaryPolicy?.channel === 'ASSISTANT'
+    const primaryPolicy = selectedPolicies.find(
+      policy => policy.channel === 'ASSISTANT' || policy.channel === 'WECOM',
+    ) ?? selectedPolicies[0]
+    const expiresAt = primaryPolicy?.channel === 'ASSISTANT' || primaryPolicy?.channel === 'WECOM'
       ? this.resolveExpiresAt(command, primaryPolicy.ttlSeconds, now)
       : null
     // 优先级由事件×渠道策略统一维护，避免业务代码硬编码 HIGH 覆盖管理端配置。
@@ -264,6 +272,19 @@ export class SystemNotificationService {
         channelResults.push(channelResult)
         continue
       }
+      if (policy.channel === 'WECOM') {
+        const channelResult = await this.createWecomDeliveries(transaction, {
+          notificationId: notification.id,
+          policy,
+          templateKey,
+          command,
+          variables,
+          now,
+          warnings,
+        })
+        channelResults.push(channelResult)
+        continue
+      }
       if (policy.channel !== 'ASSISTANT') {
         warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: `渠道 ${String(policy.channel)} 尚未实现` })
         continue
@@ -325,11 +346,22 @@ export class SystemNotificationService {
       channelResults.push(channelResult)
     }
 
-    const total = await transaction.assistantDelivery.count({ where: { notificationId: notification.id } })
-    const pending = await transaction.assistantDelivery.count({
-      where: { notificationId: notification.id, status: 'PENDING' },
-    })
-    const inboxTotal = await transaction.notificationInboxItem.count({ where: { notificationId: notification.id } })
+    const [assistantTotal, assistantPending, wecomTotal, wecomPending, inboxTotal] = await Promise.all([
+      transaction.assistantDelivery.count({ where: { notificationId: notification.id } }),
+      transaction.assistantDelivery.count({
+        where: { notificationId: notification.id, status: 'PENDING' },
+      }),
+      // 兼容只 mock 小助理表的既有单测；真实 Prisma transaction 一定有 wecomDelivery。
+      'wecomDelivery' in transaction
+        ? transaction.wecomDelivery.count({ where: { notificationId: notification.id } })
+        : Promise.resolve(0),
+      'wecomDelivery' in transaction
+        ? transaction.wecomDelivery.count({ where: { notificationId: notification.id, status: 'PENDING' } })
+        : Promise.resolve(0),
+      transaction.notificationInboxItem.count({ where: { notificationId: notification.id } }),
+    ])
+    const total = assistantTotal + wecomTotal
+    const pending = assistantPending + wecomPending
     // 全员关闭时投递与收件箱计数都是 0，按常规规则会被误判为 FAILED；
     // 只有「所有渠道都跳过、且其中至少一个是用户主动关闭」才归为 SKIPPED，
     // 其余全跳过（模板缺失、目标不可用等）仍保留 FAILED 以暴露配置问题。
@@ -647,8 +679,239 @@ export class SystemNotificationService {
     })
   }
 
-  private async createAssistantDeliveries(
+  /**
+   * WECOM 发布分支：模板按字节预算渲染，群目标走机器人，1:1 走事件路由应用。
+   *
+   * 一期文本路径不创建附件投递；图片在后续增量补齐。模板缺失/超字节只跳过
+   * WECOM 渠道，不把其他渠道一起判失败。
+   */
+  private async createWecomDeliveries(
     transaction: Transaction,
+    input: {
+      readonly notificationId: string
+      readonly policy: {
+        readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
+        readonly targetConfig: Prisma.JsonValue
+        readonly allowSensitive: boolean
+      }
+      readonly templateKey: string
+      readonly command: SystemNotificationPublishCommand
+      readonly variables: Readonly<Record<string, string | number | null>>
+      readonly now: Date
+      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
+    },
+  ): Promise<ResolvedChannelResult> {
+    const setting = await transaction.notificationChannelSettings.findUnique({
+      where: { channel: 'WECOM' },
+      select: { enabled: true },
+    })
+    if (setting === null || !setting.enabled) {
+      input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '企业微信通知渠道未启用' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
+    }
+
+    const template = await transaction.notificationTemplate.findUnique({
+      where: { key_channel: { key: input.templateKey, channel: 'WECOM' } },
+    })
+    if (template === null || !template.enabled) {
+      input.warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '企业微信模板不存在或已停用' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    }
+
+    const allowed = parseTemplateVariables(template.variables)
+    const title = template.titleTemplate?.trim()
+      ? renderNotificationTemplate({
+        body: template.titleTemplate,
+        variables: input.variables,
+        allowed,
+        allowSensitive: input.policy.allowSensitive,
+        maxLength: 200,
+      })
+      : null
+    const body = renderNotificationTemplate({
+      body: template.bodyTemplate,
+      linkUrlTemplate: template.linkUrlTemplate,
+      variables: input.variables,
+      allowed,
+      allowSensitive: input.policy.allowSensitive,
+      maxLength: template.maxLength,
+    })
+    if ((title !== null && !title.ok) || !body.ok) {
+      input.warnings.push({
+        code: 'TEMPLATE_VARIABLE_MISSING',
+        message: !body.ok ? body.message : title !== null && !title.ok ? title.message : '企业微信模板渲染失败',
+      })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    }
+    const content = title !== null && title.content.trim().length > 0
+      ? `${title.content}\n${body.content}`
+      : body.content
+    const maxBytes = template.maxBytes ?? WECOM_DEFAULT_MAX_BYTES
+    if (utf8Bytes(content) > maxBytes) {
+      input.warnings.push({
+        code: 'TEXT_TOO_LONG',
+        message: `企业微信模板渲染后 ${utf8Bytes(content)} 字节，超过 ${maxBytes} 字节上限`,
+      })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'TEXT_TOO_LONG' }
+    }
+    if (body.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
+      input.warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
+    }
+
+    const mention = this.wecomMentionFromPolicy(input.policy.targetConfig)
+
+    if (input.policy.targetMode === 'GROUP') {
+      const targetKeys = parseTargetConfig(input.policy.targetConfig).targetKeys ?? []
+      const targets = targetKeys.length === 0
+        ? []
+        : await transaction.wecomTarget.findMany({
+          where: { key: { in: targetKeys }, enabled: true, internalOnly: true },
+          select: { id: true },
+        })
+      if (targets.length === 0) {
+        input.warnings.push({ code: 'NO_RECIPIENT', message: '企业微信群目标不存在、已停用或不是内部群' })
+        return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+      }
+      await transaction.wecomDelivery.createMany({
+        data: targets.map(target => ({
+          id: randomUUID(),
+          notificationId: input.notificationId,
+          appId: null,
+          transport: 'ROBOT' as const,
+          recipientUserId: null,
+          targetId: target.id,
+          status: 'PENDING' as const,
+          templateKey: input.templateKey,
+          templateVersion: template.version,
+          renderedContent: content,
+          nextAttemptAt: input.now,
+          mentionMode: mention.mode,
+          mentionedCount: 0,
+          mentionSkipped: 0,
+        })),
+      })
+      return { channel: 'WECOM', status: 'PENDING', recipientCount: targets.length, skippedCount: 0 }
+    }
+
+    const target = input.policy.targetMode === 'COMMAND_TARGET'
+      ? input.command.target
+      : this.targetFromPolicy(input.policy)
+    const resolvedUserIds = target === null ? [] : await this.resolveUsers(transaction, target)
+    if (resolvedUserIds.length === 0) {
+      input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到企业微信收件人' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+    }
+    const { allowed: userIds, muted } = await this.filterMutedUsers(
+      transaction,
+      resolvedUserIds,
+      input.command.eventType,
+      'WECOM',
+    )
+    if (muted > 0) {
+      input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的企业微信提醒` })
+    }
+    if (userIds.length === 0) {
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
+    }
+
+    const app = await this.resolveWecomApp(transaction, input.command.eventType)
+    if (app.app === null) {
+      input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: app.reason === 'APP_DISABLED' ? '事件绑定的企业微信应用已停用' : '企业微信默认应用未配置' })
+      return {
+        channel: 'WECOM',
+        status: 'SKIPPED',
+        recipientCount: 0,
+        skippedCount: muted,
+        skipReason: app.reason === 'APP_DISABLED' ? 'APP_DISABLED' : 'APP_NOT_CONFIGURED',
+      }
+    }
+
+    const appId = app.app.id
+    const [bindings, memberships] = await Promise.all([
+      transaction.wecomBinding.findMany({
+        where: { userId: { in: userIds }, status: 'ACTIVE', verifiedAt: { not: null } },
+        select: { userId: true },
+      }),
+      transaction.wecomAppMembership.findMany({
+        where: { appId, userId: { in: userIds }, status: 'ACTIVE', verifiedAt: { not: null } },
+        select: { userId: true },
+      }),
+    ])
+    const bound = new Set(bindings.map(binding => binding.userId))
+    const inScope = new Set(memberships.map(membership => membership.userId))
+    const deliveries = userIds.map((userId) => {
+      const failureCode = !bound.has(userId)
+        ? 'NOT_BOUND'
+        : !inScope.has(userId) ? 'NOT_IN_APP_SCOPE' : null
+      return {
+        id: randomUUID(),
+        notificationId: input.notificationId,
+        appId,
+        transport: 'APP' as const,
+        recipientUserId: userId,
+        targetId: null,
+        status: failureCode === null ? 'PENDING' as const : 'SKIPPED' as const,
+        templateKey: input.templateKey,
+        templateVersion: template.version,
+        renderedContent: content,
+        nextAttemptAt: input.now,
+        mentionMode: null,
+        mentionedCount: 0,
+        mentionSkipped: 0,
+        failureCode,
+        failureMessage: failureCode === 'NOT_BOUND'
+          ? '员工未完成企业微信绑定'
+          : failureCode === 'NOT_IN_APP_SCOPE' ? '员工不在该应用可见范围或未验证' : null,
+      }
+    })
+    await transaction.wecomDelivery.createMany({ data: deliveries })
+    const skipped = muted + deliveries.filter(delivery => delivery.status === 'SKIPPED').length
+    if (skipped >= userIds.length + muted) {
+      const reason = deliveries.every(delivery => delivery.failureCode === 'NOT_IN_APP_SCOPE')
+        ? 'NOT_IN_APP_SCOPE'
+        : 'NOT_BOUND'
+      input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都不满足企业微信绑定或应用可见范围' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: skipped, skipReason: reason }
+    }
+    return { channel: 'WECOM', status: 'PENDING', recipientCount: userIds.length, skippedCount: skipped }
+  }
+
+  private async resolveWecomApp(
+    transaction: Transaction,
+    eventType: string,
+  ): Promise<{ readonly app: { readonly id: string } | null, readonly reason: 'APP_DISABLED' | 'APP_NOT_CONFIGURED' | null }> {
+    const route = await transaction.wecomAppEventRoute.findUnique({
+      where: { eventType },
+      select: {
+        enabled: true,
+        app: { select: { id: true, enabled: true, status: true } },
+      },
+    })
+    if (route !== null && route.enabled) {
+      if (!route.app.enabled || route.app.status === 'DISABLED') {
+        return { app: null, reason: 'APP_DISABLED' }
+      }
+      return { app: { id: route.app.id }, reason: null }
+    }
+
+    const fallback = await transaction.wecomApp.findFirst({
+      where: { isDefault: true, enabled: true, status: { not: 'DISABLED' } },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return fallback === null
+      ? { app: null, reason: 'APP_NOT_CONFIGURED' }
+      : { app: fallback, reason: null }
+  }
+
+  private wecomMentionFromPolicy(targetConfig: Prisma.JsonValue): WecomMentionConfig {
+    const record = typeof targetConfig === 'object' && targetConfig !== null && !Array.isArray(targetConfig)
+      ? targetConfig as Record<string, unknown>
+      : null
+    return parseWecomMentionConfig(record?.mention)
+  }
+
+  private async createAssistantDeliveries(    transaction: Transaction,
     input: {
       readonly notificationId: string
       readonly policy: {

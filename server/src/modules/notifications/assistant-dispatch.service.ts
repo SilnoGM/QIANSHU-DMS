@@ -650,7 +650,18 @@ export class AssistantDispatchService implements OnApplicationBootstrap, OnModul
       where: { notificationId },
       _count: { _all: true },
     })
-    const counts = new Map(rows.map(row => [row.status, row._count._all]))
+    // 兼容只 mock 小助理表的既有单测；真实 Prisma 一定有 wecomDelivery。
+    const wecomRows = 'wecomDelivery' in this.prisma
+      ? await this.prisma.wecomDelivery.groupBy({
+        by: ['status'],
+        where: { notificationId },
+        _count: { _all: true },
+      })
+      : []
+    const counts = new Map<string, number>()
+    for (const row of [...rows, ...wecomRows]) {
+      counts.set(row.status, (counts.get(row.status) ?? 0) + row._count._all)
+    }
     const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)
     const accepted = counts.get('ACCEPTED') ?? 0
     const partial = counts.get('PARTIAL') ?? 0

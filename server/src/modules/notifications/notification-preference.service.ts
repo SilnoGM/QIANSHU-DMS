@@ -16,7 +16,7 @@ import {
   type NotificationEventType,
 } from './notification.types'
 
-const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'ASSISTANT']
+const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'ASSISTANT', 'WECOM']
 
 function key(value: string, channel: string): string {
   return `${value}:${channel}`

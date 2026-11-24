@@ -23,6 +23,7 @@ import {
   notificationEventVariableDefinitions,
   notificationEventVariables,
   type AssistantTransport,
+  type NotificationChannel,
 } from './notification.types'
 import type {
   NotificationCancelResultDto,
@@ -53,7 +54,7 @@ function iso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
 }
 
-const NOTIFICATION_RECORD_CHANNELS = ['IN_APP', 'ASSISTANT'] as const
+const NOTIFICATION_RECORD_CHANNELS = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
 type NotificationRecordChannel = (typeof NOTIFICATION_RECORD_CHANNELS)[number]
 
 const RECORD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
@@ -172,6 +173,7 @@ function toTemplateDto(template: {
   readonly variables: Prisma.JsonValue
   readonly mediaPolicy: Prisma.JsonValue
   readonly maxLength: number
+  readonly maxBytes: number | null
   readonly enabled: boolean
   readonly version: number
   readonly updatedAt: Date
@@ -195,6 +197,7 @@ function toTemplateDto(template: {
       sources: [...mediaPolicy.sources],
     },
     maxLength: template.maxLength,
+    maxBytes: template.maxBytes,
     enabled: template.enabled,
     version: template.version,
     updatedAt: template.updatedAt.toISOString(),
@@ -257,7 +260,7 @@ export class NotificationAdminService {
 
   async listTemplates(channel?: string): Promise<NotificationTemplateDto[]> {
     const templates = await this.prisma.notificationTemplate.findMany({
-      where: channel === 'IN_APP' || channel === 'ASSISTANT' ? { channel } : {},
+      where: channel === 'IN_APP' || channel === 'ASSISTANT' || channel === 'WECOM' ? { channel } : {},
       orderBy: [{ key: 'asc' }, { channel: 'asc' }],
       include: { updatedBy: { select: { displayName: true } } },
     })
@@ -293,7 +296,7 @@ export class NotificationAdminService {
    * 保存时的严格校验与运行时的宽容解析分开——历史配置异常不能让模板永久不可编辑。
    */
   private resolveTemplateMediaPolicy(
-    channel: 'IN_APP' | 'ASSISTANT',
+    channel: NotificationChannel,
     input: {
       readonly enabled?: boolean
       readonly maxCount?: number
@@ -329,7 +332,7 @@ export class NotificationAdminService {
 
   private async assertTemplateDomainConsistent(
     key: string,
-    channel: 'IN_APP' | 'ASSISTANT',
+    channel: NotificationChannel,
     domain: string,
   ): Promise<void> {
     const other = await this.prisma.notificationTemplate.findFirst({
@@ -360,6 +363,7 @@ export class NotificationAdminService {
             variables: input.variables as unknown as Prisma.InputJsonValue,
             mediaPolicy,
             maxLength: input.maxLength ?? 2000,
+            maxBytes: input.channel === 'WECOM' ? (input.maxBytes ?? 2_048) : null,
             enabled: input.enabled ?? true,
             createdByUserId: context.actorUserId,
             updatedByUserId: context.actorUserId,
@@ -430,6 +434,7 @@ export class NotificationAdminService {
           ...(input.variables !== undefined ? { variables: input.variables as unknown as Prisma.InputJsonValue } : {}),
           ...(mediaPolicy !== undefined ? { mediaPolicy } : {}),
           ...(input.maxLength !== undefined ? { maxLength: input.maxLength } : {}),
+          ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
           version: { increment: 1 },
           updatedByUserId: context.actorUserId,
@@ -541,7 +546,7 @@ export class NotificationAdminService {
     const policies = await this.prisma.notificationChannelPolicy.findMany({
       where: {
         ...(eventType !== undefined && eventType.length > 0 ? { eventType } : {}),
-        ...(channel === 'IN_APP' || channel === 'ASSISTANT' ? { channel } : {}),
+        ...(channel === 'IN_APP' || channel === 'ASSISTANT' || channel === 'WECOM' ? { channel } : {}),
       },
       orderBy: [{ eventType: 'asc' }, { channel: 'asc' }],
       include: { updatedBy: { select: { displayName: true } } },
@@ -549,7 +554,7 @@ export class NotificationAdminService {
     return policies.map(toPolicyDto)
   }
 
-  private validatePolicy(channel: 'IN_APP' | 'ASSISTANT', input: NotificationChannelPolicyUpdateDto): void {
+  private validatePolicy(channel: NotificationChannel, input: NotificationChannelPolicyUpdateDto): void {
     if (channel === 'IN_APP') {
       if (input.targetMode === 'GROUP') {
         throw new ApiException(422, 'NOTIFICATION_POLICY_TARGET_INVALID', '站内通知不支持群目标')
@@ -595,7 +600,7 @@ export class NotificationAdminService {
    */
   private async assertPolicyTemplate(
     eventType: string,
-    channel: 'IN_APP' | 'ASSISTANT',
+    channel: NotificationChannel,
     templateKey: string | null | undefined,
   ): Promise<void> {
     const key = templateKey?.trim()
@@ -631,7 +636,7 @@ export class NotificationAdminService {
   async upsertPolicy(
     context: NotificationAdminContext,
     eventType: string,
-    channel: 'IN_APP' | 'ASSISTANT',
+    channel: NotificationChannel,
     input: NotificationChannelPolicyUpdateDto,
   ): Promise<NotificationChannelPolicyDto> {
     if (!(NOTIFICATION_EVENT_TYPES as readonly string[]).includes(eventType)) {

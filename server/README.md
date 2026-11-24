@@ -82,6 +82,8 @@ allowBuilds:
 | `PROXY_NODE_SECRET_KEY` | 静态节点密码 AES-256-GCM 密钥；启用 IPFoxy 时必填，32-byte canonical base64url | 模板保持为空 |
 | `CHEETAHGO_APPID` | 猎豹 CheetahGo 开放平台 appid；与 secret 必须同时提供 | 模板保持为空 |
 | `CHEETAHGO_SECRET` | 猎豹 CheetahGo 开放平台 secret；与 appid 必须同时提供，缺省时广告账户同步任务跳过 | 模板保持为空 |
+| `WECOM_APP_SECRET_KEY` | 企业微信应用 Secret 与群 webhook key 的 AES-256-GCM 静态加密密钥；32-byte canonical base64url，未配置时无法保存 WECOM Secret | 模板保持为空 |
+| `WECOM_WORKER_ENABLED` | WECOM 派发开关；只有显式设为 `true` 才启动后台派发 | `false` |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 

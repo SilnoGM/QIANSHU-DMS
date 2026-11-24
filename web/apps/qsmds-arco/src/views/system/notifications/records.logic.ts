@@ -2,7 +2,7 @@ import type { NotificationDeliveryDto, NotificationRecordDto } from '@/api/gener
 import { deliveryStatusLabel } from './records.presentation'
 
 export interface RecordDeliverySummaryItem {
-  channel: 'IN_APP' | 'ASSISTANT'
+  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
   detail: string | null
   label: string
   tone: 'danger' | 'normal' | 'warning'

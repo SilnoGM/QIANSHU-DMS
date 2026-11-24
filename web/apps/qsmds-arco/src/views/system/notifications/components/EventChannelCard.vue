@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
   canUpdatePolicy: boolean
   canUpdateTemplate: boolean
   canViewTemplate: boolean
-  channel: 'IN_APP' | 'ASSISTANT'
+  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
   dirty: boolean
   effective: EffectiveTemplate
   event: NotificationEventDto
@@ -37,22 +37,28 @@ const emit = defineEmits<{
 
 const draft = defineModel<PolicyDraft>('draft', { required: true })
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT' ? '千树小助理' : '站内通知')
-const channelIcon = computed(() => props.channel === 'ASSISTANT' ? 'i-lucide:messages-square' : 'i-lucide:bell')
+const channelLabel = computed(() => props.channel === 'ASSISTANT'
+  ? '千树小助理'
+  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
+const channelIcon = computed(() => props.channel === 'ASSISTANT'
+  ? 'i-lucide:messages-square'
+  : props.channel === 'WECOM' ? 'i-lucide:message-square-text' : 'i-lucide:bell')
 const isDrawer = computed(() => props.variant === 'drawer')
 const articleClass = computed(() => isDrawer.value
   ? 'flex flex-col gap-4 min-w-0'
   : 'p-4 border border-border rounded-xl bg-background flex flex-col gap-4 min-w-0 h-full')
 const channelIconClass = computed(() => props.channel === 'ASSISTANT'
   ? 'bg-primary/10 text-primary'
-  : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
+  : props.channel === 'WECOM'
+    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+    : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
 
 const targetModeOptions = computed(() => [
   { label: '使用命令目标', value: 'COMMAND_TARGET' },
   { label: '固定员工', value: 'USERS' },
   { label: '角色', value: 'ROLE' },
   { label: '权限', value: 'PERMISSION' },
-  ...(props.channel === 'ASSISTANT' ? [{ label: '群目标', value: 'GROUP' }] : []),
+  ...(props.channel === 'ASSISTANT' || props.channel === 'WECOM' ? [{ label: '群目标', value: 'GROUP' }] : []),
 ])
 
 const canSave = computed(() => (props.policy === null || props.dirty)
@@ -213,7 +219,7 @@ const stateClass = computed(() => {
       </label>
 
       <div class="gap-3 grid sm:grid-cols-2">
-        <label v-if="channel === 'ASSISTANT'" class="flex flex-col gap-1">
+        <label v-if="channel !== 'IN_APP'" class="flex flex-col gap-1">
           <span class="qs-type-meta text-muted-foreground">站外 TTL（秒）</span>
           <FaInput
             :model-value="draft.ttlSeconds ?? ''"
@@ -225,13 +231,13 @@ const stateClass = computed(() => {
           />
           <span class="qs-type-meta text-muted-foreground">{{ ttlHint }}</span>
         </label>
-        <label v-if="channel === 'ASSISTANT'" class="qs-type-meta flex gap-2 items-center sm:pb-6">
+        <label v-if="channel !== 'IN_APP'" class="qs-type-meta flex gap-2 items-center sm:pb-6">
           <FaSwitch v-model="draft.allowSensitive" :disabled="!canUpdatePolicy || busy" />
           允许金额/客户名称
         </label>
       </div>
 
-      <div v-if="channel === 'ASSISTANT'" class="flex flex-col gap-2">
+      <div v-if="channel !== 'IN_APP'" class="flex flex-col gap-2">
         <label class="qs-type-meta flex gap-2 items-center">
           <FaSwitch v-model="draft.quietHoursEnabled" :disabled="!canUpdatePolicy || busy" />
           启用静默时段

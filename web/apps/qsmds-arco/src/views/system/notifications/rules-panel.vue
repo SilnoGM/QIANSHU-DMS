@@ -93,7 +93,7 @@ const templateBaseline = ref('')
 const templateDraft = ref({
   id: '',
   key: '',
-  channel: 'ASSISTANT' as 'IN_APP' | 'ASSISTANT',
+  channel: 'ASSISTANT' as 'IN_APP' | 'ASSISTANT' | 'WECOM',
   name: '',
   domain: 'SYSTEM' as TemplateDomain,
   titleTemplate: '',
@@ -123,6 +123,7 @@ const discardOpen = ref(false)
 const CHANNEL_OPTIONS = [
   { label: '千树小助理', value: 'ASSISTANT' },
   { label: '站内通知', value: 'IN_APP' },
+  { label: '企业微信', value: 'WECOM' },
 ]
 
 const TEMPLATE_VIEW_OPTIONS = [
@@ -331,7 +332,10 @@ function insertTemplateVariable(name: string): void {
 }
 
 function formatChannel(channel: string): string {
-  return channel === 'ASSISTANT' ? '千树小助理' : '站内通知'
+  if (channel === 'ASSISTANT') {
+    return '千树小助理'
+  }
+  return channel === 'WECOM' ? '企业微信' : '站内通知'
 }
 
 async function load(): Promise<void> {
@@ -369,11 +373,12 @@ async function load(): Promise<void> {
         return
       }
       try {
-        const [assistantTemplates, inappTemplates] = await Promise.all([
+        const [assistantTemplates, inappTemplates, wecomTemplates] = await Promise.all([
           notificationsApi.templates.list('ASSISTANT', signal),
           notificationsApi.templates.list('IN_APP', signal),
+          notificationsApi.templates.list('WECOM', signal),
         ])
-        templates.value = [...assistantTemplates.data, ...inappTemplates.data]
+        templates.value = [...assistantTemplates.data, ...inappTemplates.data, ...wecomTemplates.data]
       }
       catch (failure) {
         templatesError.value = getApiClientFailureMessage(failure, '模板列表加载失败')
@@ -392,11 +397,12 @@ async function reloadTemplates(): Promise<void> {
   }
   const signal = new AbortController().signal
   try {
-    const [assistantTemplates, inappTemplates] = await Promise.all([
+    const [assistantTemplates, inappTemplates, wecomTemplates] = await Promise.all([
       notificationsApi.templates.list('ASSISTANT', signal),
       notificationsApi.templates.list('IN_APP', signal),
+      notificationsApi.templates.list('WECOM', signal),
     ])
-    templates.value = [...assistantTemplates.data, ...inappTemplates.data]
+    templates.value = [...assistantTemplates.data, ...inappTemplates.data, ...wecomTemplates.data]
     templatesError.value = null
   }
   catch (failure) {
@@ -538,7 +544,7 @@ function openCreateTemplate(): void {
 function openCreateTemplateForChannel(payload: {
   key: string
   domain: TemplateDomain
-  channel: 'ASSISTANT' | 'IN_APP'
+  channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'
 }): void {
   templateMode.value = 'create'
   templateAboveDrawer.value = false
@@ -569,7 +575,7 @@ function openCreateTemplateForChannel(payload: {
 
 function openCreateTemplateFromEvent(payload: {
   eventType: string
-  channel: 'ASSISTANT' | 'IN_APP'
+  channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'
   key: string
 }): void {
   const event = events.value.find(item => item.eventType === payload.eventType)
@@ -608,7 +614,7 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
   templateDraft.value = {
     id: template.id,
     key: template.key,
-    channel: template.channel as 'IN_APP' | 'ASSISTANT',
+    channel: template.channel as 'IN_APP' | 'ASSISTANT' | 'WECOM',
     name: template.name,
     domain: template.domain,
     titleTemplate: template.titleTemplate ?? '',
@@ -622,7 +628,7 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
     })),
     // 一期只支持图片；站内渠道即使有历史配置也按关闭展示，保存时会再次被服务端拒绝。
     mediaPolicy: {
-      enabled: template.mediaPolicy.enabled && template.channel === 'ASSISTANT',
+      enabled: template.mediaPolicy.enabled && template.channel !== 'IN_APP',
       maxCount: Math.min(3, Math.max(1, template.mediaPolicy.maxCount || 1)),
       sources: [...template.mediaPolicy.sources],
     },
@@ -1013,7 +1019,7 @@ onMounted(() => {
             <span class="qs-type-meta text-muted-foreground">填写后站内通知详情页显示跳转入口；占位符必须先在变量白名单声明。</span>
           </label>
 
-          <div v-if="templateDraft.channel === 'ASSISTANT'" class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2">
+          <div v-if="templateDraft.channel !== 'IN_APP'" class="p-3 border border-border rounded-lg bg-muted/20 flex flex-col gap-2">
             <div class="flex flex-wrap gap-3 items-center justify-between">
               <span class="qs-type-compact-label">业务附件（图片）</span>
               <label class="flex gap-2 items-center">

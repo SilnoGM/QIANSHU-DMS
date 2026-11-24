@@ -450,7 +450,7 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(templateDetailSource, /该模板键下共配置了/u)
   assert.match(templateDetailSource, /复制 Key/u)
   assert.match(templateDetailSource, /渠道已配齐/u)
-  assert.match(templateDetailSource, /缺少 1 个渠道/u)
+  assert.match(templateDetailSource, /缺少 \{\{ 3 - group\.channelCount \}\} 个渠道/u)
   assert.match(templateDetailSource, /usageCount/u)
   assert.match(templateCardSource, /splitTemplateBody/u)
   assert.match(templateCardSource, /linkSegments/u)

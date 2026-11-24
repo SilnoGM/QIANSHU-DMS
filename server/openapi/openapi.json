@@ -82242,7 +82242,8 @@
               "type": "string",
               "enum": [
                 "IN_APP",
-                "ASSISTANT"
+                "ASSISTANT",
+                "WECOM"
               ]
             }
           },
@@ -82534,7 +82535,8 @@
               "type": "string",
               "enum": [
                 "IN_APP",
-                "ASSISTANT"
+                "ASSISTANT",
+                "WECOM"
               ]
             }
           },
@@ -86283,7 +86285,8 @@
               "type": "string",
               "enum": [
                 "IN_APP",
-                "ASSISTANT"
+                "ASSISTANT",
+                "WECOM"
               ]
             }
           },
@@ -86751,7 +86754,18 @@
                 "AD_ACCOUNT_SYNCED",
                 "AD_ACCOUNT_ASSIGNED",
                 "AD_ACCOUNT_RELEASED",
-                "ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED"
+                "ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED",
+                "WECOM_CHANNEL_UPDATED",
+                "WECOM_APP_CREATED",
+                "WECOM_APP_UPDATED",
+                "WECOM_APP_DISABLED",
+                "WECOM_APP_SECRET_UPDATED",
+                "WECOM_EVENT_ROUTE_UPDATED",
+                "WECOM_MEMBERSHIP_UPDATED",
+                "WECOM_MEMBERSHIP_VERIFIED",
+                "WECOM_TARGET_CREATED",
+                "WECOM_TARGET_UPDATED",
+                "WECOM_TARGET_TESTED"
               ]
             }
           },
@@ -135242,7 +135256,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "name": {
@@ -135284,6 +135299,10 @@
           "maxLength": {
             "type": "integer"
           },
+          "maxBytes": {
+            "type": "integer",
+            "nullable": true
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -135311,6 +135330,7 @@
           "variables",
           "mediaPolicy",
           "maxLength",
+          "maxBytes",
           "enabled",
           "version",
           "updatedAt",
@@ -135357,7 +135377,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "name": {
@@ -135403,6 +135424,12 @@
             "minimum": 1,
             "maximum": 5000,
             "default": 2000
+          },
+          "maxBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096,
+            "description": "WECOM 文本模板的 UTF-8 字节上限"
           },
           "enabled": {
             "type": "boolean",
@@ -135461,6 +135488,11 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 5000
+          },
+          "maxBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
           },
           "enabled": {
             "type": "boolean"
@@ -135527,7 +135559,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "targetMode": {
@@ -135742,7 +135775,8 @@
               "type": "string",
               "enum": [
                 "IN_APP",
-                "ASSISTANT"
+                "ASSISTANT",
+                "WECOM"
               ]
             }
           },
@@ -136072,7 +136106,8 @@
               "type": "string",
               "enum": [
                 "IN_APP",
-                "ASSISTANT"
+                "ASSISTANT",
+                "WECOM"
               ]
             }
           },
@@ -136408,7 +136443,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "enabled": {
@@ -136427,7 +136463,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "available": {
@@ -136530,7 +136567,8 @@
             "type": "string",
             "enum": [
               "IN_APP",
-              "ASSISTANT"
+              "ASSISTANT",
+              "WECOM"
             ]
           },
           "muted": {
@@ -136725,7 +136763,18 @@
               "AD_ACCOUNT_SYNCED",
               "AD_ACCOUNT_ASSIGNED",
               "AD_ACCOUNT_RELEASED",
-              "ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED"
+              "ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED",
+              "WECOM_CHANNEL_UPDATED",
+              "WECOM_APP_CREATED",
+              "WECOM_APP_UPDATED",
+              "WECOM_APP_DISABLED",
+              "WECOM_APP_SECRET_UPDATED",
+              "WECOM_EVENT_ROUTE_UPDATED",
+              "WECOM_MEMBERSHIP_UPDATED",
+              "WECOM_MEMBERSHIP_VERIFIED",
+              "WECOM_TARGET_CREATED",
+              "WECOM_TARGET_UPDATED",
+              "WECOM_TARGET_TESTED"
             ]
           },
           "outcome": {

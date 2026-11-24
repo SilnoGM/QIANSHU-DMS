@@ -3,7 +3,7 @@ import { IsBoolean, IsIn, IsString, MaxLength } from 'class-validator'
 
 import type { NotificationDomain } from './notification.types'
 
-export const NOTIFICATION_PREFERENCE_CHANNELS = ['IN_APP', 'ASSISTANT'] as const
+export const NOTIFICATION_PREFERENCE_CHANNELS = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
 
 export type NotificationPreferenceChannel = (typeof NOTIFICATION_PREFERENCE_CHANNELS)[number]
 

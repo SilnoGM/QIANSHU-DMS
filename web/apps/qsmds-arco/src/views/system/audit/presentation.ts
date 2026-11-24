@@ -189,6 +189,17 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   AD_ACCOUNT_ASSIGNED: '猎豹广告户已绑定',
   AD_ACCOUNT_RELEASED: '猎豹广告户已解绑',
   ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED: '广告充值付款码已补充',
+  WECOM_CHANNEL_UPDATED: '企业微信渠道已更新',
+  WECOM_APP_CREATED: '企业微信应用已创建',
+  WECOM_APP_UPDATED: '企业微信应用已更新',
+  WECOM_APP_DISABLED: '企业微信应用已停用',
+  WECOM_APP_SECRET_UPDATED: '企业微信应用 Secret 已更新',
+  WECOM_EVENT_ROUTE_UPDATED: '企业微信事件路由已更新',
+  WECOM_MEMBERSHIP_UPDATED: '企业微信应用成员已更新',
+  WECOM_MEMBERSHIP_VERIFIED: '企业微信应用成员已验证',
+  WECOM_TARGET_CREATED: '企业微信群目标已创建',
+  WECOM_TARGET_UPDATED: '企业微信群目标已更新',
+  WECOM_TARGET_TESTED: '企业微信群目标已测试',
 }
 
 export function auditMetadataEntries(
