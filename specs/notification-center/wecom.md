@@ -10,7 +10,7 @@
 | 关联文档 | [落地设计](./design.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md) |
 | 最后更新 | 2026-11-24 |
 
-> 2026-11-24 实施进展：已完成 WECOM 渠道枚举与约束、8 张新表、`max_bytes`、权限/审计、默认应用、配置/Secret/token、应用与群机器人 text/image 传输、派发 worker、publish 文本与图片分支、群 @，以及管理端 API/页面（渠道开关、应用/Secret/事件分配、绑定/成员、群目标）。真实 API 与隔离测试库全链路 POC（应用/群、文本/图片/@）已通过；模板/策略种子、部署与页面验收未完成。详见第 17 节。
+> 2026-11-24 实施进展：已完成 WECOM 渠道枚举与约束、8 张新表、`max_bytes`、权限/审计、默认应用、配置/Secret/token、应用与群机器人 text/image 传输、派发 worker、publish 文本与图片分支、群 @，以及管理端 API/页面（渠道开关、应用/Secret/事件分配、绑定/成员、群目标）。真实 API 与隔离测试库全链路 POC（应用/群、文本/图片/@）已通过；两个采购审核试点事件的 WECOM 模板/策略已落库但默认关闭，试点启用、部署与页面验收未完成。详见第 17 节。
 
 ## 1. 结论
 
@@ -989,15 +989,16 @@ WECOM 失败时：
 - 通知偏好、模板/策略 DTO、权限目录与既有通知派发状态汇总已兼容 WECOM。
 - 模板编辑器支持 WECOM `max_bytes`（1–4096，默认 2048）输入与保存。
 - 单元测试：Server 472 套件 5,007 用例中 5,006 通过；1 个媒体变体超时为并行负载偶发，单独重跑通过。Web 2,316 用例通过；类型检查、ESLint、契约检查、根治理通过。
-- 迁移验证：隔离 PostgreSQL 16 空库按序应用 215 条迁移成功，`_prisma_migrations` 计数为 215，最新迁移为 `20261124110000_wecom_provider_msg_id_length`；新增迁移的列宽变更已在测试库确认。
+- 迁移验证：隔离 PostgreSQL 16 空库按序应用 216 条迁移成功，`_prisma_migrations` 计数为 216，最新迁移为 `20261124120000_wecom_pilot_templates_and_policies`；新增迁移的列宽变更与试点种子均已在测试库确认。
 - 真实 API POC：`gettoken`、应用文本/图片、群机器人文本/图片与 `@all` 全部 `errcode 0`；用户确认微信插件与测试群实际收到。
 - DMS 全链路 POC（隔离 PostgreSQL + 真实企业微信）：publish → `wecom_deliveries` → worker → 应用/群投递均 `ACCEPTED`；文本正文、应用图片 `media_id` 上传发送、群机器人图片压缩发送、附件记录均通过；群 `@all` 记录 `mentionMode=ALL`。
 - 字节行为确认：2,170 字节文本仍返回 `errcode 0`，但用户看不到末尾标记，证明超 2,048 字节是静默截断，必须由 DMS 发布期 `max_bytes` 拦截。
 - 业务适配（P0）：表外水单接受 `ASSISTANT` 或 `WECOM` 任一外发渠道入队，并按实际投递附件判断凭证是否进入队列；看机预约手动文案支持 WECOM 模板回退；系统状态运行时增加 `wecomWorkerEnabled`，与 `WECOM_WORKER_ENABLED=true` 的启动条件一致。
+- 试点配置（P1）：迁移 `20261124120000` 写入 `purchase.review.pending` 与 `purchase.review.approved` 两个 WECOM 模板（`max_bytes=2048`，后者带 `purchase.orderImage` 图片策略）和两条 `enabled=false` 策略；目标为空，必须由管理员选择试点员工/内部群并启用，避免部署后自动发送。
 
 ### 17.2 未完成
 
-- 模板/策略种子与试点事件；页面级验收。
+- 试点启用：在测试机选择试点员工/内部群，启用两个模板与策略；页面级验收。
 - 二期多应用 `agent/get` 同步、不同可见范围的应用级成员管理。
 - 群图片压缩后仍 >2MB 时的文件兜底；当前直接落 PARTIAL/FAILED。
 - 记录页 WECOM 投递的手动重发、通知清理任务覆盖。
