@@ -988,8 +988,8 @@ WECOM 失败时：
 - 通知记录：按渠道统计 WECOM 投递、详情合并展示 WECOM 投递与附件计数。
 - 通知偏好、模板/策略 DTO、权限目录与既有通知派发状态汇总已兼容 WECOM。
 - 模板编辑器支持 WECOM `max_bytes`（1–4096，默认 2048）输入与保存。
-- 单元测试：7 个 WECOM 套件；Server 全量 472 套件 5,007 用例通过；Web 2,316 用例通过；类型检查、ESLint、构建、契约检查、根治理通过。
-- 迁移验证：一次性 PostgreSQL 16 空库 215 条迁移首次部署成功，二次部署无待执行项，`migrate status` 最新。
+- 单元测试：Server 472 套件 5,007 用例中 5,006 通过；1 个媒体变体超时为并行负载偶发，单独重跑通过。Web 2,316 用例通过；类型检查、ESLint、契约检查、根治理通过。
+- 迁移验证：隔离 PostgreSQL 16 空库按序应用 215 条迁移成功，`_prisma_migrations` 计数为 215，最新迁移为 `20261124110000_wecom_provider_msg_id_length`；新增迁移的列宽变更已在测试库确认。
 - 真实 API POC：`gettoken`、应用文本/图片、群机器人文本/图片与 `@all` 全部 `errcode 0`；用户确认微信插件与测试群实际收到。
 - DMS 全链路 POC（隔离 PostgreSQL + 真实企业微信）：publish → `wecom_deliveries` → worker → 应用/群投递均 `ACCEPTED`；文本正文、应用图片 `media_id` 上传发送、群机器人图片压缩发送、附件记录均通过；群 `@all` 记录 `mentionMode=ALL`。
 - 字节行为确认：2,170 字节文本仍返回 `errcode 0`，但用户看不到末尾标记，证明超 2,048 字节是静默截断，必须由 DMS 发布期 `max_bytes` 拦截。
