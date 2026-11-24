@@ -993,6 +993,7 @@ WECOM 失败时：
 - 真实 API POC：`gettoken`、应用文本/图片、群机器人文本/图片与 `@all` 全部 `errcode 0`；用户确认微信插件与测试群实际收到。
 - DMS 全链路 POC（隔离 PostgreSQL + 真实企业微信）：publish → `wecom_deliveries` → worker → 应用/群投递均 `ACCEPTED`；文本正文、应用图片 `media_id` 上传发送、群机器人图片压缩发送、附件记录均通过；群 `@all` 记录 `mentionMode=ALL`。
 - 字节行为确认：2,170 字节文本仍返回 `errcode 0`，但用户看不到末尾标记，证明超 2,048 字节是静默截断，必须由 DMS 发布期 `max_bytes` 拦截。
+- 业务适配（P0）：表外水单接受 `ASSISTANT` 或 `WECOM` 任一外发渠道入队，并按实际投递附件判断凭证是否进入队列；看机预约手动文案支持 WECOM 模板回退；系统状态运行时增加 `wecomWorkerEnabled`，与 `WECOM_WORKER_ENABLED=true` 的启动条件一致。
 
 ### 17.2 未完成
 

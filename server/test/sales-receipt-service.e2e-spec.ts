@@ -413,6 +413,85 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(approved.approvedPayment?.id).toBeTruthy()
     expect((await prisma.salesOrder.findUniqueOrThrow({ where: { id: f.salesOrderId } })).paymentStatus).toBe('PAID')
   })
+  it('accepts a WECOM-only outbound queue and requires the voucher in its attachment queue', async () => {
+    const f = await fixture()
+    const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
+    const assistantPolicy = await prisma.notificationChannelPolicy.findUniqueOrThrow({ where: { eventType_channel: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'ASSISTANT' } } })
+    const app = await prisma.wecomApp.findUniqueOrThrow({ where: { key: 'default' } })
+    const wecomUserId = `e2e-${randomUUID()}`
+    const binding = await prisma.wecomBinding.create({
+      data: {
+        userId: f.userId,
+        wecomUserId,
+        displayName: 'WECOM E2E',
+        status: 'ACTIVE',
+        boundByUserId: f.userId,
+        verifiedAt: new Date(),
+        verifiedByUserId: f.userId,
+      },
+    })
+    const membership = await prisma.wecomAppMembership.create({
+      data: {
+        appId: app.id,
+        userId: f.userId,
+        status: 'ACTIVE',
+        source: 'MANUAL',
+        verifiedAt: new Date(),
+        verifiedByUserId: f.userId,
+      },
+    })
+    const template = await prisma.notificationTemplate.create({
+      data: {
+        key: 'sales.receipt.voucher-sent',
+        channel: 'WECOM',
+        name: '表外水单发送（WECOM E2E）',
+        domain: 'SALES',
+        bodyTemplate: '表外收款：{{amount}}',
+        variables: [{ name: 'amount', required: true, sensitive: true }],
+        mediaPolicy: { enabled: true, maxCount: 1, kinds: ['IMAGE'], sources: ['salesReceipt.voucher'] },
+        maxBytes: 2048,
+      },
+    })
+    const policy = await prisma.notificationChannelPolicy.create({
+      data: {
+        eventType: 'SALES_RECEIPT_VOUCHER_SENT',
+        channel: 'WECOM',
+        targetMode: 'USERS',
+        targetConfig: { userIds: [f.userId] },
+        templateKey: template.key,
+        allowSensitive: true,
+        enabled: true,
+      },
+    })
+    try {
+      await prisma.notificationChannelSettings.update({ where: { channel: 'WECOM' }, data: { enabled: true } })
+      await prisma.wecomApp.update({ where: { id: app.id }, data: { enabled: true, status: 'ACTIVE' } })
+      await prisma.notificationChannelPolicy.update({ where: { id: assistantPolicy.id }, data: { enabled: false } })
+
+      const sent = await service.sendVoucher(context(f.userId), submitted.id, { expectedVersion: 1 })
+      expect(sent.status).toBe('PENDING_CONFIRM')
+
+      const notification = await prisma.notification.findFirstOrThrow({ where: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', sourceId: submitted.id } })
+      const delivery = await prisma.wecomDelivery.findFirstOrThrow({ where: { notificationId: notification.id } })
+      expect(delivery).toMatchObject({ status: 'PENDING', recipientUserId: f.userId, transport: 'APP' })
+      const queuedMedia = await prisma.wecomDeliveryMedia.findMany({ where: { deliveryId: delivery.id } })
+      expect(queuedMedia).toEqual([
+        expect.objectContaining({ mediaAssetId: submitted.voucher.mediaAssetId, status: 'PENDING' }),
+      ])
+      expect(await prisma.notificationMedia.findMany({ where: { notificationId: notification.id } })).toEqual([
+        expect.objectContaining({ blockedReason: 'CHANNEL_DISABLED' }),
+      ])
+    }
+    finally {
+      await prisma.notificationChannelPolicy.update({ where: { id: assistantPolicy.id }, data: { enabled: true } })
+      await prisma.notificationChannelPolicy.delete({ where: { id: policy.id } })
+      await prisma.notificationTemplate.delete({ where: { id: template.id } })
+      await prisma.wecomAppMembership.delete({ where: { id: membership.id } })
+      await prisma.wecomBinding.delete({ where: { id: binding.id } })
+      await prisma.wecomApp.update({ where: { id: app.id }, data: { enabled: false, status: 'PENDING' } })
+      await prisma.notificationChannelSettings.update({ where: { channel: 'WECOM' }, data: { enabled: false } })
+    }
+  })
   it('fails closed when the group notification is not configured and leaves the request in pending-send', async () => {
     const f = await fixture()
     const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())

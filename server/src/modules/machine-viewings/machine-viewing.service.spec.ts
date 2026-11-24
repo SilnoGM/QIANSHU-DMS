@@ -581,6 +581,25 @@ describe('MachineViewingService manual notification', () => {
     expect(notifications.publish).not.toHaveBeenCalled()
   })
 
+  it('falls back to the WECOM template when no assistant template is configured', async () => {
+    const { service } = createHarness({
+      existing: todayRow(),
+      templates: [{
+        bodyTemplate: '企业微信看机预约 {{appointmentNo}}',
+        channel: 'WECOM',
+        linkUrlTemplate: null,
+        maxLength: 2000,
+        titleTemplate: null,
+        variables: [{ name: 'appointmentNo', required: false, maxLength: 200, sensitive: false }],
+      }],
+    })
+
+    await expect(service.manualNotificationText(ACTOR, CREATED_ID, NOW)).resolves.toEqual({
+      body: '企业微信看机预约 MV/20261106-0001',
+      title: null,
+    })
+  })
+
   it('rejects manual text for a future or non-pending appointment', async () => {
     const future = createHarness({ existing: existingRow() })
     await expect(future.service.manualNotificationText(ACTOR, CREATED_ID, NOW))

@@ -33,6 +33,7 @@ import type { SalesReceiptActionDto, SalesReceiptApproveDto, SalesReceiptRejectD
 import { SalesReceiptQueryService } from './sales-receipt-query.service'
 import { assertReceiptCapacity, convertReceiptToCny, receiptFailure } from './sales-receipt-money'
 import { SALES_RECEIPT_ENTRY_STATUS, SALES_RECEIPT_IN_FLIGHT_STATUSES, SALES_RECEIPT_POSTING_STATUS, isSalesReceiptInFlight } from './sales-receipt-status'
+import { hasQueuedOutboundDelivery } from './sales-receipt-delivery'
 
 type Tx = Prisma.TransactionClient
 function hash(value: string) { return createHash('sha256').update(value).digest() }
@@ -425,14 +426,29 @@ export class SalesReceiptService {
       // 通知编号规则不可用等底层错误统一翻译，避免被 mapError 误报成销售收款编号问题。
       receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单发送失败，请检查群通知配置后重试')
     }
-    const assistant = result.channels.find(channel => channel.channel === 'ASSISTANT')
-    if (result.duplicated || assistant?.status !== 'PENDING' || assistant.recipientCount - assistant.skippedCount < 1) {
-      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单未进入群发送队列，请检查群目标、模板与公司号配置')
+    if (result.duplicated || !hasQueuedOutboundDelivery(result.channels)) {
+      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单未进入群发送队列，请检查群目标、模板与渠道配置')
     }
-    // 凭证必须真正进入附件队列；被策略拦下时只发正文，不满足「发送水单」的业务语义。
-    const media = await tx.notificationMedia.findMany({ where: { notificationId: result.notificationId }, select: { blockedReason: true } })
-    if (media.length !== 1 || media[0]?.blockedReason !== null) {
-      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '收款凭证图片未进入群发送队列，请检查模板附件策略')
+    // 凭证必须真正进入某一外发渠道的附件队列；notification_media 的 blockedReason
+    // 只反映 ASSISTANT 侧的模板策略，WECOM-only 时会有 CHANNEL_DISABLED 的占位行，
+    // 因此以实际投递附件行为准。
+    const queuedMedia = await tx.assistantDeliveryMedia.findFirst({
+      where: {
+        mediaAssetId: row.voucherMediaAssetId,
+        status: 'PENDING',
+        delivery: { notificationId: result.notificationId, status: 'PENDING' },
+      },
+      select: { id: true },
+    }) ?? await tx.wecomDeliveryMedia.findFirst({
+      where: {
+        mediaAssetId: row.voucherMediaAssetId,
+        status: 'PENDING',
+        delivery: { notificationId: result.notificationId, status: 'PENDING' },
+      },
+      select: { id: true },
+    })
+    if (queuedMedia === null) {
+      receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '收款凭证图片未进入发送队列，请检查模板附件策略')
     }
     return result
   }

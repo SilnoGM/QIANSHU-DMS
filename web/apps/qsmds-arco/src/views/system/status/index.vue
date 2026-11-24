@@ -1000,7 +1000,7 @@ onBeforeUnmount(() => {
 
                 <div class="pb-3 border-b border-border/50">
                   <p class="text-xs text-muted-foreground m-0">
-                    系统时区 / 助理 Worker
+                    系统时区 / Worker
                   </p>
                   <div class="mt-1.5 flex flex-wrap gap-2 items-center">
                     <span
@@ -1013,7 +1013,13 @@ onBeforeUnmount(() => {
                       class="text-xs font-medium px-2 py-0.5 border rounded-md inline-flex items-center"
                       :class="resolveStatusTagToneClass(runtime.assistantWorkerEnabled ? 'success' : 'danger')"
                     >
-                      Worker {{ runtime.assistantWorkerEnabled ? '已启用' : '已停用' }}
+                      GeWe {{ runtime.assistantWorkerEnabled ? '已启用' : '已停用' }}
+                    </span>
+                    <span
+                      class="text-xs font-medium px-2 py-0.5 border rounded-md inline-flex items-center"
+                      :class="resolveStatusTagToneClass(runtime.wecomWorkerEnabled ? 'success' : 'danger')"
+                    >
+                      企微 {{ runtime.wecomWorkerEnabled ? '已启用' : '已停用' }}
                     </span>
                   </div>
                 </div>

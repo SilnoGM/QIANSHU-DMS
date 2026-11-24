@@ -473,6 +473,8 @@ export class SystemStatusService implements OnModuleInit {
       mediaStorageEnvironment: mediaConfig?.storageEnvironment ?? 'unknown',
       mediaDeliveryMode: mediaConfig?.contentDeliveryMode ?? 'unknown',
       assistantWorkerEnabled: process.env.ASSISTANT_WORKER_ENABLED !== 'false',
+      // WECOM worker 默认关闭，只有显式 true 才启动，状态页必须与启动条件一致。
+      wecomWorkerEnabled: process.env.WECOM_WORKER_ENABLED === 'true',
       startedAt: new Date(
         Date.now() - resources.process.uptimeSeconds * 1000,
       ).toISOString(),

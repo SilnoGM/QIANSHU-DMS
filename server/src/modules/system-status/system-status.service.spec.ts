@@ -209,6 +209,25 @@ describe('SystemStatusService', () => {
     expect(status.runtime.version).toMatch(/^\d+\.\d+\.\d+$/u)
   })
 
+  it('reports the WECOM worker only when explicitly enabled', async () => {
+    const original = process.env.WECOM_WORKER_ENABLED
+    try {
+      delete process.env.WECOM_WORKER_ENABLED
+      expect((await createService().service.getStatus()).runtime.wecomWorkerEnabled).toBe(false)
+
+      process.env.WECOM_WORKER_ENABLED = 'true'
+      expect((await createService().service.getStatus()).runtime.wecomWorkerEnabled).toBe(true)
+    }
+    finally {
+      if (original === undefined) {
+        delete process.env.WECOM_WORKER_ENABLED
+      }
+      else {
+        process.env.WECOM_WORKER_ENABLED = original
+      }
+    }
+  })
+
   it('marks the database critical when the probe fails', async () => {
     const { service } = createService({
       prismaQuery: () => Promise.reject(new Error('db down')),

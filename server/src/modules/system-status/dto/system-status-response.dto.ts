@@ -300,6 +300,9 @@ export class SystemRuntimeDto {
   @ApiProperty({ type: 'boolean' })
   assistantWorkerEnabled!: boolean
 
+  @ApiProperty({ type: 'boolean', description: '企业微信派发 worker 是否显式启用（WECOM_WORKER_ENABLED=true）' })
+  wecomWorkerEnabled!: boolean
+
   @ApiProperty({ type: 'string', format: 'date-time' })
   startedAt!: string
 
