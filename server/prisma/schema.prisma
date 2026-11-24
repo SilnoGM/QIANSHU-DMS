@@ -4096,7 +4096,7 @@ model WecomDelivery {
   mentionMode      String?               @map("mention_mode") @db.VarChar(16)
   mentionedCount   Int                   @default(0) @map("mentioned_count")
   mentionSkipped   Int                   @default(0) @map("mention_skipped")
-  providerMsgId    String?               @map("provider_msg_id") @db.VarChar(64)
+  providerMsgId    String?               @map("provider_msg_id") @db.VarChar(128)
   failureCode      String?               @map("failure_code") @db.VarChar(64)
   failureMessage   String?               @map("failure_message") @db.VarChar(255)
   acceptedAt       DateTime?             @map("accepted_at") @db.Timestamptz(6)
