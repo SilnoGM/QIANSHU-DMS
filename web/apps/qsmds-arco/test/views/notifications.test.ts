@@ -396,6 +396,8 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(eventChannelDrawerSource, /TemplatePickerDrawer/u)
   assert.match(eventChannelDrawerSource, /buildPolicyUpdate/u)
   assert.match(eventChannelDrawerSource, /canSavePolicyDraft/u)
+  assert.match(eventChannelDrawerSource, /notificationsApi\.wecom\.targets\.list/u)
+  assert.match(eventChannelDrawerSource, /notificationsApi\.assistant\.targets\.list/u)
   assert.match(eventChannelDrawerSource, /放弃修改/u)
 
   assert.match(eventChannelCardSource, /variant/u)

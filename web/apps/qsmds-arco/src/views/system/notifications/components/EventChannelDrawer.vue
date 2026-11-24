@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { NotificationChannelValue, PolicyOptionLists } from '../event-config.logic'
+import type { NotificationChannelValue, PolicyOptionLists, SelectOption } from '../event-config.logic'
 import type { PolicyDraft } from '../policy-draft.logic'
 import type {
-  AssistantTargetDto,
   NotificationChannelPolicyDto,
   NotificationEventDto,
   NotificationTemplateDto,
@@ -59,7 +58,7 @@ const pickerOpen = ref(false)
 const users = ref<UserDto[]>([])
 const roles = ref<RoleDto[]>([])
 const permissions = ref<PermissionDto[]>([])
-const targets = ref<AssistantTargetDto[]>([])
+const groupOptions = ref<SelectOption[]>([])
 const optionsLoading = ref(false)
 const optionsLoaded = ref(false)
 
@@ -70,7 +69,7 @@ const options = computed<PolicyOptionLists>(() => ({
   users: users.value.map(user => ({ label: `${user.displayName}（${user.username}）`, value: user.id })),
   roles: roles.value.map(role => ({ label: `${role.name}（${role.code}）`, value: role.code })),
   permissions: permissions.value.map(permission => ({ label: `${permission.name}（${permission.code}）`, value: permission.code })),
-  groups: targets.value.map(target => ({ label: `${target.name}（${target.key}）`, value: target.key })),
+  groups: groupOptions.value,
 }))
 
 const dirty = computed(() => baseline.value.length > 0
@@ -132,17 +131,51 @@ watch(
   },
 )
 
+// 群目标属于渠道私有资源，切换渠道时必须丢弃旧列表，避免把 GeWe 群填进 WECOM 策略。
+watch(
+  () => props.channel,
+  () => {
+    optionsLoaded.value = false
+    groupOptions.value = []
+    if (open.value && draft.value.targetMode !== 'COMMAND_TARGET') {
+      void ensureOptions()
+    }
+  },
+)
+
+// 关闭后丢弃选项缓存，重新打开时会重新拉取群目标，避免后台新增群组后看不到。
+watch(open, (isOpen) => {
+  if (!isOpen) {
+    optionsLoaded.value = false
+    groupOptions.value = []
+  }
+})
+
+async function loadGroupOptions(signal: AbortSignal): Promise<SelectOption[]> {
+  if (props.channel === 'WECOM') {
+    const targets = (await notificationsApi.wecom.targets.list(signal)).data
+    return targets
+      .filter(target => target.enabled && target.internalOnly)
+      .map(target => ({ label: `${target.name}（${target.key}）`, value: target.key }))
+  }
+  if (props.channel === 'ASSISTANT') {
+    const targets = (await notificationsApi.assistant.targets.list(signal)).data
+    return targets.map(target => ({ label: `${target.name}（${target.key}）`, value: target.key }))
+  }
+  return []
+}
+
 async function ensureOptions(): Promise<void> {
   if (optionsLoaded.value || optionsLoading.value) {
     return
   }
   optionsLoading.value = true
   const signal = new AbortController().signal
-  const [userResult, roleResult, permissionResult, targetResult] = await Promise.allSettled([
+  const [userResult, roleResult, permissionResult, groupResult] = await Promise.allSettled([
     managementApi.users.list({ page: 1, pageSize: 100, status: 'ACTIVE' }, signal),
     managementApi.roles.list(),
     managementApi.permissions.list(),
-    notificationsApi.assistant.targets.list(signal),
+    loadGroupOptions(signal),
   ])
   if (userResult.status === 'fulfilled') {
     users.value = userResult.value.data.items
@@ -153,8 +186,8 @@ async function ensureOptions(): Promise<void> {
   if (permissionResult.status === 'fulfilled') {
     permissions.value = permissionResult.value.data
   }
-  if (targetResult.status === 'fulfilled') {
-    targets.value = targetResult.value.data
+  if (groupResult.status === 'fulfilled') {
+    groupOptions.value = groupResult.value
   }
   optionsLoaded.value = true
   optionsLoading.value = false

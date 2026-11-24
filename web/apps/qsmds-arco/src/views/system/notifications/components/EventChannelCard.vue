@@ -215,6 +215,12 @@ const stateClass = computed(() => {
           :disabled="!canUpdatePolicy || busy"
           placeholder="选择群目标"
         />
+        <span
+          v-if="channel === 'WECOM' && options.groups.length === 0 && !busy"
+          class="qs-type-meta text-amber-600"
+        >
+          尚未配置企业微信内部群，请先在「企业微信」配置页添加群机器人目标。
+        </span>
         <span class="qs-type-meta text-muted-foreground">已选 {{ draft.targetConfig.targetKeys.length }} 个群；敏感内容只会发送到「仅内部」群。</span>
       </label>
 
