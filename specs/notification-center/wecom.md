@@ -986,6 +986,7 @@ WECOM 失败时：
 - 图片投递：应用消息 media_id 上传（≤10MB）、群机器人图片 Sharp 压缩（≤2MB）、`wecom_delivery_media` 写入、正文成功后逐张发送与 PARTIAL 汇总。
 - 通知记录：按渠道统计 WECOM 投递、详情合并展示 WECOM 投递与附件计数。
 - 通知偏好、模板/策略 DTO、权限目录与既有通知派发状态汇总已兼容 WECOM。
+- 模板编辑器支持 WECOM `max_bytes`（1–4096，默认 2048）输入与保存。
 - 单元测试：7 个 WECOM 套件；Server 全量 472 套件 5,007 用例通过；Web 2,316 用例通过；类型检查、ESLint、构建、契约检查、根治理通过。
 - 迁移验证：一次性 PostgreSQL 16 空库 214 条迁移首次部署成功，二次部署无待执行项，`migrate status` 最新。
 
@@ -995,7 +996,6 @@ WECOM 失败时：
 - 二期多应用 `agent/get` 同步、不同可见范围的应用级成员管理。
 - 群图片压缩后仍 >2MB 时的文件兜底；当前直接落 PARTIAL/FAILED。
 - 记录页 WECOM 投递的手动重发、通知清理任务覆盖。
-- 模板编辑器 `max_bytes` 输入；当前 WECOM 模板创建默认 2048，页面暂不能改。
 - 部署与页面级验收；生产环境 `WECOM_APP_SECRET_KEY` / `WECOM_WORKER_ENABLED` 配置。
 
 ### 17.3 已知限制

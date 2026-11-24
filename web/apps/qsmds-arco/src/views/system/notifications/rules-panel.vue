@@ -106,6 +106,7 @@ const templateDraft = ref({
     sources: [] as string[],
   },
   maxLength: 2000,
+  maxBytes: null as number | null,
   enabled: true,
   expectedVersion: 1,
 })
@@ -534,6 +535,7 @@ function openCreateTemplate(): void {
       sources: [] as string[],
     },
     maxLength: 2000,
+    maxBytes: null,
     enabled: true,
     expectedVersion: 1,
   }
@@ -566,6 +568,7 @@ function openCreateTemplateForChannel(payload: {
       sources: [] as string[],
     },
     maxLength: 2000,
+    maxBytes: payload.channel === 'WECOM' ? 2_048 : null,
     enabled: true,
     expectedVersion: 1,
   }
@@ -599,6 +602,7 @@ function openCreateTemplateFromEvent(payload: {
       sources: [] as string[],
     },
     maxLength: 2000,
+    maxBytes: payload.channel === 'WECOM' ? 2_048 : null,
     enabled: true,
     expectedVersion: 1,
   }
@@ -633,6 +637,7 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
       sources: [...template.mediaPolicy.sources],
     },
     maxLength: template.maxLength,
+    maxBytes: template.maxBytes,
     enabled: template.enabled,
     expectedVersion: template.version,
   }
@@ -679,6 +684,15 @@ const templateVariableError = computed(() => {
   return null
 })
 
+function setMaxBytes(value: string | number | undefined): void {
+  if (value === undefined || value === '') {
+    templateDraft.value.maxBytes = null
+    return
+  }
+  const parsed = Number(value)
+  templateDraft.value.maxBytes = Number.isFinite(parsed) ? parsed : null
+}
+
 const canSaveTemplate = computed(() => {
   return canUpdateTemplate.value
     && /^[\w.-]+$/u.test(templateDraft.value.key.trim())
@@ -687,11 +701,16 @@ const canSaveTemplate = computed(() => {
     && Number.isInteger(templateDraft.value.maxLength)
     && templateDraft.value.maxLength >= 1
     && templateDraft.value.maxLength <= 5000
-    && (!templateDraft.value.mediaPolicy.enabled
-      || (Number.isInteger(templateDraft.value.mediaPolicy.maxCount)
-        && templateDraft.value.mediaPolicy.maxCount >= 1
-        && templateDraft.value.mediaPolicy.maxCount <= 3))
-      && templateVariableError.value === null
+    && (templateDraft.value.channel !== 'WECOM'
+      || (typeof templateDraft.value.maxBytes === 'number'
+        && Number.isInteger(templateDraft.value.maxBytes)
+        && templateDraft.value.maxBytes >= 1
+        && templateDraft.value.maxBytes <= 4096))
+      && (!templateDraft.value.mediaPolicy.enabled
+        || (Number.isInteger(templateDraft.value.mediaPolicy.maxCount)
+          && templateDraft.value.mediaPolicy.maxCount >= 1
+          && templateDraft.value.mediaPolicy.maxCount <= 3))
+        && templateVariableError.value === null
 })
 
 function templateMediaPolicyPayload(): NotificationTemplateMediaPolicyInputDto {
@@ -719,6 +738,9 @@ async function saveTemplate(): Promise<void> {
         variables,
         mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
+        ...(templateDraft.value.channel === 'WECOM'
+          ? { maxBytes: templateDraft.value.maxBytes ?? 2_048 }
+          : {}),
         enabled: templateDraft.value.enabled,
       })
     }
@@ -732,6 +754,9 @@ async function saveTemplate(): Promise<void> {
         variables,
         mediaPolicy: templateMediaPolicyPayload(),
         maxLength: templateDraft.value.maxLength,
+        ...(templateDraft.value.channel === 'WECOM'
+          ? { maxBytes: templateDraft.value.maxBytes ?? 2_048 }
+          : {}),
         enabled: templateDraft.value.enabled,
         expectedVersion: templateDraft.value.expectedVersion,
       })
@@ -983,6 +1008,18 @@ onMounted(() => {
             <span class="qs-type-compact-label">最大长度</span>
             <FaInput v-model.number="templateDraft.maxLength" class="w-full" type="number" min="1" max="5000" />
             <span class="qs-type-meta text-muted-foreground">1–5000，正文渲染后的字符上限。</span>
+          </label>
+          <label v-if="templateDraft.channel === 'WECOM'" class="flex flex-col gap-1">
+            <span class="qs-type-compact-label">WECOM 字节上限</span>
+            <FaInput
+              :model-value="templateDraft.maxBytes ?? ''"
+              class="w-full"
+              type="number"
+              min="1"
+              max="4096"
+              @update:model-value="setMaxBytes"
+            />
+            <span class="qs-type-meta text-muted-foreground">1–4096；默认 2048 字节，发布时按 UTF-8 实际字节校验。</span>
           </label>
           <div class="flex flex-wrap gap-4 items-end md:col-span-2">
             <label class="qs-type-meta pb-2 flex gap-2 items-center">
