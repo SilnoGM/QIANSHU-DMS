@@ -35,7 +35,9 @@ interface TemplateCandidate {
   usageCount: number
 }
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT' ? '千树小助理' : '站内通知')
+const channelLabel = computed(() => props.channel === 'ASSISTANT'
+  ? '千树小助理'
+  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
 
 const allCandidates = computed<TemplateCandidate[]>(() => {
   const normalized = keyword.value.trim().toLowerCase()

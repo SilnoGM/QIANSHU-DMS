@@ -45,12 +45,14 @@ test('已有策略还原为草稿，保留目标、模板、静默和版本', ()
   assert.equal(draft.expectedVersion, 3)
 })
 
-test('新策略按渠道给默认 TTL：站内为空，小助理 24 小时', () => {
+test('新策略按渠道给默认 TTL：站内为空，站外渠道 24 小时', () => {
   assert.equal(createPolicyDraft(null, 'IN_APP').ttlSeconds, null)
   assert.equal(createPolicyDraft(null, 'ASSISTANT').ttlSeconds, 86_400)
+  assert.equal(createPolicyDraft(null, 'WECOM').ttlSeconds, 86_400)
   assert.equal(createPolicyDraft(null, 'IN_APP').quietHoursEnabled, false)
   assert.equal(createPolicyDraft(null, 'IN_APP').enabled, false)
   assert.equal(createPolicyDraft(null, 'ASSISTANT').enabled, false)
+  assert.equal(createPolicyDraft(null, 'WECOM').enabled, false)
 })
 
 test('保存载荷清洗模板键，并让站内策略清空 TTL 与静默', () => {
@@ -75,6 +77,24 @@ test('小助理保存载荷按目标模式只提交对应字段', () => {
   assert.deepEqual(payload.targetConfig, { targetKeys: ['operations'] })
   assert.deepEqual(payload.quietHours, null)
   assert.equal(payload.ttlSeconds, 86_400)
+})
+
+test('企业微信保存载荷保留 TTL 与静默时段', () => {
+  const draft = createPolicyDraft(null, 'WECOM')
+  draft.targetMode = 'USERS'
+  draft.targetConfig = { permissionCode: '', roleCodes: [], targetKeys: [], userIds: ['user-1'] }
+  draft.quietHoursEnabled = true
+  draft.quietStart = '20:00'
+  draft.quietEnd = '08:00'
+
+  const payload = buildPolicyUpdate(draft, 'WECOM')
+  assert.deepEqual(payload.targetConfig, { userIds: ['user-1'] })
+  assert.equal(payload.ttlSeconds, 86_400)
+  assert.deepEqual(payload.quietHours, {
+    start: '20:00',
+    end: '08:00',
+    timezone: 'Asia/Shanghai',
+  })
 })
 
 test('保存校验覆盖目标必填与小助理 TTL 范围', () => {

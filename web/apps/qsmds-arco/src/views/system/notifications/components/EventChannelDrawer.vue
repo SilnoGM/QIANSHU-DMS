@@ -63,7 +63,9 @@ const targets = ref<AssistantTargetDto[]>([])
 const optionsLoading = ref(false)
 const optionsLoaded = ref(false)
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT' ? '千树小助理' : '站内通知')
+const channelLabel = computed(() => props.channel === 'ASSISTANT'
+  ? '千树小助理'
+  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
 const options = computed<PolicyOptionLists>(() => ({
   users: users.value.map(user => ({ label: `${user.displayName}（${user.username}）`, value: user.id })),
   roles: roles.value.map(role => ({ label: `${role.name}（${role.code}）`, value: role.code })),

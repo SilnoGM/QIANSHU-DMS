@@ -71,7 +71,7 @@ export function createPolicyDraft(
     targetConfig: readPolicyTargetConfig(policy?.targetConfig),
     templateKey: policy?.templateKey ?? '',
     priority: (policy?.priority ?? 'NORMAL') as 'NORMAL' | 'HIGH',
-    ttlSeconds: policy?.ttlSeconds ?? (channel === 'ASSISTANT' ? 86_400 : null),
+    ttlSeconds: policy?.ttlSeconds ?? (channel === 'IN_APP' ? null : 86_400),
     quietHoursEnabled: quiet.enabled,
     quietStart: quiet.start,
     quietEnd: quiet.end,
@@ -102,7 +102,7 @@ export function buildPolicyUpdate(
   draft: PolicyDraft,
   channel: NotificationChannelValue,
 ): NotificationChannelPolicyUpdateDto {
-  const quietHours = channel === 'ASSISTANT' && draft.quietHoursEnabled
+  const quietHours = channel !== 'IN_APP' && draft.quietHoursEnabled
     ? {
         start: draft.quietStart,
         end: draft.quietEnd,
@@ -114,7 +114,7 @@ export function buildPolicyUpdate(
     targetConfig: buildPolicyTargetConfig(draft),
     templateKey: draft.templateKey.trim() || null,
     priority: draft.priority,
-    ttlSeconds: channel === 'ASSISTANT' ? draft.ttlSeconds : null,
+    ttlSeconds: channel !== 'IN_APP' ? draft.ttlSeconds : null,
     quietHours,
     allowSensitive: draft.allowSensitive,
     enabled: draft.enabled,

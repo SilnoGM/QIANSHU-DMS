@@ -574,7 +574,7 @@ export class NotificationAdminService {
     }
     else {
       if (input.ttlSeconds === undefined || input.ttlSeconds === null) {
-        throw new ApiException(422, 'NOTIFICATION_POLICY_TTL_REQUIRED', '千树小助理必须配置站外 TTL')
+        throw new ApiException(422, 'NOTIFICATION_POLICY_TTL_REQUIRED', '站外通知渠道必须配置站外 TTL')
       }
       if (input.quietHours !== undefined && input.quietHours !== null) {
         const quiet = parseNotificationQuietHours(input.quietHours)
