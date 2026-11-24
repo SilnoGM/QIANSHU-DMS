@@ -2969,6 +2969,8 @@
       "apps/qsmds-arco/src/views/component_library/basic/image-group.vue",
       "apps/qsmds-arco/src/views/operations/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-feedback-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/components/EventChannelCard.vue",
+      "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-feedback-modal.vue"
     ]
@@ -3279,6 +3281,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplatePickerDrawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/index.vue",

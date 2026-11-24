@@ -4,13 +4,13 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 一期服务端核心、管理端页面、图片投递与记录页 WECOM 计数已实施；真实 POC 与页面验收未完成 |
+| 文档状态 | 一期服务端核心、管理端页面、文本/图片投递与通知记录已实施，真实 API 与 DMS 全链路 POC 已通过；页面验收未完成 |
 | 适用范围 | 在现有 `IN_APP`、`ASSISTANT` 之外新增独立渠道 `WECOM`；一期单应用，数据模型按多应用预留 |
 | 真相源 | 本文与现有[通知中心文档](./README.md)；冲突时以本文的 WECOM 决策为准 |
 | 关联文档 | [落地设计](./design.md)、[接口契约](./api.md)、[数据模型](./data-model.md)、[运维手册](./runbook.md)、[部署清单](./deployment.md) |
 | 最后更新 | 2026-11-24 |
 
-> 2026-11-24 实施进展：已完成 WECOM 渠道枚举与约束、8 张新表、`max_bytes`、权限/审计、默认应用、配置/Secret/token、应用与群机器人 text 传输、派发 worker、publish 文本分支与群 @，以及管理端 API/页面（渠道开关、应用/Secret/事件分配、绑定/成员、群目标）；图片、模板/策略种子、真实 POC 与部署验收尚未完成。详见第 17 节。
+> 2026-11-24 实施进展：已完成 WECOM 渠道枚举与约束、8 张新表、`max_bytes`、权限/审计、默认应用、配置/Secret/token、应用与群机器人 text/image 传输、派发 worker、publish 文本与图片分支、群 @，以及管理端 API/页面（渠道开关、应用/Secret/事件分配、绑定/成员、群目标）。真实 API 与隔离测试库全链路 POC（应用/群、文本/图片/@）已通过；模板/策略种子、部署与页面验收未完成。详见第 17 节。
 
 ## 1. 结论
 
@@ -981,18 +981,22 @@ WECOM 失败时：
 - 迁移 `20261124100000_wecom_channel_enum`：`notification_channel` 增加 `WECOM`。
 - 迁移 `20261124101000_wecom_channel_schema`：新增应用、事件路由、绑定、应用成员、群目标、投递、投递附件、派发租约八张表；`NotificationTemplate.maxBytes`；通知策略渠道/群目标约束；WECOM 渠道设置、默认应用“千树 DMS”、派发租约。
 - 迁移 `20261124102000_wecom_permissions_and_audit`：10 项 `wecom-*` 权限仅授 `system_admin`；11 项 WECOM 审计枚举。
-- 服务端：`wecom.config.ts`、`wecom-secret.service.ts`、`wecom-token.service.ts`、应用 text 传输、群机器人 text/@ 传输、`wecom-dispatch.service.ts`、`system-notification.service.ts` 的 WECOM 文本分支。
+- 迁移 `20261124110000_wecom_provider_msg_id_length`：`wecom_deliveries.provider_msg_id` 放宽到 `VARCHAR(128)`。企业微信实际返回的 `msgid` 为 128 字符，原 64 长度会在发送成功回写时失败。
+- 服务端：`wecom.config.ts`、`wecom-secret.service.ts`、`wecom-token.service.ts`、应用 text/image 传输、群机器人 text/@/image 传输、`wecom-media.service.ts`、`wecom-dispatch.service.ts`、`system-notification.service.ts` 的 WECOM 文本与图片分支。
 - 管理端：`wecom-admin.controller/service/dto`，覆盖渠道开关、应用 CRUD/Secret/测试、事件分配、员工绑定/验证、应用成员、群目标 CRUD/测试；页面 `/system/notifications/wecom`。
 - 图片投递：应用消息 media_id 上传（≤10MB）、群机器人图片 Sharp 压缩（≤2MB）、`wecom_delivery_media` 写入、正文成功后逐张发送与 PARTIAL 汇总。
 - 通知记录：按渠道统计 WECOM 投递、详情合并展示 WECOM 投递与附件计数。
 - 通知偏好、模板/策略 DTO、权限目录与既有通知派发状态汇总已兼容 WECOM。
 - 模板编辑器支持 WECOM `max_bytes`（1–4096，默认 2048）输入与保存。
 - 单元测试：7 个 WECOM 套件；Server 全量 472 套件 5,007 用例通过；Web 2,316 用例通过；类型检查、ESLint、构建、契约检查、根治理通过。
-- 迁移验证：一次性 PostgreSQL 16 空库 214 条迁移首次部署成功，二次部署无待执行项，`migrate status` 最新。
+- 迁移验证：一次性 PostgreSQL 16 空库 215 条迁移首次部署成功，二次部署无待执行项，`migrate status` 最新。
+- 真实 API POC：`gettoken`、应用文本/图片、群机器人文本/图片与 `@all` 全部 `errcode 0`；用户确认微信插件与测试群实际收到。
+- DMS 全链路 POC（隔离 PostgreSQL + 真实企业微信）：publish → `wecom_deliveries` → worker → 应用/群投递均 `ACCEPTED`；文本正文、应用图片 `media_id` 上传发送、群机器人图片压缩发送、附件记录均通过；群 `@all` 记录 `mentionMode=ALL`。
+- 字节行为确认：2,170 字节文本仍返回 `errcode 0`，但用户看不到末尾标记，证明超 2,048 字节是静默截断，必须由 DMS 发布期 `max_bytes` 拦截。
 
 ### 17.2 未完成
 
-- 模板/策略种子与试点事件；真实微信插件、群机器人、2048 字节截断、@ 行为 POC。
+- 模板/策略种子与试点事件；页面级验收。
 - 二期多应用 `agent/get` 同步、不同可见范围的应用级成员管理。
 - 群图片压缩后仍 >2MB 时的文件兜底；当前直接落 PARTIAL/FAILED。
 - 记录页 WECOM 投递的手动重发、通知清理任务覆盖。
@@ -1003,7 +1007,7 @@ WECOM 失败时：
 - 群图片按 2MB 目标压缩；压缩后仍超限时暂不转文件，直接标记附件失败。
 - 应用图片按 10MB 目标压缩；压缩后仍超限时标记附件失败。
 - 群 @ 的成员不在群内时无法通过机器人 API 校验，可能静默无效。
-- 尚未做真实微信插件与真机验收。
+- 2026-11-24 POC 已确认微信插件与测试群收到文本/图片；正式上线前仍建议用真实试点事件做一次页面级验收。
 
 ## 18. 参考
 
