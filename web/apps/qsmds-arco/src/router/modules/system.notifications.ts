@@ -21,6 +21,8 @@ const route: RouteRecordRaw = {
       'notification-policy:read',
       'assistant-channel:read',
       'assistant-account:read',
+      'wecom-channel:read',
+      'wecom-app:read',
     ],
   },
   children: [
@@ -41,6 +43,16 @@ const route: RouteRecordRaw = {
         title: 'GeWe助理',
         icon: 'qs-gewe-assistant',
         auth: ['assistant-channel:read', 'assistant-account:read'],
+      },
+    },
+    {
+      path: 'wecom',
+      name: 'systemNotificationWecom',
+      component: () => import('@/views/system/notifications/wecom.vue'),
+      meta: {
+        title: '企业微信',
+        icon: 'qs-notification',
+        auth: ['wecom-channel:read', 'wecom-app:read'],
       },
     },
     {

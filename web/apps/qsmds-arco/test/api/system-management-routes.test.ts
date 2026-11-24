@@ -101,6 +101,8 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
       'notification-policy:read',
       'assistant-channel:read',
       'assistant-account:read',
+      'wecom-channel:read',
+      'wecom-app:read',
     ],
   )
   assert.deepEqual(
@@ -128,6 +130,14 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
         name: 'systemNotificationAssistant',
         path: 'assistant',
         title: 'GeWe助理',
+      },
+      {
+        auth: ['wecom-channel:read', 'wecom-app:read'],
+        icon: 'qs-notification',
+        menu: undefined,
+        name: 'systemNotificationWecom',
+        path: 'wecom',
+        title: '企业微信',
       },
       {
         auth: ['notification-template:read', 'notification-policy:read'],

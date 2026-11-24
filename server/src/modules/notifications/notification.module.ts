@@ -25,6 +25,8 @@ import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
 import { GeweAssistantTransport } from './gewe-assistant.transport'
 import { ASSISTANT_ADMIN_TRANSPORT, ASSISTANT_TRANSPORT, ASSISTANT_TRANSPORT_OPTIONS } from './notification.types'
 import { SystemNotificationService } from './system-notification.service'
+import { WecomAdminController } from './wecom-admin.controller'
+import { WecomAdminService } from './wecom-admin.service'
 import { WecomAppHttpTransport } from './wecom-app.transport'
 import { WecomDispatchService } from './wecom-dispatch.service'
 import { WecomRobotHttpTransport } from './wecom-robot.transport'
@@ -42,9 +44,10 @@ import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
 @Global()
 @Module({
   imports: [AuthModule, MediaModule, NumberingModule],
-  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController, NotificationPreferenceController],
+  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController, NotificationPreferenceController, WecomAdminController],
   providers: [
     SystemNotificationService,
+    WecomAdminService,
     AssistantAdminService,
     NotificationAdminService,
     NotificationInboxService,

@@ -43,6 +43,24 @@ import type {
   NotificationTemplatePreviewDto,
   NotificationTemplatePreviewResultDto,
   NotificationTemplateUpdateDto,
+  WecomAppCreateDto,
+  WecomAppDto,
+  WecomAppSecretUpdateDto,
+  WecomAppTestResultDto,
+  WecomAppUpdateDto,
+  WecomBindingCreateDto,
+  WecomBindingDto,
+  WecomBindingVerifyDto,
+  WecomChannelDto,
+  WecomChannelUpdateDto,
+  WecomEventRoutesDto,
+  WecomEventRoutesUpdateDto,
+  WecomMembershipCreateDto,
+  WecomMembershipDto,
+  WecomTargetCreateDto,
+  WecomTargetDto,
+  WecomTargetUpdateDto,
+  WecomTestResultDto,
 } from '../generated/types.gen'
 import api from '../index'
 
@@ -177,6 +195,62 @@ export function createNotificationsApi(client: AxiosInstance) {
           client.post<AssistantTargetDto[]>('assistant/targets/sync', {}, { errorPresentation: 'local', retry: false }),
         update: (id: string, input: AssistantTargetUpdateDto) =>
           client.patch<AssistantTargetDto>(path('assistant', 'targets', id), input, { errorPresentation: 'local', retry: false }),
+      },
+    },
+    wecom: {
+      channel: {
+        get: (signal: AbortSignal) =>
+          client.get<WecomChannelDto>('notifications/wecom/channel', { errorPresentation: 'local', signal }),
+        update: (input: WecomChannelUpdateDto) =>
+          client.put<WecomChannelDto>('notifications/wecom/channel', input, { errorPresentation: 'local', retry: false }),
+      },
+      apps: {
+        list: (signal: AbortSignal) =>
+          client.get<WecomAppDto[]>('notifications/wecom/apps', { errorPresentation: 'local', signal }),
+        create: (input: WecomAppCreateDto) =>
+          client.post<WecomAppDto>('notifications/wecom/apps', input, { errorPresentation: 'local', retry: false }),
+        update: (id: string, input: WecomAppUpdateDto) =>
+          client.patch<WecomAppDto>(path('notifications', 'wecom', 'apps', id), input, { errorPresentation: 'local', retry: false }),
+        updateSecret: (id: string, input: WecomAppSecretUpdateDto) =>
+          client.put<WecomAppDto>(path('notifications', 'wecom', 'apps', id, 'secret'), input, { errorPresentation: 'local', retry: false }),
+        test: (id: string) =>
+          client.post<WecomAppTestResultDto>(path('notifications', 'wecom', 'apps', id, 'test'), {}, { errorPresentation: 'local', retry: false }),
+        events: {
+          get: (id: string, signal: AbortSignal) =>
+            client.get<WecomEventRoutesDto>(path('notifications', 'wecom', 'apps', id, 'events'), { errorPresentation: 'local', signal }),
+          update: (id: string, input: WecomEventRoutesUpdateDto) =>
+            client.put<WecomEventRoutesDto>(path('notifications', 'wecom', 'apps', id, 'events'), input, { errorPresentation: 'local', retry: false }),
+        },
+        members: {
+          list: (id: string, signal: AbortSignal) =>
+            client.get<WecomMembershipDto[]>(path('notifications', 'wecom', 'apps', id, 'members'), { errorPresentation: 'local', signal }),
+          add: (id: string, input: WecomMembershipCreateDto) =>
+            client.post<WecomMembershipDto>(path('notifications', 'wecom', 'apps', id, 'members'), input, { errorPresentation: 'local', retry: false }),
+          remove: (id: string, userId: string) =>
+            client.delete<void>(path('notifications', 'wecom', 'apps', id, 'members', userId), { errorPresentation: 'local', retry: false }),
+        },
+      },
+      bindings: {
+        list: (signal: AbortSignal) =>
+          client.get<WecomBindingDto[]>('notifications/wecom/bindings', { errorPresentation: 'local', signal }),
+        create: (input: WecomBindingCreateDto) =>
+          client.post<WecomBindingDto>('notifications/wecom/bindings', input, { errorPresentation: 'local', retry: false }),
+        verify: (id: string, input: WecomBindingVerifyDto) =>
+          client.post<WecomTestResultDto>(path('notifications', 'wecom', 'bindings', id, 'verify'), input, { errorPresentation: 'local', retry: false }),
+        remove: (id: string) =>
+          client.delete<void>(path('notifications', 'wecom', 'bindings', id), { errorPresentation: 'local', retry: false }),
+      },
+      targets: {
+        list: (signal: AbortSignal) =>
+          client.get<WecomTargetDto[]>('notifications/wecom/targets', { errorPresentation: 'local', signal }),
+        create: (input: WecomTargetCreateDto) =>
+          client.post<WecomTargetDto>('notifications/wecom/targets', input, { errorPresentation: 'local', retry: false }),
+        update: (id: string, input: WecomTargetUpdateDto) =>
+          client.patch<WecomTargetDto>(path('notifications', 'wecom', 'targets', id), input, { errorPresentation: 'local', retry: false }),
+        remove: (id: string) =>
+          client.delete<void>(path('notifications', 'wecom', 'targets', id), { errorPresentation: 'local', retry: false }),
+        test: (id: string) =>
+          client.post<WecomTestResultDto>(path('notifications', 'wecom', 'targets', id, 'test'), {}, { errorPresentation: 'local', retry: false }),
       },
     },
   }
