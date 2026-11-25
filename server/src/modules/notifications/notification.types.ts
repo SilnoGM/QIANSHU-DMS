@@ -1135,15 +1135,6 @@ export const NOTIFICATION_VARIABLE_DEFINITIONS: Readonly<Record<string, Notifica
     maxLength: 64,
     required: false,
   },
-  accountName: {
-    name: 'accountName',
-    label: '小助理公司号',
-    description: '千树小助理公司号名称。',
-    example: '千树小助理',
-    sensitive: false,
-    maxLength: 64,
-    required: true,
-  },
   settleAmountCny: {
     name: 'settleAmountCny',
     label: '结算金额',

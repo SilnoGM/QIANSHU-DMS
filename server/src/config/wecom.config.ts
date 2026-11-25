@@ -1,7 +1,7 @@
 import { registerAs } from '@nestjs/config'
 
 /**
- * 企业微信 API 固定入口。和 GeWe 一样，出站地址属于安全边界，不接受环境变量覆盖。
+ * 企业微信 API 固定入口。出站地址属于安全边界，不接受环境变量覆盖。
  */
 export const WECOM_API_BASE_URL = 'https://qyapi.weixin.qq.com' as const
 
