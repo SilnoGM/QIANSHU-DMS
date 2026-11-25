@@ -7,8 +7,12 @@ const indexSource = readFileSync(
   new URL('../../src/views/system/notifications/index.vue', import.meta.url),
   'utf8',
 )
-const policiesPageSource = readFileSync(
-  new URL('../../src/views/system/notifications/policies.vue', import.meta.url),
+const eventsPageSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/index.vue', import.meta.url),
+  'utf8',
+)
+const eventDetailSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/detail.vue', import.meta.url),
   'utf8',
 )
 const recordsPageSource = readFileSync(
@@ -108,18 +112,21 @@ const pollingSource = readFileSync(
   'utf8',
 )
 
-test('通知中心保留企业微信、通知策略和通知记录页面', () => {
+test('通知中心保留企业微信、事件配置和通知记录页面', () => {
   // 旧入口保留权限感知跳转，不再承载多个页签。
   assert.match(indexSource, /router\.replace/u)
   assert.match(indexSource, /systemNotificationRecords/u)
   assert.match(indexSource, /systemNotificationWecom/u)
-  assert.match(indexSource, /systemNotificationPolicies/u)
+  assert.match(indexSource, /systemNotificationEvents/u)
   assert.doesNotMatch(indexSource, /<FaTabs/u)
   assert.doesNotMatch(indexSource, /data-testid="notification-center-tabs"/u)
 
-  assert.match(policiesPageSource, /<FaPageHeader/u)
-  assert.match(policiesPageSource, /title="通知策略"/u)
-  assert.match(policiesPageSource, /<RulesPanel/u)
+  assert.match(eventsPageSource, /<FaPageHeader/u)
+  assert.match(eventsPageSource, /title="事件配置"/u)
+  assert.match(eventsPageSource, /notificationsApi\.eventConfigs\.list/u)
+  assert.match(eventDetailSource, /<FaPageHeader/u)
+  assert.match(eventDetailSource, /notificationsApi\.eventConfigs\.get/u)
+  assert.match(eventDetailSource, /notificationsApi\.eventConfigs\.update/u)
 
   assert.match(recordsPageSource, /<FaPageHeader/u)
   assert.match(recordsPageSource, /title="通知记录"/u)

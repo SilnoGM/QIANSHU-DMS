@@ -97,7 +97,6 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
     systemNotificationsRoute.meta?.auth,
     [
       'notification-record:read',
-      'notification-template:read',
       'notification-policy:read',
       'wecom-channel:read',
       'wecom-app:read',
@@ -130,12 +129,20 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
         title: '企业微信',
       },
       {
-        auth: ['notification-template:read', 'notification-policy:read'],
+        auth: 'notification-policy:read',
         icon: 'qs-notification-policy',
         menu: undefined,
-        name: 'systemNotificationPolicies',
-        path: 'policies',
-        title: '通知策略',
+        name: 'systemNotificationEvents',
+        path: 'events',
+        title: '事件配置',
+      },
+      {
+        auth: 'notification-policy:read',
+        icon: undefined,
+        menu: false,
+        name: 'systemNotificationEventDetail',
+        path: 'events/:eventType',
+        title: '事件配置详情',
       },
       {
         auth: 'notification-record:read',

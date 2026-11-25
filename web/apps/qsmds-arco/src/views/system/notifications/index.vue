@@ -16,8 +16,8 @@ const target = computed<string | null>(() => {
   if (auth(['wecom-channel:read', 'wecom-app:read'])) {
     return 'systemNotificationWecom'
   }
-  if (auth(['notification-template:read', 'notification-policy:read'])) {
-    return 'systemNotificationPolicies'
+  if (auth('notification-policy:read')) {
+    return 'systemNotificationEvents'
   }
   return null
 })

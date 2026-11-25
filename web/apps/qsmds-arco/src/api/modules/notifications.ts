@@ -4,6 +4,12 @@ import type {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
   NotificationChannelPolicyUpdateDto,
+  NotificationContentMediaUploadDto,
+  NotificationEventConfigDto,
+  NotificationEventConfigPreviewDto,
+  NotificationEventConfigPreviewResultDto,
+  NotificationEventConfigSummaryDto,
+  NotificationEventConfigUpdateDto,
   NotificationEventDto,
   NotificationInboxDetailDto,
   NotificationInboxListData,
@@ -65,6 +71,34 @@ export function createNotificationsApi(client: AxiosInstance) {
     events: {
       list: (signal: AbortSignal) =>
         client.get<NotificationEventDto[]>('notifications/events', { errorPresentation: 'local', signal }),
+    },
+    eventConfigs: {
+      list: (signal: AbortSignal) =>
+        client.get<NotificationEventConfigSummaryDto[]>('notifications/event-configs', { errorPresentation: 'local', signal }),
+      get: (eventType: string, signal: AbortSignal) =>
+        client.get<NotificationEventConfigDto>(path('notifications', 'event-configs', eventType), { errorPresentation: 'local', signal }),
+      update: (eventType: string, input: NotificationEventConfigUpdateDto) =>
+        client.put<NotificationEventConfigDto>(path('notifications', 'event-configs', eventType), input, { errorPresentation: 'local', retry: false }),
+      preview: (eventType: string, input: NotificationEventConfigPreviewDto) =>
+        client.post<NotificationEventConfigPreviewResultDto>(
+          path('notifications', 'event-configs', eventType, 'preview'),
+          input,
+          { errorPresentation: 'local', retry: false },
+        ),
+    },
+    contentMedia: {
+      /** 草稿图片上传；资产在事件配置保存事务内才激活为 READY。 */
+      upload: (file: File, signal: AbortSignal) => {
+        const body = new FormData()
+        body.append('file', file)
+        return client.post<NotificationContentMediaUploadDto>('notifications/content-media', body, {
+          errorPresentation: 'local',
+          retry: false,
+          signal,
+        })
+      },
+      contentUrl: (assetId: string) =>
+        `/api/notifications/content-media/${encodeURIComponent(assetId)}/content`,
     },
     templates: {
       list: (channel: string, signal: AbortSignal) =>
