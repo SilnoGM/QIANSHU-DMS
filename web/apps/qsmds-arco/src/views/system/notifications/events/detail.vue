@@ -1,21 +1,25 @@
 <script setup lang="ts">
+import type { TargetValueOption } from './target-options'
+
 import type {
   NotificationEventChannelConfigDto,
   NotificationEventChannelMessageDto,
   NotificationEventConfigDto,
   NotificationEventConfigUpdateDto,
 } from '@/api/generated/types.gen'
-
+import { FaCombobox } from '@fantastic-admin/components'
 import dayjs from 'dayjs'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getApiClientFailureMessage } from '@/api/errors'
+import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useAppAuth } from '@/composables/app/auth'
 import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { notificationDomainLabel } from '../notification-domain.logic'
 import RichTextEditor from './components/RichTextEditor.vue'
+import TargetValuePicker from './components/TargetValuePicker.vue'
 
 defineOptions({ name: 'SystemNotificationEventDetail' })
 
@@ -65,6 +69,12 @@ const coverTargetIndex = ref<number | null>(null)
 const coverUploadingIndex = ref<number | null>(null)
 const coverUploadErrors = ref<Record<number, string>>({})
 const coverPreviewUrls = ref<Record<string, string>>({})
+const userOptions = ref<TargetValueOption[]>([])
+const roleOptions = ref<TargetValueOption[]>([])
+const permissionOptions = ref<TargetValueOption[]>([])
+const targetOptionsLoading = ref(false)
+const targetOptionsError = ref<string | null>(null)
+let targetOptionsController: AbortController | null = null
 
 const MAXIMUM_COVER_BYTES = 10 * 1024 * 1024
 
@@ -158,6 +168,80 @@ async function load(): Promise<void> {
   }
 }
 
+async function loadActiveUsers(signal: AbortSignal): Promise<TargetValueOption[]> {
+  const options: TargetValueOption[] = []
+  let page = 1
+  let total = Number.POSITIVE_INFINITY
+  while (options.length < total && page <= 20) {
+    const response = await managementApi.users.list({ page, pageSize: 100, status: 'ACTIVE' }, signal)
+    options.push(...response.data.items.map(user => ({
+      label: user.displayName,
+      value: user.id,
+      description: user.username,
+    })))
+    total = response.data.total
+    page += 1
+  }
+  return options
+}
+
+async function loadTargetOptions(): Promise<void> {
+  targetOptionsController?.abort()
+  targetOptionsController = new AbortController()
+  const signal = targetOptionsController.signal
+  targetOptionsLoading.value = true
+  targetOptionsError.value = null
+  try {
+    const [users, roles, permissions] = await Promise.allSettled([
+      loadActiveUsers(signal),
+      managementApi.roles.list(),
+      managementApi.permissions.list(),
+    ])
+    if (signal.aborted) {
+      return
+    }
+    let failed = false
+    if (users.status === 'fulfilled') {
+      userOptions.value = users.value.sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+    }
+    else {
+      failed = true
+    }
+    if (roles.status === 'fulfilled') {
+      roleOptions.value = roles.value.data
+        .map(role => ({
+          label: role.name,
+          value: role.code,
+          description: role.isSystem ? `${role.code} · 系统角色` : role.code,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+    }
+    else {
+      failed = true
+    }
+    if (permissions.status === 'fulfilled') {
+      permissionOptions.value = permissions.value.data
+        .map(permission => ({
+          label: `${permission.name}（${permission.code}）`,
+          value: permission.code,
+          description: permission.code,
+        }))
+        .sort((left, right) => left.value.localeCompare(right.value))
+    }
+    else {
+      failed = true
+    }
+    if (failed) {
+      targetOptionsError.value = '部分目标选项加载失败；仍可保存或移除已有值。'
+    }
+  }
+  finally {
+    if (!signal.aborted) {
+      targetOptionsLoading.value = false
+    }
+  }
+}
+
 function markDirty(): void {
   dirty.value = true
 }
@@ -194,6 +278,27 @@ function setTargetValues(draft: ChannelDraft, value: string): void {
   else {
     draft.targetConfig = { [key]: value.split(',').map(item => item.trim()).filter(Boolean) }
   }
+  markDirty()
+}
+
+function targetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes'): string[] {
+  const value = draft.targetConfig[key]
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function setTargetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes', values: string[]): void {
+  draft.targetConfig = { ...draft.targetConfig, [key]: values }
+  markDirty()
+}
+
+function permissionValue(draft: ChannelDraft): string | undefined {
+  const value = draft.targetConfig.permissionCode
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function setPermissionValue(draft: ChannelDraft, value: unknown): void {
+  const code = typeof value === 'string' ? value.trim() : ''
+  draft.targetConfig = code.length > 0 ? { permissionCode: code } : {}
   markDirty()
 }
 
@@ -560,10 +665,14 @@ function goBack(): void {
   void router.push({ name: 'systemNotificationEvents' })
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadTargetOptions()
+})
 watch(eventType, load)
 
 onBeforeUnmount(() => {
+  targetOptionsController?.abort()
   for (const url of Object.values(coverPreviewUrls.value)) {
     URL.revokeObjectURL(url)
   }
@@ -738,19 +847,59 @@ onBeforeUnmount(() => {
                     @update:model-value="value => changeTargetMode(activeDraft!, value as TargetMode)"
                   />
                 </label>
-                <label class="text-sm flex flex-col gap-1">
+                <div class="text-sm flex flex-col gap-1">
                   <span class="font-medium">目标值</span>
+                  <TargetValuePicker
+                    v-if="activeDraft.targetMode === 'USERS'"
+                    :model-value="targetArray(activeDraft, 'userIds')"
+                    :options="userOptions"
+                    :loading="targetOptionsLoading"
+                    :disabled="!canUpdate"
+                    placeholder="选择成员"
+                    empty-text="没有匹配的成员"
+                    @update:model-value="values => setTargetArray(activeDraft!, 'userIds', values)"
+                  />
+                  <TargetValuePicker
+                    v-else-if="activeDraft.targetMode === 'ROLE'"
+                    :model-value="targetArray(activeDraft, 'roleCodes')"
+                    :options="roleOptions"
+                    :loading="targetOptionsLoading"
+                    :disabled="!canUpdate"
+                    placeholder="选择角色"
+                    empty-text="没有匹配的角色"
+                    @update:model-value="values => setTargetArray(activeDraft!, 'roleCodes', values)"
+                  />
+                  <FaCombobox
+                    v-else-if="activeDraft.targetMode === 'PERMISSION'"
+                    :model-value="permissionValue(activeDraft)"
+                    :options="permissionOptions"
+                    :disabled="!canUpdate || targetOptionsLoading"
+                    clearable
+                    class="w-full"
+                    virtual-list
+                    placeholder="选择权限"
+                    empty-text="没有匹配的权限"
+                    @change="value => setPermissionValue(activeDraft!, value)"
+                  />
                   <FaInput
+                    v-else-if="activeDraft.targetMode === 'GROUP'"
                     :model-value="targetValues(activeDraft)"
-                    :disabled="!canUpdate || activeDraft.targetMode === 'COMMAND_TARGET'"
+                    :disabled="!canUpdate"
                     :placeholder="TARGET_VALUE_HINT[activeDraft.targetMode]"
                     @update:model-value="value => setTargetValues(activeDraft!, value ?? '')"
                   />
+                  <div v-else class="text-xs text-muted-foreground px-3 border border-border rounded-md border-dashed flex h-9 items-center">
+                    由业务发布时动态传入
+                  </div>
                   <span v-if="activeDraft.targetMode === 'COMMAND_TARGET'" class="text-xs text-muted-foreground">
                     动态目标无需填写，发布时由业务传入。
                   </span>
-                </label>
+                </div>
               </div>
+
+              <p v-if="targetOptionsError !== null" class="text-xs text-destructive m-0">
+                {{ targetOptionsError }}
+              </p>
 
               <div v-if="activeDraft.channel === 'WECOM'" class="p-3 border border-border/70 rounded-lg bg-muted/20">
                 <div class="text-xs text-muted-foreground font-medium">

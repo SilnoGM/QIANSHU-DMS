@@ -71,6 +71,11 @@ test('通知中心保留企业微信、事件配置和通知记录页面', () =>
   assert.match(eventDetailSource, /addImageMessage/u)
   assert.match(eventDetailSource, /sourceKeys/u)
   assert.match(eventDetailSource, /mediaPolicy/u)
+  assert.match(eventDetailSource, /TargetValuePicker/u)
+  assert.match(eventDetailSource, /FaCombobox/u)
+  assert.match(eventDetailSource, /managementApi\.users\.list/u)
+  assert.match(eventDetailSource, /managementApi\.roles\.list/u)
+  assert.match(eventDetailSource, /managementApi\.permissions\.list/u)
 
   assert.match(recordsPageSource, /<FaPageHeader/u)
   assert.match(recordsPageSource, /title="通知记录"/u)
