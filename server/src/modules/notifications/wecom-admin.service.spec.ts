@@ -229,6 +229,26 @@ describe('WecomAdminService', () => {
     expect(result).toMatchObject({ key: 'finance', internalOnly: true })
   })
 
+  it('extracts the key when a full wecom webhook URL is pasted', async () => {
+    const tx = transaction()
+    const prisma = {
+      $transaction: jest.fn((callback: (value: typeof tx) => unknown) => Promise.resolve(callback(tx))),
+    }
+
+    await service(prisma).createTarget(
+      { actorUserId: 'actor-1', requestId: 'request-1' },
+      {
+        key: 'poc',
+        name: 'POC 测试群',
+        webhookKey: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=robot-key-1',
+      },
+    )
+
+    expect(tx.wecomTarget.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ webhookKeyEncrypted: 'enc:robot-key-1' }),
+    })
+  })
+
   it('updates the channel setting and returns the actor name', async () => {
     const tx = transaction()
     const prisma = {

@@ -27,6 +27,7 @@ import type {
 } from './wecom-admin.dto'
 import { WecomSecretService } from './wecom-secret.service'
 import { WecomTokenService } from './wecom-token.service'
+import { normalizeWecomWebhookKey } from './wecom-webhook'
 import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT, type WecomAppTransport, type WecomRobotTransport, utf8Bytes } from './wecom.types'
 
 export interface WecomAdminContext {
@@ -750,9 +751,13 @@ export class WecomAdminService {
     if (!this.secret.available) {
       throw new ApiException(503, 'WECOM_SECRET_KEY_MISSING', '未配置 WECOM_APP_SECRET_KEY，无法保存群 webhook')
     }
+    const normalizedWebhook = normalizeWecomWebhookKey(input.webhookKey)
+    if (!normalizedWebhook.ok) {
+      throw new ApiException(422, 'WECOM_TARGET_WEBHOOK_INVALID', normalizedWebhook.message)
+    }
     let webhookKeyEncrypted: string
     try {
-      webhookKeyEncrypted = this.secret.encrypt(input.webhookKey)
+      webhookKeyEncrypted = this.secret.encrypt(normalizedWebhook.key)
     }
     catch {
       throw new ApiException(503, 'WECOM_SECRET_KEY_MISSING', 'WECOM_APP_SECRET_KEY 不可用')
@@ -804,8 +809,12 @@ export class WecomAdminService {
       if (!this.secret.available) {
         throw new ApiException(503, 'WECOM_SECRET_KEY_MISSING', '未配置 WECOM_APP_SECRET_KEY，无法保存群 webhook')
       }
+      const normalizedWebhook = normalizeWecomWebhookKey(input.webhookKey)
+      if (!normalizedWebhook.ok) {
+        throw new ApiException(422, 'WECOM_TARGET_WEBHOOK_INVALID', normalizedWebhook.message)
+      }
       try {
-        webhookKeyEncrypted = this.secret.encrypt(input.webhookKey)
+        webhookKeyEncrypted = this.secret.encrypt(normalizedWebhook.key)
       }
       catch {
         throw new ApiException(503, 'WECOM_SECRET_KEY_MISSING', 'WECOM_APP_SECRET_KEY 不可用')

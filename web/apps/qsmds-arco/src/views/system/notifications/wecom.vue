@@ -1038,6 +1038,9 @@ onMounted(load)
       <label class="flex flex-col gap-1">
         <span class="qs-type-compact-label">{{ targetModalMode === 'create' ? 'webhook key' : '新 webhook key（留空不修改）' }}</span>
         <FaInput v-model="targetDraft.webhookKey" type="password" placeholder="只写不读" />
+        <span class="qs-type-meta text-muted-foreground">
+          可粘贴完整企业微信群机器人 webhook URL，保存时会自动提取 key；也可以只填 key= 后的值。
+        </span>
       </label>
       <label class="qs-type-meta flex gap-2 items-center">
         <FaSwitch v-model="targetDraft.enabled" />
