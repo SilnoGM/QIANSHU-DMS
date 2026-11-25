@@ -311,8 +311,15 @@ export class SystemNotificationService {
       })
       if (template === null || !template.enabled) {
         warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站外模板不存在或已停用' })
-        await this.finishNotification(transaction, notification.id, 'FAILED', now)
-        return { notificationId: notification.id, duplicated: false, channels: channelResults, warnings }
+        // 渠道之间独立：小助理模板缺失不能阻断后续 WECOM 投递。
+        channelResults.push({
+          channel: 'ASSISTANT',
+          status: 'SKIPPED',
+          recipientCount: 0,
+          skippedCount: 0,
+          skipReason: 'CHANNEL_NOT_CONFIGURED',
+        })
+        continue
       }
 
       const render = renderNotificationTemplate({
@@ -325,8 +332,14 @@ export class SystemNotificationService {
       })
       if (!render.ok) {
         warnings.push({ code: notificationFailureCode(render.code), message: render.message })
-        await this.finishNotification(transaction, notification.id, 'FAILED', now)
-        return { notificationId: notification.id, duplicated: false, channels: channelResults, warnings }
+        channelResults.push({
+          channel: 'ASSISTANT',
+          status: 'SKIPPED',
+          recipientCount: 0,
+          skippedCount: 0,
+          skipReason: 'CHANNEL_NOT_CONFIGURED',
+        })
+        continue
       }
       if (render.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
         warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })

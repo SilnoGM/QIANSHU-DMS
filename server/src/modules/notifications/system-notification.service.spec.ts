@@ -114,7 +114,7 @@ describe('SystemNotificationService.publish', () => {
     expect(updateCalls[0]?.[0]?.data?.status).toBe('FAILED')
   })
 
-  it('records a failed notification when the template is missing', async () => {
+  it('records a failed notification when the only enabled template is missing', async () => {
     const transaction = {
       notification: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -124,11 +124,16 @@ describe('SystemNotificationService.publish', () => {
       notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([assistantPolicy()]) },
       notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
       notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+      assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
     }
     const service = createService({} as PrismaService)
 
     const result = await service.publish(command, { transaction: transaction as never })
 
+    expect(result.channels).toEqual([
+      expect.objectContaining({ channel: 'ASSISTANT', status: 'SKIPPED' }),
+    ])
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'TEMPLATE_NOT_FOUND' }),
     ]))
@@ -225,6 +230,8 @@ describe('SystemNotificationService.publish', () => {
       })]) },
       notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
       notificationTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+      assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
+      notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
     }
     const service = createService({} as PrismaService)
 
@@ -234,6 +241,9 @@ describe('SystemNotificationService.publish', () => {
     expect(transaction.notificationTemplate.findUnique).toHaveBeenCalledWith({
       where: { key_channel: { key: 'purchase.review.pending.short', channel: 'ASSISTANT' } },
     })
+    expect(result.channels).toEqual([
+      expect.objectContaining({ channel: 'ASSISTANT', status: 'SKIPPED' }),
+    ])
     expect(result.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'TEMPLATE_NOT_FOUND' }),
     ]))
