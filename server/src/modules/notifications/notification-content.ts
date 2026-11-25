@@ -121,23 +121,119 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-function containsDangerousHtml(value: string): boolean {
-  return /<(script|iframe|object|embed|form)\b/iu.test(value)
-    || /\son[a-z]+\s*=/iu.test(value)
-    || /\b(?:javascript|data):/iu.test(value)
+/**
+ * mpnews 正文的严格白名单校验。
+ *
+ * 这不是“发现危险标签再拒绝”的黑名单：除下方允许的标签/属性外，任何未知标签、
+ * 未声明属性、未加引号的属性、注释、DOCTYPE 或错误嵌套都直接拒绝保存/发布。
+ * 采用拒绝而不是剥离，避免解析器差异把被剥离的片段重新解释成可执行 HTML。
+ */
+const MPNEWS_ALLOWED_TAGS = new Set([
+  'p', 'br', 'h2', 'h3',
+  'strong', 'b', 'em', 'i', 'u', 's', 'del',
+  'ul', 'ol', 'li', 'blockquote',
+  'a', 'img', 'pre', 'code', 'hr',
+])
+const MPNEWS_VOID_TAGS = new Set(['br', 'hr', 'img'])
+const MPNEWS_ALLOWED_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
+  a: new Set(['href', 'target', 'rel']),
+  img: new Set(['data-asset-id', 'alt']),
+}
+const MPNEWS_TAG_PATTERN = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^<>]*?)?)(\/)?>/gu
+const MPNEWS_ATTRIBUTE_PATTERN = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gu
+
+function parseMpnewsAttributes(raw: string): Map<string, string> | null {
+  const attributes = new Map<string, string>()
+  let cursor = 0
+  for (const match of raw.matchAll(MPNEWS_ATTRIBUTE_PATTERN)) {
+    const index = match.index ?? 0
+    if (raw.slice(cursor, index).trim().length > 0) {
+      return null
+    }
+    const name = match[1]?.toLowerCase()
+    if (name === undefined || attributes.has(name)) {
+      return null
+    }
+    attributes.set(name, match[2] ?? match[3] ?? '')
+    cursor = index + match[0].length
+  }
+  return raw.slice(cursor).trim().length === 0 ? attributes : null
 }
 
-function containsExternalOrInvalidImage(value: string): boolean {
-  for (const match of value.matchAll(/<img\b[^>]*>/giu)) {
-    const tag = match[0]
-    if (!/\bdata-asset-id\s*=\s*["'][^"']+["']/iu.test(tag)) {
-      return true
+function isSafeLinkRel(value: string): boolean {
+  const tokens = value.trim().split(/\s+/u)
+  return tokens.length > 0 && tokens.every(token => ['noopener', 'noreferrer', 'nofollow'].includes(token))
+}
+
+function validateMpnewsHtmlStructure(value: string): string | null {
+  const stack: string[] = []
+  let cursor = 0
+
+  for (const match of value.matchAll(MPNEWS_TAG_PATTERN)) {
+    const index = match.index ?? 0
+    if (value.slice(cursor, index).includes('<')) {
+      return '正文包含无法解析的 HTML'
     }
-    if (/\bsrc\s*=/iu.test(tag)) {
-      return true
+    cursor = index + match[0].length
+    const closing = match[1] === '/'
+    const name = match[2]?.toLowerCase() ?? ''
+    const rawAttributes = match[3] ?? ''
+    const selfClosing = match[4] === '/'
+
+    if (!MPNEWS_ALLOWED_TAGS.has(name)) {
+      return `正文包含不支持的 HTML 标签：${name}`
     }
+    if (closing) {
+      if (selfClosing || rawAttributes.trim().length > 0) {
+        return '正文 HTML 闭合标签格式无效'
+      }
+      if (MPNEWS_VOID_TAGS.has(name) || stack.pop() !== name) {
+        return '正文 HTML 标签嵌套不正确'
+      }
+      continue
+    }
+
+    const attributes = parseMpnewsAttributes(rawAttributes)
+    if (attributes === null) {
+      return '正文 HTML 属性格式无效'
+    }
+    const allowedAttributes = MPNEWS_ALLOWED_ATTRIBUTES[name] ?? new Set<string>()
+    for (const [attribute, attributeValue] of attributes) {
+      if (!allowedAttributes.has(attribute)) {
+        return `正文 HTML 标签 ${name} 不允许属性 ${attribute}`
+      }
+      if (name === 'a' && attribute === 'href' && !isHttpUrl(attributeValue)) {
+        return '正文链接必须是 http/https URL'
+      }
+      if (name === 'a' && attribute === 'target' && attributeValue !== '_blank') {
+        return '正文链接 target 只允许 _blank'
+      }
+      if (name === 'a' && attribute === 'rel' && !isSafeLinkRel(attributeValue)) {
+        return '正文链接 rel 只允许 noopener/noreferrer/nofollow'
+      }
+      if (name === 'img' && attribute === 'data-asset-id' && !UUID_PATTERN.test(attributeValue)) {
+        return '正文图片必须引用有效的 DMS 资产'
+      }
+    }
+    if (name === 'a' && !attributes.has('href')) {
+      return '正文链接必须包含 href'
+    }
+    if (name === 'img' && !attributes.has('data-asset-id')) {
+      return '正文图片必须使用 DMS 资产'
+    }
+    if (MPNEWS_VOID_TAGS.has(name)) {
+      continue
+    }
+    if (selfClosing) {
+      return '正文 HTML 标签格式无效'
+    }
+    stack.push(name)
   }
-  return false
+
+  if (value.slice(cursor).includes('<')) {
+    return '正文包含无法解析的 HTML'
+  }
+  return stack.length === 0 ? null : '正文 HTML 标签未闭合'
 }
 
 /**
@@ -268,11 +364,9 @@ function validateMpnews(input: {
   else if (bytesOf(content) > MPNEWS_MAX_CONTENT_BYTES) {
     issues.push(issue('NOTIFICATION_CONTENT_MPSNEWS_CONTENT_TOO_LONG', 'mpnews 正文不能超过 666KB', input.itemIndex, 'content'))
   }
-  if (containsDangerousHtml(content)) {
-    issues.push(issue('NOTIFICATION_CONTENT_HTML_UNSAFE', 'mpnews 正文包含不支持的 HTML', input.itemIndex, 'content'))
-  }
-  if (containsExternalOrInvalidImage(content)) {
-    issues.push(issue('NOTIFICATION_CONTENT_IMAGE_INVALID', 'mpnews 正文图片只能使用 DMS 资产，不能包含外部 src', input.itemIndex, 'content'))
+  const htmlIssue = validateMpnewsHtmlStructure(content)
+  if (htmlIssue !== null) {
+    issues.push(issue('NOTIFICATION_CONTENT_HTML_UNSAFE', htmlIssue, input.itemIndex, 'content'))
   }
   issues.push(...inspectContentPlaceholders({
     texts: [title ?? '', digest ?? '', content, contentSourceUrl ?? ''],
@@ -434,8 +528,8 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * mpnews 正文是 HTML，变量值必须按 HTML 文本上下文转义；这里只做替换与转义，
- * 最终标签白名单仍由保存/派发前的 sanitize 负责。
+ * mpnews 正文是 HTML，变量值必须按 HTML 文本上下文转义；变量替换前后都执行严格白名单校验，
+ * 防止存储层历史数据或绕过保存校验的写入进入企微正文。
  */
 export function renderMpnewsHtml(input: {
   readonly html: string
@@ -453,9 +547,13 @@ export function renderMpnewsHtml(input: {
   readonly warnings: readonly 'SENSITIVE_VARIABLE_MASKED'[]
 } | {
   readonly ok: false
-  readonly code: 'NOTIFICATION_CONTENT_UNDECLARED_VARIABLE' | 'NOTIFICATION_CONTENT_VARIABLE_MISSING' | 'NOTIFICATION_CONTENT_MPNEWS_TOO_LONG'
+  readonly code: 'NOTIFICATION_CONTENT_UNDECLARED_VARIABLE' | 'NOTIFICATION_CONTENT_VARIABLE_MISSING' | 'NOTIFICATION_CONTENT_MPNEWS_TOO_LONG' | 'NOTIFICATION_CONTENT_HTML_UNSAFE'
   readonly message: string
 } {
+  const htmlIssue = validateMpnewsHtmlStructure(input.html)
+  if (htmlIssue !== null) {
+    return { ok: false, code: 'NOTIFICATION_CONTENT_HTML_UNSAFE', message: htmlIssue }
+  }
   const definitions = new Map(input.allowed.map(definition => [definition.name, definition]))
   const warnings = new Set<'SENSITIVE_VARIABLE_MASKED'>()
   const state: { missing: string | null } = { missing: null }

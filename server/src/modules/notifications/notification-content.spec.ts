@@ -1,5 +1,6 @@
 import {
   hashNotificationContent,
+  renderMpnewsHtml,
   validateNotificationContentGroup,
 } from './notification-content'
 
@@ -123,7 +124,7 @@ describe('notification content group validation', () => {
     })
     expect(externalImage.ok).toBe(false)
     if (!externalImage.ok) {
-      expect(externalImage.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_IMAGE_INVALID')
+      expect(externalImage.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_HTML_UNSAFE')
     }
 
     const script = validateNotificationContentGroup({
@@ -135,6 +136,52 @@ describe('notification content group validation', () => {
     if (!script.ok) {
       expect(script.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_HTML_UNSAFE')
     }
+  })
+
+  it('enforces the mpnews HTML allowlist instead of only blocking known-dangerous tags', () => {
+    const invalidContents = [
+      '<style>p{color:red}</style>',
+      '<p onclick="alert(1)">正文</p>',
+      '<a href=https://example.com>链接</a>',
+      '<a href="javascript:alert(1)">链接</a>',
+      '<p><strong>正文</p></strong>',
+      '<img data-asset-id="not-a-uuid">',
+      '<p>正文</p><!-- comment -->',
+    ]
+    for (const content of invalidContents) {
+      const result = validateNotificationContentGroup({
+        method: 'APP',
+        items: [mpnews({ content })],
+        allowedVariables: null,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_HTML_UNSAFE')
+      }
+    }
+
+    const valid = '<p>正文 <strong>加粗</strong><br><a href="https://example.com/a?b=1" target="_blank" rel="noopener noreferrer nofollow">链接</a></p><ul><li>一</li></ul><img data-asset-id="00000000-0000-4000-8000-000000000001" alt="图">'
+    const accepted = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({ content: valid })],
+      allowedVariables: null,
+    })
+    expect(accepted.ok).toBe(true)
+
+    const rendered = renderMpnewsHtml({
+      html: valid,
+      variables: {},
+      allowed: [],
+      allowSensitive: true,
+    })
+    expect(rendered.ok).toBe(true)
+    const blocked = renderMpnewsHtml({
+      html: '<p>正文</p><script>alert(1)</script>',
+      variables: {},
+      allowed: [],
+      allowSensitive: true,
+    })
+    expect(blocked).toMatchObject({ ok: false, code: 'NOTIFICATION_CONTENT_HTML_UNSAFE' })
   })
 
   it('rejects multiple mpnews items', () => {

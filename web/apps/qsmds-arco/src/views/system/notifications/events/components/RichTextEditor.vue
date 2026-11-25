@@ -67,6 +67,10 @@ const editor = useEditor({
         openOnClick: false,
         autolink: false,
         linkOnPaste: false,
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer nofollow',
+        },
       },
     }),
     AssetImage,
