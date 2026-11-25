@@ -1464,6 +1464,8 @@ export type NotificationSkipReason =
   | 'APP_NOT_CONFIGURED'
   | 'TEXT_TOO_LONG'
   | 'QUIET_HOURS_EXPIRED'
+  | 'CONTENT_NOT_CONFIGURED'
+  | 'MESSAGE_KIND_NOT_IMPLEMENTED'
 
 export type NotificationPublishWarningCode =
   | 'EVENT_NOT_CONFIGURED'
@@ -1476,6 +1478,9 @@ export type NotificationPublishWarningCode =
   | 'DUPLICATE_IGNORED'
   | 'MEDIA_ATTACHMENT_BLOCKED'
   | 'TEXT_TOO_LONG'
+  | 'CONTENT_NOT_CONFIGURED'
+  | 'CONTENT_RENDER_FAILED'
+  | 'MESSAGE_KIND_NOT_IMPLEMENTED'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel

@@ -849,6 +849,7 @@ model User {
   notificationTemplatesCreated      NotificationTemplate[]        @relation("NotificationTemplateCreatedBy")
   notificationTemplatesUpdated      NotificationTemplate[]        @relation("NotificationTemplateUpdatedBy")
   notificationPoliciesUpdated       NotificationChannelPolicy[]   @relation("NotificationPolicyUpdatedBy")
+  notificationEventChannelsUpdated  NotificationEventChannel[]    @relation("NotificationEventChannelUpdatedBy")
   notificationSettingsUpdated       NotificationSettings[]        @relation("NotificationSettingsUpdatedBy")
   notificationChannelSettingsUpdated NotificationChannelSettings[] @relation("NotificationChannelSettingsUpdatedBy")
   wecomBinding                      WecomBinding?                  @relation("WecomBindingUser")
@@ -1258,6 +1259,7 @@ model MediaAsset {
   advertisingRechargePaymentProofs AdvertisingRechargeRequest[] @relation("AdvertisingRechargeProof")
   avatarProfile UserProfile? @relation("UserProfileAvatar")
   notificationMedia NotificationMedia[] @relation("NotificationMediaAsset")
+  notificationEventChannelMessageMedia NotificationEventChannelMessageMedia[] @relation("NotificationEventChannelMessageMediaAsset")
   wecomDeliveryMedia WecomDeliveryMedia[] @relation("WecomDeliveryMediaAsset")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
@@ -3504,6 +3506,42 @@ enum NotificationTargetMode {
   @@map("notification_target_mode")
 }
 
+/// 事件渠道配置的发送方式。IN_APP 只能配站内；APP / ROBOT 只用于 WECOM。
+enum NotificationSendMethod {
+  IN_APP
+  APP
+  ROBOT
+
+  @@map("notification_send_method")
+}
+
+/// 渠道配置内部的消息项类型；发送方式决定允许的子集。
+enum NotificationMessageKind {
+  TEXT
+  MARKDOWN
+  MARKDOWN_V2
+  IMAGE
+  VOICE
+  VIDEO
+  FILE
+  TEXTCARD
+  NEWS
+  MPNEWS
+  MINIPROGRAM_NOTICE
+  TEMPLATE_CARD
+  INTERACTIVE_TASKCARD
+
+  @@map("notification_message_kind")
+}
+
+/// 内容消息项引用的媒体角色：mpnews 固定封面与富文本正文图片。
+enum NotificationMessageMediaRole {
+  COVER
+  INLINE
+
+  @@map("notification_message_media_role")
+}
+
 enum NotificationTemplateDomain {
   SALES
   PURCHASE
@@ -3598,6 +3636,7 @@ model Notification {
   requestedBy        User?                @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   wecomDeliveries    WecomDelivery[]
+  renderedMessages   NotificationRenderedMessage[] @relation("NotificationRenderedMessages")
   inboxItems         NotificationInboxItem[]
   media              NotificationMedia[]
 
@@ -3686,6 +3725,117 @@ model NotificationChannelPolicy {
   @@unique([eventType, channel], map: "notification_channel_policies_event_channel_key")
   @@index([channel, enabled], map: "notification_channel_policies_channel_enabled_idx")
   @@map("notification_channel_policies")
+}
+
+/// 事件 × 渠道的最终配置：收件人/目标、发送方式、TTL 与渠道独享内容。
+model NotificationEventChannel {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType       String                  @map("event_type") @db.VarChar(64)
+  channel         NotificationChannel
+  sendMethod      NotificationSendMethod  @map("send_method")
+  enabled         Boolean                 @default(true)
+  targetMode      NotificationTargetMode  @default(COMMAND_TARGET) @map("target_mode")
+  targetConfig    Json                    @default("{}") @map("target_config") @db.JsonB
+  ttlSeconds      Int?                    @map("ttl_seconds")
+  quietHours      Json?                   @map("quiet_hours") @db.JsonB
+  allowSensitive  Boolean                 @default(false) @map("allow_sensitive")
+  version         Int                     @default(1)
+  updatedByUserId String?                 @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("NotificationEventChannelUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  messages  NotificationEventChannelMessage[]
+
+  @@unique([eventType, channel], map: "notification_event_channels_event_channel_key")
+  @@index([channel, sendMethod, enabled], map: "notification_event_channels_method_enabled_idx")
+  @@map("notification_event_channels")
+}
+
+/// 渠道配置内部的有序消息项；不跨事件/渠道/发送方式复用。
+/// 阶段一尚未创建内容媒体引用表；mpnews 传输落地时必须补封面/正文图片的媒体引用与清理保护。
+model NotificationEventChannelMessage {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channelConfigId String                   @map("channel_config_id") @db.Uuid
+  sortOrder       Int                      @map("sort_order")
+  kind            NotificationMessageKind
+  payload         Json                     @default("{}") @db.JsonB
+  mediaPolicy     Json                     @default("{}") @map("media_policy") @db.JsonB
+  contentHash     String?                  @map("content_hash") @db.VarChar(64)
+  enabled         Boolean                  @default(true)
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  channelConfig NotificationEventChannel @relation(fields: [channelConfigId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  media         NotificationEventChannelMessageMedia[]
+
+  @@unique([channelConfigId, sortOrder], map: "notification_event_channel_messages_config_sort_key")
+  @@index([kind], map: "notification_event_channel_messages_kind_idx")
+  @@map("notification_event_channel_messages")
+}
+
+/// 内容消息项的媒体引用：mpnews 封面与富文本正文图片，供媒体清理保护使用。
+model NotificationEventChannelMessageMedia {
+  id           String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId    String                      @map("message_id") @db.Uuid
+  mediaAssetId String                      @map("media_asset_id") @db.Uuid
+  role         NotificationMessageMediaRole
+  sortOrder    Int                         @default(0) @map("sort_order")
+  createdAt    DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  message    NotificationEventChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset MediaAsset                      @relation("NotificationEventChannelMessageMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([messageId, mediaAssetId, role], map: "notification_event_channel_message_media_unique")
+  @@index([mediaAssetId], map: "notification_event_channel_message_media_asset_idx")
+  @@map("notification_event_channel_message_media")
+}
+
+/// 通知级渲染快照：大内容（尤其 mpnews）只渲染一次，投递消息只引用。
+model NotificationRenderedMessage {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId  String                 @map("notification_id") @db.Uuid
+  channel         NotificationChannel
+  sendMethod      NotificationSendMethod @map("send_method")
+  sortOrder       Int                    @map("sort_order")
+  kind            NotificationMessageKind
+  payloadSnapshot Json                   @map("payload_snapshot") @db.JsonB
+  contentHash     String?                @map("content_hash") @db.VarChar(64)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  notification     Notification              @relation("NotificationRenderedMessages", fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  deliveryMessages NotificationDeliveryMessage[]
+
+  @@unique([notificationId, channel, sendMethod, sortOrder], map: "notification_rendered_messages_notification_channel_sort_key")
+  @@index([notificationId, channel, sendMethod], map: "notification_rendered_messages_notification_channel_idx")
+  @@map("notification_rendered_messages")
+}
+
+/// 单条投递内的实际发送消息项；逐项状态、重试与 provider 标识。
+model NotificationDeliveryMessage {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deliveryId        String              @map("delivery_id") @db.Uuid
+  renderedMessageId String              @map("rendered_message_id") @db.Uuid
+  sortOrder         Int                 @map("sort_order")
+  status            WecomDeliveryStatus @default(PENDING)
+  attemptCount      Int                 @default(0) @map("attempt_count")
+  nextAttemptAt     DateTime            @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  providerMsgId     String?             @map("provider_msg_id") @db.VarChar(128)
+  mediaId           String?             @map("media_id") @db.VarChar(128)
+  mediaIdExpiresAt  DateTime?           @map("media_id_expires_at") @db.Timestamptz(6)
+  failureCode       String?             @map("failure_code") @db.VarChar(64)
+  failureMessage    String?             @map("failure_message") @db.VarChar(255)
+  acceptedAt        DateTime?           @map("accepted_at") @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  delivery        WecomDelivery             @relation("WecomDeliveryMessages", fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  renderedMessage NotificationRenderedMessage @relation(fields: [renderedMessageId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([deliveryId, sortOrder], map: "notification_delivery_messages_delivery_sort_key")
+  @@index([status, nextAttemptAt], map: "notification_delivery_messages_status_next_idx")
+  @@index([renderedMessageId], map: "notification_delivery_messages_rendered_idx")
+  @@map("notification_delivery_messages")
 }
 
 /// 全局保留期设置，单例 id = 'default'。
@@ -3903,6 +4053,7 @@ model WecomDelivery {
   recipientUser User?            @relation("WecomDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   target        WecomTarget?     @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   media         WecomDeliveryMedia[]
+  messages      NotificationDeliveryMessage[] @relation("WecomDeliveryMessages")
 
   @@index([status, nextAttemptAt], map: "wecom_deliveries_status_next_attempt_idx")
   @@index([notificationId], map: "wecom_deliveries_notification_idx")
@@ -3946,4 +4097,16 @@ model WecomDispatchLease {
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("wecom_dispatch_leases")
+}
+
+/// 企业微信媒体缓存：mpnews 正文永久 URL 与封面临时 media_id。
+model WecomMediaCache {
+  key       String    @id @db.VarChar(256)
+  value     String    @db.Text
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "wecom_media_cache_expires_idx")
+  @@map("wecom_media_cache")
 }

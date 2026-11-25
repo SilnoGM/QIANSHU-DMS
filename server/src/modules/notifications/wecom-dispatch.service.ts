@@ -18,6 +18,8 @@ import {
   WECOM_ROBOT_TRANSPORT,
   type WecomAppTransport,
   type WecomRobotTransport,
+  type WecomTransportFailureKind,
+  type WecomTransportResult,
 } from './wecom.types'
 import { WecomSecretService } from './wecom-secret.service'
 import { WecomMediaService } from './wecom-media.service'
@@ -41,6 +43,24 @@ interface ClaimedDelivery {
   readonly rendered_content: string
   readonly mention_mode: string | null
   readonly content_sent_at: Date | null
+}
+
+interface DeliveryMessageRow {
+  readonly id: string
+  readonly deliveryId: string
+  readonly renderedMessageId: string
+  readonly sortOrder: number
+  readonly status: string
+  readonly attemptCount: number
+  readonly nextAttemptAt: Date
+  readonly providerMsgId: string | null
+  readonly failureCode: string | null
+  readonly failureMessage: string | null
+  readonly acceptedAt: Date | null
+  readonly renderedMessage: {
+    readonly kind: string
+    readonly payloadSnapshot: Prisma.JsonValue
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -321,6 +341,58 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       return
     }
 
+    const items = await this.findDeliveryMessages(delivery.id)
+    if (items.length > 0) {
+      await this.deliverMessageItems({
+        delivery,
+        items,
+        notificationId: notification.id,
+        send: async (item) => {
+          if (item.renderedMessage.kind === 'MPNEWS') {
+            const result = await this.sendAppMpnewsItem({
+              item,
+              delivery,
+              accessToken: token.accessToken,
+              agentId: app.agentId!,
+              toUser: binding.wecomUserId,
+            })
+            if (!result.ok && result.kind === 'TOKEN_INVALID') {
+              this.tokenService.invalidate(app.key)
+            }
+            return result
+          }
+          if (item.renderedMessage.kind !== 'TEXT') {
+            return {
+              ok: false,
+              kind: 'REJECTED',
+              code: 'WECOM_MESSAGE_KIND_UNSUPPORTED',
+              message: '消息类型尚未接入派发',
+            }
+          }
+          const content = this.messageContent(item.renderedMessage.payloadSnapshot)
+          if (content === null) {
+            return {
+              ok: false,
+              kind: 'REJECTED',
+              code: 'WECOM_MESSAGE_CONTENT_MISSING',
+              message: '消息内容为空',
+            }
+          }
+          const result = await this.appTransport.sendText({
+            accessToken: token.accessToken,
+            agentId: app.agentId!,
+            toUser: binding.wecomUserId,
+            content,
+          })
+          if (!result.ok && result.kind === 'TOKEN_INVALID') {
+            this.tokenService.invalidate(app.key)
+          }
+          return result
+        },
+      })
+      return
+    }
+
     const result = await this.appTransport.sendText({
       accessToken: token.accessToken,
       agentId: app.agentId,
@@ -374,6 +446,50 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     }
 
     const mention = await this.resolveMention(delivery, notification.eventType)
+    const items = await this.findDeliveryMessages(delivery.id)
+    if (items.length > 0) {
+      await this.deliverMessageItems({
+        delivery,
+        items,
+        notificationId: notification.id,
+        send: async (item, isFirstText) => {
+          if (item.renderedMessage.kind !== 'TEXT') {
+            return {
+              ok: false,
+              kind: 'REJECTED',
+              code: 'WECOM_MESSAGE_KIND_UNSUPPORTED',
+              message: '群机器人暂不支持该消息类型',
+            }
+          }
+          const content = this.messageContent(item.renderedMessage.payloadSnapshot)
+          if (content === null) {
+            return {
+              ok: false,
+              kind: 'REJECTED',
+              code: 'WECOM_MESSAGE_CONTENT_MISSING',
+              message: '消息内容为空',
+            }
+          }
+          return this.robotTransport.sendText({
+            webhookKey,
+            content,
+            ...(isFirstText && mention.userIds.length > 0 ? { mentionedUserIds: mention.userIds } : {}),
+          })
+        },
+        onFirstAccepted: async () => {
+          await this.prisma.wecomDelivery.update({
+            where: { id: delivery.id },
+            data: {
+              mentionMode: mention.mode,
+              mentionedCount: mention.userIds.length,
+              mentionSkipped: mention.skipped,
+            },
+          })
+        },
+      })
+      return
+    }
+
     const result = await this.robotTransport.sendText({
       webhookKey,
       content: delivery.rendered_content,
@@ -406,7 +522,15 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       where: { eventType_channel: { eventType, channel: 'WECOM' } },
       select: { targetConfig: true },
     })
-    const mention = parseWecomMentionConfig(asRecord(policy?.targetConfig)?.mention)
+    let targetConfig = policy?.targetConfig ?? null
+    if (policy === null) {
+      const config = await this.prisma.notificationEventChannel.findUnique({
+        where: { eventType_channel: { eventType, channel: 'WECOM' } },
+        select: { targetConfig: true },
+      })
+      targetConfig = config?.targetConfig ?? null
+    }
+    const mention = parseWecomMentionConfig(asRecord(targetConfig)?.mention)
     if (mention.mode === 'ALL') {
       return { mode: 'ALL', userIds: ['@all'], skipped: 0 }
     }
@@ -426,6 +550,343 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       userIds: [...new Set(bindings.map(binding => binding.wecomUserId))],
       skipped: mention.userIds.length - bindings.length,
     }
+  }
+
+  private async sendAppMpnewsItem(input: {
+    readonly item: DeliveryMessageRow
+    readonly delivery: ClaimedDelivery
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+  }): Promise<WecomTransportResult> {
+    const appId = input.delivery.app_id
+    if (appId === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_APP_MISSING', message: 'mpnews 投递缺少应用' }
+    }
+    const payload = asRecord(input.item.renderedMessage.payloadSnapshot)
+    const coverAssetId = typeof payload?.coverAssetId === 'string' ? payload.coverAssetId : null
+    const title = typeof payload?.title === 'string' ? payload.title : ''
+    const content = typeof payload?.content === 'string' ? payload.content : ''
+    if (coverAssetId === null || title.length === 0 || content.length === 0) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_PAYLOAD_INVALID', message: 'mpnews 内容快照不完整' }
+    }
+    const cover = await this.resolveMpnewsCoverMediaId(appId, coverAssetId, input.accessToken)
+    if (!cover.ok) {
+      return cover
+    }
+    const inline = await this.renderMpnewsInlineImages(appId, content, input.accessToken)
+    if (!inline.ok) {
+      return inline
+    }
+    return this.appTransport.sendMpnews({
+      accessToken: input.accessToken,
+      agentId: input.agentId,
+      toUser: input.toUser,
+      articles: [{
+        title,
+        thumbMediaId: cover.mediaId,
+        author: typeof payload?.author === 'string' ? payload.author : null,
+        contentSourceUrl: typeof payload?.contentSourceUrl === 'string' ? payload.contentSourceUrl : null,
+        content: inline.content,
+        digest: typeof payload?.digest === 'string' ? payload.digest : null,
+      }],
+    })
+  }
+
+  private async resolveMpnewsCoverMediaId(
+    appId: string,
+    assetId: string,
+    accessToken: string,
+  ): Promise<{ readonly ok: true, readonly mediaId: string } | { readonly ok: false, readonly kind: WecomTransportFailureKind, readonly code: string, readonly message: string }> {
+    const cacheKey = `mpnews-cover:${appId}:${assetId}`
+    const cached = await this.readMediaCache(cacheKey)
+    if (cached !== null) {
+      return { ok: true, mediaId: cached }
+    }
+    const asset = await this.prisma.mediaAsset.findUnique({
+      where: { id: assetId },
+      select: {
+        mediaType: true,
+        status: true,
+        deletedAt: true,
+        objectKey: true,
+        mimeType: true,
+        originalFilename: true,
+      },
+    })
+    if (asset === null || asset.mediaType !== 'IMAGE' || asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_COVER_INVALID', message: 'mpnews 封面资产不可用' }
+    }
+    let buffer: Buffer
+    try {
+      buffer = await this.mediaService.read(asset.objectKey)
+    }
+    catch {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_COVER_READ_FAILED', message: '读取 mpnews 封面失败' }
+    }
+    const prepared = await this.mediaService.prepareAppImage({
+      buffer,
+      mimeType: asset.mimeType,
+      filename: asset.originalFilename,
+    })
+    if (!prepared.ok) {
+      return { ok: false, kind: 'REJECTED', code: prepared.code, message: prepared.message }
+    }
+    const uploaded = await this.appTransport.uploadImage({
+      accessToken,
+      buffer: prepared.buffer,
+      mimeType: prepared.mimeType,
+      filename: prepared.filename,
+    })
+    // uploadImage 的错误类型与传输结果同构；成功时缓存 3 天。
+    if (!uploaded.ok) {
+      return uploaded
+    }
+    await this.writeMediaCache(cacheKey, uploaded.mediaId, new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000))
+    return { ok: true, mediaId: uploaded.mediaId }
+  }
+
+  private async renderMpnewsInlineImages(
+    appId: string,
+    content: string,
+    accessToken: string,
+  ): Promise<{ readonly ok: true, readonly content: string } | { readonly ok: false, readonly kind: WecomTransportFailureKind, readonly code: string, readonly message: string }> {
+    const assetIds = [...new Set([...content.matchAll(/\bdata-asset-id\s*=\s*["']([^"']+)["']/giu)]
+      .map(match => match[1])
+      .filter((assetId): assetId is string => assetId !== undefined))]
+    let rendered = content
+    for (const assetId of assetIds) {
+      const cacheKey = `mpnews-inline-url:${appId}:${assetId}`
+      let imageUrl = await this.readMediaCache(cacheKey)
+      if (imageUrl === null) {
+        const asset = await this.prisma.mediaAsset.findUnique({
+          where: { id: assetId },
+          select: {
+            mediaType: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+            mimeType: true,
+            originalFilename: true,
+          },
+        })
+        if (asset === null || asset.mediaType !== 'IMAGE' || asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+          return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_INLINE_INVALID', message: 'mpnews 正文图片资产不可用' }
+        }
+        let buffer: Buffer
+        try {
+          buffer = await this.mediaService.read(asset.objectKey)
+        }
+        catch {
+          return { ok: false, kind: 'REJECTED', code: 'WECOM_MPNEWS_INLINE_READ_FAILED', message: '读取 mpnews 正文图片失败' }
+        }
+        const prepared = await this.mediaService.prepareMpnewsInlineImage({
+          buffer,
+          mimeType: asset.mimeType,
+          filename: asset.originalFilename,
+        })
+        if (!prepared.ok) {
+          return { ok: false, kind: 'REJECTED', code: prepared.code, message: prepared.message }
+        }
+        const uploaded = await this.appTransport.uploadImageUrl({
+          accessToken,
+          buffer: prepared.buffer,
+          mimeType: prepared.mimeType,
+          filename: prepared.filename,
+        })
+        if (!uploaded.ok) {
+          return uploaded
+        }
+        imageUrl = uploaded.url
+        await this.writeMediaCache(cacheKey, imageUrl, null)
+      }
+      const escapedUrl = imageUrl.replace(/&/gu, '&amp;').replace(/"/gu, '&quot;')
+      const pattern = new RegExp(`<img\\b[^>]*\\bdata-asset-id\\s*=\\s*["']${assetId.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}["'][^>]*>`, 'giu')
+      rendered = rendered.replace(pattern, (tag) => {
+        const withoutData = tag.replace(/\sdata-asset-id\s*=\s*["'][^"']*["']/iu, '')
+        return withoutData.replace(/^<img\b/iu, `<img src="${escapedUrl}"`)
+      })
+    }
+    return { ok: true, content: rendered }
+  }
+
+  private async readMediaCache(key: string): Promise<string | null> {
+    const row = await this.prisma.wecomMediaCache.findUnique({
+      where: { key },
+      select: { value: true, expiresAt: true },
+    })
+    if (row === null) return null
+    if (row.expiresAt !== null && row.expiresAt.getTime() <= Date.now()) return null
+    return row.value
+  }
+
+  private async writeMediaCache(key: string, value: string, expiresAt: Date | null): Promise<void> {
+    await this.prisma.wecomMediaCache.upsert({
+      where: { key },
+      update: { value, expiresAt },
+      create: { key, value, expiresAt },
+    })
+  }
+
+  private async findDeliveryMessages(deliveryId: string): Promise<DeliveryMessageRow[]> {
+    return this.prisma.notificationDeliveryMessage.findMany({
+      where: { deliveryId },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        deliveryId: true,
+        renderedMessageId: true,
+        sortOrder: true,
+        status: true,
+        attemptCount: true,
+        nextAttemptAt: true,
+        providerMsgId: true,
+        failureCode: true,
+        failureMessage: true,
+        acceptedAt: true,
+        renderedMessage: {
+          select: { kind: true, payloadSnapshot: true },
+        },
+      },
+    })
+  }
+
+  private messageContent(value: Prisma.JsonValue): string | null {
+    const record = asRecord(value)
+    return typeof record?.content === 'string' && record.content.length > 0 ? record.content : null
+  }
+
+  /**
+   * 新内容模型的逐消息项发送。TEXT 阶段只处理文本；已 ACCEPTED 的项不重发，
+   * 失败项沿用投递级退避，后续项在前项最终失败时标记 SKIPPED。
+   */
+  private async deliverMessageItems(input: {
+    readonly delivery: ClaimedDelivery
+    readonly items: readonly DeliveryMessageRow[]
+    readonly notificationId: string
+    readonly send: (item: DeliveryMessageRow, isFirstText: boolean) => Promise<WecomTransportResult>
+    readonly onFirstAccepted?: () => Promise<void>
+  }): Promise<void> {
+    let sentAny = false
+    let sentText = false
+    for (const item of input.items) {
+      if (item.status === 'ACCEPTED') {
+        sentAny = true
+        if (item.renderedMessage.kind === 'TEXT') sentText = true
+        continue
+      }
+      if (item.status !== 'PENDING' && item.status !== 'SENDING') {
+        await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
+        await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
+        return
+      }
+
+      const isFirstText = item.renderedMessage.kind === 'TEXT' && !sentText
+      const result = await input.send(item, isFirstText)
+      if (result.ok) {
+        await this.prisma.notificationDeliveryMessage.update({
+          where: { id: item.id },
+          data: {
+            status: 'ACCEPTED',
+            attemptCount: { increment: 1 },
+            providerMsgId: result.msgId,
+            acceptedAt: new Date(),
+            failureCode: null,
+            failureMessage: null,
+          },
+        })
+        await this.prisma.wecomDelivery.update({
+          where: { id: input.delivery.id },
+          data: {
+            ...(input.delivery.content_sent_at === null ? { contentSentAt: new Date() } : {}),
+            ...(sentAny || result.msgId === null ? {} : { providerMsgId: result.msgId }),
+            failureCode: null,
+            failureMessage: null,
+          },
+        })
+        if (isFirstText && input.onFirstAccepted !== undefined) {
+          await input.onFirstAccepted()
+        }
+        if (item.renderedMessage.kind === 'TEXT') sentText = true
+        sentAny = true
+        continue
+      }
+
+      if (isRetryableWecomFailure(result.kind)) {
+        if (input.delivery.attempt_count + 1 >= MAX_ATTEMPTS) {
+          await this.prisma.notificationDeliveryMessage.update({
+            where: { id: item.id },
+            data: {
+              status: 'FAILED',
+              attemptCount: { increment: 1 },
+              failureCode: result.code,
+              failureMessage: result.message.slice(0, 255),
+            },
+          })
+          await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
+          await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
+          return
+        }
+        const delay = result.code.includes('RATE_LIMITED')
+          ? RATE_LIMIT_RETRY_MS
+          : RETRY_DELAYS_MS[Math.min(item.attemptCount, RETRY_DELAYS_MS.length - 1)] ?? 120_000
+        await this.prisma.notificationDeliveryMessage.update({
+          where: { id: item.id },
+          data: {
+            nextAttemptAt: new Date(Date.now() + delay),
+            failureCode: result.code,
+            failureMessage: result.message.slice(0, 255),
+          },
+        })
+        await this.failDelivery(input.delivery, result.code, result.message, input.notificationId, result.invalidUserIds)
+        return
+      }
+
+      await this.prisma.notificationDeliveryMessage.update({
+        where: { id: item.id },
+        data: {
+          status: 'FAILED',
+          attemptCount: { increment: 1 },
+          failureCode: result.code,
+          failureMessage: result.message.slice(0, 255),
+        },
+      })
+      await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
+      await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
+      return
+    }
+
+    await this.finalizeMessageDelivery(input.delivery.id, 'ACCEPTED')
+  }
+
+  private async skipRemainingMessages(deliveryId: string, afterSortOrder: number): Promise<void> {
+    await this.prisma.notificationDeliveryMessage.updateMany({
+      where: {
+        deliveryId,
+        sortOrder: { gt: afterSortOrder },
+        status: 'PENDING',
+      },
+      data: {
+        status: 'SKIPPED',
+        failureCode: 'PREVIOUS_MESSAGE_FAILED',
+        failureMessage: '前序消息失败，后续消息未发送',
+      },
+    })
+  }
+
+  private async finalizeMessageDelivery(
+    deliveryId: string,
+    status: 'ACCEPTED' | 'PARTIAL' | 'FAILED',
+  ): Promise<void> {
+    await this.prisma.wecomDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        status,
+        acceptedAt: status === 'ACCEPTED' ? new Date() : null,
+        failureCode: status === 'ACCEPTED' ? null : 'WECOM_MESSAGE_PARTIAL',
+        failureMessage: status === 'ACCEPTED' ? null : '至少一条消息项未发送',
+      },
+    })
   }
 
   private async sendAppMedia(

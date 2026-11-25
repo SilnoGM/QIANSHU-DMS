@@ -22,11 +22,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'user_profiles',
   'advertising_recharge_requests',
   'notification_media',
+  'notification_event_channel_message_media',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile' | 'advertisingRechargeRequest' | 'notificationMedia'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest' | 'paymentRecipientAccount' | 'purchaseOrderPayment' | 'containerBatch' | 'slhBill' | 'invoiceRequest' | 'fundWithdrawalRequest' | 'userProfile' | 'advertisingRechargeRequest' | 'notificationMedia' | 'notificationEventChannelMessageMedia'
 >
 
 /**
@@ -99,6 +100,8 @@ export class MediaAssetReferenceRepository {
     }) !== null) return true
     // 通知附件在保留期内仍需可被上游拉取；被替换的业务图片不能因「业务已解绑」提前回收。
     if (await reader.notificationMedia.findFirst({ where: { mediaAssetId: assetId }, select: { id: true } }) !== null) return true
+    // mpnews 封面/正文图片属于事件渠道内容配置，配置存在期间必须保留资产。
+    if (await reader.notificationEventChannelMessageMedia.findFirst({ where: { mediaAssetId: assetId }, select: { id: true } }) !== null) return true
     // 账单原件是外部凭证的唯一留痕；账单本身不可删，原件同样不可回收。
     return await reader.slhBill.findFirst({ where: { sourceFileId: assetId }, select: { id: true } }) !== null
   }

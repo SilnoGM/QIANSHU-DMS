@@ -90,7 +90,7 @@ function service(
     audit,
     secret,
     token,
-    options.appTransport ?? { sendText: jest.fn(), uploadImage: jest.fn(), sendImage: jest.fn() },
+    options.appTransport ?? { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn() },
     options.robotTransport ?? { sendText: jest.fn(), sendImage: jest.fn() },
   )
 }
@@ -186,7 +186,7 @@ describe('WecomAdminService', () => {
         }),
       },
     }
-    const appTransport = { sendText: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-1' }), uploadImage: jest.fn(), sendImage: jest.fn() }
+    const appTransport = { sendText: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-1' }), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn() }
 
     const result = await service(prisma, { appTransport }).verifyBinding(
       { actorUserId: 'actor-1', requestId: 'request-1' },

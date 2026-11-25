@@ -93,6 +93,9 @@ describe('notification center database contract', () => {
       ['NotificationPriority', 'notification_priority'],
       ['NotificationStatus', 'notification_status'],
       ['NotificationTargetMode', 'notification_target_mode'],
+      ['NotificationSendMethod', 'notification_send_method'],
+      ['NotificationMessageKind', 'notification_message_kind'],
+      ['NotificationMessageMediaRole', 'notification_message_media_role'],
     ] as const) {
       expect(block('enum', name)).toContain(`@@map("${map}")`)
     }
@@ -109,6 +112,12 @@ describe('notification center database contract', () => {
       'NotificationChannelSettings',
       'NotificationUserMute',
       'NotificationInboxItem',
+      'NotificationEventChannel',
+      'NotificationEventChannelMessage',
+      'NotificationEventChannelMessageMedia',
+      'NotificationRenderedMessage',
+      'NotificationDeliveryMessage',
+      'WecomMediaCache',
     ]) {
       expect(() => block('model', name)).not.toThrow()
     }

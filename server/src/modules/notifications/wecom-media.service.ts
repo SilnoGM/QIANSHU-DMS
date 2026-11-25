@@ -10,6 +10,7 @@ import { MediaContentDeliveryService } from '../media/media-content-delivery.ser
 
 export const WECOM_APP_IMAGE_MAX_BYTES = 10n * 1024n * 1024n
 export const WECOM_ROBOT_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+export const WECOM_MPNEWS_INLINE_IMAGE_MAX_BYTES = 2 * 1024 * 1024
 const MAX_INPUT_PIXELS = 40_000_000
 
 export type WecomImagePayload =
@@ -66,6 +67,36 @@ export class WecomMediaService {
     const compressed = await this.compress(input.buffer, Number(WECOM_APP_IMAGE_MAX_BYTES))
     if (compressed === null) {
       return { ok: false, code: 'WECOM_MEDIA_TOO_LARGE', message: '应用消息图片压缩后仍超过 10MB' }
+    }
+    return {
+      ok: true,
+      mediaType: 'image',
+      buffer: compressed,
+      mimeType: 'image/jpeg',
+      filename: input.filename.replace(/\.[^.]+$/u, '') + '.jpg',
+    }
+  }
+
+  /**
+   * mpnews 正文图片走 media/uploadimg，协议要求原图 ≤2MB；这里比应用消息图片更严格。
+   */
+  async prepareMpnewsInlineImage(input: {
+    readonly buffer: Buffer
+    readonly mimeType: string | null
+    readonly filename: string
+  }): Promise<WecomImagePayload> {
+    if (input.buffer.length <= WECOM_MPNEWS_INLINE_IMAGE_MAX_BYTES && isSupportedImage(input.mimeType)) {
+      return {
+        ok: true,
+        mediaType: 'image',
+        buffer: input.buffer,
+        mimeType: input.mimeType,
+        filename: input.filename,
+      }
+    }
+    const compressed = await this.compress(input.buffer, WECOM_MPNEWS_INLINE_IMAGE_MAX_BYTES)
+    if (compressed === null) {
+      return { ok: false, code: 'WECOM_MEDIA_TOO_LARGE', message: 'mpnews 正文图片压缩后仍超过 2MB' }
     }
     return {
       ok: true,

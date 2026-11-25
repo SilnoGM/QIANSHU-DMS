@@ -33,6 +33,24 @@ export type WecomMediaUploadResult =
     readonly message: string
   }
 
+export type WecomImageUrlResult =
+  | { readonly ok: true, readonly url: string }
+  | {
+    readonly ok: false
+    readonly kind: WecomTransportFailureKind
+    readonly code: string
+    readonly message: string
+  }
+
+export interface WecomMpnewsArticle {
+  readonly title: string
+  readonly thumbMediaId: string
+  readonly author?: string | null
+  readonly contentSourceUrl?: string | null
+  readonly content: string
+  readonly digest?: string | null
+}
+
 export interface WecomAppTransport {
   sendText(input: {
     readonly accessToken: string
@@ -46,11 +64,23 @@ export interface WecomAppTransport {
     readonly mimeType: string
     readonly filename: string
   }): Promise<WecomMediaUploadResult>
+  uploadImageUrl(input: {
+    readonly accessToken: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomImageUrlResult>
   sendImage(input: {
     readonly accessToken: string
     readonly agentId: number
     readonly toUser: string
     readonly mediaId: string
+  }): Promise<WecomTransportResult>
+  sendMpnews(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly articles: readonly WecomMpnewsArticle[]
   }): Promise<WecomTransportResult>
 }
 

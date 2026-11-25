@@ -6,6 +6,10 @@ import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { NotificationAdminController } from './notification-admin.controller'
 import { NotificationAdminService } from './notification-admin.service'
+import { NotificationContentMediaController } from './notification-content-media.controller'
+import { NotificationContentMediaService } from './notification-content-media.service'
+import { NotificationEventConfigController } from './notification-event-config.controller'
+import { NotificationEventConfigService } from './notification-event-config.service'
 import { NotificationInboxController } from './notification-inbox.controller'
 import { NotificationInboxService } from './notification-inbox.service'
 import { NotificationPreferenceController } from './notification-preference.controller'
@@ -31,11 +35,13 @@ import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
 @Global()
 @Module({
   imports: [AuthModule, MediaModule, NumberingModule],
-  controllers: [NotificationAdminController, NotificationInboxController, NotificationPreferenceController, WecomAdminController],
+  controllers: [NotificationAdminController, NotificationContentMediaController, NotificationEventConfigController, NotificationInboxController, NotificationPreferenceController, WecomAdminController],
   providers: [
     SystemNotificationService,
     WecomAdminService,
     NotificationAdminService,
+    NotificationContentMediaService,
+    NotificationEventConfigService,
     NotificationInboxService,
     NotificationPreferenceService,
     {

@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsISO8601,
@@ -19,7 +20,13 @@ import {
   ValidateNested,
 } from 'class-validator'
 
+import { NOTIFICATION_MESSAGE_KINDS, NOTIFICATION_SEND_METHODS } from './notification-content'
+
 const TEMPLATE_DOMAINS = ['SALES', 'PURCHASE', 'SHIPMENT', 'FINANCE', 'INVOICE', 'RECONCILIATION', 'OPERATIONS', 'SYSTEM'] as const
+const NOTIFICATION_TARGET_MODES = ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] as const
+
+export const NOTIFICATION_CHANNEL_VALUES = ['IN_APP', 'WECOM'] as const
+export type NotificationChannelValue = (typeof NOTIFICATION_CHANNEL_VALUES)[number]
 
 export class NotificationEventVariableDto {
   @ApiProperty() name!: string
@@ -51,8 +58,137 @@ export class NotificationEventDto {
   @ApiProperty() variablesKnown!: boolean
   @ApiProperty({ type: 'string', nullable: true }) defaultTemplateKey!: string | null
   @ApiProperty() implemented!: boolean
-  /** 已验收过附件能力的事件返回上限与类型；空表示该事件未接入附件。 */
+  /** 已验收过附件能力的事件返回上限与类型；空表示该事件未接入。 */
   @ApiProperty({ type: () => NotificationEventMediaDto, nullable: true }) media!: NotificationEventMediaDto | null
+}
+
+export class NotificationEventChannelMessageDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'integer', minimum: 0 }) sortOrder!: number
+  @ApiProperty({ enum: NOTIFICATION_MESSAGE_KINDS }) kind!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) payload!: Record<string, unknown>
+  @ApiProperty({ type: 'object', additionalProperties: true }) mediaPolicy!: Record<string, unknown>
+  @ApiProperty() enabled!: boolean
+  @ApiProperty({ type: 'string', nullable: true }) contentHash!: string | null
+}
+
+export class NotificationEventChannelConfigDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_SEND_METHODS }) sendMethod!: string
+  @ApiProperty() enabled!: boolean
+  @ApiProperty({ enum: NOTIFICATION_TARGET_MODES }) targetMode!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) targetConfig!: Record<string, unknown>
+  @ApiProperty({ type: 'integer', nullable: true }) ttlSeconds!: number | null
+  @ApiProperty({ type: 'object', nullable: true, additionalProperties: true }) quietHours!: Record<string, unknown> | null
+  @ApiProperty() allowSensitive!: boolean
+  @ApiProperty({ type: 'integer' }) version!: number
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string
+  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
+  @ApiProperty({ type: () => [NotificationEventChannelMessageDto] }) messages!: NotificationEventChannelMessageDto[]
+}
+
+export class NotificationEventConfigDto {
+  @ApiProperty() eventType!: string
+  @ApiProperty() label!: string
+  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
+  @ApiProperty({ type: [String] }) variables!: string[]
+  @ApiProperty({ type: () => [NotificationEventVariableDto] }) variableDefinitions!: NotificationEventVariableDto[]
+  @ApiProperty() variablesKnown!: boolean
+  @ApiProperty() implemented!: boolean
+  @ApiProperty({ type: () => NotificationEventMediaDto, nullable: true }) media!: NotificationEventMediaDto | null
+  @ApiProperty({ type: () => [NotificationEventChannelConfigDto] }) channels!: NotificationEventChannelConfigDto[]
+}
+
+export class NotificationEventConfigSummaryChannelDto {
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_SEND_METHODS }) sendMethod!: string
+  @ApiProperty() enabled!: boolean
+  @ApiProperty({ enum: NOTIFICATION_TARGET_MODES }) targetMode!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) targetConfig!: Record<string, unknown>
+  @ApiProperty({ type: 'integer' }) messageCount!: number
+  @ApiProperty({ format: 'date-time' }) updatedAt!: string
+  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
+}
+
+export class NotificationEventConfigSummaryDto {
+  @ApiProperty() eventType!: string
+  @ApiProperty() label!: string
+  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
+  @ApiProperty() implemented!: boolean
+  @ApiProperty({ type: () => [NotificationEventConfigSummaryChannelDto] }) channels!: NotificationEventConfigSummaryChannelDto[]
+}
+
+export class NotificationEventChannelMessageInputDto {
+  @ApiProperty({ enum: NOTIFICATION_MESSAGE_KINDS }) @IsIn(NOTIFICATION_MESSAGE_KINDS) kind!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() payload!: Record<string, unknown>
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true }) @IsOptional() @IsObject() mediaPolicy?: Record<string, unknown>
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
+}
+
+export class NotificationEventChannelConfigInputDto {
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_SEND_METHODS }) @IsIn(NOTIFICATION_SEND_METHODS) sendMethod!: string
+  @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() enabled?: boolean
+  @ApiProperty({ enum: NOTIFICATION_TARGET_MODES }) @IsIn(NOTIFICATION_TARGET_MODES) targetMode!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() targetConfig!: Record<string, unknown>
+  @ApiPropertyOptional({ nullable: true, type: 'integer', minimum: 60, maximum: 604800 })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null)
+  @IsInt()
+  @Min(60)
+  @Max(604800)
+  ttlSeconds?: number | null
+
+  @ApiPropertyOptional({ type: 'object', nullable: true, additionalProperties: true })
+  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== null)
+  @IsObject()
+  quietHours?: Record<string, unknown> | null
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() allowSensitive?: boolean
+  @ApiProperty({ type: 'integer', minimum: 0 }) @IsInt() @Min(0) expectedVersion!: number
+  @ApiProperty({ type: () => [NotificationEventChannelMessageInputDto] })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => NotificationEventChannelMessageInputDto)
+  messages!: NotificationEventChannelMessageInputDto[]
+}
+
+export class NotificationEventConfigUpdateDto {
+  @ApiProperty({ type: () => [NotificationEventChannelConfigInputDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => NotificationEventChannelConfigInputDto)
+  channels!: NotificationEventChannelConfigInputDto[]
+}
+
+export class NotificationEventConfigPreviewDto {
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true })
+  @IsOptional()
+  @IsObject()
+  variables?: Record<string, string | number | null>
+}
+
+export class NotificationEventConfigPreviewItemDto {
+  @ApiProperty({ enum: NOTIFICATION_MESSAGE_KINDS }) kind!: string
+  @ApiProperty({ type: 'object', additionalProperties: true }) payload!: Record<string, unknown>
+  @ApiProperty({ type: [String] }) warnings!: string[]
+  @ApiPropertyOptional({ type: [String], description: 'mpnews 封面与正文引用的媒体资产 ID' }) assetIds?: string[]
+}
+
+export class NotificationEventConfigPreviewChannelDto {
+  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
+  @ApiProperty({ enum: NOTIFICATION_SEND_METHODS }) sendMethod!: string
+  @ApiProperty({ type: () => [NotificationEventConfigPreviewItemDto] }) items!: NotificationEventConfigPreviewItemDto[]
+}
+
+export class NotificationEventConfigPreviewResultDto {
+  @ApiProperty() eventType!: string
+  @ApiProperty({ type: () => [NotificationEventConfigPreviewChannelDto] }) channels!: NotificationEventConfigPreviewChannelDto[]
 }
 
 export class NotificationTemplateMediaPolicyDto {
@@ -75,9 +211,6 @@ export class NotificationTemplateVariableDto {
   @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 1500 }) @IsOptional() @IsInt() @Min(1) @Max(1500) maxLength?: number
   @ApiPropertyOptional() @IsOptional() @IsBoolean() sensitive?: boolean
 }
-
-export const NOTIFICATION_CHANNEL_VALUES = ['IN_APP', 'WECOM'] as const
-export type NotificationChannelValue = (typeof NOTIFICATION_CHANNEL_VALUES)[number]
 
 export class NotificationTemplateDto {
   @ApiProperty({ format: 'uuid' }) id!: string
@@ -170,6 +303,10 @@ export class NotificationChannelPolicyUpdateDto {
 export class NotificationChannelPolicyPathDto {
   @ApiProperty() @IsString() @Matches(/\S/u) eventType!: string
   @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: NotificationChannelValue
+}
+
+export class NotificationEventTypeParamDto {
+  @ApiProperty({ maxLength: 64 }) @IsString() @MaxLength(64) @Matches(/^[A-Z0-9_]+$/u) eventType!: string
 }
 
 export class NotificationRecordQueryDto {

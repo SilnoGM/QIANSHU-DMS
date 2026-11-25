@@ -29,8 +29,13 @@ describe('media reference extension contract', () => {
       serverRoot,
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
+    const notificationContentMediaMigration = readFileSync(resolve(
+      serverRoot,
+      'prisma/migrations/20261125140000_notification_content_media_and_cache/migration.sql',
+    ), 'utf8')
     const migration = [
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261116120000_notification_media_attachments/migration.sql'), 'utf8'),
+      notificationContentMediaMigration,
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261102160000_advertising_recharge/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261020140000_user_profile_avatar_media/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20261017130000_fund_withdrawal_requests/migration.sql'), 'utf8'),
@@ -48,7 +53,7 @@ describe('media reference extension contract', () => {
     ].join('\n')
     const referenceTables = modelBlocks(schema)
       // 通知附件没有 detachedAt 语义：它是保留期内的读取引用，因此在过滤里按表名显式列出。
-      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block) || /\bavatarMediaAssetId\b/u.test(block) || /@@map\("notification_media"\)/u.test(block))
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block) || /\bpackagingImageMediaAssetId\b/u.test(block) || /\bqrMediaAssetId\b/u.test(block) || /\brecipientQrMediaAssetId\b/u.test(block) || /\bsourceFileId\b/u.test(block) || /\bdocumentMediaAssetId\b/u.test(block) || /\bpaymentProofMediaAssetId\b/u.test(block) || /\bavatarMediaAssetId\b/u.test(block) || /@@map\("notification_media"\)/u.test(block) || /@@map\("notification_event_channel_message_media"\)/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
@@ -93,6 +98,11 @@ describe('media reference extension contract', () => {
       }
       if (table === 'notification_media') {
         expect(migration).toContain('FROM notification_media reference WHERE reference.media_asset_id = reference_asset_id')
+        continue
+      }
+      if (table === 'notification_event_channel_message_media') {
+        expect(migration).toContain('CREATE CONSTRAINT TRIGGER "notification_event_channel_message_media_ready_trigger"')
+        expect(migration).toContain('enforce_notification_content_media_ready')
         continue
       }
       expect(migration).toContain(`FROM "${table}" AS reference`)

@@ -64,6 +64,7 @@ function baseTransaction(overrides: Record<string, unknown> = {}) {
       update: jest.fn().mockResolvedValue({}),
     },
     notificationChannelPolicy: { findMany: jest.fn().mockResolvedValue([wecomPolicy()]) },
+    notificationEventChannel: { findMany: jest.fn().mockResolvedValue([]) },
     notificationChannelSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: true }) },
     notificationTemplate: { findUnique: jest.fn().mockResolvedValue(wecomTemplate()) },
     notificationUserMute: { findMany: jest.fn().mockResolvedValue([]) },

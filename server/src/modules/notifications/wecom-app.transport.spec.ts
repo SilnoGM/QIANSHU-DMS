@@ -181,4 +181,73 @@ describe('WecomAppHttpTransport', () => {
       })
     }
   })
+
+  it('uploads an mpnews inline image and returns the permanent URL', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ errcode: 0, errmsg: 'ok', url: 'https://wecom.example/image' }))
+    const transport = new WecomAppHttpTransport(configService())
+
+    const result = await transport.uploadImageUrl({
+      accessToken: 'token-1',
+      buffer: Buffer.from('image'),
+      mimeType: 'image/png',
+      filename: 'inline.png',
+    })
+
+    expect(result).toEqual({ ok: true, url: 'https://wecom.example/image' })
+    const [url, init] = fetchSpy.mock.calls[0] ?? []
+    expect(url).toBeInstanceOf(URL)
+    if (url instanceof URL) {
+      expect(url.pathname).toBe('/cgi-bin/media/uploadimg')
+      expect(url.searchParams.get('access_token')).toBe('token-1')
+    }
+    expect(init?.body).toBeInstanceOf(FormData)
+  })
+
+  it('sends an mpnews article with safe=2', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({ errcode: 0, errmsg: 'ok', msgid: 'msg-3' }))
+    const transport = new WecomAppHttpTransport(configService())
+
+    const result = await transport.sendMpnews({
+      accessToken: 'token-1',
+      agentId: 1000001,
+      toUser: 'zhangsan',
+      articles: [{
+        title: '采购通知',
+        thumbMediaId: 'thumb-1',
+        author: '千树 DMS',
+        contentSourceUrl: 'https://dms.example.com/notice',
+        content: '<p>正文</p>',
+        digest: '摘要',
+      }],
+    })
+
+    expect(result).toEqual({ ok: true, msgId: 'msg-3' })
+    const [url, init] = fetchSpy.mock.calls[0] ?? []
+    expect(url).toBeInstanceOf(URL)
+    if (url instanceof URL) {
+      expect(url.pathname).toBe('/cgi-bin/message/send')
+    }
+    const body = init?.body
+    expect(typeof body).toBe('string')
+    if (typeof body === 'string') {
+      expect(JSON.parse(body)).toEqual({
+        touser: 'zhangsan',
+        agentid: 1000001,
+        msgtype: 'mpnews',
+        mpnews: {
+          articles: [{
+            title: '采购通知',
+            thumb_media_id: 'thumb-1',
+            author: '千树 DMS',
+            content_source_url: 'https://dms.example.com/notice',
+            content: '<p>正文</p>',
+            digest: '摘要',
+          }],
+        },
+        safe: 2,
+      })
+    }
+  })
 })
