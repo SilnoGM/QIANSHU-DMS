@@ -6,7 +6,7 @@ import { NotificationTemplateCreateDto } from './notification-admin.dto'
 function createPayload(mediaPolicy?: Record<string, unknown>): Record<string, unknown> {
   return {
     key: 'sales.order.submitted.XZL',
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     name: '销售单提交通知',
     domain: 'SALES',
     bodyTemplate: '销售单 {{orderNo}} 已提交',

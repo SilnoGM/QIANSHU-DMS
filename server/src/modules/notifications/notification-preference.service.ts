@@ -16,7 +16,7 @@ import {
   type NotificationEventType,
 } from './notification.types'
 
-const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'ASSISTANT', 'WECOM']
+const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'WECOM']
 
 function key(value: string, channel: string): string {
   return `${value}:${channel}`
@@ -79,8 +79,9 @@ export class NotificationPreferenceService {
   }
 
   private async buildView(userId: string): Promise<NotificationPreferenceListDto> {
-    const [policies, settings, templates, mutes, binding] = await Promise.all([
+    const [policies, settings, templates, mutes] = await Promise.all([
       this.prisma.notificationChannelPolicy.findMany({
+        where: { channel: { in: [...CHANNELS] } },
         select: {
           eventType: true,
           channel: true,
@@ -90,30 +91,21 @@ export class NotificationPreferenceService {
         },
       }),
       this.prisma.notificationChannelSettings.findMany({
+        where: { channel: { in: [...CHANNELS] } },
         select: { channel: true, enabled: true },
       }),
       this.prisma.notificationTemplate.findMany({
-        where: { enabled: true },
+        where: { enabled: true, channel: { in: [...CHANNELS] } },
         select: { key: true, channel: true },
       }),
       this.prisma.notificationUserMute.findMany({
-        where: { userId },
+        where: { userId, channel: { in: [...CHANNELS] } },
         select: { eventType: true, channel: true },
-      }),
-      // 与发布/派发时的绑定判定保持一致：已验证、公司号启用且不是待绑定占位号。
-      this.prisma.assistantBinding.findFirst({
-        where: {
-          userId,
-          status: 'ACTIVE',
-          verifiedAt: { not: null },
-          account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-        },
-        select: { id: true },
       }),
     ])
 
     const policyByKey = new Map<string, PolicyRow>(
-      policies.map(policy => [key(policy.eventType, policy.channel), policy]),
+      (policies as unknown as PolicyRow[]).map(policy => [key(policy.eventType, policy.channel), policy]),
     )
     const channelEnabled = new Map<string, boolean>(
       settings.map(setting => [setting.channel, setting.enabled]),
@@ -131,7 +123,6 @@ export class NotificationPreferenceService {
         channel,
         enabled: channelEnabled.get(channel) === true,
       })),
-      assistantBound: binding !== null,
       events: NOTIFICATION_EVENT_TYPES.map(eventType => ({
         eventType,
         label: NOTIFICATION_EVENT_LABELS[eventType],

@@ -41,7 +41,7 @@ const DOMAINS: readonly NotificationRecordDomain[] = [
   'OPERATIONS',
   'SYSTEM',
 ]
-const CHANNELS: readonly NotificationRecordChannel[] = ['IN_APP', 'ASSISTANT', 'WECOM']
+const CHANNELS: readonly NotificationRecordChannel[] = ['IN_APP', 'WECOM']
 const PRIORITIES: readonly NotificationRecordPriority[] = ['NORMAL', 'HIGH']
 
 function stringValue(query: LocationQuery, key: string): string | null {

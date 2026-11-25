@@ -9,28 +9,24 @@ import { splitTemplateBody } from '../template-key-grouping.logic'
 const props = defineProps<{
   busy: boolean
   canUpdate: boolean
-  channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
   template: NotificationTemplateDto | null
 }>()
 
 const emit = defineEmits<{
-  add: [channel: 'ASSISTANT' | 'IN_APP' | 'WECOM']
+  add: [channel: 'IN_APP' | 'WECOM']
   edit: [template: NotificationTemplateDto]
   preview: [template: NotificationTemplateDto]
   toggle: [template: NotificationTemplateDto, enabled: boolean]
 }>()
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT'
-  ? '千树小助理'
-  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
-const channelIcon = computed(() => props.channel === 'ASSISTANT'
-  ? 'i-lucide:messages-square'
-  : props.channel === 'WECOM' ? 'i-lucide:message-square-text' : 'i-lucide:bell')
-const channelIconClass = computed(() => props.channel === 'ASSISTANT'
-  ? 'bg-primary/10 text-primary'
-  : props.channel === 'WECOM'
-    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-    : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
+const channelLabel = computed(() => props.channel === 'WECOM' ? '企业微信' : '站内通知')
+const channelIcon = computed(() => props.channel === 'WECOM'
+  ? 'i-lucide:message-square-text'
+  : 'i-lucide:bell')
+const channelIconClass = computed(() => props.channel === 'WECOM'
+  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
 const previewSegments = computed(() => props.template === null ? [] : splitTemplateBody(props.template.bodyTemplate))
 const linkSegments = computed(() => props.template?.linkUrlTemplate ? splitTemplateBody(props.template.linkUrlTemplate) : [])
 </script>

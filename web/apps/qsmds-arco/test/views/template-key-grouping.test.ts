@@ -33,7 +33,7 @@ function template(overrides: Partial<NotificationTemplateDto> & Pick<Notificatio
 
 test('模板键按渠道聚合，并在域内保持稳定顺序', () => {
   const groups = groupTemplatesByKey([
-    template({ channel: 'ASSISTANT', key: 'purchase.review.pending', name: '采购审核提醒', updatedAt: '2026-11-09T08:00:00.000Z', updatedByName: '张三' }),
+    template({ channel: 'WECOM', key: 'purchase.review.pending', name: '采购审核提醒', updatedAt: '2026-11-09T08:00:00.000Z', updatedByName: '张三' }),
     template({ channel: 'IN_APP', key: 'purchase.review.pending', name: '采购审核待办', updatedAt: '2026-11-08T08:00:00.000Z', updatedByName: '李四' }),
     template({ channel: 'IN_APP', key: 'shipment.arrived', name: '货件到仓', domain: 'SHIPMENT' }),
   ])
@@ -48,8 +48,8 @@ test('模板键按渠道聚合，并在域内保持稳定顺序', () => {
 
 test('业务域和模板键过滤使用同一份分组结果', () => {
   const groups = groupTemplateKeysByDomain(groupTemplatesByKey([
-    template({ channel: 'ASSISTANT', key: 'purchase.review.pending', domain: 'PURCHASE' }),
-    template({ channel: 'ASSISTANT', key: 'shipment.arrived', domain: 'SHIPMENT' }),
+    template({ channel: 'WECOM', key: 'purchase.review.pending', domain: 'PURCHASE' }),
+    template({ channel: 'WECOM', key: 'shipment.arrived', domain: 'SHIPMENT' }),
   ]))
 
   assert.deepEqual(filterTemplateDomainGroups(groups, '货件').map(group => group.label), ['货件运输域'])

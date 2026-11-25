@@ -527,7 +527,7 @@ describe('advertising recharge against isolated PostgreSQL', () => {
         await transaction.fundPostingBatchSource.deleteMany({ where: { batchId: { in: batchIds } } })
         await transaction.fundPostingBatch.deleteMany({ where: { id: { in: batchIds } } })
       }
-      await transaction.assistantDelivery.deleteMany({ where: { recipientUserId: { in: userIds } } })
+      await transaction.wecomDelivery.deleteMany({ where: { recipientUserId: { in: userIds } } })
       if (notificationIds.length > 0) {
         await transaction.notification.deleteMany({ where: { id: { in: notificationIds } } })
       }

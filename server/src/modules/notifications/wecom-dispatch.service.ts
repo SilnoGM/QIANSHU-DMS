@@ -684,20 +684,13 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
   }
 
   private async refreshNotificationStatus(notificationId: string): Promise<void> {
-    const [assistantRows, wecomRows] = await Promise.all([
-      this.prisma.assistantDelivery.groupBy({
-        by: ['status'],
-        where: { notificationId },
-        _count: { _all: true },
-      }),
-      this.prisma.wecomDelivery.groupBy({
-        by: ['status'],
-        where: { notificationId },
-        _count: { _all: true },
-      }),
-    ])
+    const wecomRows = await this.prisma.wecomDelivery.groupBy({
+      by: ['status'],
+      where: { notificationId },
+      _count: { _all: true },
+    })
     const counts = new Map<string, number>()
-    for (const row of [...assistantRows, ...wecomRows]) {
+    for (const row of wecomRows) {
       counts.set(row.status, (counts.get(row.status) ?? 0) + row._count._all)
     }
     const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)

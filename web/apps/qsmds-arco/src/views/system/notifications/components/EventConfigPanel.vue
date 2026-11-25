@@ -24,7 +24,6 @@ import {
   findChannelPolicy,
 } from '../event-config.logic'
 import {
-  ASSISTANT_ACTION_CLASS,
   channelStateClass,
   IN_APP_ACTION_CLASS,
   channelSummary as presentChannelSummary,
@@ -66,7 +65,6 @@ type TableRow = EventTableGroupRow | EventTableRow
 
 const ACTION_COLUMN_WIDTH = resolveActionColumnWidth([
   { kind: 'text', chars: 4 },
-  { kind: 'text', chars: 5 },
   { kind: 'text', chars: 6 },
 ])
 
@@ -117,12 +115,6 @@ const tableColumns: QsGenericTableColumn<TableRow>[] = [
     title: '站内通知',
     minWidth: 130,
     accessorFn: row => eventRow(row)?.coverage.inApp.key ?? '',
-  },
-  {
-    id: 'assistant',
-    title: '千树小助理',
-    minWidth: 130,
-    accessorFn: row => eventRow(row)?.coverage.assistant.key ?? '',
   },
   {
     id: 'wecom',
@@ -278,20 +270,6 @@ defineExpose({
         </div>
       </template>
 
-      <template #cell-assistant="{ row }">
-        <div class="flex flex-col gap-1 min-w-0">
-          <FaTag variant="outline" class="w-fit" :class="channelStateClass(channelSummary(row.original, 'ASSISTANT').state)">
-            {{ channelSummary(row.original, 'ASSISTANT').label }}
-          </FaTag>
-          <span class="qs-type-meta text-muted-foreground break-all">
-            <template v-if="channelSummary(row.original, 'ASSISTANT').key !== null">
-              {{ channelSummary(row.original, 'ASSISTANT').source }} · {{ channelSummary(row.original, 'ASSISTANT').key }}
-            </template>
-            <template v-else>未指定模板</template>
-          </span>
-        </div>
-      </template>
-
       <template #cell-wecom="{ row }">
         <div class="flex flex-col gap-1 min-w-0">
           <FaTag variant="outline" class="w-fit" :class="channelStateClass(channelSummary(row.original, 'WECOM').state)">
@@ -327,14 +305,6 @@ defineExpose({
             @click="openDrawer(eventRow(row)!.event.eventType, 'IN_APP')"
           >
             站内配置
-          </FaButton>
-          <FaButton
-            variant="outline"
-            size="sm"
-            :class="ASSISTANT_ACTION_CLASS"
-            @click="openDrawer(eventRow(row)!.event.eventType, 'ASSISTANT')"
-          >
-            小助理配置
           </FaButton>
           <FaButton
             variant="outline"

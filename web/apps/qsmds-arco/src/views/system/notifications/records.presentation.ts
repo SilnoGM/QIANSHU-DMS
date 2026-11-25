@@ -65,13 +65,11 @@ export const PRIORITY_OPTIONS = [
 
 export const CHANNEL_OPTIONS = [
   { label: '站内', value: 'IN_APP' },
-  { label: '小助理', value: 'ASSISTANT' },
   { label: '企业微信', value: 'WECOM' },
 ] as const
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
   ADVERTISING_RECHARGE_REQUEST: '广告充值申请',
-  ASSISTANT_ACCOUNT: 'GeWe 公司号',
   FUND_POSTING_BATCH: '资金记账批次',
   FUND_WITHDRAWAL_REQUEST: '提款申请',
   INVOICE_REQUEST: '开票申请',
@@ -113,19 +111,13 @@ export function priorityClass(priority: string): string {
   return priority === 'HIGH' ? TONE_CLASSES.warning : TONE_CLASSES.muted
 }
 
-export function channelLabel(channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'): string {
-  if (channel === 'IN_APP') {
-    return '站内'
-  }
-  return channel === 'ASSISTANT' ? '小助理' : '企业微信'
+export function channelLabel(channel: 'IN_APP' | 'WECOM'): string {
+  return channel === 'IN_APP' ? '站内' : '企业微信'
 }
 
-export function channelClass(channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'): string {
-  if (channel === 'IN_APP') {
-    return 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
-  }
-  return channel === 'ASSISTANT'
-    ? 'border-primary/30 bg-primary/10 text-primary'
+export function channelClass(channel: 'IN_APP' | 'WECOM'): string {
+  return channel === 'IN_APP'
+    ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
     : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
 }
 

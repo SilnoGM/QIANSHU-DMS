@@ -117,17 +117,11 @@ function sanitizeVariables(input: Readonly<Record<string, string | number | null
   return result
 }
 
-function notificationFailureCode(
-  code: 'TEMPLATE_VARIABLE_MISSING' | 'TEMPLATE_TOO_LONG',
-): NotificationPublishWarningCode {
-  return code === 'TEMPLATE_VARIABLE_MISSING' ? 'TEMPLATE_VARIABLE_MISSING' : 'TEMPLATE_NOT_FOUND'
-}
-
 /**
  * 业务侧唯一发布入口。
  *
  * 只写数据库：解析事件 × 渠道策略、收件人、模板和幂等键，创建逻辑通知与站外交付；
- * 不调用 GeWe、不做重试。配置或模板问题不抛异常，避免通知问题回滚业务事务。
+ * 不调用企业微信、不做重试。配置或模板问题不抛异常，避免通知问题回滚业务事务。
  * 通知编号是唯一例外：新通知必须在同一事务取得编号，编号域不可用时失败关闭。
  */
 @Injectable()
@@ -189,16 +183,16 @@ export class SystemNotificationService {
     const policies = eventType === null
       ? []
       : await transaction.notificationChannelPolicy.findMany({
-        where: { eventType, enabled: true },
+        where: { eventType, enabled: true, channel: { in: ['IN_APP', 'WECOM'] } },
       })
     const requestedChannels = command.channels === undefined ? null : new Set(command.channels)
     const selectedPolicies = requestedChannels === null
       ? policies
       : policies.filter(policy => requestedChannels.has(policy.channel))
     const primaryPolicy = selectedPolicies.find(
-      policy => policy.channel === 'ASSISTANT' || policy.channel === 'WECOM',
+      policy => policy.channel === 'WECOM',
     ) ?? selectedPolicies[0]
-    const expiresAt = primaryPolicy?.channel === 'ASSISTANT' || primaryPolicy?.channel === 'WECOM'
+    const expiresAt = primaryPolicy?.channel === 'WECOM'
       ? this.resolveExpiresAt(command, primaryPolicy.ttlSeconds, now)
       : null
     // 优先级由事件×渠道策略统一维护，避免业务代码硬编码 HIGH 覆盖管理端配置。
@@ -249,7 +243,7 @@ export class SystemNotificationService {
     }
 
     // 附件归属整条通知，与渠道循环分离：被策略拦下的附件也要留痕，供记录页排障。
-    const media = await this.prepareNotificationMedia(transaction, {
+    await this.prepareNotificationMedia(transaction, {
       notificationId: notification.id,
       command,
       policies: selectedPolicies,
@@ -285,96 +279,19 @@ export class SystemNotificationService {
         channelResults.push(channelResult)
         continue
       }
-      if (policy.channel !== 'ASSISTANT') {
+      if (policy.channel !== 'IN_APP' && policy.channel !== 'WECOM') {
         warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: `渠道 ${String(policy.channel)} 尚未实现` })
         continue
       }
-
-      const setting = await transaction.notificationChannelSettings.findUnique({
-        where: { channel: 'ASSISTANT' },
-        select: { enabled: true },
-      })
-      if (setting === null || !setting.enabled) {
-        warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '千树小助理渠道未启用' })
-        channelResults.push({
-          channel: 'ASSISTANT',
-          status: 'SKIPPED',
-          recipientCount: 0,
-          skippedCount: 0,
-          skipReason: 'CHANNEL_DISABLED',
-        })
-        continue
-      }
-
-      const template = await transaction.notificationTemplate.findUnique({
-        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
-      })
-      if (template === null || !template.enabled) {
-        warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站外模板不存在或已停用' })
-        // 渠道之间独立：小助理模板缺失不能阻断后续 WECOM 投递。
-        channelResults.push({
-          channel: 'ASSISTANT',
-          status: 'SKIPPED',
-          recipientCount: 0,
-          skippedCount: 0,
-          skipReason: 'CHANNEL_NOT_CONFIGURED',
-        })
-        continue
-      }
-
-      const render = renderNotificationTemplate({
-        body: template.bodyTemplate,
-        linkUrlTemplate: template.linkUrlTemplate,
-        variables,
-        allowed: parseTemplateVariables(template.variables),
-        allowSensitive: policy.allowSensitive,
-        maxLength: template.maxLength,
-      })
-      if (!render.ok) {
-        warnings.push({ code: notificationFailureCode(render.code), message: render.message })
-        channelResults.push({
-          channel: 'ASSISTANT',
-          status: 'SKIPPED',
-          recipientCount: 0,
-          skippedCount: 0,
-          skipReason: 'CHANNEL_NOT_CONFIGURED',
-        })
-        continue
-      }
-      if (render.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
-        warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
-      }
-
-      const channelResult = await this.createAssistantDeliveries(transaction, {
-        notificationId: notification.id,
-        policy,
-        templateKey,
-        templateVersion: template.version,
-        content: render.content,
-        media,
-        command,
-        now,
-        warnings,
-      })
-      channelResults.push(channelResult)
     }
 
-    const [assistantTotal, assistantPending, wecomTotal, wecomPending, inboxTotal] = await Promise.all([
-      transaction.assistantDelivery.count({ where: { notificationId: notification.id } }),
-      transaction.assistantDelivery.count({
-        where: { notificationId: notification.id, status: 'PENDING' },
-      }),
-      // 兼容只 mock 小助理表的既有单测；真实 Prisma transaction 一定有 wecomDelivery。
-      'wecomDelivery' in transaction
-        ? transaction.wecomDelivery.count({ where: { notificationId: notification.id } })
-        : Promise.resolve(0),
-      'wecomDelivery' in transaction
-        ? transaction.wecomDelivery.count({ where: { notificationId: notification.id, status: 'PENDING' } })
-        : Promise.resolve(0),
+    const [wecomTotal, wecomPending, inboxTotal] = await Promise.all([
+      transaction.wecomDelivery.count({ where: { notificationId: notification.id } }),
+      transaction.wecomDelivery.count({ where: { notificationId: notification.id, status: 'PENDING' } }),
       transaction.notificationInboxItem.count({ where: { notificationId: notification.id } }),
     ])
-    const total = assistantTotal + wecomTotal
-    const pending = assistantPending + wecomPending
+    const total = wecomTotal
+    const pending = wecomPending
     // 全员关闭时投递与收件箱计数都是 0，按常规规则会被误判为 FAILED；
     // 只有「所有渠道都跳过、且其中至少一个是用户主动关闭」才归为 SKIPPED，
     // 其余全跳过（模板缺失、目标不可用等）仍保留 FAILED 以暴露配置问题。
@@ -548,14 +465,14 @@ export class SystemNotificationService {
       return []
     }
 
-    const policy = input.policies.find(candidate => candidate.channel === 'ASSISTANT')
+    const policy = input.policies.find(candidate => candidate.channel === 'WECOM')
     const templateKey = policy === undefined
       ? null
       : this.resolveTemplateKey(policy.templateKey, input.command.templateKey)
     const template = templateKey === null
       ? null
       : await transaction.notificationTemplate.findUnique({
-        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
+        where: { key_channel: { key: templateKey, channel: 'WECOM' } },
         select: { enabled: true, mediaPolicy: true },
       })
     const mediaPolicy = template !== null && template.enabled
@@ -668,28 +585,6 @@ export class SystemNotificationService {
       result.push({ assetId, sourceKey })
     }
     return result
-  }
-
-  /** 只为真正会发送的投递创建附件项；已跳过或未绑定的投递不产生无意义的重试行。 */
-  private async createDeliveryMedia(
-    transaction: Transaction,
-    deliveries: readonly { readonly id: string, readonly status: 'PENDING' | 'SKIPPED' }[],
-    media: readonly NotificationMediaAttachment[],
-  ): Promise<void> {
-    if (media.length === 0) {
-      return
-    }
-    const sendable = deliveries.filter(delivery => delivery.status === 'PENDING')
-    if (sendable.length === 0) {
-      return
-    }
-    await transaction.assistantDeliveryMedia.createMany({
-      data: sendable.flatMap(delivery => media.map(item => ({
-        deliveryId: delivery.id,
-        mediaAssetId: item.mediaAssetId,
-        sortOrder: item.sortOrder,
-      }))),
-    })
   }
 
   /**
@@ -1004,139 +899,6 @@ export class SystemNotificationService {
       ? targetConfig as Record<string, unknown>
       : null
     return parseWecomMentionConfig(record?.mention)
-  }
-
-  private async createAssistantDeliveries(    transaction: Transaction,
-    input: {
-      readonly notificationId: string
-      readonly policy: {
-        readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
-        readonly targetConfig: Prisma.JsonValue
-        readonly allowSensitive: boolean
-      }
-      readonly templateKey: string
-      readonly templateVersion: number
-      readonly content: string
-      readonly media: readonly NotificationMediaAttachment[]
-      readonly command: SystemNotificationPublishCommand
-      readonly now: Date
-      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
-    },
-  ): Promise<ResolvedChannelResult> {
-    const tx = transaction
-
-    if (input.policy.targetMode === 'GROUP') {
-      const targetKeys = parseTargetConfig(input.policy.targetConfig).targetKeys ?? []
-      const targets = targetKeys.length === 0
-        ? []
-        : await tx.assistantTarget.findMany({
-          where: { key: { in: targetKeys }, enabled: true },
-          select: { id: true, internalOnly: true },
-        })
-      if (targets.length === 0) {
-        input.warnings.push({ code: 'NO_RECIPIENT', message: '群目标不存在或已停用' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
-      }
-      const account = await tx.assistantAccount.findFirst({
-        where: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      })
-      if (account === null) {
-        input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '没有可用的公司号' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
-      }
-
-      const skipped = targets.filter(target => input.policy.allowSensitive && !target.internalOnly).length
-      const deliveries = targets.map(target => {
-        const sendable = !(input.policy.allowSensitive && !target.internalOnly)
-        return {
-          id: randomUUID(),
-          notificationId: input.notificationId,
-          recipientUserId: null,
-          targetId: target.id,
-          accountId: account.id,
-          status: sendable ? 'PENDING' as const : 'SKIPPED' as const,
-          failureCode: sendable ? null : 'TARGET_DISABLED',
-          failureMessage: sendable ? null : '群未标记为仅内部成员，敏感内容不发送',
-          templateKey: input.templateKey,
-          templateVersion: input.templateVersion,
-          renderedContent: input.content,
-          nextAttemptAt: input.now,
-        }
-      })
-      await tx.assistantDelivery.createMany({ data: deliveries })
-      await this.createDeliveryMedia(tx, deliveries, input.media)
-      if (skipped === targets.length) {
-        input.warnings.push({ code: 'NO_RECIPIENT', message: '所有群目标都不允许接收敏感内容' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: targets.length, skippedCount: skipped, skipReason: 'TARGET_DISABLED' }
-      }
-      return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: targets.length, skippedCount: skipped }
-    }
-
-    const target = input.policy.targetMode === 'COMMAND_TARGET'
-      ? input.command.target
-      : this.targetFromPolicy(input.policy)
-    const resolvedUserIds = target === null ? [] : await this.resolveUsers(tx, target)
-    if (resolvedUserIds.length === 0) {
-      input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到收件人' })
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
-    }
-    // 用户关闭优先于绑定检查：关闭者不计入 NOT_BOUND，也不再生成投递行。
-    const { allowed: userIds, muted } = await this.filterMutedUsers(
-      tx,
-      resolvedUserIds,
-      input.command.eventType,
-      'ASSISTANT',
-    )
-    if (muted > 0) {
-      input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的小助理提醒` })
-    }
-    if (userIds.length === 0) {
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
-    }
-
-    const bindings = await tx.assistantBinding.findMany({
-      where: {
-        userId: { in: userIds },
-        status: 'ACTIVE',
-        verifiedAt: { not: null },
-        account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-      },
-      select: { userId: true, accountId: true },
-      orderBy: { boundAt: 'asc' },
-    })
-    const bindingByUser = new Map<string, string>()
-    for (const binding of bindings) {
-      if (!bindingByUser.has(binding.userId)) {
-        bindingByUser.set(binding.userId, binding.accountId)
-      }
-    }
-    const skipped = userIds.filter(userId => !bindingByUser.has(userId)).length
-    const deliveries = userIds.map(userId => {
-      const accountId = bindingByUser.get(userId) ?? null
-      return {
-        id: randomUUID(),
-        notificationId: input.notificationId,
-        recipientUserId: userId,
-        targetId: null,
-        accountId,
-        status: accountId === null ? 'SKIPPED' as const : 'PENDING' as const,
-        failureCode: accountId === null ? 'NOT_BOUND' : null,
-        failureMessage: accountId === null ? '员工未完成已验证绑定' : null,
-        templateKey: input.templateKey,
-        templateVersion: input.templateVersion,
-        renderedContent: input.content,
-        nextAttemptAt: input.now,
-      }
-    })
-    await tx.assistantDelivery.createMany({ data: deliveries })
-    await this.createDeliveryMedia(tx, deliveries, input.media)
-    if (skipped === userIds.length) {
-      input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都未完成绑定' })
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: muted + skipped, skipReason: 'NOT_BOUND' }
-    }
-    return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: userIds.length, skippedCount: muted + skipped }
   }
 
   /**

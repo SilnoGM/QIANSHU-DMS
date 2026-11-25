@@ -78,7 +78,6 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     notificationUserMute: { findFirst: jest.fn().mockResolvedValue(null) },
     notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(null) },
     notificationInboxItem: { count: jest.fn().mockResolvedValue(0) },
-    assistantDelivery: { groupBy: jest.fn().mockResolvedValue([]) },
     wecomDelivery: {
       groupBy: jest.fn().mockResolvedValue([{ _count: { _all: 1 }, status: 'ACCEPTED' }]),
       update: jest.fn().mockResolvedValue({}),

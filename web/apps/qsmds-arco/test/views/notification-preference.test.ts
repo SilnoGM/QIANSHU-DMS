@@ -27,7 +27,7 @@ function preferenceEvent(
   eventType: string,
   domain: NotificationPreferenceEventDto['domain'],
   channels: Array<{
-    channel: 'IN_APP' | 'ASSISTANT'
+    channel: 'IN_APP' | 'WECOM'
     available: boolean
     muted?: boolean
     unavailableReason?: string | null
@@ -49,13 +49,13 @@ test('接收设置只保留至少一个渠道可调整的事件', () => {
   const groups = buildPreferenceGroups([
     preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
       { channel: 'IN_APP', available: true },
-      { channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' },
+      { channel: 'WECOM', available: false, unavailableReason: 'CHANNEL_DISABLED' },
     ]),
     preferenceEvent('SALES_ORDER_SUBMITTED', 'sales', [
       { channel: 'IN_APP', available: false, unavailableReason: 'TEMPLATE_MISSING' },
-      { channel: 'ASSISTANT', available: false, unavailableReason: 'NOT_CONFIGURED' },
+      { channel: 'WECOM', available: false, unavailableReason: 'NOT_CONFIGURED' },
     ]),
-    preferenceEvent('ASSISTANT_ACCOUNT_OFFLINE', 'system', [
+    preferenceEvent('WECOM_CHANNEL_OFFLINE', 'system', [
       { channel: 'IN_APP', available: true },
     ]),
   ])
@@ -77,19 +77,19 @@ test('接收设置按固定业务域顺序分组', () => {
 
 test('渠道与不可设置原因使用中文文案', () => {
   assert.equal(PREFERENCE_CHANNEL_LABELS.IN_APP, '站内通知')
-  assert.equal(PREFERENCE_CHANNEL_LABELS.ASSISTANT, '千树小助理')
+  assert.equal(PREFERENCE_CHANNEL_LABELS.WECOM, '企业微信')
   assert.equal(preferenceUnavailableLabel('GROUP_TARGET'), '仅发送到群')
   assert.equal(preferenceUnavailableLabel('CHANNEL_DISABLED'), '渠道未启用')
   assert.equal(preferenceUnavailableLabel('UNKNOWN'), '不可设置')
   assert.equal(preferenceUnavailableLabel(null), '')
 })
 
-test('接收设置单元格固定按站内、小助理、企业微信排序并保留缺失列', () => {
-  const cells = preferenceCells(preferenceEvent('ASSISTANT_ACCOUNT_OFFLINE', 'system', [
-    { channel: 'ASSISTANT', available: true },
+test('接收设置单元格固定按站内、企业微信排序并保留缺失列', () => {
+  const cells = preferenceCells(preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
+    { channel: 'WECOM', available: true },
   ]))
 
-  assert.deepEqual(cells.map(cell => cell.channel), ['IN_APP', 'ASSISTANT', 'WECOM'])
+  assert.deepEqual(cells.map(cell => cell.channel), ['IN_APP', 'WECOM'])
   assert.equal(cells[0]?.dto, null)
   assert.equal(cells[1]?.dto?.available, true)
 })
@@ -98,11 +98,11 @@ test('已关闭汇总只统计可投递且确实关闭的渠道', () => {
   const events = [
     preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
       { channel: 'IN_APP', available: true, muted: true },
-      { channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' },
+      { channel: 'WECOM', available: false, unavailableReason: 'CHANNEL_DISABLED' },
     ]),
     preferenceEvent('SALES_ORDER_COMPLETED', 'sales', [
       { channel: 'IN_APP', available: true, muted: false },
-      { channel: 'ASSISTANT', available: true, muted: true },
+      { channel: 'WECOM', available: true, muted: true },
     ]),
   ]
 
@@ -144,10 +144,10 @@ test('隐藏渠道后只保留仍有可见渠道的事件', () => {
   const groups = buildPreferenceGroups([
     preferenceEvent('PURCHASE_REVIEW_PENDING', 'purchase', [
       { channel: 'IN_APP', available: true },
-      { channel: 'ASSISTANT', available: true },
+      { channel: 'WECOM', available: true },
     ]),
     preferenceEvent('SALES_ORDER_COMPLETED', 'sales', [
-      { channel: 'ASSISTANT', available: true },
+      { channel: 'WECOM', available: true },
     ]),
   ], { visibleChannels: ['IN_APP'] })
 
@@ -156,11 +156,11 @@ test('隐藏渠道后只保留仍有可见渠道的事件', () => {
 })
 
 test('渠道启停状态缺失时退回展示全部列', () => {
-  assert.deepEqual(enabledPreferenceChannels(undefined), ['IN_APP', 'ASSISTANT', 'WECOM'])
-  assert.deepEqual(enabledPreferenceChannels([]), ['IN_APP', 'ASSISTANT', 'WECOM'])
+  assert.deepEqual(enabledPreferenceChannels(undefined), ['IN_APP', 'WECOM'])
+  assert.deepEqual(enabledPreferenceChannels([]), ['IN_APP', 'WECOM'])
   assert.deepEqual(enabledPreferenceChannels([
     { channel: 'IN_APP', enabled: true },
-    { channel: 'ASSISTANT', enabled: false },
+    { channel: 'WECOM', enabled: false },
   ]), ['IN_APP'])
 })
 
@@ -178,7 +178,7 @@ test('个人通知中心提供接收设置抽屉并调用自助接口', () => {
   assert.match(drawerSource, /pendingKeys/u)
   assert.doesNotMatch(drawerSource, /pendingKey !== null/u)
   // 三列表头与可读标签。
-  assert.match(drawerSource, /grid-cols-\[minmax\(0,1fr\)_5\.5rem_5\.5rem\]/u)
+  assert.match(drawerSource, /grid-cols-\[minmax\(0,1fr\)_5\.5rem\]/u)
   assert.match(drawerSource, /aria-label/u)
   assert.match(drawerSource, /已关闭 \{\{ mutedCount \}\} 项/u)
   // 搜索、筛选、批量恢复与全局渠道折叠。
@@ -190,10 +190,6 @@ test('个人通知中心提供接收设置抽屉并调用自助接口', () => {
   assert.match(drawerSource, /top-0/u)
   assert.match(drawerSource, /hiddenChannelLabels/u)
   assert.match(drawerSource, /enabledPreferenceChannels/u)
-  // 未绑定小助理时给出明确状态，避免开关显示为已开启却收不到消息。
-  assert.match(drawerSource, /assistantBound/u)
-  assert.match(drawerSource, /未绑定/u)
-  assert.match(drawerSource, /assistantHint/u)
   // 个人设置只依赖登录态，不能引用管理端权限。
   assert.doesNotMatch(drawerSource, /notification-policy:update/u)
   assert.doesNotMatch(drawerSource, /notification-template:update/u)

@@ -13,7 +13,7 @@ const props = defineProps<{
   canUpdatePolicy: boolean
   canUpdateTemplate: boolean
   canViewTemplate: boolean
-  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
   effective: EffectiveTemplate
   event: NotificationEventDto
 }>()

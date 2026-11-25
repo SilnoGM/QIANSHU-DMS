@@ -85,7 +85,7 @@ async function deleteDeliveryBatches(
 ): Promise<{ deleted: number, timedOut: boolean }> {
   let deleted = 0
   while (Date.now() < deadline) {
-    const rows = await prisma.assistantDelivery.findMany({
+    const rows = await prisma.wecomDelivery.findMany({
       where: { createdAt: { lte: cutoff } },
       select: { id: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -94,7 +94,7 @@ async function deleteDeliveryBatches(
     if (rows.length === 0) {
       return { deleted, timedOut: false }
     }
-    const result = await prisma.assistantDelivery.deleteMany({
+    const result = await prisma.wecomDelivery.deleteMany({
       where: { id: { in: rows.map(row => row.id) } },
     })
     deleted += result.count
@@ -117,7 +117,7 @@ async function deleteNotificationBatches(
       where: {
         createdAt: { lte: cutoff },
         inboxItems: { none: {} },
-        deliveries: { none: {} },
+        wecomDeliveries: { none: {} },
       },
       select: { id: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

@@ -21,7 +21,6 @@ export interface TemplateKeyGroup {
   key: string
   domain: TemplateDomain
   displayName: string
-  assistant: NotificationTemplateDto | null
   inApp: NotificationTemplateDto | null
   wecom: NotificationTemplateDto | null
   channelCount: number
@@ -74,12 +73,11 @@ export function templateDomainClass(domain: string): string {
 }
 
 export function templateKeyDisplayName(
-  assistant: NotificationTemplateDto | null,
   wecom: NotificationTemplateDto | null,
   inApp: NotificationTemplateDto | null,
   key: string,
 ): string {
-  return assistant?.name.trim() || wecom?.name.trim() || inApp?.name.trim() || key
+  return wecom?.name.trim() || inApp?.name.trim() || key
 }
 
 function latestTemplate(
@@ -92,7 +90,6 @@ function latestTemplate(
 
 export function groupTemplatesByKey(templates: readonly NotificationTemplateDto[]): TemplateKeyGroup[] {
   const groups = new Map<string, {
-    assistant: NotificationTemplateDto | null
     inApp: NotificationTemplateDto | null
     wecom: NotificationTemplateDto | null
     key: string
@@ -102,17 +99,13 @@ export function groupTemplatesByKey(templates: readonly NotificationTemplateDto[
 
   for (const template of templates) {
     const group = groups.get(template.key) ?? {
-      assistant: null,
       inApp: null,
       wecom: null,
       key: template.key,
       latest: null,
       domain: template.domain,
     }
-    if (template.channel === 'ASSISTANT') {
-      group.assistant = template
-    }
-    else if (template.channel === 'WECOM') {
+    if (template.channel === 'WECOM') {
       group.wecom = template
     }
     else {
@@ -125,18 +118,14 @@ export function groupTemplatesByKey(templates: readonly NotificationTemplateDto[
   return [...groups.values()]
     .map((group) => {
       const latest = group.latest?.template ?? null
-      const fallback = latest?.channel === 'ASSISTANT'
-        ? group.inApp
-        : latest?.channel === 'WECOM' ? group.assistant ?? group.inApp : group.assistant ?? group.wecom
+      const fallback = latest?.channel === 'WECOM' ? group.inApp : group.wecom
       return {
         key: group.key,
         domain: group.domain,
-        displayName: templateKeyDisplayName(group.assistant, group.wecom, group.inApp, group.key),
-        assistant: group.assistant,
+        displayName: templateKeyDisplayName(group.wecom, group.inApp, group.key),
         inApp: group.inApp,
         wecom: group.wecom,
-        channelCount: (group.assistant === null ? 0 : 1)
-          + (group.inApp === null ? 0 : 1)
+        channelCount: (group.inApp === null ? 0 : 1)
           + (group.wecom === null ? 0 : 1),
         updatedAt: latest?.updatedAt ?? null,
         updatedByName: latest?.updatedByName ?? fallback?.updatedByName ?? null,

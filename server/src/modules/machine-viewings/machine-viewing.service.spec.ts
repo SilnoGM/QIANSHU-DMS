@@ -566,7 +566,7 @@ describe('MachineViewingService manual notification', () => {
       existing: todayRow(),
       templates: [{
         bodyTemplate: '看机预约 {{appointmentNo}}',
-        channel: 'ASSISTANT',
+        channel: 'WECOM',
         linkUrlTemplate: null,
         maxLength: 2000,
         titleTemplate: null,
@@ -581,12 +581,12 @@ describe('MachineViewingService manual notification', () => {
     expect(notifications.publish).not.toHaveBeenCalled()
   })
 
-  it('falls back to the WECOM template when no assistant template is configured', async () => {
+  it('falls back to the in-app template when no WECOM template is configured', async () => {
     const { service } = createHarness({
       existing: todayRow(),
       templates: [{
-        bodyTemplate: '企业微信看机预约 {{appointmentNo}}',
-        channel: 'WECOM',
+        bodyTemplate: '站内看机预约 {{appointmentNo}}',
+        channel: 'IN_APP',
         linkUrlTemplate: null,
         maxLength: 2000,
         titleTemplate: null,
@@ -595,7 +595,7 @@ describe('MachineViewingService manual notification', () => {
     })
 
     await expect(service.manualNotificationText(ACTOR, CREATED_ID, NOW)).resolves.toEqual({
-      body: '企业微信看机预约 MV/20261106-0001',
+      body: '站内看机预约 MV/20261106-0001',
       title: null,
     })
   })

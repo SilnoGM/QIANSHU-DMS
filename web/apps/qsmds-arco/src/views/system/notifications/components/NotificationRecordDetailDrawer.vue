@@ -51,7 +51,7 @@ const canManage = computed(() => auth('notification-record:manage'))
 const canCancel = computed(() => detail.value !== null && canCancelRecord(detail.value, canManage.value))
 const deliveries = computed(() => detail.value === null ? [] : sortRecordDeliveries(detail.value.deliveries))
 const deliveryStatuses = computed(() => detail.value === null ? [] : deliveryStatusEntries(detail.value))
-const assistantTotal = computed(() => detail.value === null ? 0 : deliveryTotal(detail.value.deliveryCounts))
+const wecomTotal = computed(() => detail.value === null ? 0 : deliveryTotal(detail.value.wecomDeliveryCounts ?? {}))
 const inAppRead = computed(() => detail.value === null ? 0 : inAppReadCount(detail.value))
 
 /** 附件大小以字符串下发，避免 BigInt 序列化问题；这里只在展示层换算。 */
@@ -309,15 +309,15 @@ defineExpose({ reload })
             </dl>
           </div>
 
-          <div v-if="detail.channels.includes('ASSISTANT')" class="p-4 border border-border rounded-lg">
+          <div v-if="detail.channels.includes('WECOM')" class="p-4 border border-border rounded-lg">
             <div class="flex gap-2 items-center">
-              <FaIcon name="i-lucide:send" class="text-primary size-4" />
+              <FaIcon name="i-lucide:send" class="text-emerald-600 size-4" />
               <p class="qs-type-body-medium m-0">
-                千树小助理
+                企业微信
               </p>
             </div>
             <p class="qs-type-data-emphasis m-0 mt-3">
-              {{ assistantTotal }} <span class="qs-type-meta text-muted-foreground font-normal">条交付</span>
+              {{ wecomTotal }} <span class="qs-type-meta text-muted-foreground font-normal">条交付</span>
             </p>
             <div v-if="deliveryStatuses.length > 0" class="mt-2 flex flex-wrap gap-1.5">
               <FaTag
@@ -331,13 +331,13 @@ defineExpose({ reload })
               </FaTag>
             </div>
             <p v-else class="qs-type-meta text-muted-foreground m-0 mt-2">
-              未生成小助理交付
+              未生成企业微信交付
             </p>
           </div>
         </div>
       </section>
 
-      <section v-if="detail.channels.includes('ASSISTANT')" class="flex flex-col gap-3">
+      <section v-if="detail.channels.includes('WECOM')" class="flex flex-col gap-3">
         <div class="flex flex-wrap gap-2 items-baseline justify-between">
           <h3 class="qs-type-body-medium m-0">
             逐人交付
@@ -405,8 +405,8 @@ defineExpose({ reload })
         <FaEmpty
           v-else
           icon="i-lucide:send"
-          title="没有小助理交付"
-          description="这条通知没有生成小助理交付记录。"
+          title="没有企业微信交付"
+          description="这条通知没有生成企业微信交付记录。"
           class="min-h-28"
         />
       </section>
@@ -442,7 +442,7 @@ defineExpose({ reload })
       </section>
 
       <p class="qs-type-meta text-muted-foreground m-0 pt-3 border-t border-border">
-        “完成”“已接受”表示 GeWe 已接受发送，不代表员工已阅读；站内阅读状态在员工通知中心查看。
+        “完成”“已接受”表示企业微信已接受发送，不代表员工已阅读；站内阅读状态在员工通知中心查看。
       </p>
     </div>
 

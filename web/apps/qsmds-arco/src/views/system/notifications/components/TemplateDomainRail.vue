@@ -95,17 +95,6 @@ watch(() => props.search, (value) => {
             </span>
             <span class="flex shrink-0 gap-1 items-center">
               <FaTag
-                v-if="keyGroup.assistant !== null"
-                variant="outline"
-                class="text-[11px]! leading-4! px-1.5! py-0!"
-                :class="keyGroup.assistant.enabled
-                  ? 'text-primary border-primary/30 bg-primary/10'
-                  : 'text-muted-foreground border-border bg-muted'"
-                :title="`千树小助理：${keyGroup.assistant.enabled ? '已启用' : '已停用'}`"
-              >
-                小助理
-              </FaTag>
-              <FaTag
                 v-if="keyGroup.wecom !== null"
                 variant="outline"
                 class="text-[11px]! leading-4! px-1.5! py-0!"

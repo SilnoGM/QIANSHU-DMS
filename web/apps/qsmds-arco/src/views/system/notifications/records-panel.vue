@@ -499,7 +499,7 @@ defineExpose({ refresh: loadRecords })
               ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
               : 'border-primary/30 bg-primary/10 text-primary'"
           >
-            {{ channel === 'IN_APP' ? '站内' : '小助理' }}
+            {{ channel === 'IN_APP' ? '站内' : '企业微信' }}
           </FaTag>
           <span v-if="row.original.channels.length === 0" class="text-muted-foreground">—</span>
         </div>
@@ -651,7 +651,7 @@ defineExpose({ refresh: loadRecords })
                       ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
                       : 'border-primary/30 bg-primary/10 text-primary'"
                   >
-                    {{ channel === 'IN_APP' ? '站内' : '小助理' }}
+                    {{ channel === 'IN_APP' ? '站内' : '企业微信' }}
                   </FaTag>
                   <span v-if="row.channels.length === 0" class="text-muted-foreground">—</span>
                 </div>

@@ -4,7 +4,7 @@ import { NotificationPreferenceService } from './notification-preference.service
 
 interface PolicyFixture {
   readonly eventType: string
-  readonly channel: 'IN_APP' | 'ASSISTANT'
+  readonly channel: 'IN_APP' | 'WECOM'
   readonly enabled?: boolean
   readonly templateKey?: string | null
   readonly targetMode?: string
@@ -12,15 +12,14 @@ interface PolicyFixture {
 
 interface TemplateFixture {
   readonly key: string
-  readonly channel: 'IN_APP' | 'ASSISTANT'
+  readonly channel: 'IN_APP' | 'WECOM'
 }
 
 function createPrisma(options: {
   readonly policies?: readonly PolicyFixture[]
-  readonly settings?: ReadonlyArray<{ readonly channel: 'IN_APP' | 'ASSISTANT', readonly enabled: boolean }>
+  readonly settings?: ReadonlyArray<{ readonly channel: 'IN_APP' | 'WECOM', readonly enabled: boolean }>
   readonly templates?: readonly TemplateFixture[]
-  readonly mutes?: ReadonlyArray<{ readonly eventType: string, readonly channel: 'IN_APP' | 'ASSISTANT' }>
-  readonly assistantBound?: boolean
+  readonly mutes?: ReadonlyArray<{ readonly eventType: string, readonly channel: 'IN_APP' | 'WECOM' }>
   readonly upsert?: jest.Mock
   readonly deleteMany?: jest.Mock
 } = {}) {
@@ -46,9 +45,6 @@ function createPrisma(options: {
       upsert,
       deleteMany,
     },
-    assistantBinding: {
-      findFirst: jest.fn().mockResolvedValue(options.assistantBound === true ? { id: 'binding-1' } : null),
-    },
   } as unknown as PrismaService
   return { prisma, upsert, deleteMany }
 }
@@ -67,8 +63,8 @@ const inAppTemplate: TemplateFixture = {
 describe('NotificationPreferenceService', () => {
   it('reports availability per channel and keeps the muted flag', async () => {
     const { prisma } = createPrisma({
-      policies: [inAppPolicy, { eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }],
-      settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'ASSISTANT', enabled: false }],
+      policies: [inAppPolicy, { eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }],
+      settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'WECOM', enabled: false }],
       templates: [inAppTemplate],
       mutes: [{ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }],
     })
@@ -80,23 +76,12 @@ describe('NotificationPreferenceService', () => {
     expect(event?.domain).toBe('purchase')
     expect(event?.channels).toEqual([
       { channel: 'IN_APP', available: true, muted: true, unavailableReason: null },
-      { channel: 'ASSISTANT', available: false, muted: false, unavailableReason: 'CHANNEL_DISABLED' },
-      { channel: 'WECOM', available: false, muted: false, unavailableReason: 'NOT_CONFIGURED' },
+      { channel: 'WECOM', available: false, muted: false, unavailableReason: 'CHANNEL_DISABLED' },
     ])
     expect(view.channels).toEqual([
       { channel: 'IN_APP', enabled: true },
-      { channel: 'ASSISTANT', enabled: false },
       { channel: 'WECOM', enabled: false },
     ])
-    expect(view.assistantBound).toBe(false)
-  })
-
-  it('reports whether the user has a verified assistant binding', async () => {
-    const { prisma } = createPrisma({ assistantBound: true })
-
-    const view = await new NotificationPreferenceService(prisma).list('user-1')
-
-    expect(view.assistantBound).toBe(true)
   })
 
   it('distinguishes unconfigured, disabled and template-missing channels', async () => {
@@ -122,11 +107,11 @@ describe('NotificationPreferenceService', () => {
     const { prisma } = createPrisma({
       policies: [{
         eventType: 'PURCHASE_REVIEW_PENDING',
-        channel: 'ASSISTANT',
+        channel: 'WECOM',
         targetMode: 'GROUP',
       }],
-      settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'ASSISTANT', enabled: true }],
-      templates: [inAppTemplate, { key: 'purchase.review.pending', channel: 'ASSISTANT' }],
+      settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'WECOM', enabled: true }],
+      templates: [inAppTemplate, { key: 'purchase.review.pending', channel: 'WECOM' }],
     })
 
     const view = await new NotificationPreferenceService(prisma).list('user-1')

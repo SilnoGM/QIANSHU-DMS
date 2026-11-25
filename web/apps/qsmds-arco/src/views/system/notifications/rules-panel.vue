@@ -93,7 +93,7 @@ const templateBaseline = ref('')
 const templateDraft = ref({
   id: '',
   key: '',
-  channel: 'ASSISTANT' as 'IN_APP' | 'ASSISTANT' | 'WECOM',
+  channel: 'IN_APP' as 'IN_APP' | 'WECOM',
   name: '',
   domain: 'SYSTEM' as TemplateDomain,
   titleTemplate: '',
@@ -122,7 +122,6 @@ const previewWarnings = ref<string[]>([])
 const discardOpen = ref(false)
 
 const CHANNEL_OPTIONS = [
-  { label: '千树小助理', value: 'ASSISTANT' },
   { label: '站内通知', value: 'IN_APP' },
   { label: '企业微信', value: 'WECOM' },
 ]
@@ -333,9 +332,6 @@ function insertTemplateVariable(name: string): void {
 }
 
 function formatChannel(channel: string): string {
-  if (channel === 'ASSISTANT') {
-    return '千树小助理'
-  }
   return channel === 'WECOM' ? '企业微信' : '站内通知'
 }
 
@@ -374,12 +370,11 @@ async function load(): Promise<void> {
         return
       }
       try {
-        const [assistantTemplates, inappTemplates, wecomTemplates] = await Promise.all([
-          notificationsApi.templates.list('ASSISTANT', signal),
+        const [inappTemplates, wecomTemplates] = await Promise.all([
           notificationsApi.templates.list('IN_APP', signal),
           notificationsApi.templates.list('WECOM', signal),
         ])
-        templates.value = [...assistantTemplates.data, ...inappTemplates.data, ...wecomTemplates.data]
+        templates.value = [...inappTemplates.data, ...wecomTemplates.data]
       }
       catch (failure) {
         templatesError.value = getApiClientFailureMessage(failure, '模板列表加载失败')
@@ -398,12 +393,11 @@ async function reloadTemplates(): Promise<void> {
   }
   const signal = new AbortController().signal
   try {
-    const [assistantTemplates, inappTemplates, wecomTemplates] = await Promise.all([
-      notificationsApi.templates.list('ASSISTANT', signal),
+    const [inappTemplates, wecomTemplates] = await Promise.all([
       notificationsApi.templates.list('IN_APP', signal),
       notificationsApi.templates.list('WECOM', signal),
     ])
-    templates.value = [...assistantTemplates.data, ...inappTemplates.data, ...wecomTemplates.data]
+    templates.value = [...inappTemplates.data, ...wecomTemplates.data]
     templatesError.value = null
   }
   catch (failure) {
@@ -522,7 +516,7 @@ function openCreateTemplate(): void {
   templateDraft.value = {
     id: '',
     key: '',
-    channel: 'ASSISTANT',
+    channel: 'IN_APP',
     name: '',
     domain: 'SYSTEM',
     titleTemplate: '',
@@ -546,7 +540,7 @@ function openCreateTemplate(): void {
 function openCreateTemplateForChannel(payload: {
   key: string
   domain: TemplateDomain
-  channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
 }): void {
   templateMode.value = 'create'
   templateAboveDrawer.value = false
@@ -578,7 +572,7 @@ function openCreateTemplateForChannel(payload: {
 
 function openCreateTemplateFromEvent(payload: {
   eventType: string
-  channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
   key: string
 }): void {
   const event = events.value.find(item => item.eventType === payload.eventType)
@@ -618,7 +612,7 @@ function openEditTemplate(template: NotificationTemplateDto, aboveDrawer = false
   templateDraft.value = {
     id: template.id,
     key: template.key,
-    channel: template.channel as 'IN_APP' | 'ASSISTANT' | 'WECOM',
+    channel: template.channel as 'IN_APP' | 'WECOM',
     name: template.name,
     domain: template.domain,
     titleTemplate: template.titleTemplate ?? '',
@@ -804,25 +798,6 @@ async function preview(): Promise<void> {
   }
   catch (failure) {
     toast.error(getApiClientFailureMessage(failure, '模板预览失败'))
-  }
-  finally {
-    busy.value = false
-  }
-}
-
-async function testTemplate(): Promise<void> {
-  if (previewTemplate.value === null) {
-    return
-  }
-  busy.value = true
-  try {
-    await notificationsApi.templates.test(previewTemplate.value.id, {
-      variables: parseVariables(previewVariables.value),
-    })
-    toast.success('测试消息已提交，请确认公司号文件传输助手已收到')
-  }
-  catch (failure) {
-    toast.error(getApiClientFailureMessage(failure, '测试发送失败'))
   }
   finally {
     busy.value = false
@@ -1263,16 +1238,10 @@ onMounted(() => {
       <p v-if="previewLink" class="qs-type-meta text-muted-foreground break-all">
         链接：{{ previewLink }}
       </p>
-      <p v-if="previewTemplate?.channel === 'IN_APP'" class="qs-type-meta text-muted-foreground m-0">
-        站内模板不支持测试发送，仅千树小助理模板可以测试外发。
-      </p>
     </div>
     <template #footer>
       <FaButton variant="outline" :loading="busy" @click="preview">
         预览
-      </FaButton>
-      <FaButton :loading="busy" :disabled="!canUpdateTemplate || previewTemplate?.channel !== 'ASSISTANT'" @click="testTemplate">
-        测试发送
       </FaButton>
     </template>
   </QsGenericModal>

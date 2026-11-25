@@ -5,7 +5,7 @@ function Layout() {
 }
 
 /**
- * 通知中心从单页签改为分组菜单：GeWe 助理、通知策略、通知记录各自独立。
+ * 通知中心分组菜单：通知策略、通知记录与企业微信配置各自独立。
  * 父级只承担分组与权限并集，具体页面权限由叶子声明；没有通知权限的角色看不到整组。
  */
 const route: RouteRecordRaw = {
@@ -19,8 +19,6 @@ const route: RouteRecordRaw = {
       'notification-record:read',
       'notification-template:read',
       'notification-policy:read',
-      'assistant-channel:read',
-      'assistant-account:read',
       'wecom-channel:read',
       'wecom-app:read',
     ],
@@ -33,16 +31,6 @@ const route: RouteRecordRaw = {
       meta: {
         title: '通知中心',
         menu: false,
-      },
-    },
-    {
-      path: 'assistant',
-      name: 'systemNotificationAssistant',
-      component: () => import('@/views/system/notifications/assistant.vue'),
-      meta: {
-        title: 'GeWe助理',
-        icon: 'qs-gewe-assistant',
-        auth: ['assistant-channel:read', 'assistant-account:read'],
       },
     },
     {

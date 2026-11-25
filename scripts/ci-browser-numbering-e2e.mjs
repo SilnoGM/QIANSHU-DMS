@@ -219,9 +219,6 @@ export function createBrowserNumberingSensitiveValues(databaseUrl, secrets) {
     databaseUrl,
     new URL(databaseUrl).password,
     secrets.adminPassword,
-      ...(secrets.notificationMediaSecret === undefined
-        ? []
-        : [secrets.notificationMediaSecret]),
     secrets.limitedPassword,
     ...secrets.hmacKeys,
   ])
@@ -574,7 +571,6 @@ export async function runProductionBrowserNumberingE2e() {
       adminPassword: `Bn-${randomBytes(9).toString('base64url')}!8`,
       hmacKeys: [0, 1, 2]
         .map(() => randomBytes(32).toString('base64url')),
-      notificationMediaSecret: randomBytes(32).toString('base64url'),
       limitedPassword: `Nl-${randomBytes(8).toString('base64url')}!7`,
     }
     const sensitiveValues = createBrowserNumberingSensitiveValues(

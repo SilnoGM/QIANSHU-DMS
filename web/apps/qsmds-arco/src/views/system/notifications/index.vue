@@ -13,8 +13,8 @@ const target = computed<string | null>(() => {
   if (auth('notification-record:read')) {
     return 'systemNotificationRecords'
   }
-  if (auth(['assistant-channel:read', 'assistant-account:read'])) {
-    return 'systemNotificationAssistant'
+  if (auth(['wecom-channel:read', 'wecom-app:read'])) {
+    return 'systemNotificationWecom'
   }
   if (auth(['notification-template:read', 'notification-policy:read'])) {
     return 'systemNotificationPolicies'
@@ -32,7 +32,7 @@ watch(target, (value) => {
 <template>
   <FaPageHeader
     title="通知中心"
-    description="统一管理 GeWe 助理、通知策略与通知记录。"
+    description="统一管理企业微信、通知策略与通知记录。"
   />
   <FaPageMain>
     <FaEmpty

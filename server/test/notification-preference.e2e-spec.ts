@@ -45,11 +45,17 @@ describe('Notification preference API with PostgreSQL', () => {
       select: { id: true },
     })
     if (existing === null) {
+      // 同一模板键的渠道域必须一致；WECOM 基线可能已建好同键模板，沿用其域。
+      const sibling = await prisma.notificationTemplate.findFirst({
+        where: { key: TEMPLATE_KEY },
+        select: { domain: true },
+      })
       const template = await prisma.notificationTemplate.create({
         data: {
           key: TEMPLATE_KEY,
           channel: 'IN_APP',
           name: 'E2E 收款待审核',
+          domain: sibling?.domain ?? 'SYSTEM',
           bodyTemplate: '收款 {{collectionNo}} 待审核',
           variables: [{ name: 'collectionNo', required: true }],
         },
@@ -109,12 +115,11 @@ describe('Notification preference API with PostgreSQL', () => {
     const initialEvent = readEvent(initial.body)
     expect(initial.body.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ channel: 'IN_APP', enabled: true }),
-      expect.objectContaining({ channel: 'ASSISTANT', enabled: false }),
+      expect.objectContaining({ channel: 'WECOM', enabled: false }),
     ]))
-    expect(initial.body.assistantBound).toBe(false)
     expect(initialEvent?.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ channel: 'IN_APP', available: true, muted: false, unavailableReason: null }),
-      expect.objectContaining({ channel: 'ASSISTANT', available: false, unavailableReason: 'CHANNEL_DISABLED' }),
+      expect.objectContaining({ channel: 'WECOM', available: false, unavailableReason: 'POLICY_DISABLED' }),
     ]))
 
     await request(application.getHttpServer())
@@ -169,7 +174,7 @@ describe('Notification preference API with PostgreSQL', () => {
     const user = await createUser('invalid')
 
     await request(application.getHttpServer())
-      .put(`/api/notifications/me/preferences/${EVENT_TYPE}/ASSISTANT`)
+      .put(`/api/notifications/me/preferences/${EVENT_TYPE}/WECOM`)
       .set(CSRF_HEADERS)
       .set('Cookie', user.cookie)
       .send({ muted: true })

@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
   canUpdatePolicy: boolean
   canUpdateTemplate: boolean
   canViewTemplate: boolean
-  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
   dirty: boolean
   effective: EffectiveTemplate
   event: NotificationEventDto
@@ -37,28 +37,24 @@ const emit = defineEmits<{
 
 const draft = defineModel<PolicyDraft>('draft', { required: true })
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT'
-  ? '千树小助理'
-  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
-const channelIcon = computed(() => props.channel === 'ASSISTANT'
-  ? 'i-lucide:messages-square'
-  : props.channel === 'WECOM' ? 'i-lucide:message-square-text' : 'i-lucide:bell')
+const channelLabel = computed(() => props.channel === 'WECOM' ? '企业微信' : '站内通知')
+const channelIcon = computed(() => props.channel === 'WECOM'
+  ? 'i-lucide:message-square-text'
+  : 'i-lucide:bell')
 const isDrawer = computed(() => props.variant === 'drawer')
 const articleClass = computed(() => isDrawer.value
   ? 'flex flex-col gap-4 min-w-0'
   : 'p-4 border border-border rounded-xl bg-background flex flex-col gap-4 min-w-0 h-full')
-const channelIconClass = computed(() => props.channel === 'ASSISTANT'
-  ? 'bg-primary/10 text-primary'
-  : props.channel === 'WECOM'
-    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
-    : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
+const channelIconClass = computed(() => props.channel === 'WECOM'
+  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+  : 'bg-sky-500/10 text-sky-600 dark:text-sky-300')
 
 const targetModeOptions = computed(() => [
   { label: '使用命令目标', value: 'COMMAND_TARGET' },
   { label: '固定员工', value: 'USERS' },
   { label: '角色', value: 'ROLE' },
   { label: '权限', value: 'PERMISSION' },
-  ...(props.channel === 'ASSISTANT' || props.channel === 'WECOM' ? [{ label: '群目标', value: 'GROUP' }] : []),
+  ...(props.channel === 'WECOM' ? [{ label: '群目标', value: 'GROUP' }] : []),
 ])
 
 const canSave = computed(() => (props.policy === null || props.dirty)

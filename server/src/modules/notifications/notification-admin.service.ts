@@ -1,18 +1,13 @@
-import { Inject, Injectable, Logger } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
+import { Injectable } from '@nestjs/common'
 
-import type { AssistantConfiguration } from '../../config/assistant.config'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
-import { assistantAdminErrorToApiException } from './assistant-admin.errors'
 import { normalizeNotificationMediaPolicy, parseNotificationMediaPolicy } from './notification-media'
 import { parseNotificationQuietHours } from './notification-quiet-hours'
 import { inspectNotificationTemplate, renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
-  ASSISTANT_TRANSPORT,
-  AssistantAdminError,
   IMPLEMENTED_NOTIFICATION_EVENT_TYPES,
   NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY,
   NOTIFICATION_EVENT_LABELS,
@@ -22,7 +17,6 @@ import {
   notificationEventMediaCapability,
   notificationEventVariableDefinitions,
   notificationEventVariables,
-  type AssistantTransport,
   type NotificationChannel,
 } from './notification.types'
 import type {
@@ -48,13 +42,11 @@ export interface NotificationAdminContext {
   readonly requestId: string
 }
 
-const TEST_TEXT = '【千树小助理】模板测试：这是一条测试消息，无需处理。'
-
 function iso(value: Date | null): string | null {
   return value === null ? null : value.toISOString()
 }
 
-const NOTIFICATION_RECORD_CHANNELS = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
+const NOTIFICATION_RECORD_CHANNELS = ['IN_APP', 'WECOM'] as const
 type NotificationRecordChannel = (typeof NOTIFICATION_RECORD_CHANNELS)[number]
 
 const RECORD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
@@ -86,7 +78,6 @@ function recordEventDomain(eventType: string): string {
 function resolveRecordChannels(
   value: Prisma.JsonValue,
   inAppCount: number,
-  deliveryCounts: Record<string, number>,
   wecomDeliveryCounts: Record<string, number>,
 ): NotificationRecordChannel[] {
   const requested = requestedRecordChannels(value)
@@ -98,9 +89,6 @@ function resolveRecordChannels(
   if (inAppCount > 0) {
     derived.push('IN_APP')
   }
-  if (Object.values(deliveryCounts).some(count => count > 0)) {
-    derived.push('ASSISTANT')
-  }
   if (Object.values(wecomDeliveryCounts).some(count => count > 0)) {
     derived.push('WECOM')
   }
@@ -109,7 +97,6 @@ function resolveRecordChannels(
 
 function toRecordDto(
   row: NotificationRecordRow,
-  deliveryCounts: Record<string, number>,
   wecomDeliveryCounts: Record<string, number>,
   inApp: InAppRecordCounts,
   mediaCount: number,
@@ -129,10 +116,9 @@ function toRecordDto(
     publishedAt: row.publishedAt.toISOString(),
     completedAt: iso(row.completedAt),
     requestedByName: row.requestedBy?.displayName ?? null,
-    channels: resolveRecordChannels(row.requestedChannels, inApp.total, deliveryCounts, wecomDeliveryCounts),
+    channels: resolveRecordChannels(row.requestedChannels, inApp.total, wecomDeliveryCounts),
     inAppItemCount: inApp.total,
     inAppUnreadCount: inApp.unread,
-    deliveryCounts,
     wecomDeliveryCounts,
     mediaCount,
   }
@@ -249,24 +235,12 @@ function toPolicyDto(policy: {
 export class NotificationAdminService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
     private readonly audit: AuditService,
-    @Inject(ASSISTANT_TRANSPORT) private readonly transport: AssistantTransport,
   ) {}
-
-  private readonly logger = new Logger(NotificationAdminService.name)
-
-  private mapUpstreamError(error: unknown): never {
-    if (error instanceof AssistantAdminError) {
-      this.logger.warn(`assistant upstream failed code=${error.code} kind=${error.kind}`)
-      throw assistantAdminErrorToApiException(error)
-    }
-    throw error
-  }
 
   async listTemplates(channel?: string): Promise<NotificationTemplateDto[]> {
     const templates = await this.prisma.notificationTemplate.findMany({
-      where: channel === 'IN_APP' || channel === 'ASSISTANT' || channel === 'WECOM' ? { channel } : {},
+      where: channel === 'IN_APP' || channel === 'WECOM' ? { channel } : {},
       orderBy: [{ key: 'asc' }, { channel: 'asc' }],
       include: { updatedBy: { select: { displayName: true } } },
     })
@@ -486,44 +460,6 @@ export class NotificationAdminService {
     }
   }
 
-  async testTemplate(id: string, input: NotificationTemplatePreviewDto): Promise<{ accepted: true }> {
-    const template = await this.prisma.notificationTemplate.findUnique({ where: { id } })
-    if (template === null) {
-      throw new ApiException(404, 'NOTIFICATION_TEMPLATE_NOT_FOUND', '模板不存在')
-    }
-    if (template.channel !== 'ASSISTANT') {
-      throw new ApiException(422, 'NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED', '当前只支持测试站外模板')
-    }
-    const account = await this.prisma.assistantAccount.findFirst({
-      where: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-      orderBy: { createdAt: 'asc' },
-      select: { appId: true },
-    })
-    if (account === null) {
-      throw new ApiException(422, 'ASSISTANT_ACCOUNT_UNAVAILABLE', '没有可用的公司号')
-    }
-    const rendered = renderNotificationTemplate({
-      body: template.bodyTemplate,
-      linkUrlTemplate: template.linkUrlTemplate,
-      variables: input.variables,
-      allowed: templateVariables(template.variables),
-      allowSensitive: true,
-      maxLength: template.maxLength,
-    })
-    if (!rendered.ok) {
-      throw new ApiException(422, rendered.code, rendered.message)
-    }
-    const result = await this.transport.sendText({
-      appId: account.appId,
-      toWxid: 'filehelper',
-      content: rendered.content || TEST_TEXT,
-    })
-    if (!result.ok) {
-      this.mapUpstreamError(new AssistantAdminError(result.code, result.kind, result.message))
-    }
-    return { accepted: true }
-  }
-
   /** 事件元数据由服务端常量派生，管理端不再各自维护事件名、变量与默认模板键。 */
   listEvents(): NotificationEventDto[] {
     return NOTIFICATION_EVENT_TYPES.map(eventType => ({
@@ -552,7 +488,7 @@ export class NotificationAdminService {
     const policies = await this.prisma.notificationChannelPolicy.findMany({
       where: {
         ...(eventType !== undefined && eventType.length > 0 ? { eventType } : {}),
-        ...(channel === 'IN_APP' || channel === 'ASSISTANT' || channel === 'WECOM' ? { channel } : {}),
+        ...(channel === 'IN_APP' || channel === 'WECOM' ? { channel } : {}),
       },
       orderBy: [{ eventType: 'asc' }, { channel: 'asc' }],
       include: { updatedBy: { select: { displayName: true } } },
@@ -705,24 +641,6 @@ export class NotificationAdminService {
     return toPolicyDto(saved)
   }
 
-  private async deliveryCounts(notificationIds: readonly string[]): Promise<Map<string, Record<string, number>>> {
-    if (notificationIds.length === 0) {
-      return new Map()
-    }
-    const rows = await this.prisma.assistantDelivery.groupBy({
-      by: ['notificationId', 'status'],
-      where: { notificationId: { in: [...notificationIds] } },
-      _count: { _all: true },
-    })
-    const result = new Map<string, Record<string, number>>()
-    for (const row of rows) {
-      const counts = result.get(row.notificationId) ?? {}
-      counts[row.status] = row._count._all
-      result.set(row.notificationId, counts)
-    }
-    return result
-  }
-
   private async wecomDeliveryCounts(notificationIds: readonly string[]): Promise<Map<string, Record<string, number>>> {
     if (notificationIds.length === 0) {
       return new Map()
@@ -821,7 +739,7 @@ export class NotificationAdminService {
           },
         },
         {
-          deliveries: {
+          wecomDeliveries: {
             some: {
               OR: [
                 { recipientUser: { is: { displayName: { contains: keyword, mode: 'insensitive' } } } },
@@ -857,8 +775,7 @@ export class NotificationAdminService {
       }),
     ])
     const ids = rows.map(row => row.id)
-    const [deliveryCounts, wecomDeliveryCounts, inAppCounts, mediaCounts] = await Promise.all([
-      this.deliveryCounts(ids),
+    const [wecomDeliveryCounts, inAppCounts, mediaCounts] = await Promise.all([
       this.wecomDeliveryCounts(ids),
       this.inAppCounts(ids),
       this.mediaCounts(ids),
@@ -866,7 +783,6 @@ export class NotificationAdminService {
     return {
       items: rows.map(row => toRecordDto(
         row,
-        deliveryCounts.get(row.id) ?? {},
         wecomDeliveryCounts.get(row.id) ?? {},
         inAppCounts.get(row.id) ?? { total: 0, unread: 0 },
         mediaCounts.get(row.id) ?? 0,
@@ -885,15 +801,7 @@ export class NotificationAdminService {
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
-    const [assistantDeliveries, wecomDeliveries, inAppCounts, media] = await Promise.all([
-      this.prisma.assistantDelivery.findMany({
-        where: { notificationId: id },
-        include: {
-          recipientUser: { select: { displayName: true } },
-          target: { select: { name: true } },
-        },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      }),
+    const [wecomDeliveries, inAppCounts, media] = await Promise.all([
       this.prisma.wecomDelivery.findMany({
         where: { notificationId: id },
         include: {
@@ -917,25 +825,14 @@ export class NotificationAdminService {
         },
       }),
     ])
-    const [mediaByDelivery, wecomMediaByDelivery] = await Promise.all([
-      this.deliveryMediaCounts(assistantDeliveries.map(delivery => delivery.id)),
-      this.wecomDeliveryMediaCounts(wecomDeliveries.map(delivery => delivery.id)),
-    ])
-    const counts: Record<string, number> = {}
-    for (const delivery of assistantDeliveries) {
-      counts[delivery.status] = (counts[delivery.status] ?? 0) + 1
-    }
+    const wecomMediaByDelivery = await this.wecomDeliveryMediaCounts(wecomDeliveries.map(delivery => delivery.id))
     const wecomCounts: Record<string, number> = {}
     for (const delivery of wecomDeliveries) {
       wecomCounts[delivery.status] = (wecomCounts[delivery.status] ?? 0) + 1
     }
-    const deliveries = [
-      ...assistantDeliveries.map(delivery => ({ ...delivery, channel: 'ASSISTANT' as const })),
-      ...wecomDeliveries.map(delivery => ({ ...delivery, channel: 'WECOM' as const })),
-    ].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id))
+    const deliveries = wecomDeliveries.map(delivery => ({ ...delivery, channel: 'WECOM' as const }))
     const record = toRecordDto(
       notification,
-      counts,
       wecomCounts,
       inAppCounts.get(id) ?? { total: 0, unread: 0 },
       media.length,
@@ -943,9 +840,7 @@ export class NotificationAdminService {
     return {
       ...record,
       deliveries: deliveries.map((delivery) => {
-        const mediaCounts = (delivery.channel === 'WECOM'
-          ? wecomMediaByDelivery.get(delivery.id)
-          : mediaByDelivery.get(delivery.id)) ?? { accepted: 0, failed: 0, total: 0 }
+        const mediaCounts = wecomMediaByDelivery.get(delivery.id) ?? { accepted: 0, failed: 0, total: 0 }
         return {
           id: delivery.id,
           channel: delivery.channel,
@@ -989,32 +884,6 @@ export class NotificationAdminService {
     return new Map(rows.map(row => [row.notificationId, row._count._all]))
   }
 
-  private async deliveryMediaCounts(
-    deliveryIds: readonly string[],
-  ): Promise<Map<string, { readonly total: number, readonly accepted: number, readonly failed: number }>> {
-    if (deliveryIds.length === 0) {
-      return new Map()
-    }
-    const rows = await this.prisma.assistantDeliveryMedia.groupBy({
-      by: ['deliveryId', 'status'],
-      where: { deliveryId: { in: [...deliveryIds] } },
-      _count: { _all: true },
-    })
-    const result = new Map<string, { total: number, accepted: number, failed: number }>()
-    for (const row of rows) {
-      const entry = result.get(row.deliveryId) ?? { accepted: 0, failed: 0, total: 0 }
-      entry.total += row._count._all
-      if (row.status === 'ACCEPTED') {
-        entry.accepted += row._count._all
-      }
-      if (row.status === 'FAILED' || row.status === 'EXPIRED') {
-        entry.failed += row._count._all
-      }
-      result.set(row.deliveryId, entry)
-    }
-    return result
-  }
-
   private async wecomDeliveryMediaCounts(
     deliveryIds: readonly string[],
   ): Promise<Map<string, { readonly total: number, readonly accepted: number, readonly failed: number }>> {
@@ -1047,30 +916,17 @@ export class NotificationAdminService {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
     const result = await this.prisma.$transaction(async transaction => {
-      const [updated, wecomUpdated] = await Promise.all([
-        transaction.assistantDelivery.updateMany({
-          where: { notificationId: id, status: 'PENDING' },
-          data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
-        }),
-        transaction.wecomDelivery.updateMany({
-          where: { notificationId: id, status: 'PENDING' },
-          data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
-        }),
-      ])
-      const [grouped, wecomGrouped] = await Promise.all([
-        transaction.assistantDelivery.groupBy({
-          by: ['status'],
-          where: { notificationId: id },
-          _count: { _all: true },
-        }),
-        transaction.wecomDelivery.groupBy({
-          by: ['status'],
-          where: { notificationId: id },
-          _count: { _all: true },
-        }),
-      ])
+      const wecomUpdated = await transaction.wecomDelivery.updateMany({
+        where: { notificationId: id, status: 'PENDING' },
+        data: { status: 'CANCELLED', failureCode: 'CANCELLED', failureMessage: '管理员取消' },
+      })
+      const wecomGrouped = await transaction.wecomDelivery.groupBy({
+        by: ['status'],
+        where: { notificationId: id },
+        _count: { _all: true },
+      })
       const counts = new Map<string, number>()
-      for (const row of [...grouped, ...wecomGrouped]) {
+      for (const row of wecomGrouped) {
         counts.set(row.status, (counts.get(row.status) ?? 0) + row._count._all)
       }
       const pending = (counts.get('PENDING') ?? 0) + (counts.get('SENDING') ?? 0)
@@ -1099,17 +955,15 @@ export class NotificationAdminService {
         requestId: context.requestId,
         targetType: 'NOTIFICATION',
         targetId: id,
-        metadata: { cancelledCount: updated.count + wecomUpdated.count },
+        metadata: { cancelledCount: wecomUpdated.count },
       })
-      return { cancelled: updated.count + wecomUpdated.count, status }
+      return { cancelled: wecomUpdated.count, status }
     })
     return result
   }
 
   async overview(): Promise<NotificationOverviewDto> {
-    const config = this.configService.get<AssistantConfiguration>('assistant')
-    const setting = await this.prisma.notificationChannelSettings.findUnique({ where: { channel: 'ASSISTANT' } })
-    const account = await this.prisma.assistantAccount.findFirst({ orderBy: { createdAt: 'asc' } })
+    const setting = await this.prisma.notificationChannelSettings.findUnique({ where: { channel: 'WECOM' } })
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const counts = await this.prisma.notification.groupBy({
       by: ['status'],
@@ -1128,17 +982,13 @@ export class NotificationAdminService {
     for (const count of counts) {
       last24Hours[count.status] = count._count._all
     }
-    const queue = await this.prisma.assistantDelivery.aggregate({
+    const queue = await this.prisma.wecomDelivery.aggregate({
       where: { status: 'PENDING' },
       _count: { _all: true },
       _min: { nextAttemptAt: true },
     })
     return {
       channelEnabled: setting?.enabled ?? false,
-      tokenConfigured: config?.token !== null && config?.token !== undefined,
-      accountName: account?.name ?? null,
-      accountStatus: account?.status ?? null,
-      lastOnlineAt: iso(account?.lastOnlineAt ?? null),
       last24Hours,
       queue: {
         pending: queue._count._all,

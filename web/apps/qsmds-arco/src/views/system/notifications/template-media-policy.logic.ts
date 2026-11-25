@@ -8,7 +8,7 @@ import type { NotificationTemplateMediaPolicyInputDto } from '@/api/generated/ty
  * 站内通知一期不支持附件，草稿开关对 IN_APP 不生效。
  */
 export function buildTemplateMediaPolicyPayload(draft: {
-  readonly channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
+  readonly channel: 'IN_APP' | 'WECOM'
   readonly enabled: boolean
   readonly maxCount: number
   readonly sources: readonly string[]

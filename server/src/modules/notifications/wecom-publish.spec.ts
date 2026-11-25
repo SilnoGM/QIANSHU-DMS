@@ -74,7 +74,6 @@ function baseTransaction(overrides: Record<string, unknown> = {}) {
     },
     mediaAsset: { findMany: jest.fn().mockResolvedValue([]) },
     wecomDeliveryMedia: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
-    assistantDelivery: { count: jest.fn().mockResolvedValue(0) },
     wecomDelivery: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(1),
@@ -120,58 +119,6 @@ describe('SystemNotificationService WECOM branch', () => {
         }),
       ],
     })
-    expect(transaction.notification.update).toHaveBeenCalledWith({
-      where: { id: 'notification-1' },
-      data: { status: 'PENDING' },
-    })
-  })
-
-  it('keeps WECOM delivery when an enabled assistant template is missing', async () => {
-    const transaction = baseTransaction({
-      notificationChannelPolicy: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            channel: 'ASSISTANT',
-            targetMode: 'COMMAND_TARGET',
-            targetConfig: {},
-            allowSensitive: true,
-            ttlSeconds: 86_400,
-            priority: 'NORMAL',
-            enabled: true,
-          },
-          wecomPolicy(),
-        ]),
-      },
-      notificationTemplate: {
-        findUnique: jest.fn(({ where }: { where: { key_channel: { channel: string } } }) =>
-          Promise.resolve(where.key_channel.channel === 'WECOM' ? wecomTemplate() : null),
-        ),
-      },
-      wecomAppEventRoute: {
-        findUnique: jest.fn().mockResolvedValue({
-          enabled: true,
-          app: { id: 'app-1', enabled: true, status: 'ACTIVE' },
-        }),
-      },
-      wecomBinding: {
-        findMany: jest.fn().mockResolvedValue([{
-          userId: '11111111-1111-4111-8111-111111111111',
-        }]),
-      },
-      wecomAppMembership: {
-        findMany: jest.fn().mockResolvedValue([{
-          userId: '11111111-1111-4111-8111-111111111111',
-        }]),
-      },
-    })
-
-    const result = await service().publish(command, { transaction: transaction as never })
-
-    expect(result.channels).toEqual([
-      expect.objectContaining({ channel: 'ASSISTANT', status: 'SKIPPED' }),
-      expect.objectContaining({ channel: 'WECOM', status: 'PENDING' }),
-    ])
-    expect(transaction.wecomDelivery.createMany).toHaveBeenCalled()
     expect(transaction.notification.update).toHaveBeenCalledWith({
       where: { id: 'notification-1' },
       data: { status: 'PENDING' },

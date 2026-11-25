@@ -76,7 +76,7 @@ export class NotificationTemplateVariableDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() sensitive?: boolean
 }
 
-export const NOTIFICATION_CHANNEL_VALUES = ['IN_APP', 'ASSISTANT', 'WECOM'] as const
+export const NOTIFICATION_CHANNEL_VALUES = ['IN_APP', 'WECOM'] as const
 export type NotificationChannelValue = (typeof NOTIFICATION_CHANNEL_VALUES)[number]
 
 export class NotificationTemplateDto {
@@ -198,7 +198,7 @@ export class NotificationRecordOptionsDto {
 
 export class NotificationDeliveryDto {
   @ApiProperty({ format: 'uuid' }) id!: string
-  @ApiPropertyOptional({ enum: ['ASSISTANT', 'WECOM'], description: '历史记录未标记时按 ASSISTANT 处理' }) channel?: string
+  @ApiPropertyOptional({ enum: ['WECOM'], description: '历史记录未标记时视为企业微信' }) channel?: string
   @ApiProperty({ type: 'string', nullable: true }) recipientName!: string | null
   @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
   @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
@@ -248,8 +248,7 @@ export class NotificationRecordDto {
   @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES, isArray: true }) channels!: NotificationChannelValue[]
   @ApiProperty({ type: 'integer', description: '站内收件箱条目数' }) inAppItemCount!: number
   @ApiProperty({ type: 'integer', description: '站内未读条目数' }) inAppUnreadCount!: number
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '小助理 AssistantDelivery 按状态计数' }) deliveryCounts!: Record<string, number>
-  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'integer' }, description: '企业微信 WecomDelivery 按状态计数' }) wecomDeliveryCounts?: Record<string, number>
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, description: '企业微信 WecomDelivery 按状态计数' }) wecomDeliveryCounts!: Record<string, number>
   @ApiProperty({ type: 'integer', description: '业务附件数量（含被策略拦截的）' }) mediaCount!: number
 }
 
@@ -271,11 +270,7 @@ export class NotificationCancelResultDto {
 }
 
 export class NotificationOverviewDto {
-  @ApiProperty() channelEnabled!: boolean
-  @ApiProperty() tokenConfigured!: boolean
-  @ApiProperty({ type: 'string', nullable: true }) accountName!: string | null
-  @ApiProperty({ type: 'string', nullable: true }) accountStatus!: string | null
-  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) lastOnlineAt!: string | null
+  @ApiProperty({ description: '企业微信渠道是否启用' }) channelEnabled!: boolean
   @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' } }) last24Hours!: Record<string, number>
   @ApiProperty({ type: 'object', additionalProperties: true }) queue!: Record<string, string | number | null>
 }

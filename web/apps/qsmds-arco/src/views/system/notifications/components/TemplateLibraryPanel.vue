@@ -22,7 +22,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  add: [payload: { key: string, domain: TemplateDomain, channel: 'ASSISTANT' | 'IN_APP' | 'WECOM' }]
+  add: [payload: { key: string, domain: TemplateDomain, channel: 'IN_APP' | 'WECOM' }]
   create: []
   edit: [template: NotificationTemplateDto]
   preview: [template: NotificationTemplateDto]
@@ -57,7 +57,7 @@ watch(
   { immediate: true },
 )
 
-function handleTemplateAdd(channel: 'ASSISTANT' | 'IN_APP' | 'WECOM'): void {
+function handleTemplateAdd(channel: 'IN_APP' | 'WECOM'): void {
   if (selectedTemplateGroup.value === null) {
     return
   }

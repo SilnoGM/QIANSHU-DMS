@@ -62,9 +62,7 @@ const groupOptions = ref<SelectOption[]>([])
 const optionsLoading = ref(false)
 const optionsLoaded = ref(false)
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT'
-  ? '千树小助理'
-  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
+const channelLabel = computed(() => props.channel === 'WECOM' ? '企业微信' : '站内通知')
 const options = computed<PolicyOptionLists>(() => ({
   users: users.value.map(user => ({ label: `${user.displayName}（${user.username}）`, value: user.id })),
   roles: roles.value.map(role => ({ label: `${role.name}（${role.code}）`, value: role.code })),
@@ -131,7 +129,7 @@ watch(
   },
 )
 
-// 群目标属于渠道私有资源，切换渠道时必须丢弃旧列表，避免把 GeWe 群填进 WECOM 策略。
+// 群目标属于渠道私有资源，切换渠道时必须丢弃旧列表。
 watch(
   () => props.channel,
   () => {
@@ -157,10 +155,6 @@ async function loadGroupOptions(signal: AbortSignal): Promise<SelectOption[]> {
     return targets
       .filter(target => target.enabled && target.internalOnly)
       .map(target => ({ label: `${target.name}（${target.key}）`, value: target.key }))
-  }
-  if (props.channel === 'ASSISTANT') {
-    const targets = (await notificationsApi.assistant.targets.list(signal)).data
-    return targets.map(target => ({ label: `${target.name}（${target.key}）`, value: target.key }))
   }
   return []
 }

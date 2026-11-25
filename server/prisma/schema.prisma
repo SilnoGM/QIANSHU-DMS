@@ -851,10 +851,6 @@ model User {
   notificationPoliciesUpdated       NotificationChannelPolicy[]   @relation("NotificationPolicyUpdatedBy")
   notificationSettingsUpdated       NotificationSettings[]        @relation("NotificationSettingsUpdatedBy")
   notificationChannelSettingsUpdated NotificationChannelSettings[] @relation("NotificationChannelSettingsUpdatedBy")
-  assistantBindings                 AssistantBinding[]            @relation("AssistantBindingUser")
-  assistantBindingsCreated          AssistantBinding[]            @relation("AssistantBindingBoundBy")
-  assistantBindingsVerified         AssistantBinding[]            @relation("AssistantBindingVerifiedBy")
-  assistantDeliveries               AssistantDelivery[]           @relation("AssistantDeliveryRecipient")
   wecomBinding                      WecomBinding?                  @relation("WecomBindingUser")
   wecomBindingsCreated              WecomBinding[]                 @relation("WecomBindingBoundBy")
   wecomBindingsVerified             WecomBinding[]                 @relation("WecomBindingVerifiedBy")
@@ -1262,7 +1258,6 @@ model MediaAsset {
   advertisingRechargePaymentProofs AdvertisingRechargeRequest[] @relation("AdvertisingRechargeProof")
   avatarProfile UserProfile? @relation("UserProfileAvatar")
   notificationMedia NotificationMedia[] @relation("NotificationMediaAsset")
-  assistantDeliveryMedia AssistantDeliveryMedia[] @relation("AssistantDeliveryMediaAsset")
   wecomDeliveryMedia WecomDeliveryMedia[] @relation("WecomDeliveryMediaAsset")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
@@ -3475,7 +3470,6 @@ model MachineViewingAppointment {
 
 enum NotificationChannel {
   IN_APP
-  ASSISTANT
   WECOM
 
   @@map("notification_channel")
@@ -3521,37 +3515,6 @@ enum NotificationTemplateDomain {
   OPERATIONS
 
   @@map("notification_template_domain")
-}
-
-enum AssistantAccountStatus {
-  ONLINE
-  OFFLINE
-  REQUIRES_LOGIN
-  DISABLED
-
-  @@map("assistant_account_status")
-}
-
-enum AssistantBindingStatus {
-  ACTIVE
-  INVALID
-  DISABLED
-
-  @@map("assistant_binding_status")
-}
-
-enum AssistantDeliveryStatus {
-  PENDING
-  SENDING
-  ACCEPTED
-  /// 正文已送达但至少一个附件项永久失败；通知级状态按「部分成功」汇总。
-  PARTIAL
-  FAILED
-  SKIPPED
-  EXPIRED
-  CANCELLED
-
-  @@map("assistant_delivery_status")
 }
 
 // ---------------------------------------------------------------------------
@@ -3634,7 +3597,6 @@ model Notification {
 
   requestedBy        User?                @relation("NotificationRequestedBy", fields: [requestedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   numberingIssuance  NumberingIssuance?   @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  deliveries         AssistantDelivery[]
   wecomDeliveries    WecomDelivery[]
   inboxItems         NotificationInboxItem[]
   media              NotificationMedia[]
@@ -3650,7 +3612,7 @@ model Notification {
 /// 通知级附件清单：发布时快照业务传入的媒体资产与顺序。
 ///
 /// `blockedReason` 非空表示业务传了附件但被模板策略或校验拦截，只用于排障展示，
-/// 不会为它创建任何站外投递；附件是否真正发出由 `AssistantDeliveryMedia` 记录。
+/// 不会为它创建任何站外投递；附件是否真正发出由 `WecomDeliveryMedia` 记录。
 model NotificationMedia {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   notificationId String   @map("notification_id") @db.Uuid
@@ -3766,7 +3728,7 @@ model NotificationInboxItem {
   @@map("notification_inbox_items")
 }
 
-/// 渠道级开关与默认静默时段。ASSISTANT 可配静默；IN_APP 不使用静默与 TTL。
+/// 渠道级开关与默认静默时段。WECOM 可配静默；IN_APP 不使用静默与 TTL。
 model NotificationChannelSettings {
   channel           NotificationChannel @id
   enabled           Boolean             @default(false)
@@ -3793,173 +3755,6 @@ model NotificationUserMute {
 
   @@unique([userId, eventType, channel], map: "notification_user_mutes_user_event_channel_key")
   @@map("notification_user_mutes")
-}
-
-/// 千树小助理的公司号（GeWe 执行节点）。
-model AssistantAccount {
-  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String                 @db.VarChar(64)
-  appId             String                 @unique(map: "assistant_accounts_app_id_key") @map("app_id") @db.VarChar(128)
-  wxid              String?                @db.VarChar(128)
-  nickname          String?                @db.VarChar(128)
-  avatarUrl         String?                @map("avatar_url") @db.Text
-  status            AssistantAccountStatus @default(OFFLINE)
-  regionId          String?                @map("region_id") @db.VarChar(16)
-  proxyIpEncrypted  String?                @map("proxy_ip_encrypted") @db.Text
-  enabled           Boolean                @default(true)
-  lastOnlineAt      DateTime?              @map("last_online_at") @db.Timestamptz(6)
-  lastLoginAt       DateTime?              @map("last_login_at") @db.Timestamptz(6)
-  lastErrorCode     String?                @map("last_error_code") @db.VarChar(64)
-  lastErrorMessage  String?                @map("last_error_message") @db.VarChar(255)
-  version           Int                    @default(1)
-  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  bindings   AssistantBinding[]
-  deliveries AssistantDelivery[]
-
-  @@index([status, enabled], map: "assistant_accounts_status_enabled_idx")
-  @@map("assistant_accounts")
-}
-
-/// 员工与公司号的绑定，仅管理员维护；verifiedAt 非空才允许 1:1 发送。
-model AssistantBinding {
-  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId            String                 @map("user_id") @db.Uuid
-  accountId         String                 @map("account_id") @db.Uuid
-  wxid              String                 @db.VarChar(128)
-  wechatNickname    String?                @map("wechat_nickname") @db.VarChar(128)
-  wechatAvatarUrl   String?                @map("wechat_avatar_url") @db.Text
-  status            AssistantBindingStatus @default(ACTIVE)
-  boundByUserId     String                 @map("bound_by_user_id") @db.Uuid
-  verifiedAt        DateTime?              @map("verified_at") @db.Timestamptz(6)
-  verifiedByUserId  String?                @map("verified_by_user_id") @db.Uuid
-  friendCheckedAt   DateTime?              @map("friend_checked_at") @db.Timestamptz(6)
-  lastTestSentAt    DateTime?              @map("last_test_sent_at") @db.Timestamptz(6)
-  boundAt           DateTime               @default(now()) @map("bound_at") @db.Timestamptz(6)
-  updatedAt         DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  user       User             @relation("AssistantBindingUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  account    AssistantAccount @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  boundBy    User             @relation("AssistantBindingBoundBy", fields: [boundByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  verifiedBy User?            @relation("AssistantBindingVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-
-  @@unique([userId, accountId], map: "assistant_bindings_user_account_key")
-  @@unique([accountId, wxid], map: "assistant_bindings_account_wxid_key")
-  @@index([status], map: "assistant_bindings_status_idx")
-  @@index([userId], map: "assistant_bindings_user_idx")
-  @@map("assistant_bindings")
-}
-
-/// 已登记的微信群目标；敏感内容只能发到 internalOnly = true 的群。
-model AssistantTarget {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  key          String    @unique(map: "assistant_targets_key_key") @db.VarChar(64)
-  chatroomId   String    @unique(map: "assistant_targets_chatroom_id_key") @map("chatroom_id") @db.VarChar(128)
-  name         String    @db.VarChar(128)
-  purpose      String?   @db.VarChar(255)
-  internalOnly Boolean   @default(false) @map("internal_only")
-  memberCount  Int?      @map("member_count")
-  avatarUrl    String?   @map("avatar_url") @db.Text
-  enabled      Boolean   @default(true)
-  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  deliveries AssistantDelivery[]
-
-  @@index([enabled, internalOnly], map: "assistant_targets_enabled_internal_idx")
-  @@map("assistant_targets")
-}
-
-/// 千树小助理的一次发送尝试：个人 1:1 或群目标二选一。
-model AssistantDelivery {
-  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  notificationId    String                  @map("notification_id") @db.Uuid
-  recipientUserId   String?                 @map("recipient_user_id") @db.Uuid
-  targetId          String?                 @map("target_id") @db.Uuid
-  accountId         String?                 @map("account_id") @db.Uuid
-  status            AssistantDeliveryStatus @default(PENDING)
-  attemptCount      Int                     @default(0) @map("attempt_count")
-  nextAttemptAt     DateTime                @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
-  templateKey       String                  @map("template_key") @db.VarChar(64)
-  templateVersion   Int                     @map("template_version")
-  renderedContent   String                  @map("rendered_content") @db.Text
-  /// 正文发送成功时间；非空后重试只补发未完成的附件项，避免重复发正文。
-  contentSentAt     DateTime?               @map("content_sent_at") @db.Timestamptz(6)
-  providerMsgId     String?                 @map("provider_msg_id") @db.VarChar(64)
-  providerNewMsgId  String?                 @map("provider_new_msg_id") @db.VarChar(64)
-  failureCode       String?                 @map("failure_code") @db.VarChar(64)
-  failureMessage    String?                 @map("failure_message") @db.VarChar(255)
-  acceptedAt        DateTime?               @map("accepted_at") @db.Timestamptz(6)
-  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  notification  Notification             @relation(fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  recipientUser User?                    @relation("AssistantDeliveryRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  target        AssistantTarget?         @relation(fields: [targetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  account       AssistantAccount?        @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  media         AssistantDeliveryMedia[]
-
-  @@index([status, nextAttemptAt], map: "assistant_deliveries_status_next_attempt_idx")
-  @@index([accountId, status], map: "assistant_deliveries_account_status_idx")
-  @@index([notificationId], map: "assistant_deliveries_notification_idx")
-  @@index([recipientUserId, createdAt(sort: Desc)], map: "assistant_deliveries_recipient_created_idx")
-  @@index([targetId, createdAt(sort: Desc)], map: "assistant_deliveries_target_created_idx")
-  @@map("assistant_deliveries")
-}
-
-/// 一条投递内的单个附件发送事实。
-///
-/// 正文与附件分开发送：正文成功写 `AssistantDelivery.contentSentAt`，附件项各自持有
-/// 状态、重试计数与上游消息标识；任一项永久失败时投递落到 `PARTIAL`。
-model AssistantDeliveryMedia {
-  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  deliveryId       String                  @map("delivery_id") @db.Uuid
-  mediaAssetId     String                  @map("media_asset_id") @db.Uuid
-  sortOrder        Int                     @map("sort_order")
-  status           AssistantDeliveryStatus @default(PENDING)
-  attemptCount     Int                     @default(0) @map("attempt_count")
-  nextAttemptAt    DateTime                @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
-  providerMsgId    String?                 @map("provider_msg_id") @db.VarChar(64)
-  providerNewMsgId String?                 @map("provider_new_msg_id") @db.VarChar(64)
-  failureCode      String?                 @map("failure_code") @db.VarChar(64)
-  failureMessage   String?                 @map("failure_message") @db.VarChar(255)
-  /// 公开取流路由首次读到该对象的时间；用于判断上游是否真的来拉取过图片。
-  fetchedAt        DateTime?               @map("fetched_at") @db.Timestamptz(6)
-  acceptedAt       DateTime?               @map("accepted_at") @db.Timestamptz(6)
-  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  delivery   AssistantDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: Restrict)
-  mediaAsset MediaAsset        @relation("AssistantDeliveryMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-
-  @@unique([deliveryId, sortOrder], map: "assistant_delivery_media_delivery_sort_key")
-  @@index([status, nextAttemptAt], map: "assistant_delivery_media_status_next_idx")
-  @@index([mediaAssetId], map: "assistant_delivery_media_asset_idx")
-  @@map("assistant_delivery_media")
-}
-
-/// 派发器单实例租约，固定 id = 'assistant-dispatch'。
-model AssistantDispatchLease {
-  id        String    @id @db.VarChar(64)
-  ownerId   String?   @map("owner_id") @db.Uuid
-  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@map("assistant_dispatch_leases")
-}
-
-/// 全局发送闸门，固定 id = 'assistant-send'。
-/// 同一时刻只允许一个 sendText 持有发送租约，并在发送结束后写入下一次最早发送时间。
-model AssistantSendGate {
-  id            String    @id @db.VarChar(64)
-  nextAllowedAt DateTime? @map("next_allowed_at") @db.Timestamptz(6)
-  lockOwner     String?   @map("lock_owner") @db.Uuid
-  lockExpiresAt DateTime? @map("lock_expires_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@map("assistant_send_gates")
 }
 
 /// 企业微信自建应用。一期只有 `default`，多应用靠同一张表扩展。

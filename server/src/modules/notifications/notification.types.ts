@@ -48,14 +48,13 @@ export const NOTIFICATION_EVENT_TYPES = [
   'SALES_ORDER_TERMINATED',
   'FUND_ACCOUNT_ADJUSTED',
   'PROXY_NODE_EXPIRED',
-  'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
   'AD_ACCOUNT_BALANCE_LOW',
 ] as const
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]
 
-export type NotificationChannel = 'IN_APP' | 'ASSISTANT' | 'WECOM'
+export type NotificationChannel = 'IN_APP' | 'WECOM'
 
 export type NotificationPriority = 'NORMAL' | 'HIGH'
 
@@ -126,7 +125,6 @@ export const NOTIFICATION_EVENT_DOMAIN: Readonly<Record<NotificationEventType, N
   SALES_ORDER_TERMINATED: 'sales',
   FUND_ACCOUNT_ADJUSTED: 'finance',
   PROXY_NODE_EXPIRED: 'operations',
-  ASSISTANT_ACCOUNT_OFFLINE: 'system',
   FUND_ACCOUNT_REVERSED: 'finance',
   AD_ACCOUNT_BALANCE_LOW: 'operations',
 })
@@ -173,7 +171,6 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   SALES_ORDER_TERMINATED: '销售订单终止',
   FUND_ACCOUNT_ADJUSTED: '资金账户调整',
   PROXY_NODE_EXPIRED: '节点已过期',
-  ASSISTANT_ACCOUNT_OFFLINE: '小助理离线',
   FUND_ACCOUNT_REVERSED: '资金冲账',
   AD_ACCOUNT_BALANCE_LOW: '广告户余额预警',
 })
@@ -221,7 +218,6 @@ export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEve
   SALES_ORDER_TERMINATED: 'SALES',
   FUND_ACCOUNT_ADJUSTED: 'FINANCE',
   PROXY_NODE_EXPIRED: 'OPERATIONS',
-  ASSISTANT_ACCOUNT_OFFLINE: 'SYSTEM',
   FUND_ACCOUNT_REVERSED: 'FINANCE',
   AD_ACCOUNT_BALANCE_LOW: 'OPERATIONS',
 })
@@ -269,7 +265,6 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'SALES_ORDER_TERMINATED',
   'FUND_ACCOUNT_ADJUSTED',
   'PROXY_NODE_EXPIRED',
-  'ASSISTANT_ACCOUNT_OFFLINE',
   'FUND_ACCOUNT_REVERSED',
   'AD_ACCOUNT_BALANCE_LOW',
 ])
@@ -317,7 +312,6 @@ export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<No
   SALES_ORDER_TERMINATED: 'sales.order.terminated',
   FUND_ACCOUNT_ADJUSTED: 'fund.account.adjusted',
   PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
-  ASSISTANT_ACCOUNT_OFFLINE: 'system.assistant-account.offline',
   FUND_ACCOUNT_REVERSED: 'fund.account.reversed',
   AD_ACCOUNT_BALANCE_LOW: 'operations.ad-account.balance-low',
 })
@@ -402,7 +396,6 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
   SALES_ORDER_TERMINATED: ['orderNo', 'customerName', 'reason', 'occurredAt', 'agreedTotalAmount', 'currencyCode', 'customerPhone', 'orderStatus', 'paymentStatus', 'fulfillmentStatus'],
   FUND_ACCOUNT_ADJUSTED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
   PROXY_NODE_EXPIRED: ['nodeLabel', 'host', 'expiresAt', 'assignedUserName'],
-  ASSISTANT_ACCOUNT_OFFLINE: ['accountName', 'occurredAt', 'reason'],
   FUND_ACCOUNT_REVERSED: ['amount', 'currencyCode', 'reason', 'occurredAt'],
   AD_ACCOUNT_BALANCE_LOW: ['adAccountName', 'adAccountNo', 'availableBalance', 'balanceThreshold', 'sevenDayAverage', 'expectedDays', 'companyName'],
 })
@@ -1520,80 +1513,4 @@ export function notificationDomainOf(eventType: string): NotificationDomain | nu
   return Object.prototype.hasOwnProperty.call(NOTIFICATION_EVENT_DOMAIN, eventType)
     ? NOTIFICATION_EVENT_DOMAIN[eventType as NotificationEventType]
     : null
-}
-
-export type AssistantTransportResult =
-  | { readonly ok: true, readonly msgId: string | null, readonly newMsgId: string | null }
-  | {
-    readonly ok: false
-    readonly kind: 'TIMEOUT' | 'NETWORK' | 'REJECTED' | 'OFFLINE' | 'RATE_LIMITED' | 'UNKNOWN'
-    readonly code: string
-    readonly message: string
-  }
-
-export interface AssistantTransport {
-  sendText(input: {
-    readonly appId: string
-    readonly toWxid: string
-    readonly content: string
-    readonly ats?: string
-  }): Promise<AssistantTransportResult>
-  /**
-   * 图片消息由上游按 URL 拉取，调用方必须在发送时现签一个短时效地址。
-   * 与 `sendText` 共用同一把返回结构与失败分类，便于派发器复用重试策略。
-   */
-  sendImage(input: {
-    readonly appId: string
-    readonly toWxid: string
-    readonly imageUrl: string
-  }): Promise<AssistantTransportResult>
-}
-
-export const ASSISTANT_TRANSPORT = Symbol('ASSISTANT_TRANSPORT')
-export const ASSISTANT_TRANSPORT_OPTIONS = Symbol('ASSISTANT_TRANSPORT_OPTIONS')
-export const ASSISTANT_ADMIN_TRANSPORT = Symbol('ASSISTANT_ADMIN_TRANSPORT')
-
-export interface AssistantBriefContact {
-  readonly wxid: string
-  readonly nickname: string | null
-  readonly remark: string | null
-  readonly alias: string | null
-  readonly avatarUrl: string | null
-}
-
-export interface AssistantChatroomInfo {
-  readonly nickname: string | null
-  readonly avatarUrl: string | null
-  readonly memberCount: number | null
-}
-
-export interface AssistantChatroomMember {
-  readonly wxid: string
-  readonly nickname: string | null
-  readonly displayName: string | null
-  readonly avatarUrl: string | null
-  readonly inviterName: string | null
-  readonly role: 'ADMIN' | 'MEMBER' | 'OWNER'
-}
-
-export interface AssistantAdminTransport {
-  /** 只读探测节点在线状态；账号登录、重连和退出都在 GeWe 控制台完成。 */
-  checkOnline(appId: string): Promise<boolean>
-  fetchContactIds(appId: string): Promise<{ readonly friends: readonly string[], readonly chatrooms: readonly string[] }>
-  fetchBriefInfo(appId: string, wxids: readonly string[]): Promise<readonly AssistantBriefContact[]>
-  fetchChatroomInfo(appId: string, chatroomId: string): Promise<AssistantChatroomInfo>
-  fetchChatroomMembers(appId: string, chatroomId: string): Promise<readonly AssistantChatroomMember[]>
-  getOwnQrCode(appId: string): Promise<string>
-  checkRelations(appId: string, wxids: readonly string[]): Promise<readonly { readonly wxid: string, readonly relation: number }[]>
-}
-
-export class AssistantAdminError extends Error {
-  constructor(
-    readonly code: string,
-    readonly kind: string,
-    message: string,
-  ) {
-    super(message)
-    this.name = 'AssistantAdminError'
-  }
 }

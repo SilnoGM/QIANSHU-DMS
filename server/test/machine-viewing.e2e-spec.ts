@@ -133,17 +133,6 @@ describe('machine viewing appointments against PostgreSQL', () => {
           enabled: true,
         },
         {
-          key: 'operations.machine-viewing.created',
-          channel: 'ASSISTANT',
-          name: '看机预约',
-          domain: 'OPERATIONS',
-          titleTemplate: null,
-          bodyTemplate: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
-          variables,
-          maxLength: 2000,
-          enabled: true,
-        },
-        {
           key: 'operations.machine-viewing.rescheduled',
           channel: 'IN_APP',
           name: '看机预约改期',

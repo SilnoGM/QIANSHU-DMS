@@ -99,8 +99,6 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
       'notification-record:read',
       'notification-template:read',
       'notification-policy:read',
-      'assistant-channel:read',
-      'assistant-account:read',
       'wecom-channel:read',
       'wecom-app:read',
     ],
@@ -122,14 +120,6 @@ test('顶层主导航按目标结构装配管理员工作台与系统管理', ()
         name: 'systemNotificationLanding',
         path: '',
         title: '通知中心',
-      },
-      {
-        auth: ['assistant-channel:read', 'assistant-account:read'],
-        icon: 'qs-gewe-assistant',
-        menu: undefined,
-        name: 'systemNotificationAssistant',
-        path: 'assistant',
-        title: 'GeWe助理',
       },
       {
         auth: ['wecom-channel:read', 'wecom-app:read'],

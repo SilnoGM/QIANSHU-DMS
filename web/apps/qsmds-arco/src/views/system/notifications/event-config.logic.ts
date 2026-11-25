@@ -7,7 +7,7 @@ import type {
 } from '@/api/generated/types.gen'
 import { TEMPLATE_DOMAIN_OPTIONS } from './template-key-grouping.logic'
 
-export type NotificationChannelValue = 'IN_APP' | 'ASSISTANT' | 'WECOM'
+export type NotificationChannelValue = 'IN_APP' | 'WECOM'
 
 export type EventChannelState = 'READY' | 'MISSING_TEMPLATE' | 'UNCONFIGURED' | 'DISABLED' | 'UNKNOWN'
 
@@ -28,7 +28,6 @@ export type EventCoverageState = 'READY' | 'PARTIAL' | 'MISSING_TEMPLATE' | 'UNC
 export interface EventCoverage {
   event: NotificationEventDto
   inApp: EffectiveTemplate
-  assistant: EffectiveTemplate
   wecom: EffectiveTemplate
   state: EventCoverageState
 }
@@ -140,14 +139,9 @@ export function resolveChannelTemplate(
 
 function deriveEventState(
   inApp: EffectiveTemplate,
-  assistant: EffectiveTemplate,
   wecom: EffectiveTemplate,
 ): EventCoverageState {
-  const channels = [inApp, assistant]
-  // WECOM 是增量渠道：未配置时不把已有事件拖成 PARTIAL；一旦有策略就参与状态判定。
-  if (wecom.state !== 'UNCONFIGURED') {
-    channels.push(wecom)
-  }
+  const channels = [inApp, wecom]
   const configured = channels.filter(channel => channel.state !== 'UNCONFIGURED')
   if (configured.length === 0) {
     return 'UNCONFIGURED'
@@ -179,19 +173,13 @@ export function buildEventCoverage(
       findChannelPolicy(policies, event.eventType, 'IN_APP'),
       templates,
     )
-    const assistant = resolveChannelTemplate(
-      event,
-      'ASSISTANT',
-      findChannelPolicy(policies, event.eventType, 'ASSISTANT'),
-      templates,
-    )
     const wecom = resolveChannelTemplate(
       event,
       'WECOM',
       findChannelPolicy(policies, event.eventType, 'WECOM'),
       templates,
     )
-    return { event, inApp, assistant, wecom, state: deriveEventState(inApp, assistant, wecom) }
+    return { event, inApp, wecom, state: deriveEventState(inApp, wecom) }
   })
 }
 
@@ -262,10 +250,8 @@ function matchesTableKeyword(item: EventCoverage, normalized: string): boolean {
     item.event.label,
     item.event.eventType,
     item.inApp.key ?? '',
-    item.assistant.key ?? '',
     item.wecom.key ?? '',
     item.inApp.template?.name ?? '',
-    item.assistant.template?.name ?? '',
     item.wecom.template?.name ?? '',
   ].join(' ').toLowerCase()
   return haystack.includes(normalized)
@@ -341,9 +327,9 @@ export function filterEventCoverage(
       item.event.label,
       item.event.eventType,
       item.inApp.key ?? '',
-      item.assistant.key ?? '',
+      item.wecom.key ?? '',
       item.inApp.template?.name ?? '',
-      item.assistant.template?.name ?? '',
+      item.wecom.template?.name ?? '',
     ].join(' ').toLowerCase()
     return haystack.includes(normalized)
   })

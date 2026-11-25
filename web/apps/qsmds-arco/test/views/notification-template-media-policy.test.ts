@@ -12,7 +12,7 @@ const rulesSource = readFileSync(
 
 test('关闭附件时只提交 enabled:false，不携带被服务端拒绝的 maxCount', () => {
   const payload = buildTemplateMediaPolicyPayload({
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     enabled: false,
     maxCount: 1,
     sources: [],
@@ -33,9 +33,9 @@ test('站内通知一期不支持附件，草稿即使开启也按禁用提交',
   assert.deepEqual(payload, { enabled: false })
 })
 
-test('小助理开启附件时提交完整策略', () => {
+test('企业微信开启附件时提交完整策略', () => {
   const payload = buildTemplateMediaPolicyPayload({
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     enabled: true,
     maxCount: 2,
     sources: ['salesOrder.issuanceVoucher'],

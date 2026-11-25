@@ -1,5 +1,7 @@
 # 通知中心与千树小助理落地设计
 
+> 2026-11-25 起千树小助理渠道已退役，通知渠道收敛为站内通知与企业微信。本文中与 GeWe 相关的实现章节仅保留历史设计记录。
+
 ## 文档信息
 
 | 项目 | 内容 |
@@ -361,9 +363,8 @@ PENDING ──► SENDING ──► ACCEPTED
 | `ASSISTANT_REQUEST_TIMEOUT_MS` | 否 | 默认 10000 |
 | `ASSISTANT_MIN_SEND_INTERVAL_MS` | 否 | 默认 3000；所有 sendText 与 sendImage 的全局最小间隔（冷却下限），0 仅用于本地关闭节流 |
 | `ASSISTANT_SEND_INTERVAL_JITTER_MS` | 否 | 默认 2000；在最小间隔之上叠加 `[0, 抖动]` 的均匀随机，默认实际冷却 3000~5000ms；最小间隔为 0 时抖动不生效 |
-| `NOTIFICATION_MEDIA_URL_SECRET` | 是（生产） | 32 字节 base64url；图片取流地址的 HMAC 密钥，必须与认证域三个 key 不同。dev/test 缺省时使用进程级随机值 |
 
-渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。`NOTIFICATION_MEDIA_URL_SECRET` 是例外：生产缺失直接拒绝启动（fail-closed），发版前必须先配置。
+渠道启停由 `notification_channel_settings` 管理，不再使用进程级 `ASSISTANT_ENABLED`，避免双开关冲突。配置缺失时**不阻断服务启动**：记录错误日志，管理端概览显示 `CONFIG_INVALID`，发布时该渠道落 `SKIPPED`。上述 GeWe 配置与图片取流签名密钥已随渠道退役移除。
 
 ### 5.10 附件取流
 

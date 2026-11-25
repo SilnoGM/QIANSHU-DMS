@@ -11,7 +11,7 @@ const props = defineProps<{
   busy: boolean
   canUpdatePolicy: boolean
   canUpdateTemplate: boolean
-  channel: 'IN_APP' | 'ASSISTANT' | 'WECOM'
+  channel: 'IN_APP' | 'WECOM'
   event: NotificationEventDto
   selectedKey: string | null
   templates: readonly NotificationTemplateDto[]
@@ -35,9 +35,7 @@ interface TemplateCandidate {
   usageCount: number
 }
 
-const channelLabel = computed(() => props.channel === 'ASSISTANT'
-  ? '千树小助理'
-  : props.channel === 'WECOM' ? '企业微信' : '站内通知')
+const channelLabel = computed(() => props.channel === 'WECOM' ? '企业微信' : '站内通知')
 
 const allCandidates = computed<TemplateCandidate[]>(() => {
   const normalized = keyword.value.trim().toLowerCase()

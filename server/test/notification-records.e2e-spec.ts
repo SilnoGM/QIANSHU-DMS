@@ -72,6 +72,7 @@ describe('Notification records API with PostgreSQL', () => {
   async function createRecord(): Promise<string> {
     const suffix = randomUUID()
     const now = new Date()
+    const defaultApp = await prisma.wecomApp.findUniqueOrThrow({ where: { key: 'default' }, select: { id: true } })
     const notification = await prisma.notification.create({
       data: {
         eventType: 'PURCHASE_REVIEW_PENDING',
@@ -81,7 +82,7 @@ describe('Notification records API with PostgreSQL', () => {
         priority: 'HIGH',
         status: 'PENDING',
         templateKey: 'purchase.review.pending',
-        requestedChannels: ['IN_APP', 'ASSISTANT'],
+        requestedChannels: ['IN_APP', 'WECOM'],
         variables: {},
         expiresAt: new Date(now.getTime() + 86_400_000),
         publishedAt: now,
@@ -96,8 +97,10 @@ describe('Notification records API with PostgreSQL', () => {
             bodySnapshot: '通知记录 E2E 正文',
           },
         },
-        deliveries: {
+        wecomDeliveries: {
           create: {
+            appId: defaultApp.id,
+            transport: 'APP',
             recipientUserId: userId,
             status: 'PENDING',
             attemptCount: 0,
@@ -159,7 +162,7 @@ describe('Notification records API with PostgreSQL', () => {
     const options = await browser
       .get('/api/notifications/records/options')
       .expect(200)
-    expect(options.body.events).toHaveLength(44)
+    expect(options.body.events).toHaveLength(43)
 
     const now = Date.now()
     const list = await browser
@@ -182,10 +185,10 @@ describe('Notification records API with PostgreSQL', () => {
       id: recordId,
       eventLabel: '采购审核',
       domain: 'PURCHASE',
-      channels: ['IN_APP', 'ASSISTANT'],
+      channels: ['IN_APP', 'WECOM'],
       inAppItemCount: 1,
       inAppUnreadCount: 1,
-      deliveryCounts: { PENDING: 1 },
+      wecomDeliveryCounts: { PENDING: 1 },
       requestedByName: '通知记录 E2E 管理员',
     })
 
@@ -209,6 +212,6 @@ describe('Notification records API with PostgreSQL', () => {
       .get(`/api/notifications/records/${recordId}`)
       .expect(200)
     expect(afterCancel.body.status).toBe('CANCELLED')
-    expect(afterCancel.body.deliveryCounts).toEqual({ CANCELLED: 1 })
+    expect(afterCancel.body.wecomDeliveryCounts).toEqual({ CANCELLED: 1 })
   })
 })

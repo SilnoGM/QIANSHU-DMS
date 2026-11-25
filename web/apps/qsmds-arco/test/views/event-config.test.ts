@@ -59,7 +59,7 @@ function policy(overrides: Partial<NotificationChannelPolicyDto> & Pick<Notifica
     targetConfig: {},
     templateKey: null,
     priority: 'NORMAL',
-    ttlSeconds: overrides.channel === 'ASSISTANT' ? 86_400 : null,
+    ttlSeconds: overrides.channel === 'WECOM' ? 86_400 : null,
     quietHours: null,
     allowSensitive: true,
     enabled: true,
@@ -93,11 +93,11 @@ function template(overrides: Partial<NotificationTemplateDto> & Pick<Notificatio
 test('策略绑定的模板优先于业务默认键', () => {
   const effective = resolveChannelTemplate(
     purchaseEvent,
-    'ASSISTANT',
-    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT', templateKey: 'purchase.review.pending.short' }),
+    'WECOM',
+    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM', templateKey: 'purchase.review.pending.short' }),
     [
-      template({ channel: 'ASSISTANT', key: 'purchase.review.pending.short', name: '采购审核简版' }),
-      template({ channel: 'ASSISTANT', key: 'purchase.review.pending', name: '采购审核默认' }),
+      template({ channel: 'WECOM', key: 'purchase.review.pending.short', name: '采购审核简版' }),
+      template({ channel: 'WECOM', key: 'purchase.review.pending', name: '采购审核默认' }),
     ],
   )
 
@@ -137,9 +137,9 @@ test('策略绑定键与业务默认键相同时按默认处理', () => {
 test('没有策略时为未配置，模板状态不参与判定', () => {
   const effective = resolveChannelTemplate(
     purchaseEvent,
-    'ASSISTANT',
+    'WECOM',
     null,
-    [template({ channel: 'ASSISTANT', key: 'purchase.review.pending' })],
+    [template({ channel: 'WECOM', key: 'purchase.review.pending' })],
   )
 
   assert.equal(effective.state, 'UNCONFIGURED')
@@ -149,17 +149,17 @@ test('没有策略时为未配置，模板状态不参与判定', () => {
 test('策略停用和模板停用分别给出明确状态', () => {
   const disabledPolicy = resolveChannelTemplate(
     purchaseEvent,
-    'ASSISTANT',
-    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT', enabled: false }),
-    [template({ channel: 'ASSISTANT', key: 'purchase.review.pending' })],
+    'WECOM',
+    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM', enabled: false }),
+    [template({ channel: 'WECOM', key: 'purchase.review.pending' })],
   )
   assert.equal(disabledPolicy.state, 'DISABLED')
 
   const disabledTemplate = resolveChannelTemplate(
     purchaseEvent,
-    'ASSISTANT',
-    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
-    [template({ channel: 'ASSISTANT', key: 'purchase.review.pending', enabled: false })],
+    'WECOM',
+    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
+    [template({ channel: 'WECOM', key: 'purchase.review.pending', enabled: false })],
   )
   assert.equal(disabledTemplate.state, 'MISSING_TEMPLATE')
   assert.equal(disabledTemplate.missingReason, 'TEMPLATE_DISABLED')
@@ -168,8 +168,8 @@ test('策略停用和模板停用分别给出明确状态', () => {
 test('没有模板查看权限时状态为未知，不误判缺模板', () => {
   const effective = resolveChannelTemplate(
     purchaseEvent,
-    'ASSISTANT',
-    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
+    'WECOM',
+    policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
     null,
   )
 
@@ -179,13 +179,13 @@ test('没有模板查看权限时状态为未知，不误判缺模板', () => {
 
 test('事件覆盖态按缺模板、未配置、部分配置、已停用区分', () => {
   const templates = [
-    template({ channel: 'ASSISTANT', key: 'purchase.review.pending' }),
+    template({ channel: 'WECOM', key: 'purchase.review.pending' }),
     template({ channel: 'IN_APP', key: 'purchase.review.pending' }),
   ]
   const bothReady = buildEventCoverage(
     [purchaseEvent],
     [
-      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
+      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
       policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }),
     ],
     templates,
@@ -197,7 +197,7 @@ test('事件覆盖态按缺模板、未配置、部分配置、已停用区分',
 
   const partial = buildEventCoverage(
     [purchaseEvent],
-    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' })],
+    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' })],
     templates,
   )
   assert.equal(partial[0]?.state, 'PARTIAL')
@@ -205,7 +205,7 @@ test('事件覆盖态按缺模板、未配置、部分配置、已停用区分',
   const missing = buildEventCoverage(
     [purchaseEvent],
     [
-      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
+      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
       policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }),
     ],
     [templates[0]!],
@@ -214,7 +214,7 @@ test('事件覆盖态按缺模板、未配置、部分配置、已停用区分',
 
   const disabled = buildEventCoverage(
     [purchaseEvent],
-    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT', enabled: false })],
+    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM', enabled: false })],
     templates,
   )
   assert.equal(disabled[0]?.state, 'DISABLED')
@@ -224,11 +224,11 @@ test('汇总统计只按事件计数', () => {
   const coverage = buildEventCoverage(
     [purchaseEvent, shipmentEvent, withdrawalEvent],
     [
-      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
+      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
       policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }),
     ],
     [
-      template({ channel: 'ASSISTANT', key: 'purchase.review.pending' }),
+      template({ channel: 'WECOM', key: 'purchase.review.pending' }),
       template({ channel: 'IN_APP', key: 'purchase.review.pending' }),
     ],
   )
@@ -247,7 +247,7 @@ test('汇总统计只按事件计数', () => {
 
 test('模板占位符超出事件变量时给出不兼容清单，未知契约不拦截', () => {
   const incompatible = template({
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     key: 'purchase.review.pending',
     titleTemplate: '采购单 {{orderNo}}',
     bodyTemplate: '货件 {{partNumbers}} 客户 {{customerName}}',
@@ -261,9 +261,9 @@ test('模板使用数按事件去重，默认键和策略绑定都计入', () =>
   const usage = buildTemplateUsageCounts(
     [purchaseEvent, shipmentEvent],
     [
-      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' }),
+      policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }),
       policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }),
-      policy({ eventType: 'SHIPMENT_ARRIVED', channel: 'ASSISTANT', templateKey: 'purchase.review.pending' }),
+      policy({ eventType: 'SHIPMENT_ARRIVED', channel: 'WECOM', templateKey: 'purchase.review.pending' }),
     ],
   )
 
@@ -275,8 +275,8 @@ test('模板使用数按事件去重，默认键和策略绑定都计入', () =>
 test('事件按模板域分组并支持关键词与未配齐过滤', () => {
   const coverage = buildEventCoverage(
     [purchaseEvent, shipmentEvent, withdrawalEvent],
-    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' })],
-    [template({ channel: 'ASSISTANT', key: 'purchase.review.pending' })],
+    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' })],
+    [template({ channel: 'WECOM', key: 'purchase.review.pending' })],
   )
   assert.deepEqual(groupEventCoverageByDomain(coverage).map(group => group.label), ['采购域', '货件运输域', '财务域'])
   assert.deepEqual(filterEventCoverage(coverage, '货件', false).map(item => item.event.label), ['货件到仓'])
@@ -289,7 +289,7 @@ test('分组表格按业务域输出父组与事件子行，并保留最近策�
     [
       policy({
         eventType: 'PURCHASE_REVIEW_PENDING',
-        channel: 'ASSISTANT',
+        channel: 'WECOM',
         updatedAt: '2026-11-08T08:00:00.000Z',
         updatedByName: '张三',
       }),
@@ -305,7 +305,7 @@ test('分组表格按业务域输出父组与事件子行，并保留最近策�
   const groups = buildEventTableGroups(coverage, [
     policy({
       eventType: 'PURCHASE_REVIEW_PENDING',
-      channel: 'ASSISTANT',
+      channel: 'WECOM',
       updatedAt: '2026-11-08T08:00:00.000Z',
       updatedByName: '张三',
     }),
@@ -328,8 +328,8 @@ test('分组表格按业务域输出父组与事件子行，并保留最近策�
 test('分组表格支持状态、未接入与关键词过滤，空组会被移除', () => {
   const coverage = buildEventCoverage(
     [purchaseEvent, shipmentEvent, withdrawalEvent],
-    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'ASSISTANT' })],
-    [template({ channel: 'ASSISTANT', key: 'purchase.review.pending' })],
+    [policy({ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' })],
+    [template({ channel: 'WECOM', key: 'purchase.review.pending' })],
   )
 
   assert.deepEqual(

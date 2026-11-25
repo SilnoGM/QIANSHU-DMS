@@ -2,7 +2,6 @@
 import type { EventTableGroupRow, NotificationChannelValue } from '../event-config.logic'
 
 import {
-  ASSISTANT_ACTION_CLASS,
   channelStateClass,
   channelSummary,
   eventStateClass,
@@ -75,14 +74,14 @@ function isUnimplementedConfigured(row: EventTableGroupRow['children'][number]):
             支持附件：{{ row.event.media.sources.map(source => source.label).join('、') || '未声明来源' }}（最多 {{ row.event.media.maxCount }} 张）
           </p>
 
-          <div class="gap-2 grid sm:grid-cols-2 xl:grid-cols-3">
+          <div class="gap-2 grid sm:grid-cols-2">
             <div
-              v-for="channel in (['IN_APP', 'ASSISTANT', 'WECOM'] as const)"
+              v-for="channel in (['IN_APP', 'WECOM'] as const)"
               :key="channel"
               class="p-3 border border-border rounded-md bg-muted/20 flex flex-col gap-2 min-w-0"
             >
               <div class="flex flex-wrap gap-2 items-center justify-between">
-                <span class="qs-type-meta text-muted-foreground">{{ channel === 'IN_APP' ? '站内通知' : channel === 'ASSISTANT' ? '千树小助理' : '企业微信' }}</span>
+                <span class="qs-type-meta text-muted-foreground">{{ channel === 'IN_APP' ? '站内通知' : '企业微信' }}</span>
                 <FaTag variant="outline" :class="channelStateClass(channelSummary(row.coverage, channel).state)">
                   {{ channelSummary(row.coverage, channel).label }}
                 </FaTag>
@@ -99,11 +98,11 @@ function isUnimplementedConfigured(row: EventTableGroupRow['children'][number]):
                 variant="outline"
                 size="sm"
                 class="mt-auto w-full"
-                :class="channel === 'IN_APP' ? IN_APP_ACTION_CLASS : channel === 'ASSISTANT' ? ASSISTANT_ACTION_CLASS : WECOM_ACTION_CLASS"
+                :class="channel === 'IN_APP' ? IN_APP_ACTION_CLASS : WECOM_ACTION_CLASS"
                 :disabled="busy"
                 @click="emit('configure', row.event.eventType, channel)"
               >
-                {{ channel === 'IN_APP' ? '站内配置' : channel === 'ASSISTANT' ? '小助理配置' : '企业微信配置' }}
+                {{ channel === 'IN_APP' ? '站内配置' : '企业微信配置' }}
               </FaButton>
             </div>
           </div>

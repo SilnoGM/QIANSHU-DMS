@@ -4,26 +4,12 @@ import { ConfigService } from '@nestjs/config'
 import { AuthModule } from '../auth/auth.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
-import { AssistantAdminController } from './assistant-admin.controller'
-import { AssistantAdminService } from './assistant-admin.service'
 import { NotificationAdminController } from './notification-admin.controller'
 import { NotificationAdminService } from './notification-admin.service'
 import { NotificationInboxController } from './notification-inbox.controller'
 import { NotificationInboxService } from './notification-inbox.service'
-import { NotificationMediaController } from './notification-media.controller'
 import { NotificationPreferenceController } from './notification-preference.controller'
 import { NotificationPreferenceService } from './notification-preference.service'
-import { AssistantDispatchService } from './assistant-dispatch.service'
-import {
-  AssistantMediaDeliveryService,
-  AssistantMediaRateLimiter,
-} from './assistant-media-delivery.service'
-import { AssistantMediaUrlService } from './assistant-media-url'
-import { AssistantSendGateService } from './assistant-send-gate.service'
-import { GatedAssistantTransport } from './gated-assistant.transport'
-import { GeweAssistantAdminTransport } from './gewe-assistant-admin.transport'
-import { GeweAssistantTransport } from './gewe-assistant.transport'
-import { ASSISTANT_ADMIN_TRANSPORT, ASSISTANT_TRANSPORT, ASSISTANT_TRANSPORT_OPTIONS } from './notification.types'
 import { SystemNotificationService } from './system-notification.service'
 import { WecomAdminController } from './wecom-admin.controller'
 import { WecomAdminService } from './wecom-admin.service'
@@ -38,41 +24,20 @@ import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
 /**
  * 通知中心基础模块。
  *
- * 发布入口、千树小助理派发、站内收件箱与管理端共用同一通知域。
+ * 发布入口、站内收件箱、企业微信派发与管理端共用同一通知域。
  * 全局模块：业务模块只需注入 SystemNotificationService，不再各自导入本模块。
  * PrismaModule 与 ConfigModule 都是全局模块，不需要在这里重复导入。
  */
 @Global()
 @Module({
   imports: [AuthModule, MediaModule, NumberingModule],
-  controllers: [AssistantAdminController, NotificationAdminController, NotificationInboxController, NotificationMediaController, NotificationPreferenceController, WecomAdminController],
+  controllers: [NotificationAdminController, NotificationInboxController, NotificationPreferenceController, WecomAdminController],
   providers: [
     SystemNotificationService,
     WecomAdminService,
-    AssistantAdminService,
     NotificationAdminService,
     NotificationInboxService,
     NotificationPreferenceService,
-    AssistantSendGateService,
-    AssistantMediaUrlService,
-    AssistantMediaRateLimiter,
-    AssistantMediaDeliveryService,
-    GeweAssistantTransport,
-    GatedAssistantTransport,
-    GeweAssistantAdminTransport,
-    {
-      provide: ASSISTANT_TRANSPORT,
-      useExisting: GatedAssistantTransport,
-    },
-    {
-      provide: ASSISTANT_ADMIN_TRANSPORT,
-      useExisting: GeweAssistantAdminTransport,
-    },
-    {
-      provide: ASSISTANT_TRANSPORT_OPTIONS,
-      useValue: {},
-    },
-    AssistantDispatchService,
     {
       provide: WECOM_SECRET_KEY,
       inject: [ConfigService],

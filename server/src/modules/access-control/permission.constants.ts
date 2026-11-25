@@ -267,10 +267,9 @@ export const MACHINE_VIEWING_PERMISSION_CODES = [
 ] as const
 
 /**
- * 通知中心：共享的模板/策略/记录权限，以及千树小助理渠道专属权限。
+ * 通知中心：共享的模板/策略/记录权限；企业微信渠道权限在 WECOM 权限组中维护。
  *
- * 全部为 system_only；阶段 1 只启用千树小助理相关权限，站内通知接口只要求
- * 登录，不新增权限码。回调引入后再增加 assistant-callback:read。
+ * 全部为 system_only；站内通知接口只要求登录，不新增权限码。
  */
 export const NOTIFICATION_PERMISSION_CODES = [
   'notification-template:read',
@@ -279,15 +278,6 @@ export const NOTIFICATION_PERMISSION_CODES = [
   'notification-policy:update',
   'notification-record:read',
   'notification-record:manage',
-  'assistant-channel:read',
-  'assistant-channel:update',
-  'assistant-account:read',
-  'assistant-account:operate',
-  'assistant-binding:read',
-  'assistant-binding:manage',
-  'assistant-target:read',
-  'assistant-target:manage',
-  'assistant-delivery:resend',
   'wecom-channel:read',
   'wecom-channel:update',
   'wecom-app:read',

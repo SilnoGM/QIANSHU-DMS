@@ -7,7 +7,6 @@ import type { ApiContractErrorOptions } from '../../openapi/contract-metadata'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequireAnyPermissions, RequirePermissions } from '../auth/decorators/auth.decorators'
-import { AssistantTestSendDto } from './assistant-admin.dto'
 import {
   NotificationCancelResultDto,
   NotificationChannelPolicyDto,
@@ -112,20 +111,6 @@ export class NotificationAdminController {
   @contract('notifications_templates_preview', true, [{ status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] }])
   previewTemplate(@Param() params: NotificationUuidParamDto, @Body() input: NotificationTemplatePreviewDto) {
     return this.notifications.previewTemplate(params.id, input)
-  }
-
-  @Post('templates/:id/test')
-  @HttpCode(200)
-  @RequirePermissions('notification-template:update')
-  @ApiContractResponse({ status: 200, type: AssistantTestSendDto })
-  @contract('notifications_templates_test', true, [
-    { status: 404, codes: ['NOTIFICATION_TEMPLATE_NOT_FOUND'] },
-    { status: 422, codes: ['ASSISTANT_ACCOUNT_OFFLINE', 'ASSISTANT_ACCOUNT_UNAVAILABLE', 'NOTIFICATION_TEMPLATE_CHANNEL_UNSUPPORTED'] },
-    { status: 429, codes: ['ASSISTANT_RATE_LIMITED'] },
-    { status: 503, codes: ['ASSISTANT_OUTBOUND_BLOCKED', 'ASSISTANT_UPSTREAM_UNAVAILABLE'] },
-  ])
-  testTemplate(@Param() params: NotificationUuidParamDto, @Body() input: NotificationTemplatePreviewDto) {
-    return this.notifications.testTemplate(params.id, input)
   }
 
   @Get('channel-policies')

@@ -154,15 +154,6 @@ describe('permission constants', () => {
       'notification-policy:update',
       'notification-record:read',
       'notification-record:manage',
-      'assistant-channel:read',
-      'assistant-channel:update',
-      'assistant-account:read',
-      'assistant-account:operate',
-      'assistant-binding:read',
-      'assistant-binding:manage',
-      'assistant-target:read',
-      'assistant-target:manage',
-      'assistant-delivery:resend',
       'wecom-channel:read',
       'wecom-channel:update',
       'wecom-app:read',
@@ -176,7 +167,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 144)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 135)
   })
 })
 

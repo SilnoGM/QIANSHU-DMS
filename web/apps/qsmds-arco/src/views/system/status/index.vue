@@ -1011,12 +1011,6 @@ onBeforeUnmount(() => {
                     </span>
                     <span
                       class="text-xs font-medium px-2 py-0.5 border rounded-md inline-flex items-center"
-                      :class="resolveStatusTagToneClass(runtime.assistantWorkerEnabled ? 'success' : 'danger')"
-                    >
-                      GeWe {{ runtime.assistantWorkerEnabled ? '已启用' : '已停用' }}
-                    </span>
-                    <span
-                      class="text-xs font-medium px-2 py-0.5 border rounded-md inline-flex items-center"
                       :class="resolveStatusTagToneClass(runtime.wecomWorkerEnabled ? 'success' : 'danger')"
                     >
                       企微 {{ runtime.wecomWorkerEnabled ? '已启用' : '已停用' }}

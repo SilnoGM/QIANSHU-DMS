@@ -209,8 +209,7 @@ function parseTemplateVariables(value: Prisma.JsonValue): NotificationTemplateVa
 }
 
 /**
- * 手动标记只生成可复制的文案，不发布通知；优先取站内模板标题和现有外发渠道纯文本正文。
- * 保留 ASSISTANT 优先，WECOM 作为未配置小助理时的可用回退。
+ * 手动标记只生成可复制的文案，不发布通知；优先取站内模板标题和企业微信纯文本正文。
  */
 export async function renderManualAppointmentNotificationText(
   transaction: Prisma.TransactionClient,
@@ -219,7 +218,7 @@ export async function renderManualAppointmentNotificationText(
   const templates = await transaction.notificationTemplate.findMany({
     where: {
       key: 'operations.machine-viewing.created',
-      channel: { in: ['IN_APP', 'ASSISTANT', 'WECOM'] },
+      channel: { in: ['IN_APP', 'WECOM'] },
       enabled: true,
     },
     select: {
@@ -232,9 +231,8 @@ export async function renderManualAppointmentNotificationText(
     },
   })
   const inApp = templates.find(template => template.channel === 'IN_APP')
-  const assistant = templates.find(template => template.channel === 'ASSISTANT')
   const wecom = templates.find(template => template.channel === 'WECOM')
-  const bodyTemplate = assistant ?? wecom ?? inApp
+  const bodyTemplate = wecom ?? inApp
   if (bodyTemplate === undefined) {
     throw new MachineViewingNotificationTextUnavailableError('看机预约通知模板不可用')
   }

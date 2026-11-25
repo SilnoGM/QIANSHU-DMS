@@ -403,7 +403,7 @@ export class SalesReceiptService {
       result = await this.notifications.publish({
         eventType: 'SALES_RECEIPT_VOUCHER_SENT',
         source: { type: 'SALES_RECEIPT_REQUEST', id: row.id },
-        // 群目标由 ASSISTANT 渠道策略覆盖；命令目标只服务可能配置的站内渠道。
+        // 群目标由 WECOM 渠道策略覆盖；命令目标只服务可能配置的站内渠道。
         target: { kind: 'PERMISSION', permissionCode: 'sales-receipts:review' },
         templateKey: 'sales.receipt.voucher-sent',
         variables: {
@@ -429,17 +429,8 @@ export class SalesReceiptService {
     if (result.duplicated || !hasQueuedOutboundDelivery(result.channels)) {
       receiptFailure('SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE', '水单未进入群发送队列，请检查群目标、模板与渠道配置')
     }
-    // 凭证必须真正进入某一外发渠道的附件队列；notification_media 的 blockedReason
-    // 只反映 ASSISTANT 侧的模板策略，WECOM-only 时会有 CHANNEL_DISABLED 的占位行，
-    // 因此以实际投递附件行为准。
-    const queuedMedia = await tx.assistantDeliveryMedia.findFirst({
-      where: {
-        mediaAssetId: row.voucherMediaAssetId,
-        status: 'PENDING',
-        delivery: { notificationId: result.notificationId, status: 'PENDING' },
-      },
-      select: { id: true },
-    }) ?? await tx.wecomDeliveryMedia.findFirst({
+    // 凭证必须真正进入企业微信投递附件队列，不能只看模板策略是否允许。
+    const queuedMedia = await tx.wecomDeliveryMedia.findFirst({
       where: {
         mediaAssetId: row.voucherMediaAssetId,
         status: 'PENDING',

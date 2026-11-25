@@ -656,15 +656,6 @@
     "source": "brand"
   },
   {
-    "name": "qs-gewe-assistant",
-    "label": "GeWe助理",
-    "category": "系统",
-    "usages": [
-      "系统管理 / 通知中心 / GeWe助理"
-    ],
-    "source": "brand"
-  },
-  {
     "name": "qs-notification-policy",
     "label": "通知策略",
     "category": "系统",
@@ -1595,7 +1586,6 @@
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
       "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
@@ -2831,7 +2821,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/rules-panel.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
@@ -2985,16 +2974,6 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
-    ]
-  },
-  {
-    "name": "i-lucide:messages-square",
-    "label": "i-lucide:messages-square",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/components/EventChannelCard.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue"
     ]
   },
   {
@@ -3314,15 +3293,6 @@
     ]
   },
   {
-    "name": "i-lucide:qr-code",
-    "label": "i-lucide:qr-code",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue"
-    ]
-  },
-  {
     "name": "i-lucide:receipt-text",
     "label": "i-lucide:receipt-text",
     "category": "通用图标",
@@ -3399,7 +3369,6 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/release-notes/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
@@ -3547,7 +3516,6 @@
       "apps/qsmds-arco/src/views/operations/product-library/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/EventFilterBar.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplatePickerDrawer.vue",

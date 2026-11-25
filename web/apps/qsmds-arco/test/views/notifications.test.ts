@@ -3,18 +3,8 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 页面源码契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
-import { qrImageSrc } from '../../src/views/system/notifications/qr-image'
-
 const indexSource = readFileSync(
   new URL('../../src/views/system/notifications/index.vue', import.meta.url),
-  'utf8',
-)
-const assistantPageSource = readFileSync(
-  new URL('../../src/views/system/notifications/assistant.vue', import.meta.url),
-  'utf8',
-)
-const channelSwitchSource = readFileSync(
-  new URL('../../src/views/system/notifications/channel-switch.vue', import.meta.url),
   'utf8',
 )
 const policiesPageSource = readFileSync(
@@ -23,10 +13,6 @@ const policiesPageSource = readFileSync(
 )
 const recordsPageSource = readFileSync(
   new URL('../../src/views/system/notifications/records.vue', import.meta.url),
-  'utf8',
-)
-const assistantSource = readFileSync(
-  new URL('../../src/views/system/notifications/assistant-panel.vue', import.meta.url),
   'utf8',
 )
 const rulesSource = readFileSync(
@@ -122,18 +108,14 @@ const pollingSource = readFileSync(
   'utf8',
 )
 
-test('通知中心拆分为 GeWe 助理、通知策略和通知记录三个独立页面', () => {
-  // 旧入口保留权限感知跳转，不再承载四个页签。
+test('通知中心保留企业微信、通知策略和通知记录页面', () => {
+  // 旧入口保留权限感知跳转，不再承载多个页签。
   assert.match(indexSource, /router\.replace/u)
   assert.match(indexSource, /systemNotificationRecords/u)
-  assert.match(indexSource, /systemNotificationAssistant/u)
+  assert.match(indexSource, /systemNotificationWecom/u)
   assert.match(indexSource, /systemNotificationPolicies/u)
   assert.doesNotMatch(indexSource, /<FaTabs/u)
   assert.doesNotMatch(indexSource, /data-testid="notification-center-tabs"/u)
-
-  assert.match(assistantPageSource, /<FaPageHeader/u)
-  assert.match(assistantPageSource, /title="GeWe助理"/u)
-  assert.match(assistantPageSource, /<AssistantPanel/u)
 
   assert.match(policiesPageSource, /<FaPageHeader/u)
   assert.match(policiesPageSource, /title="通知策略"/u)
@@ -145,129 +127,6 @@ test('通知中心拆分为 GeWe 助理、通知策略和通知记录三个独�
   assert.match(recordsPageSource, /<RecordsPanel/u)
   assert.match(recordsPageSource, /刷新/u)
   assert.doesNotMatch(recordsPageSource, /<section/u)
-})
-
-test('千树小助理面板从控制台导入节点，不提供扫码登录与退出', () => {
-  assert.match(assistantPageSource, /<FaPageHeader[\s\S]*<ChannelSwitch/u)
-  assert.match(channelSwitchSource, /assistant\.channel\.update/u)
-  assert.match(channelSwitchSource, /<FaSwitch/u)
-  assert.doesNotMatch(channelSwitchSource, /保存/u)
-  assert.doesNotMatch(assistantSource, /saveChannel|channelEnabled|<h3[^>]*>\s*渠道/u)
-  assert.doesNotMatch(assistantSource, /<FaPageMain title=/u)
-  assert.match(assistantSource, /qs-type-section-title[\s\S]*微信节点/u)
-  assert.match(assistantSource, /微信节点/u)
-  assert.match(assistantSource, /用户微信绑定/u)
-  assert.match(assistantSource, /群管理/u)
-  assert.match(assistantSource, /<FaAvatar/u)
-  assert.match(assistantSource, /微信昵称/u)
-  assert.match(assistantSource, /未同步/u)
-  assert.doesNotMatch(assistantSource, /account\.nickname !== account\.name/u)
-  assert.doesNotMatch(assistantSource, /account\.nickname \?\? account\.name \}\} ·/u)
-  assert.doesNotMatch(assistantSource, /\{\{ account\.appId \}\}/u)
-  assert.match(assistantSource, /导入公司号/u)
-  assert.match(assistantSource, /检查状态/u)
-  assert.match(assistantSource, /更新节点/u)
-  assert.match(assistantSource, /个人二维码/u)
-  assert.match(assistantSource, /i-lucide:qr-code/u)
-  assert.match(assistantSource, /更多操作/u)
-  assert.match(assistantSource, /accountMenuItems/u)
-  assert.match(assistantSource, /发送测试/u)
-  assert.match(assistantSource, /更新节点/u)
-  assert.match(assistantSource, /statusDotClass/u)
-  assert.match(assistantSource, /animate-ping/u)
-  assert.match(assistantSource, /bg-slate-50\/70/u)
-  assert.match(assistantSource, /i-lucide:refresh-cw/u)
-  assert.match(assistantSource, /i-lucide:chevron-down/u)
-  assert.match(assistantSource, /启用派发[\s\S]*<FaSwitch/u)
-  assert.doesNotMatch(assistantSource, /<FaTag[^>]*statusClass\(account\.status\)/u)
-  assert.doesNotMatch(assistantSource, /@click="testChannel"/u)
-  assert.match(assistantSource, /启用派发/u)
-  assert.match(assistantSource, /qrImageSrc/u)
-  assert.match(assistantSource, /发送测试/u)
-  assert.match(assistantSource, /改绑/u)
-  assert.match(assistantSource, /群目标 key/u)
-  assert.match(assistantSource, /仅内部成员/u)
-  assert.match(assistantSource, /assistant-binding-grid/u)
-  assert.match(assistantSource, /wechatAvatarUrl/u)
-  assert.match(assistantSource, /昵称：\{\{ binding\.wechatNickname/u)
-  assert.match(assistantSource, /statusDotClass\(binding\.status\)/u)
-  assert.match(assistantSource, /status === 'OFFLINE' \|\| status === 'DISABLED'[\s\S]*bg-red-500/u)
-  assert.match(assistantSource, /verifyButtonClass\(binding\.status\)/u)
-  assert.match(assistantSource, /function verifyButtonClass[\s\S]*?status === 'DISABLED'[\s\S]*?text-destructive/u)
-  assert.doesNotMatch(assistantSource, /<FaTag[^>]*binding\.status/u)
-  assert.match(assistantSource, /CopyCellButton/u)
-  assert.match(assistantSource, /xl:grid-cols-5/u)
-  assert.match(assistantSource, /2xl:grid-cols-6/u)
-  assert.match(assistantSource, /bindingMenuItems/u)
-  assert.match(assistantSource, /好友巡检[\s\S]*checkBindings/u)
-  assert.match(assistantSource, /class="text-white bg-amber-500 hover:bg-amber-600"[\s\S]{0,120}好友巡检/u)
-  assert.match(assistantSource, /好友巡检[\s\S]{0,160}新增绑定/u)
-  assert.match(assistantSource, /@click="openVerify\(binding\)"/u)
-  assert.match(assistantSource, /randomVerifyContent/u)
-  assert.match(assistantSource, /regenerateVerifyContent/u)
-  assert.match(assistantSource, /VERIFY_CONTENT_LIMIT = 500/u)
-  assert.match(assistantSource, /:maxlength="VERIFY_CONTENT_LIMIT"/u)
-  assert.match(assistantSource, /randomUUID/u)
-  assert.match(assistantSource, /bindings\.verify\(binding\.id, \{ content \}\)/u)
-  assert.match(assistantSource, /30 秒内只能发送一次/u)
-  assert.doesNotMatch(assistantSource, /bindings\.verify\(binding\.id\)/u)
-  assert.doesNotMatch(assistantSource, /verifyBinding\(binding\)/u)
-  assert.match(assistantSource, /assistant-target-grid/u)
-  assert.match(assistantSource, /sm:grid-cols-2/u)
-  assert.match(assistantSource, /xl:grid-cols-3/u)
-  assert.match(assistantSource, /2xl:grid-cols-4/u)
-  assert.match(assistantSource, /QsStatusSwitchToolbar/u)
-  assert.match(assistantSource, /aria-label="群目标筛选"[\s\S]*?stretch/u)
-  assert.match(assistantSource, /同步群组/u)
-  assert.doesNotMatch(assistantSource, /targetKeyword|搜索群目标/u)
-  assert.match(assistantSource, /targetFilterItems/u)
-  assert.match(assistantSource, /filteredTargets/u)
-  assert.match(assistantSource, /target\.avatarUrl/u)
-  assert.match(assistantSource, /target\.memberCount/u)
-  assert.match(assistantSource, /target\.lastSyncedAt/u)
-  assert.match(assistantSource, /targetMenuItems/u)
-  assert.match(assistantSource, /查看成员/u)
-  assert.match(assistantSource, /查看群组/u)
-  assert.match(assistantSource, /编辑信息/u)
-  assert.match(assistantSource, /targetStatusDotClass/u)
-  assert.match(assistantSource, /targetScopeClass/u)
-  assert.match(assistantSource, /用途：\{\{ target\.purpose/u)
-  assert.match(assistantSource, /label="群 chatroomId"/u)
-  assert.match(assistantSource, /\[perspective:1200px\]/u)
-  assert.match(assistantSource, /\[backface-visibility:hidden\]/u)
-  assert.match(assistantSource, /\[transform:rotateY\(180deg\)\]/u)
-  assert.match(assistantSource, /\[scrollbar-width:none\]/u)
-  assert.match(assistantSource, /hover:border-primary/u)
-  assert.match(assistantSource, /flippedTargetId/u)
-  assert.match(assistantSource, /memberDisplayName/u)
-  assert.match(assistantSource, /memberRoleLabel/u)
-  assert.match(assistantSource, /openMemberDetail/u)
-  assert.match(assistantSource, /memberDetailOpen/u)
-  assert.match(assistantSource, /groupMembersOpen/u)
-  assert.match(assistantSource, /targets\.members/u)
-  assert.match(assistantSource, /搜索昵称或 wxid/u)
-  assert.match(assistantSource, /返回/u)
-  assert.match(assistantSource, /@TA消息/u)
-  assert.match(assistantSource, /mentionOpen/u)
-  assert.match(assistantSource, /mentionContent/u)
-  assert.match(assistantSource, /MENTION_CONTENT_LIMIT = 1000/u)
-  assert.match(assistantSource, /targets\.mentionMessage/u)
-  assert.match(assistantSource, /:z-index="2100"/u)
-  assert.doesNotMatch(assistantSource, /bindingColumns|<QsGenericTable/u)
-  assert.match(assistantSource, /<QsGenericModal/u)
-  assert.match(assistantSource, /<FaAlert/u)
-  assert.doesNotMatch(assistantSource, /扫码登录/u)
-  assert.doesNotMatch(assistantSource, /accounts\.(?:loginStart|loginStatus|reconnect|logout)/u)
-  assert.doesNotMatch(assistantSource, /<FaTable/u)
-  assert.doesNotMatch(assistantSource, /#(?:[0-9a-fA-F]{3}){1,2}\b/u)
-})
-
-test('公司号个人二维码把裸 base64 转为 data URI', () => {
-  assert.equal(qrImageSrc('/9j/4AAQSkZJRg=='), 'data:image/jpeg;base64,/9j/4AAQSkZJRg==')
-  assert.equal(qrImageSrc(' iVBORw0KGgo='), 'data:image/png;base64,iVBORw0KGgo=')
-  assert.equal(qrImageSrc('R0lGODlhAQAB'), 'data:image/gif;base64,R0lGODlhAQAB')
-  assert.equal(qrImageSrc('UklGRgAAAABXRUJQ'), 'data:image/webp;base64,UklGRgAAAABXRUJQ')
-  assert.equal(qrImageSrc('data:image/png;base64,abc'), 'data:image/png;base64,abc')
 })
 
 test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
@@ -358,7 +217,6 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(rulesSource, /canCloseTemplateModal/u)
   assert.match(rulesSource, /canSaveTemplate/u)
   assert.match(rulesSource, /toggleTemplateEnabled/u)
-  assert.match(rulesSource, /测试发送/u)
   assert.doesNotMatch(rulesSource, /<FaTabs/u)
   assert.doesNotMatch(rulesSource, /policyCoverage|openPolicyAt|policyColumns/u)
 
@@ -376,7 +234,6 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.doesNotMatch(eventConfigPanelSource, /:stripe="true"/u)
   assert.match(eventConfigPanelSource, /策略更新/u)
   assert.match(eventConfigPanelSource, /站内配置/u)
-  assert.match(eventConfigPanelSource, /小助理配置/u)
   assert.match(eventConfigPanelSource, /企业微信配置/u)
   assert.match(eventConfigPanelSource, /hasDirty/u)
   assert.match(eventConfigPanelSource, /未接入/u)
@@ -384,7 +241,7 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
 
   assert.match(eventConfigCardsSource, /notification-event-cards/u)
   assert.match(eventConfigCardsSource, /站内配置/u)
-  assert.match(eventConfigCardsSource, /小助理配置/u)
+  assert.match(eventConfigCardsSource, /企业微信配置/u)
   assert.match(eventConfigCardsSource, /策略更新/u)
   assert.match(eventConfigCardsSource, /FaEmpty/u)
 
@@ -398,7 +255,6 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(eventChannelDrawerSource, /buildPolicyUpdate/u)
   assert.match(eventChannelDrawerSource, /canSavePolicyDraft/u)
   assert.match(eventChannelDrawerSource, /notificationsApi\.wecom\.targets\.list/u)
-  assert.match(eventChannelDrawerSource, /notificationsApi\.assistant\.targets\.list/u)
   assert.match(eventChannelDrawerSource, /放弃修改/u)
 
   assert.match(eventChannelCardSource, /variant/u)
@@ -453,7 +309,7 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(templateDetailSource, /该模板键下共配置了/u)
   assert.match(templateDetailSource, /复制 Key/u)
   assert.match(templateDetailSource, /渠道已配齐/u)
-  assert.match(templateDetailSource, /缺少 \{\{ 3 - group\.channelCount \}\} 个渠道/u)
+  assert.match(templateDetailSource, /缺少 \{\{ 2 - group\.channelCount \}\} 个渠道/u)
   assert.match(templateDetailSource, /usageCount/u)
   assert.match(templateCardSource, /splitTemplateBody/u)
   assert.match(templateCardSource, /linkSegments/u)
