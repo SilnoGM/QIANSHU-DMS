@@ -377,6 +377,7 @@ test('通知策略页以分组表格与渠道抽屉组织，模板库独立成�
   assert.match(eventConfigPanelSource, /策略更新/u)
   assert.match(eventConfigPanelSource, /站内配置/u)
   assert.match(eventConfigPanelSource, /小助理配置/u)
+  assert.match(eventConfigPanelSource, /企业微信配置/u)
   assert.match(eventConfigPanelSource, /hasDirty/u)
   assert.match(eventConfigPanelSource, /未接入/u)
   assert.doesNotMatch(eventConfigPanelSource, /EventNavRail|EventChannelCard|v-model:draft|#mobile-row|小助配置/u)

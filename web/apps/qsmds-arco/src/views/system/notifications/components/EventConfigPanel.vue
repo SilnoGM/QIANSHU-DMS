@@ -31,6 +31,7 @@ import {
   eventStateClass as presentEventStateClass,
   eventStateLabel as presentEventStateLabel,
   updatedDateLabel,
+  WECOM_ACTION_CLASS,
 } from '../event-config.presentation'
 import { formatNotificationDateTime } from '../template-key-grouping.logic'
 import EventChannelDrawer from './EventChannelDrawer.vue'
@@ -66,6 +67,7 @@ type TableRow = EventTableGroupRow | EventTableRow
 const ACTION_COLUMN_WIDTH = resolveActionColumnWidth([
   { kind: 'text', chars: 4 },
   { kind: 'text', chars: 5 },
+  { kind: 'text', chars: 6 },
 ])
 
 const keyword = ref('')
@@ -333,6 +335,14 @@ defineExpose({
             @click="openDrawer(eventRow(row)!.event.eventType, 'ASSISTANT')"
           >
             小助理配置
+          </FaButton>
+          <FaButton
+            variant="outline"
+            size="sm"
+            :class="WECOM_ACTION_CLASS"
+            @click="openDrawer(eventRow(row)!.event.eventType, 'WECOM')"
+          >
+            企业微信配置
           </FaButton>
         </div>
       </template>
