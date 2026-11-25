@@ -39,6 +39,10 @@ const retirement = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261125110000_retire_assistant_channel/migration.sql'),
   'utf8',
 )
+const auditPurge = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261125120000_purge_assistant_audit_events/migration.sql'),
+  'utf8',
+)
 const constants = readFileSync(
   resolve(serverRoot, 'src/modules/access-control/permission.constants.ts'),
   'utf8',
@@ -151,6 +155,13 @@ describe('notification center database contract', () => {
     expect(retirement).toContain('DELETE FROM "permissions" WHERE "code" LIKE \'assistant-%\'')
     expect(retirement).toContain('CREATE TYPE "notification_channel" AS ENUM (\'IN_APP\', \'WECOM\')')
     expect(retirement).toContain('"requested_channels" - \'ASSISTANT\'')
+  })
+
+  it('purges assistant audit rows while keeping enum labels for compatibility', () => {
+    expect(auditPurge).toContain('DELETE FROM "audit_events"')
+    expect(auditPurge).toContain(`WHERE "event_type"::text LIKE 'ASSISTANT%'`)
+    expect(auditPurge).toContain('assistant audit events still exist after purge migration')
+    expect(schema).toContain('  ASSISTANT_CHANNEL_UPDATED')
   })
 
   it('adds business detail links and their ID variables to the in-app templates', () => {
