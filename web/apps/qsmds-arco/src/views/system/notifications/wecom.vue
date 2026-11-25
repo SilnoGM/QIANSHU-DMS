@@ -133,6 +133,14 @@ function statusClass(status: string): string {
   return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
 }
 
+function appMissingFields(app: WecomAppDto): string[] {
+  return [
+    app.corpId === null ? 'corpId' : null,
+    app.agentId === null ? 'agentId' : null,
+    app.hasSecret ? null : 'Secret',
+  ].filter((field): field is string => field !== null)
+}
+
 function membershipLabel(status: string): string {
   if (status === 'ACTIVE') {
     return '可用'
@@ -358,7 +366,7 @@ function appMenuItems(app: WecomAppDto): ActionMenuItem[][] {
       handle: () => void openMembers(app),
     },
     {
-      label: '重置 Secret',
+      label: app.hasSecret ? '重置 Secret' : '配置 Secret',
       disabled: !canUpdateSecret.value || busy.value,
       handle: () => openSecret(app),
     },
@@ -674,6 +682,13 @@ onMounted(load)
               <span class="qs-type-meta text-muted-foreground">agentId {{ app.agentId ?? '—' }}</span>
             </div>
             <dl class="qs-type-meta text-muted-foreground m-0 gap-x-4 gap-y-1 grid grid-cols-2">
+              <div class="flex gap-1 col-span-2 min-w-0">
+                <dt class="m-0">
+                  corpId
+                </dt><dd class="m-0 truncate">
+                  {{ app.corpId ?? '未配置' }}
+                </dd>
+              </div>
               <div class="flex gap-1">
                 <dt class="m-0">
                   Secret
@@ -706,6 +721,32 @@ onMounted(load)
             <p v-if="app.lastErrorMessage !== null" class="qs-type-meta text-destructive m-0 break-all">
               {{ app.lastErrorMessage }}
             </p>
+            <div
+              v-if="appMissingFields(app).length > 0"
+              class="p-2.5 border border-amber-500/30 rounded-md bg-amber-500/5 flex flex-wrap gap-2 items-center justify-between"
+            >
+              <span class="qs-type-meta text-amber-800 dark:text-amber-300">
+                缺少 {{ appMissingFields(app).join('、') }}，测试连接会失败
+              </span>
+              <FaButton
+                v-if="!app.hasSecret && canUpdateSecret"
+                variant="outline"
+                size="sm"
+                :disabled="busy"
+                @click="openSecret(app)"
+              >
+                配置 Secret
+              </FaButton>
+              <FaButton
+                v-else-if="canManageApp"
+                variant="outline"
+                size="sm"
+                :disabled="busy"
+                @click="openEditApp(app)"
+              >
+                补充配置
+              </FaButton>
+            </div>
             <div class="mt-auto flex flex-wrap gap-2 items-center">
               <FaButton variant="outline" size="sm" :disabled="busy" @click="testApp(app)">
                 测试连接
@@ -848,6 +889,12 @@ onMounted(load)
         <span class="qs-type-compact-label">Secret</span>
         <FaInput v-model="appDraft.secret" type="password" placeholder="只写不读" />
       </label>
+      <p
+        v-else-if="editingApp !== null && !editingApp.hasSecret"
+        class="qs-type-meta text-amber-800 m-0 p-2 border border-amber-500/30 rounded-md bg-amber-500/5 dark:text-amber-300"
+      >
+        当前应用还没有 Secret。保存基础信息后，请在应用卡片点「配置 Secret」。
+      </p>
       <label class="qs-type-meta flex gap-2 items-center">
         <FaSwitch v-model="appDraft.isDefault" />
         设为默认应用

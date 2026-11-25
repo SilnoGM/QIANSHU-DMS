@@ -126,6 +126,25 @@ describe('WecomAdminService', () => {
     expect(result).toMatchObject({ key: 'default', isDefault: true, hasSecret: true })
   })
 
+  it('names only the missing fields when testing an incomplete app', async () => {
+    const prisma = {
+      wecomApp: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'app-1',
+          key: 'default',
+          corpId: 'ww-1',
+          agentId: 1000001,
+          secretEncrypted: null,
+        }),
+      },
+    }
+
+    await expect(service(prisma).testApp(
+      { actorUserId: 'actor-1', requestId: 'request-1' },
+      'app-1',
+    )).rejects.toThrow('应用尚未配置 Secret')
+  })
+
   it('rejects an event already assigned to another app', async () => {
     const prisma = {
       wecomApp: { findUnique: jest.fn().mockResolvedValue({ id: 'app-1', key: 'default' }) },

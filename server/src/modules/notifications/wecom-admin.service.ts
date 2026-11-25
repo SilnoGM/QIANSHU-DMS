@@ -48,6 +48,18 @@ function appStatus(enabled: boolean, current: string): 'PENDING' | 'ACTIVE' | 'I
   return current === 'ACTIVE' ? 'ACTIVE' : current === 'INVALID' ? 'INVALID' : 'PENDING'
 }
 
+function missingAppConfiguration(app: {
+  readonly corpId: string | null
+  readonly agentId: number | null
+  readonly secretEncrypted: string | null
+}): string[] {
+  return [
+    app.corpId === null ? 'corpId' : null,
+    app.agentId === null ? 'agentId' : null,
+    app.secretEncrypted === null ? 'Secret' : null,
+  ].filter((field): field is string => field !== null)
+}
+
 function nextAppStatus(
   current: string,
   currentEnabled: boolean,
@@ -342,7 +354,11 @@ export class WecomAdminService {
       throw new ApiException(404, 'WECOM_APP_NOT_FOUND', '企业微信应用不存在')
     }
     if (app.corpId === null || app.agentId === null || app.secretEncrypted === null) {
-      throw new ApiException(422, 'WECOM_APP_NOT_CONFIGURED', '应用尚未配置 corpId、agentId 或 Secret')
+      throw new ApiException(
+        422,
+        'WECOM_APP_NOT_CONFIGURED',
+        `应用尚未配置 ${missingAppConfiguration(app).join('、')}`,
+      )
     }
     let secret: string
     try {
