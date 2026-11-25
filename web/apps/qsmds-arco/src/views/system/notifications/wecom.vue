@@ -8,6 +8,7 @@ import type {
   WecomMembershipDto,
   WecomTargetDto,
 } from '@/api/generated/types.gen'
+import type { ActionMenuItem } from '@/components/business/QsGenericTable/action-column-width'
 
 import { computed, onMounted, ref } from 'vue'
 
@@ -70,6 +71,41 @@ const eventOptions = computed(() => events.value.map(event => ({
   label: `${event.label}（${event.eventType}）`,
   value: event.eventType,
 })))
+
+const defaultApp = computed(() => apps.value.find(app => app.isDefault) ?? apps.value[0] ?? null)
+const verifiedBindingCount = computed(() =>
+  bindings.value.filter(binding => binding.status === 'ACTIVE' && binding.verifiedAt !== null).length,
+)
+const enabledTargets = computed(() => targets.value.filter(target => target.enabled && target.internalOnly))
+const appEventCount = computed(() => apps.value.reduce((total, app) => total + app.eventCount, 0))
+
+const setupIssues = computed(() => {
+  const issues: string[] = []
+  if (channel.value?.enabled !== true) {
+    issues.push('渠道未启用')
+  }
+  if (defaultApp.value === null) {
+    issues.push('未配置应用')
+  }
+  else {
+    if (!defaultApp.value.enabled) {
+      issues.push('默认应用已停用')
+    }
+    if (!defaultApp.value.hasSecret) {
+      issues.push('应用 Secret 未配置')
+    }
+    if (defaultApp.value.status !== 'ACTIVE') {
+      issues.push('应用尚未验证')
+    }
+  }
+  if (verifiedBindingCount.value === 0) {
+    issues.push('没有已验证员工')
+  }
+  if (enabledTargets.value.length === 0) {
+    issues.push('没有可用内部群')
+  }
+  return issues
+})
 
 function statusLabel(status: string): string {
   if (status === 'ACTIVE') {
@@ -304,6 +340,37 @@ async function openMembers(app: WecomAppDto): Promise<void> {
   }
 }
 
+function appMenuItems(app: WecomAppDto): ActionMenuItem[][] {
+  return [[
+    {
+      label: '编辑应用',
+      disabled: !canManageApp.value || busy.value,
+      handle: () => openEditApp(app),
+    },
+    {
+      label: '承担事件',
+      disabled: !canManageApp.value || busy.value,
+      handle: () => void openEvents(app),
+    },
+    {
+      label: '可见成员',
+      disabled: !canReadMembers.value || busy.value,
+      handle: () => void openMembers(app),
+    },
+    {
+      label: '重置 Secret',
+      disabled: !canUpdateSecret.value || busy.value,
+      handle: () => openSecret(app),
+    },
+    {
+      label: app.enabled ? '停用应用' : '启用应用',
+      disabled: !canManageApp.value || busy.value,
+      variant: app.enabled ? 'destructive' : undefined,
+      handle: () => void toggleApp(app),
+    },
+  ]]
+}
+
 async function addMember(): Promise<void> {
   const app = memberApp.value
   if (app === null || memberUserId.value === undefined) {
@@ -427,212 +494,337 @@ async function removeTarget(target: WecomTargetDto): Promise<void> {
   }, '群目标删除失败')
 }
 
+function targetMenuItems(target: WecomTargetDto): ActionMenuItem[][] {
+  return [[
+    {
+      label: '编辑群目标',
+      disabled: !canManageTargets.value || busy.value,
+      handle: () => openEditTarget(target),
+    },
+    {
+      label: '删除群目标',
+      disabled: !canManageTargets.value || busy.value,
+      variant: 'destructive',
+      handle: () => void removeTarget(target),
+    },
+  ]]
+}
+
 onMounted(load)
 </script>
 
 <template>
   <FaPageHeader title="企业微信" description="管理 WECOM 应用、员工绑定、群目标与渠道开关；Secret 与 webhook 只写不读。">
     <div class="flex gap-2 items-center">
+      <FaTag
+        variant="outline"
+        :class="channel?.enabled ? 'border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400' : 'text-muted-foreground'"
+      >
+        {{ channel?.enabled ? '渠道运行中' : '渠道已停用' }}
+      </FaTag>
       <FaSwitch
         :model-value="channel?.enabled ?? false"
         :disabled="!canUpdateChannel || busy || loading"
+        :aria-label="channel?.enabled ? '停用企业微信渠道' : '启用企业微信渠道'"
         @update:model-value="toggleChannel"
       />
-      <span class="qs-type-meta text-muted-foreground">{{ channel?.enabled ? '渠道已启用' : '渠道已停用' }}</span>
     </div>
   </FaPageHeader>
 
-  <FaAlert v-if="error !== null" variant="destructive" :title="error" class="mb-4" />
+  <FaPageMain main-class="flex flex-col gap-4">
+    <FaAlert v-if="error !== null" variant="destructive" :title="error" />
 
-  <div v-if="loading" class="qs-type-meta text-muted-foreground py-12 text-center">
-    加载中…
-  </div>
-  <div v-else class="flex flex-col gap-5">
-    <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
-      <div class="flex flex-wrap gap-2 items-center justify-between">
-        <div>
-          <h2 class="qs-type-section-title m-0">
-            应用
-          </h2>
-          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            一期默认应用“千树 DMS”；二期可手动添加更多应用并分配事件。
-          </p>
-        </div>
-        <FaButton v-if="canManageApp" variant="outline" size="sm" :disabled="busy" @click="openCreateApp">
-          <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
-          新增应用
-        </FaButton>
-      </div>
-      <FaEmpty v-if="apps.length === 0" title="还没有企业微信应用" description="先新增应用并配置 Secret。" class="py-6" />
-      <div v-else class="gap-3 grid xl:grid-cols-2">
-        <article v-for="app in apps" :key="app.id" class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col gap-3">
-          <div class="flex flex-wrap gap-2 items-center justify-between">
+    <div v-if="loading" class="qs-type-meta text-muted-foreground py-12 text-center">
+      加载中…
+    </div>
+    <div v-else class="flex flex-col gap-4">
+      <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-4">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div class="flex gap-3 min-w-0 items-start">
+            <span class="text-emerald-700 mt-0.5 rounded-xl bg-emerald-500/10 flex shrink-0 size-10 items-center justify-center dark:text-emerald-300">
+              <FaIcon name="i-lucide:message-square-text" class="size-5" aria-hidden="true" />
+            </span>
             <div class="min-w-0">
               <div class="flex flex-wrap gap-2 items-center">
-                <span class="qs-type-body-medium truncate">{{ app.name }}</span>
-                <FaTag v-if="app.isDefault" variant="outline" class="text-primary border-primary/30 bg-primary/10">
-                  默认
+                <h2 class="qs-type-section-title m-0">
+                  接入概览
+                </h2>
+                <FaTag
+                  variant="outline"
+                  :class="channel?.enabled ? 'border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-400' : 'text-muted-foreground'"
+                >
+                  {{ channel?.enabled ? '已启用' : '未启用' }}
                 </FaTag>
-                <FaTag variant="outline" :class="statusClass(app.status)">
-                  {{ statusLabel(app.status) }}
+              </div>
+              <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+                通过自建应用发送员工 1:1 消息，通过内部群机器人发送群通知。
+              </p>
+            </div>
+          </div>
+          <p class="qs-type-meta text-muted-foreground m-0">
+            渠道设置版本 {{ channel?.version ?? '—' }}
+          </p>
+        </div>
+
+        <dl class="m-0 gap-3 grid sm:grid-cols-2 xl:grid-cols-4">
+          <div class="p-3 border border-border/70 rounded-lg bg-muted/20 min-w-0">
+            <dt class="qs-type-meta text-muted-foreground m-0">
+              默认应用
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1 truncate">
+              {{ defaultApp?.name ?? '未配置' }}
+            </dd>
+            <span class="qs-type-meta text-muted-foreground mt-1 block">
+              {{ defaultApp === null ? '先新增应用' : defaultApp.hasSecret ? 'Secret 已配置' : 'Secret 未配置' }}
+            </span>
+          </div>
+          <div class="p-3 border border-border/70 rounded-lg bg-muted/20 min-w-0">
+            <dt class="qs-type-meta text-muted-foreground m-0">
+              已验证员工
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1">
+              {{ verifiedBindingCount }} <span class="qs-type-meta text-muted-foreground">/ {{ bindings.length }}</span>
+            </dd>
+            <span class="qs-type-meta text-muted-foreground mt-1 block">
+              绑定后需发送测试消息
+            </span>
+          </div>
+          <div class="p-3 border border-border/70 rounded-lg bg-muted/20 min-w-0">
+            <dt class="qs-type-meta text-muted-foreground m-0">
+              可用内部群
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1">
+              {{ enabledTargets.length }} <span class="qs-type-meta text-muted-foreground">/ {{ targets.length }}</span>
+            </dd>
+            <span class="qs-type-meta text-muted-foreground mt-1 block">
+              只统计已启用且仅内部的群
+            </span>
+          </div>
+          <div class="p-3 border border-border/70 rounded-lg bg-muted/20 min-w-0">
+            <dt class="qs-type-meta text-muted-foreground m-0">
+              已分配事件
+            </dt>
+            <dd class="qs-type-body-medium m-0 mt-1">
+              {{ appEventCount }}
+            </dd>
+            <span class="qs-type-meta text-muted-foreground mt-1 block">
+              跨 {{ apps.length }} 个应用
+            </span>
+          </div>
+        </dl>
+
+        <div
+          v-if="setupIssues.length > 0"
+          class="p-3 border border-amber-500/30 rounded-lg bg-amber-500/5 flex flex-wrap gap-x-2 gap-y-1 items-center"
+        >
+          <FaIcon name="i-lucide:triangle-alert" class="text-amber-600 shrink-0 size-4" aria-hidden="true" />
+          <span class="qs-type-meta text-amber-800 dark:text-amber-300">待完善：</span>
+          <span
+            v-for="issue in setupIssues"
+            :key="issue"
+            class="qs-type-meta text-amber-800 px-1.5 py-0.5 border border-amber-500/30 rounded dark:text-amber-300"
+          >
+            {{ issue }}
+          </span>
+        </div>
+        <p v-else class="qs-type-meta text-emerald-700 m-0 flex gap-2 items-center dark:text-emerald-300">
+          <FaIcon name="i-lucide:circle-check" class="size-4" aria-hidden="true" />
+          基础配置已就绪，事件是否投递仍由通知策略决定。
+        </p>
+      </section>
+
+      <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <div>
+            <div class="flex gap-2 items-center">
+              <h2 class="qs-type-section-title m-0">
+                应用
+              </h2>
+              <FaTag variant="outline">
+                {{ apps.length }}
+              </FaTag>
+            </div>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+              一期默认应用“千树 DMS”；二期可手动添加更多应用并分配事件。
+            </p>
+          </div>
+          <FaButton v-if="canManageApp" variant="outline" size="sm" :disabled="busy" @click="openCreateApp">
+            <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
+            新增应用
+          </FaButton>
+        </div>
+        <FaEmpty v-if="apps.length === 0" title="还没有企业微信应用" description="先新增应用并配置 Secret。" class="py-6" />
+        <div v-else class="gap-3 grid xl:grid-cols-2">
+          <article v-for="app in apps" :key="app.id" class="p-4 border border-border rounded-lg bg-muted/10 flex flex-col gap-3">
+            <div class="flex flex-wrap gap-2 items-center justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap gap-2 items-center">
+                  <span class="qs-type-body-medium truncate">{{ app.name }}</span>
+                  <FaTag v-if="app.isDefault" variant="outline" class="text-primary border-primary/30 bg-primary/10">
+                    默认
+                  </FaTag>
+                  <FaTag variant="outline" :class="statusClass(app.status)">
+                    {{ statusLabel(app.status) }}
+                  </FaTag>
+                </div>
+                <p class="qs-type-meta text-muted-foreground font-mono m-0 mt-1 break-all">
+                  {{ app.key }}
+                </p>
+              </div>
+              <span class="qs-type-meta text-muted-foreground">agentId {{ app.agentId ?? '—' }}</span>
+            </div>
+            <dl class="qs-type-meta text-muted-foreground m-0 gap-x-4 gap-y-1 grid grid-cols-2">
+              <div class="flex gap-1">
+                <dt class="m-0">
+                  Secret
+                </dt><dd class="m-0">
+                  {{ app.hasSecret ? '已配置' : '未配置' }}
+                </dd>
+              </div>
+              <div class="flex gap-1">
+                <dt class="m-0">
+                  事件
+                </dt><dd class="m-0">
+                  {{ app.eventCount }}
+                </dd>
+              </div>
+              <div class="flex gap-1">
+                <dt class="m-0">
+                  成员
+                </dt><dd class="m-0">
+                  {{ app.memberCount }}
+                </dd>
+              </div>
+              <div class="flex gap-1">
+                <dt class="m-0">
+                  最近检查
+                </dt><dd class="m-0">
+                  {{ app.lastCheckedAt ?? '—' }}
+                </dd>
+              </div>
+            </dl>
+            <p v-if="app.lastErrorMessage !== null" class="qs-type-meta text-destructive m-0 break-all">
+              {{ app.lastErrorMessage }}
+            </p>
+            <div class="mt-auto flex flex-wrap gap-2 items-center">
+              <FaButton variant="outline" size="sm" :disabled="busy" @click="testApp(app)">
+                测试连接
+              </FaButton>
+              <FaDropdown :items="appMenuItems(app)" align="end">
+                <FaButton variant="outline" size="sm" :disabled="busy">
+                  更多操作
+                  <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <div>
+            <div class="flex gap-2 items-center">
+              <h2 class="qs-type-section-title m-0">
+                员工绑定
+              </h2>
+              <FaTag variant="outline">
+                {{ verifiedBindingCount }} / {{ bindings.length }}
+              </FaTag>
+            </div>
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+              绑定 DMS 用户与企业微信 userid；验证会通过默认应用发送测试消息。
+            </p>
+          </div>
+          <FaButton v-if="canManageMembers" variant="outline" size="sm" :disabled="busy" @click="openCreateBinding">
+            <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
+            新增绑定
+          </FaButton>
+        </div>
+        <FaEmpty v-if="bindings.length === 0" title="还没有员工绑定" description="先新增绑定并发送测试消息。" class="py-6" />
+        <div v-else class="gap-2 grid lg:grid-cols-2">
+          <article v-for="binding in bindings" :key="binding.id" class="p-3 border border-border rounded-lg bg-muted/10 flex flex-wrap gap-2 min-w-0 items-center justify-between">
+            <div class="min-w-0">
+              <div class="flex flex-wrap gap-2 items-center">
+                <span class="qs-type-body-medium">{{ binding.userName }}</span>
+                <span class="qs-type-meta text-muted-foreground">{{ binding.username }}</span>
+                <FaTag variant="outline" :class="binding.verifiedAt === null ? 'text-amber-700 border-amber-500/30 bg-amber-500/10' : 'text-green-700 border-green-600/30 bg-green-600/10 dark:text-green-400'">
+                  {{ binding.verifiedAt === null ? '未验证' : '已验证' }}
+                </FaTag>
+                <FaTag v-if="binding.status !== 'ACTIVE'" variant="outline" class="text-muted-foreground">
+                  {{ statusLabel(binding.status) }}
                 </FaTag>
               </div>
               <p class="qs-type-meta text-muted-foreground font-mono m-0 mt-1 break-all">
-                {{ app.key }}
+                {{ binding.wecomUserId }}
               </p>
             </div>
-            <span class="qs-type-meta text-muted-foreground">agentId {{ app.agentId ?? '—' }}</span>
-          </div>
-          <dl class="qs-type-meta text-muted-foreground m-0 gap-x-4 gap-y-1 grid grid-cols-2">
-            <div class="flex gap-1">
-              <dt class="m-0">
-                Secret
-              </dt><dd class="m-0">
-                {{ app.hasSecret ? '已配置' : '未配置' }}
-              </dd>
+            <div class="flex flex-wrap gap-2">
+              <FaButton v-if="canManageMembers" variant="outline" size="sm" :disabled="busy" @click="verifyBinding(binding)">
+                发送测试
+              </FaButton>
+              <FaButton v-if="canManageMembers" variant="ghost" size="sm" :disabled="busy" @click="removeBinding(binding)">
+                解绑
+              </FaButton>
             </div>
-            <div class="flex gap-1">
-              <dt class="m-0">
-                事件
-              </dt><dd class="m-0">
-                {{ app.eventCount }}
-              </dd>
-            </div>
-            <div class="flex gap-1">
-              <dt class="m-0">
-                成员
-              </dt><dd class="m-0">
-                {{ app.memberCount }}
-              </dd>
-            </div>
-            <div class="flex gap-1">
-              <dt class="m-0">
-                最近检查
-              </dt><dd class="m-0">
-                {{ app.lastCheckedAt ?? '—' }}
-              </dd>
-            </div>
-          </dl>
-          <p v-if="app.lastErrorMessage !== null" class="qs-type-meta text-destructive m-0 break-all">
-            {{ app.lastErrorMessage }}
-          </p>
-          <div class="mt-auto flex flex-wrap gap-2">
-            <FaButton variant="outline" size="sm" :disabled="busy" @click="testApp(app)">
-              测试
-            </FaButton>
-            <FaButton v-if="canManageApp" variant="outline" size="sm" :disabled="busy" @click="openEditApp(app)">
-              编辑
-            </FaButton>
-            <FaButton v-if="canManageApp" variant="outline" size="sm" :disabled="busy" @click="openEvents(app)">
-              承担事件
-            </FaButton>
-            <FaButton v-if="canReadMembers" variant="outline" size="sm" :disabled="busy" @click="openMembers(app)">
-              可见成员
-            </FaButton>
-            <FaButton v-if="canUpdateSecret" variant="outline" size="sm" :disabled="busy" @click="openSecret(app)">
-              重置 Secret
-            </FaButton>
-            <FaButton v-if="canManageApp" variant="ghost" size="sm" :disabled="busy" @click="toggleApp(app)">
-              {{ app.enabled ? '停用' : '启用' }}
-            </FaButton>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
-      <div class="flex flex-wrap gap-2 items-center justify-between">
-        <div>
-          <h2 class="qs-type-section-title m-0">
-            员工绑定
-          </h2>
-          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            绑定 DMS 用户与企业微信 userid；验证会通过默认应用发送测试消息。
-          </p>
+          </article>
         </div>
-        <FaButton v-if="canManageMembers" variant="outline" size="sm" :disabled="busy" @click="openCreateBinding">
-          <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
-          新增绑定
-        </FaButton>
-      </div>
-      <FaEmpty v-if="bindings.length === 0" title="还没有员工绑定" description="先新增绑定并发送测试消息。" class="py-6" />
-      <div v-else class="flex flex-col gap-2">
-        <article v-for="binding in bindings" :key="binding.id" class="p-3 border border-border rounded-lg bg-muted/10 flex flex-wrap gap-2 items-center justify-between">
-          <div class="min-w-0">
-            <div class="flex flex-wrap gap-2 items-center">
-              <span class="qs-type-body-medium">{{ binding.userName }}</span>
-              <span class="qs-type-meta text-muted-foreground">{{ binding.username }}</span>
-              <FaTag variant="outline" :class="binding.verifiedAt === null ? 'text-amber-700 border-amber-500/30 bg-amber-500/10' : 'text-green-700 border-green-600/30 bg-green-600/10 dark:text-green-400'">
-                {{ binding.verifiedAt === null ? '未验证' : '已验证' }}
-              </FaTag>
-              <FaTag v-if="binding.status !== 'ACTIVE'" variant="outline" class="text-muted-foreground">
-                {{ statusLabel(binding.status) }}
+      </section>
+
+      <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <div>
+            <div class="flex gap-2 items-center">
+              <h2 class="qs-type-section-title m-0">
+                内部群目标
+              </h2>
+              <FaTag variant="outline">
+                {{ enabledTargets.length }} / {{ targets.length }}
               </FaTag>
             </div>
-            <p class="qs-type-meta text-muted-foreground font-mono m-0 mt-1 break-all">
-              {{ binding.wecomUserId }}
+            <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+              只允许企业内部群机器人；webhook key 只写不读。
             </p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <FaButton v-if="canManageMembers" variant="outline" size="sm" :disabled="busy" @click="verifyBinding(binding)">
-              发送测试
-            </FaButton>
-            <FaButton v-if="canManageMembers" variant="ghost" size="sm" :disabled="busy" @click="removeBinding(binding)">
-              解绑
-            </FaButton>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="p-4 border border-border rounded-xl bg-background flex flex-col gap-3">
-      <div class="flex flex-wrap gap-2 items-center justify-between">
-        <div>
-          <h2 class="qs-type-section-title m-0">
-            内部群目标
-          </h2>
-          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            只允许企业内部群机器人；webhook key 只写不读。
-          </p>
+          <FaButton v-if="canManageTargets" variant="outline" size="sm" :disabled="busy" @click="openCreateTarget">
+            <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
+            新增群目标
+          </FaButton>
         </div>
-        <FaButton v-if="canManageTargets" variant="outline" size="sm" :disabled="busy" @click="openCreateTarget">
-          <FaIcon name="i-lucide:plus" class="size-4" aria-hidden="true" />
-          新增群目标
-        </FaButton>
-      </div>
-      <FaEmpty v-if="targets.length === 0" title="还没有群目标" description="新增内部群机器人 webhook 后才能发群通知。" class="py-6" />
-      <div v-else class="flex flex-col gap-2">
-        <article v-for="target in targets" :key="target.id" class="p-3 border border-border rounded-lg bg-muted/10 flex flex-wrap gap-2 items-center justify-between">
-          <div class="min-w-0">
-            <div class="flex flex-wrap gap-2 items-center">
-              <span class="qs-type-body-medium">{{ target.name }}</span>
-              <span class="qs-type-meta text-muted-foreground font-mono">{{ target.key }}</span>
-              <FaTag variant="outline" :class="target.enabled ? 'text-green-700 border-green-600/30 bg-green-600/10 dark:text-green-400' : 'text-muted-foreground'">
-                {{ target.enabled ? '已启用' : '已停用' }}
-              </FaTag>
-              <FaTag variant="outline" class="text-emerald-700 border-emerald-500/30 bg-emerald-500/10 dark:text-emerald-300">
-                仅内部
-              </FaTag>
+        <FaEmpty v-if="targets.length === 0" title="还没有群目标" description="新增内部群机器人 webhook 后才能发群通知。" class="py-6" />
+        <div v-else class="gap-2 grid md:grid-cols-2 xl:grid-cols-3">
+          <article v-for="target in targets" :key="target.id" class="p-3 border border-border rounded-lg bg-muted/10 flex flex-col gap-2 min-w-0">
+            <div class="min-w-0">
+              <div class="flex flex-wrap gap-2 items-center">
+                <span class="qs-type-body-medium">{{ target.name }}</span>
+                <span class="qs-type-meta text-muted-foreground font-mono">{{ target.key }}</span>
+                <FaTag variant="outline" :class="target.enabled ? 'text-green-700 border-green-600/30 bg-green-600/10 dark:text-green-400' : 'text-muted-foreground'">
+                  {{ target.enabled ? '已启用' : '已停用' }}
+                </FaTag>
+                <FaTag variant="outline" class="text-emerald-700 border-emerald-500/30 bg-emerald-500/10 dark:text-emerald-300">
+                  仅内部
+                </FaTag>
+              </div>
+              <p v-if="target.purpose !== null" class="qs-type-meta text-muted-foreground m-0 mt-1">
+                {{ target.purpose }}
+              </p>
             </div>
-            <p v-if="target.purpose !== null" class="qs-type-meta text-muted-foreground m-0 mt-1">
-              {{ target.purpose }}
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <FaButton v-if="canManageTargets" variant="outline" size="sm" :disabled="busy" @click="testTarget(target)">
-              测试
-            </FaButton>
-            <FaButton v-if="canManageTargets" variant="outline" size="sm" :disabled="busy" @click="openEditTarget(target)">
-              编辑
-            </FaButton>
-            <FaButton v-if="canManageTargets" variant="ghost" size="sm" :disabled="busy" @click="removeTarget(target)">
-              删除
-            </FaButton>
-          </div>
-        </article>
-      </div>
-    </section>
-  </div>
+            <div class="mt-auto flex flex-wrap gap-2 items-center">
+              <FaButton v-if="canManageTargets" variant="outline" size="sm" :disabled="busy" @click="testTarget(target)">
+                测试
+              </FaButton>
+              <FaDropdown :items="targetMenuItems(target)" align="end">
+                <FaButton variant="outline" size="sm" :disabled="busy">
+                  更多
+                  <FaIcon name="i-lucide:chevron-down" class="size-3.5" aria-hidden="true" />
+                </FaButton>
+              </FaDropdown>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </FaPageMain>
 
   <QsGenericModal v-model="appModalOpen" :title="appModalMode === 'create' ? '新增企业微信应用' : '编辑企业微信应用'" size="lg" :submitting="busy" @update:model-value="appModalOpen = $event">
     <div class="flex flex-col gap-3">

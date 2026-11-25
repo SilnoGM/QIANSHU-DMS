@@ -1597,6 +1597,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
       "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-source-summary.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-orders.vue",
@@ -1778,6 +1779,7 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-terminate-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
@@ -2971,6 +2973,7 @@
       "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-feedback-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/EventChannelCard.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-feedback-modal.vue"
     ]
@@ -3998,6 +4001,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/overview-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
