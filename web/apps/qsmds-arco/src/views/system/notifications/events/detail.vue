@@ -66,6 +66,7 @@ const MAXIMUM_COVER_BYTES = 10 * 1024 * 1024
 
 const eventType = computed(() => String(route.params.eventType ?? ''))
 const activeDraft = computed(() => drafts.value.find(channel => channel.channel === activeChannel.value) ?? null)
+const activeValidationError = computed(() => activeDraft.value === null ? null : validateDraft(activeDraft.value))
 
 const TARGET_MODE_OPTIONS: Array<{ label: string, value: TargetMode }> = [
   { label: '动态目标', value: 'COMMAND_TARGET' },
@@ -381,6 +382,14 @@ function validateDraft(draft: ChannelDraft): string | null {
     && (draft.messages.length !== 1 || draft.messages[0]?.kind !== 'TEXT')) {
     return '站内通知必须配置且只配置一条文本消息'
   }
+  if (draft.channel === 'WECOM') {
+    // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
+    const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT' ? ['TEXT'] : ['TEXT', 'MPNEWS']
+    const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
+    if (unsupported !== undefined) {
+      return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${unsupported.kind} 消息，请删除或切换发送方式`
+    }
+  }
   return null
 }
 
@@ -616,6 +625,13 @@ onBeforeUnmount(() => {
                 </FaButton>
               </div>
             </div>
+
+            <FaAlert
+              v-if="activeValidationError !== null"
+              variant="destructive"
+              class="mt-3"
+              :title="activeValidationError"
+            />
 
             <div v-if="activeDraft.messages.length === 0" class="text-sm text-muted-foreground py-8 text-center">
               尚未配置消息内容
