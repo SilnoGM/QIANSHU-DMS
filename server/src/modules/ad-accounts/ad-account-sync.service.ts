@@ -341,7 +341,6 @@ export class AdAccountSyncService {
         target: assignedUser === null
           ? { kind: 'PERMISSION', permissionCode: 'ad-accounts:manage' }
           : { kind: 'USERS', userIds: [assignedUser] },
-        templateKey: 'operations.ad-account.balance-low',
         variables: {
           adAccountName: account.accountName,
           adAccountNo: account.accountId,

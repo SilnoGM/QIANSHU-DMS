@@ -151,7 +151,6 @@ describe('AdAccountSyncService', () => {
     expect(publish).toHaveBeenCalledTimes(1)
     expect(publish).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'AD_ACCOUNT_BALANCE_LOW',
-      templateKey: 'operations.ad-account.balance-low',
       target: { kind: 'USERS', userIds: [USER_ID] },
       dedupeKey: 'ad-account-balance-low:183000000000097:2026-11-22',
       variables: expect.objectContaining({

@@ -236,7 +236,6 @@ export class SalesReceiptService {
           eventType: 'SALES_RECEIPT_REVIEW_PENDING',
           source: { type: 'SALES_RECEIPT_REQUEST', id: row.id },
           target: { kind: 'PERMISSION', permissionCode: 'sales-receipts:review' },
-          templateKey: 'sales.receipt.pending',
           variables: {
             amount: row.amount.toFixed(2),
             collectionNo: row.collectionNo ?? '',
@@ -316,7 +315,6 @@ export class SalesReceiptService {
           eventType: 'SALES_RECEIPT_APPROVED',
           source: { type: 'SALES_RECEIPT_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.submittedByUserId] },
-          templateKey: 'sales.receipt.approved',
           variables: {
             amount: row.amount.toFixed(2),
             collectionNo: row.collectionNo ?? '',
@@ -354,7 +352,6 @@ export class SalesReceiptService {
         eventType: 'SALES_RECEIPT_REJECTED',
         source: { type: 'SALES_RECEIPT_REQUEST', id },
         target: { kind: 'USERS', userIds: [row.submittedByUserId] },
-        templateKey: 'sales.receipt.rejected',
         variables: {
           amount: row.amount.toFixed(2),
           collectionNo: row.collectionNo ?? '',
@@ -405,7 +402,6 @@ export class SalesReceiptService {
         source: { type: 'SALES_RECEIPT_REQUEST', id: row.id },
         // 群目标由 WECOM 渠道策略覆盖；命令目标只服务可能配置的站内渠道。
         target: { kind: 'PERMISSION', permissionCode: 'sales-receipts:review' },
-        templateKey: 'sales.receipt.voucher-sent',
         variables: {
           amount: row.amount.toFixed(2),
           collectionNo: row.collectionNo ?? '',

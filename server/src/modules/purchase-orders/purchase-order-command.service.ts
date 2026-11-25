@@ -423,7 +423,6 @@ export class PurchaseOrderCommandService {
           eventType: 'PURCHASE_REVIEW_PENDING',
           source: { type: 'PURCHASE_ORDER', id: created.id },
           target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:review' },
-          templateKey: 'purchase.review.pending',
           variables: {
             orderNo: issuance.number,
             orderId: created.id,

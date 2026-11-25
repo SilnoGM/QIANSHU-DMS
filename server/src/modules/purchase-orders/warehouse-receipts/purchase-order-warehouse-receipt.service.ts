@@ -188,7 +188,6 @@ export class PurchaseOrderWarehouseReceiptService {
       eventType: 'SHIPMENT_ARRIVED',
       source: { type: 'PURCHASE_SHIPMENT', id: order.id },
       target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:read' },
-      templateKey: 'shipment.arrived',
       variables: {
         orderNo: order.orderNo,
         orderId: order.id,
@@ -219,7 +218,6 @@ export class PurchaseOrderWarehouseReceiptService {
         eventType: 'PURCHASE_ORDER_COMPLETED',
         source: { type: 'PURCHASE_ORDER', id: order.id },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
-        templateKey: 'purchase.order.completed',
         variables: {
           occurredAt: formatWarehouseTime(recordedAt),
           orderDate: formatNotificationDate(order.orderDate),

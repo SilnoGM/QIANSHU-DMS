@@ -3623,6 +3623,7 @@ model Notification {
   dedupeKey           String               @unique(map: "notifications_dedupe_key_key") @map("dedupe_key") @db.VarChar(200)
   priority            NotificationPriority @default(NORMAL)
   status              NotificationStatus   @default(PENDING)
+  /// 历史模板键或新链路事件类型；仅用于记录展示，不再驱动发布。
   templateKey         String               @map("template_key") @db.VarChar(64)
   requestedChannels   Json                 @default("[]") @map("requested_channels") @db.JsonB
   variables           Json                 @default("{}") @db.JsonB
@@ -3670,7 +3671,8 @@ model NotificationMedia {
   @@map("notification_media")
 }
 
-/// 按渠道拆分的模板。业务只传一个 key，每个渠道各有一份渲染。
+/// 已下线（2026-11-25）：内容改由事件渠道配置独享。代码不再读写本表；
+/// 保留一个发布周期供回滚核对，之后由独立迁移删除。
 model NotificationTemplate {
   id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   key             String                   @db.VarChar(64)
@@ -3702,7 +3704,8 @@ model NotificationTemplate {
   @@map("notification_templates")
 }
 
-/// 事件在某个渠道上的目标、模板、TTL 与敏感内容策略。
+/// 已下线（2026-11-25）：目标与内容改由 NotificationEventChannel 承载。
+/// 代码不再读写本表；保留一个发布周期供回滚核对，之后由独立迁移删除。
 model NotificationChannelPolicy {
   id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   eventType       String                 @map("event_type") @db.VarChar(64)
@@ -3858,6 +3861,7 @@ model NotificationInboxItem {
   notificationId   String    @map("notification_id") @db.Uuid
   userId           String    @map("user_id") @db.Uuid
   eventType        String    @map("event_type") @db.VarChar(64)
+  /// 历史模板键或新链路事件类型；快照列保留用于记录页。
   templateKey      String    @map("template_key") @db.VarChar(64)
   templateVersion  Int       @map("template_version")
   titleSnapshot    String    @map("title_snapshot") @db.Text
@@ -4034,6 +4038,7 @@ model WecomDelivery {
   status           WecomDeliveryStatus   @default(PENDING)
   attemptCount     Int                   @default(0) @map("attempt_count")
   nextAttemptAt    DateTime              @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  /// 历史模板键或新链路事件类型；投递快照列保留用于记录页。
   templateKey      String                @map("template_key") @db.VarChar(64)
   templateVersion  Int                   @map("template_version")
   renderedContent  String                @map("rendered_content") @db.Text

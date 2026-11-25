@@ -267,13 +267,11 @@ export const MACHINE_VIEWING_PERMISSION_CODES = [
 ] as const
 
 /**
- * 通知中心：共享的模板/策略/记录权限；企业微信渠道权限在 WECOM 权限组中维护。
+ * 通知中心：事件配置与记录权限；企业微信渠道权限在 WECOM 权限组中维护。
  *
  * 全部为 system_only；站内通知接口只要求登录，不新增权限码。
  */
 export const NOTIFICATION_PERMISSION_CODES = [
-  'notification-template:read',
-  'notification-template:update',
   'notification-policy:read',
   'notification-policy:update',
   'notification-record:read',

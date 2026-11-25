@@ -96,6 +96,7 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     wecomDeliveryMedia: {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     ...overrides,
   }
@@ -191,7 +192,7 @@ describe('WecomDispatchService', () => {
 
   it('passes @all to the robot when the policy configures it', async () => {
     const prisma = basePrisma({
-      notificationChannelPolicy: {
+      notificationEventChannel: {
         findUnique: jest.fn().mockResolvedValue({
           targetConfig: { mention: { mode: 'ALL' } },
         }),
@@ -335,7 +336,7 @@ describe('WecomDispatchService', () => {
           }),
           update: jest.fn().mockResolvedValue({}),
         },
-        notificationChannelPolicy: {
+        notificationEventChannel: {
           findUnique: jest.fn().mockResolvedValue({
             quietHours: { start: '22:00', end: '09:00', timezone: 'Asia/Shanghai' },
           }),

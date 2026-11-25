@@ -233,7 +233,6 @@ export class PackagingCostService {
           eventType: 'PACKAGING_COST_PAID',
           source: { type: 'PACKAGING_COST_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.submittedByUserId] },
-          templateKey: 'packaging.payment.paid',
           variables: {
             amount: row.amount.toFixed(2),
             currencyCode: 'CNY',

@@ -152,12 +152,118 @@ describe('notification content group validation', () => {
   it('rejects unimplemented message kinds', () => {
     const result = validateNotificationContentGroup({
       method: 'APP',
-      items: [{ kind: 'IMAGE', payload: {} }],
+      items: [{ kind: 'VIDEO', payload: {} }],
       allowedVariables: null,
     })
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_KIND_UNSUPPORTED')
+    }
+  })
+
+  it('accepts an image attachment item within the event media contract', () => {
+    const result = validateNotificationContentGroup({
+      method: 'APP',
+      items: [
+        text('采购单已审核通过'),
+        {
+          kind: 'IMAGE',
+          payload: {},
+          mediaPolicy: { sourceKeys: ['purchase.orderImage'], maxCount: 1 },
+        },
+      ],
+      allowedVariables: null,
+      mediaSources: ['purchase.orderImage', 'purchase.paymentVoucher'],
+      mediaMaxCount: 2,
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.items[1]).toMatchObject({
+        kind: 'IMAGE',
+        payload: {},
+        mediaPolicy: { sourceKeys: ['purchase.orderImage'], maxCount: 1 },
+      })
+    }
+  })
+
+  it('allows an empty source list to mean every declared source', () => {
+    const result = validateNotificationContentGroup({
+      method: 'ROBOT',
+      items: [
+        text('收款水单已发送'),
+        {
+          kind: 'IMAGE',
+          payload: {},
+          mediaPolicy: { sourceKeys: [], maxCount: 2 },
+        },
+      ],
+      allowedVariables: null,
+      mediaSources: ['salesReceipt.voucher'],
+      mediaMaxCount: 2,
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.items[1]?.mediaPolicy).toEqual({ sourceKeys: [], maxCount: 2 })
+    }
+  })
+
+  it.each([
+    ['an event without media capability', { mediaSources: null, mediaMaxCount: 0 }, 'NOTIFICATION_CONTENT_MEDIA_UNSUPPORTED'],
+    ['an undeclared source', { mediaSources: ['salesReceipt.voucher'], mediaMaxCount: 2 }, 'NOTIFICATION_CONTENT_MEDIA_SOURCE_INVALID'],
+    ['a limit above the event cap', { mediaSources: ['salesReceipt.voucher'], mediaMaxCount: 2 }, 'NOTIFICATION_CONTENT_MEDIA_LIMIT_INVALID'],
+    ['a malformed policy', { mediaSources: ['salesReceipt.voucher'], mediaMaxCount: 2 }, 'NOTIFICATION_CONTENT_MEDIA_POLICY_INVALID'],
+  ])('rejects an image item with %s', (_label, contract, code) => {
+    const mediaPolicy = code === 'NOTIFICATION_CONTENT_MEDIA_POLICY_INVALID'
+      ? { sourceKeys: ['salesReceipt.voucher', 'salesReceipt.voucher'], maxCount: 1 }
+      : code === 'NOTIFICATION_CONTENT_MEDIA_LIMIT_INVALID'
+        ? { sourceKeys: ['salesReceipt.voucher'], maxCount: 3 }
+        : { sourceKeys: code === 'NOTIFICATION_CONTENT_MEDIA_SOURCE_INVALID' ? ['other.source'] : ['salesReceipt.voucher'], maxCount: 1 }
+    const result = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'IMAGE', payload: {}, mediaPolicy }],
+      allowedVariables: null,
+      ...contract,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues.map(item => item.code)).toContain(code)
+    }
+  })
+
+  it('does not allow image attachments on in-app notifications', () => {
+    const result = validateNotificationContentGroup({
+      method: 'IN_APP',
+      items: [{ kind: 'IMAGE', payload: {}, mediaPolicy: { sourceKeys: [], maxCount: 1 } }],
+      allowedVariables: null,
+      mediaSources: ['salesReceipt.voucher'],
+      mediaMaxCount: 1,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_KIND_UNSUPPORTED')
+    }
+  })
+
+  it('requires a text or mpnews body alongside image attachments', () => {
+    const result = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{
+        kind: 'IMAGE',
+        payload: {},
+        mediaPolicy: { sourceKeys: ['salesReceipt.voucher'], maxCount: 1 },
+      }],
+      allowedVariables: null,
+      mediaSources: ['salesReceipt.voucher'],
+      mediaMaxCount: 1,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_TEXT_REQUIRED')
     }
   })
 

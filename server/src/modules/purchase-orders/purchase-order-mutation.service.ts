@@ -424,7 +424,6 @@ export class PurchaseOrderMutationService {
         eventType: 'PURCHASE_REVIEW_APPROVED',
         source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
-        templateKey: 'purchase.review.approved',
         variables: {
           balanceAmount: order.balanceDueAmount.toFixed(2),
           currencyCode: order.currencyCode,
@@ -519,7 +518,6 @@ export class PurchaseOrderMutationService {
         eventType: 'PURCHASE_ORDER_CANCELLED',
         source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
-        templateKey: 'purchase.order.cancelled',
         variables: {
           orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
@@ -582,7 +580,6 @@ export class PurchaseOrderMutationService {
         eventType: 'PURCHASE_REVIEW_REJECTED',
         source: { type: 'PURCHASE_ORDER', id: purchaseOrderId },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
-        templateKey: 'purchase.review.rejected',
         variables: {
           orderDate: formatNotificationDate(order.orderDate),
           orderNo: order.orderNo,
@@ -1778,7 +1775,6 @@ export class PurchaseOrderMutationService {
         eventType: 'PURCHASE_ORDER_COMPLETED',
         source: { type: 'PURCHASE_ORDER', id: order.id },
         target: { kind: 'USERS', userIds: [order.createdByUserId] },
-        templateKey: 'purchase.order.completed',
         variables: {
           occurredAt: notificationTime(new Date()),
           orderDate: formatNotificationDate(order.orderDate),

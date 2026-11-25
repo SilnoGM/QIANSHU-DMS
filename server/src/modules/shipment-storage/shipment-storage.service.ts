@@ -872,7 +872,6 @@ export class ShipmentStorageService {
         eventType: 'SHIPMENT_RELEASED_TO_STORAGE',
         source: { type: 'SHIPMENT_STORAGE_RELEASE', id: records[0].id },
         target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
-        templateKey: 'shipment.released-to-storage',
         variables: {
           locationScope: input.locationScope === 'OVERSEAS' ? '海外' : '内地',
           originCustomerName: records[0].originCustomerNameSnapshot,
@@ -2214,7 +2213,6 @@ export class ShipmentStorageService {
           eventType: 'STORAGE_CLAIM_REQUEST_PENDING',
           source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: created.id },
           target: { kind: 'PERMISSION', permissionCode: 'shipment-storage:claim' },
-          templateKey: 'shipment.storage-claim.pending',
           variables: {
             originCustomerName: record.originCustomerNameSnapshot,
             salesOrderNo: prepared.order.orderNo,
@@ -2315,7 +2313,6 @@ export class ShipmentStorageService {
         eventType: 'STORAGE_CLAIM_REQUEST_REJECTED',
         source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: requestId },
         target: { kind: 'USERS', userIds: [request.applicantUserId] },
-        templateKey: 'shipment.storage-claim.rejected',
         variables: {
           originCustomerName: record?.originCustomerNameSnapshot ?? '—',
           reason,
@@ -2401,7 +2398,6 @@ export class ShipmentStorageService {
       eventType: 'STORAGE_CLAIM_REQUEST_APPROVED',
       source: { type: 'SHIPMENT_STORAGE_CLAIM_REQUEST', id: requestId },
       target: { kind: 'USERS', userIds: [request.applicantUserId] },
-      templateKey: 'shipment.storage-claim.approved',
       variables: {
         originCustomerName: record?.originCustomerNameSnapshot ?? '—',
         salesOrderNo: request.salesOrderNoSnapshot,

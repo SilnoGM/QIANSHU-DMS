@@ -349,7 +349,6 @@ export class SalesOrderMutationService {
           eventType: 'SALES_ORDER_TERMINATED',
           source: { type: 'SALES_ORDER', id: salesOrderId },
           target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
-          templateKey: 'sales.order.terminated',
           variables: {
             agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
             currencyCode: order.currencyCode,
@@ -474,7 +473,6 @@ export class SalesOrderMutationService {
           eventType: 'SHIPMENT_SIGNED',
           source: { type: 'SALES_ORDER', id: salesOrderId },
           target: { kind: 'USERS', userIds: [order.issuerUserId] },
-          templateKey: 'shipment.signed',
           variables: {
             agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
             currencyCode: order.currencyCode,

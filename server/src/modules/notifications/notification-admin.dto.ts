@@ -56,7 +56,6 @@ export class NotificationEventDto {
   @ApiProperty({ type: [String] }) variables!: string[]
   @ApiProperty({ type: () => [NotificationEventVariableDto] }) variableDefinitions!: NotificationEventVariableDto[]
   @ApiProperty() variablesKnown!: boolean
-  @ApiProperty({ type: 'string', nullable: true }) defaultTemplateKey!: string | null
   @ApiProperty() implemented!: boolean
   /** 已验收过附件能力的事件返回上限与类型；空表示该事件未接入。 */
   @ApiProperty({ type: () => NotificationEventMediaDto, nullable: true }) media!: NotificationEventMediaDto | null
@@ -191,120 +190,6 @@ export class NotificationEventConfigPreviewResultDto {
   @ApiProperty({ type: () => [NotificationEventConfigPreviewChannelDto] }) channels!: NotificationEventConfigPreviewChannelDto[]
 }
 
-export class NotificationTemplateMediaPolicyDto {
-  @ApiProperty() enabled!: boolean
-  @ApiProperty({ type: 'integer', minimum: 0, maximum: 3 }) maxCount!: number
-  @ApiProperty({ enum: ['IMAGE'], isArray: true }) kinds!: string[]
-  @ApiProperty({ type: [String], description: '允许的附件来源键；空表示不区分来源' }) sources!: string[]
-}
-
-export class NotificationTemplateMediaPolicyInputDto {
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 3 }) @IsOptional() @IsInt() @Min(1) @Max(3) maxCount?: number
-  @ApiPropertyOptional({ enum: ['IMAGE'], isArray: true }) @IsOptional() @IsArray() @IsIn(['IMAGE'], { each: true }) kinds?: ('IMAGE')[]
-  @ApiPropertyOptional({ type: [String], maxItems: 20 }) @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @Matches(/^[A-Za-z0-9._-]+$/u, { each: true }) @MaxLength(64, { each: true }) sources?: string[]
-}
-
-export class NotificationTemplateVariableDto {
-  @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/^[a-zA-Z0-9_]+$/u) name!: string
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() required?: boolean
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 1500 }) @IsOptional() @IsInt() @Min(1) @Max(1500) maxLength?: number
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() sensitive?: boolean
-}
-
-export class NotificationTemplateDto {
-  @ApiProperty({ format: 'uuid' }) id!: string
-  @ApiProperty() key!: string
-  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
-  @ApiProperty() name!: string
-  @ApiProperty({ enum: TEMPLATE_DOMAINS }) domain!: string
-  @ApiProperty({ type: 'string', nullable: true }) titleTemplate!: string | null
-  @ApiProperty() bodyTemplate!: string
-  @ApiProperty({ type: 'string', nullable: true }) linkUrlTemplate!: string | null
-  @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) variables!: NotificationTemplateVariableDto[]
-  @ApiProperty({ type: () => NotificationTemplateMediaPolicyDto }) mediaPolicy!: NotificationTemplateMediaPolicyDto
-  @ApiProperty({ type: 'integer' }) maxLength!: number
-  @ApiProperty({ type: 'integer', nullable: true }) maxBytes!: number | null
-  @ApiProperty() enabled!: boolean
-  @ApiProperty({ type: 'integer' }) version!: number
-  @ApiProperty({ format: 'date-time' }) updatedAt!: string
-  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
-}
-
-export class NotificationTemplateCreateDto {
-  @ApiProperty({ maxLength: 64 }) @IsString() @Matches(/^[a-zA-Z0-9._-]+$/u) key!: string
-  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: NotificationChannelValue
-  @ApiProperty({ maxLength: 128 }) @IsString() @Matches(/\S/u) name!: string
-  @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS, default: 'SYSTEM' }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
-  @ApiProperty() @IsString() @Matches(/\S/u) bodyTemplate!: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
-  @ApiProperty({ type: () => [NotificationTemplateVariableDto] }) @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables!: NotificationTemplateVariableDto[]
-  @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000, default: 2000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 4096, description: 'WECOM 文本模板的 UTF-8 字节上限' }) @IsOptional() @IsInt() @Min(1) @Max(4096) maxBytes?: number
-  @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() enabled?: boolean
-}
-
-export class NotificationTemplateUpdateDto {
-  @ApiPropertyOptional({ maxLength: 128 }) @IsOptional() @IsString() name?: string
-  @ApiPropertyOptional({ enum: TEMPLATE_DOMAINS }) @IsOptional() @IsIn(TEMPLATE_DOMAINS) domain?: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() titleTemplate?: string | null
-  @ApiPropertyOptional() @IsOptional() @IsString() bodyTemplate?: string
-  @ApiPropertyOptional({ type: 'string', nullable: true }) @IsOptional() @IsString() linkUrlTemplate?: string | null
-  @ApiPropertyOptional({ type: () => [NotificationTemplateVariableDto] }) @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => NotificationTemplateVariableDto) variables?: NotificationTemplateVariableDto[]
-  @ApiPropertyOptional({ type: () => NotificationTemplateMediaPolicyInputDto }) @IsOptional() @ValidateNested() @Type(() => NotificationTemplateMediaPolicyInputDto) mediaPolicy?: NotificationTemplateMediaPolicyInputDto
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 5000 }) @IsOptional() @IsInt() @Min(1) @Max(5000) maxLength?: number
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 4096 }) @IsOptional() @IsInt() @Min(1) @Max(4096) maxBytes?: number
-  @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean
-  @ApiProperty({ type: 'integer', minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number
-}
-
-export class NotificationTemplatePreviewDto {
-  @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() variables!: Record<string, string | number | null>
-}
-
-export class NotificationTemplatePreviewResultDto {
-  @ApiProperty() content!: string
-  @ApiProperty({ type: 'string', nullable: true }) linkUrl!: string | null
-  @ApiProperty() truncated!: boolean
-  @ApiProperty({ type: [String] }) warnings!: string[]
-}
-
-export class NotificationChannelPolicyDto {
-  @ApiProperty({ format: 'uuid' }) id!: string
-  @ApiProperty() eventType!: string
-  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) channel!: string
-  @ApiProperty({ enum: ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] }) targetMode!: string
-  @ApiProperty({ type: 'object', additionalProperties: true }) targetConfig!: Record<string, unknown>
-  @ApiProperty({ type: 'string', nullable: true }) templateKey!: string | null
-  @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) priority!: string
-  @ApiProperty({ nullable: true, type: 'integer' }) ttlSeconds!: number | null
-  @ApiProperty({ type: 'object', nullable: true, additionalProperties: true }) quietHours!: Record<string, unknown> | null
-  @ApiProperty() allowSensitive!: boolean
-  @ApiProperty() enabled!: boolean
-  @ApiProperty({ type: 'integer' }) version!: number
-  @ApiProperty({ format: 'date-time' }) updatedAt!: string
-  @ApiProperty({ type: 'string', nullable: true }) updatedByName!: string | null
-}
-
-export class NotificationChannelPolicyUpdateDto {
-  @ApiProperty({ enum: ['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP'] }) @IsIn(['COMMAND_TARGET', 'USERS', 'ROLE', 'PERMISSION', 'GROUP']) targetMode!: string
-  @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() targetConfig!: Record<string, unknown>
-  @ApiPropertyOptional({ type: 'string', nullable: true, maxLength: 64 }) @IsOptional() @IsString() templateKey?: string | null
-  @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) @IsIn(['NORMAL', 'HIGH']) priority!: string
-  @ApiPropertyOptional({ nullable: true, type: 'integer', minimum: 60, maximum: 604800 }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsInt() @Min(60) @Max(604800) ttlSeconds?: number | null
-  @ApiPropertyOptional({ type: 'object', nullable: true, additionalProperties: true }) @IsOptional() @ValidateIf((_object, value: unknown) => value !== null) @IsObject() quietHours?: Record<string, unknown> | null
-  @ApiProperty() @IsBoolean() allowSensitive!: boolean
-  @ApiProperty() @IsBoolean() enabled!: boolean
-  @ApiProperty({ type: 'integer', minimum: 0 }) @IsInt() @Min(0) expectedVersion!: number
-}
-
-export class NotificationChannelPolicyPathDto {
-  @ApiProperty() @IsString() @Matches(/\S/u) eventType!: string
-  @ApiProperty({ enum: NOTIFICATION_CHANNEL_VALUES }) @IsIn(NOTIFICATION_CHANNEL_VALUES) channel!: NotificationChannelValue
-}
-
 export class NotificationEventTypeParamDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @MaxLength(64) @Matches(/^[A-Z0-9_]+$/u) eventType!: string
 }
@@ -340,7 +225,8 @@ export class NotificationDeliveryDto {
   @ApiProperty({ type: 'string', nullable: true }) targetName!: string | null
   @ApiProperty({ enum: ['PENDING', 'SENDING', 'ACCEPTED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
   @ApiProperty({ type: 'integer' }) attemptCount!: number
-  @ApiProperty() templateKey!: string
+  @ApiProperty({ description: '内容标识：历史记录为旧模板键，新记录为事件类型' }) contentKey!: string
+  @ApiProperty({ type: 'integer', description: '内容配置版本快照' }) contentVersion!: number
   @ApiProperty({ description: '实际发送的正文快照' }) renderedContent!: string
   @ApiProperty({ type: 'integer', description: '该投递的附件项总数' }) mediaTotal!: number
   @ApiProperty({ type: 'integer', description: '已接受的附件项数' }) mediaAccepted!: number
@@ -362,7 +248,7 @@ export class NotificationRecordMediaDto {
   @ApiProperty({
     type: 'string',
     nullable: true,
-    description: '非空表示附件被模板策略或校验拦截，未进入投递',
+    description: '非空表示附件被事件渠道内容策略或校验拦截，未进入投递',
   })
   blockedReason!: string | null
 }
@@ -377,7 +263,7 @@ export class NotificationRecordDto {
   @ApiProperty() sourceId!: string
   @ApiProperty({ enum: ['NORMAL', 'HIGH'] }) priority!: string
   @ApiProperty({ enum: ['PENDING', 'COMPLETED', 'PARTIAL', 'FAILED', 'SKIPPED', 'EXPIRED', 'CANCELLED'] }) status!: string
-  @ApiProperty() templateKey!: string
+  @ApiProperty({ description: '内容标识：历史记录为旧模板键，新记录为事件类型' }) contentKey!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) expiresAt!: string | null
   @ApiProperty({ format: 'date-time' }) publishedAt!: string
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) completedAt!: string | null

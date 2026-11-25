@@ -2,23 +2,17 @@ import type { PrismaService } from '../../infrastructure/database/prisma.service
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { NotificationPreferenceService } from './notification-preference.service'
 
-interface PolicyFixture {
+interface EventChannelFixture {
   readonly eventType: string
   readonly channel: 'IN_APP' | 'WECOM'
   readonly enabled?: boolean
-  readonly templateKey?: string | null
   readonly targetMode?: string
-}
-
-interface TemplateFixture {
-  readonly key: string
-  readonly channel: 'IN_APP' | 'WECOM'
+  readonly content?: boolean
 }
 
 function createPrisma(options: {
-  readonly policies?: readonly PolicyFixture[]
+  readonly channels?: readonly EventChannelFixture[]
   readonly settings?: ReadonlyArray<{ readonly channel: 'IN_APP' | 'WECOM', readonly enabled: boolean }>
-  readonly templates?: readonly TemplateFixture[]
   readonly mutes?: ReadonlyArray<{ readonly eventType: string, readonly channel: 'IN_APP' | 'WECOM' }>
   readonly upsert?: jest.Mock
   readonly deleteMany?: jest.Mock
@@ -26,19 +20,17 @@ function createPrisma(options: {
   const upsert = options.upsert ?? jest.fn().mockResolvedValue({})
   const deleteMany = options.deleteMany ?? jest.fn().mockResolvedValue({ count: 1 })
   const prisma = {
-    notificationChannelPolicy: {
-      findMany: jest.fn().mockResolvedValue((options.policies ?? []).map(policy => ({
+    notificationEventChannel: {
+      findMany: jest.fn().mockResolvedValue((options.channels ?? []).map(channel => ({
         enabled: true,
-        templateKey: null,
         targetMode: 'COMMAND_TARGET',
-        ...policy,
+        content: true,
+        ...channel,
+        messages: channel.content === false ? [] : [{ id: 'message-1' }],
       }))),
     },
     notificationChannelSettings: {
       findMany: jest.fn().mockResolvedValue(options.settings ?? []),
-    },
-    notificationTemplate: {
-      findMany: jest.fn().mockResolvedValue(options.templates ?? []),
     },
     notificationUserMute: {
       findMany: jest.fn().mockResolvedValue(options.mutes ?? []),
@@ -49,23 +41,17 @@ function createPrisma(options: {
   return { prisma, upsert, deleteMany }
 }
 
-const inAppPolicy: PolicyFixture = {
+const inAppChannel: EventChannelFixture = {
   eventType: 'PURCHASE_REVIEW_PENDING',
   channel: 'IN_APP',
   targetMode: 'USERS',
 }
 
-const inAppTemplate: TemplateFixture = {
-  key: 'purchase.review.pending',
-  channel: 'IN_APP',
-}
-
 describe('NotificationPreferenceService', () => {
   it('reports availability per channel and keeps the muted flag', async () => {
     const { prisma } = createPrisma({
-      policies: [inAppPolicy, { eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }],
+      channels: [inAppChannel, { eventType: 'PURCHASE_REVIEW_PENDING', channel: 'WECOM' }],
       settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'WECOM', enabled: false }],
-      templates: [inAppTemplate],
       mutes: [{ eventType: 'PURCHASE_REVIEW_PENDING', channel: 'IN_APP' }],
     })
 
@@ -84,34 +70,32 @@ describe('NotificationPreferenceService', () => {
     ])
   })
 
-  it('distinguishes unconfigured, disabled and template-missing channels', async () => {
+  it('distinguishes unconfigured, disabled and content-missing channels', async () => {
     const { prisma } = createPrisma({
-      policies: [
-        { ...inAppPolicy, enabled: false },
-        { eventType: 'SALES_ORDER_COMPLETED', channel: 'IN_APP', targetMode: 'USERS' },
+      channels: [
+        { ...inAppChannel, enabled: false },
+        { eventType: 'SALES_ORDER_COMPLETED', channel: 'IN_APP', targetMode: 'USERS', content: false },
       ],
       settings: [{ channel: 'IN_APP', enabled: true }],
-      templates: [],
     })
 
     const view = await new NotificationPreferenceService(prisma).list('user-1')
     const purchase = view.events.find(item => item.eventType === 'PURCHASE_REVIEW_PENDING')
     const sales = view.events.find(item => item.eventType === 'SALES_ORDER_COMPLETED')
 
-    expect(purchase?.channels[0].unavailableReason).toBe('POLICY_DISABLED')
-    expect(sales?.channels[0].unavailableReason).toBe('TEMPLATE_MISSING')
+    expect(purchase?.channels[0].unavailableReason).toBe('CONFIG_DISABLED')
+    expect(sales?.channels[0].unavailableReason).toBe('CONTENT_MISSING')
     expect(sales?.channels[1].unavailableReason).toBe('NOT_CONFIGURED')
   })
 
   it('does not let users mute an event with a group-only target', async () => {
     const { prisma } = createPrisma({
-      policies: [{
+      channels: [{
         eventType: 'PURCHASE_REVIEW_PENDING',
         channel: 'WECOM',
         targetMode: 'GROUP',
       }],
       settings: [{ channel: 'IN_APP', enabled: true }, { channel: 'WECOM', enabled: true }],
-      templates: [inAppTemplate, { key: 'purchase.review.pending', channel: 'WECOM' }],
     })
 
     const view = await new NotificationPreferenceService(prisma).list('user-1')
@@ -125,9 +109,8 @@ describe('NotificationPreferenceService', () => {
 
   it('stores a mute row only for an available event and channel', async () => {
     const { prisma, upsert } = createPrisma({
-      policies: [inAppPolicy],
+      channels: [inAppChannel],
       settings: [{ channel: 'IN_APP', enabled: true }],
-      templates: [inAppTemplate],
     })
 
     const result = await new NotificationPreferenceService(prisma)
@@ -149,9 +132,8 @@ describe('NotificationPreferenceService', () => {
 
   it('deletes the mute row when the user turns the event back on', async () => {
     const { prisma, deleteMany } = createPrisma({
-      policies: [inAppPolicy],
+      channels: [inAppChannel],
       settings: [{ channel: 'IN_APP', enabled: true }],
-      templates: [inAppTemplate],
     })
 
     const result = await new NotificationPreferenceService(prisma)
@@ -165,9 +147,8 @@ describe('NotificationPreferenceService', () => {
 
   it('rejects muting a channel that the admin has not made deliverable', async () => {
     const { prisma, upsert } = createPrisma({
-      policies: [inAppPolicy],
+      channels: [{ ...inAppChannel, content: false }],
       settings: [{ channel: 'IN_APP', enabled: true }],
-      templates: [],
     })
 
     const error = await new NotificationPreferenceService(prisma)

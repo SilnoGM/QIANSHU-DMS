@@ -10,6 +10,7 @@ import { MediaAssetService } from '../media/media-asset.service'
 import { MediaAssetRetentionService } from '../media/media-retention.service'
 import {
   extractNotificationContentAssetIds,
+  parseNotificationImageMediaPolicy,
   renderMpnewsHtml,
   validateNotificationContentGroup,
   type NotificationMessageKindValue,
@@ -258,7 +259,11 @@ export class NotificationEventConfigService {
   private previewMessage(input: {
     readonly eventType: string
     readonly channel: { readonly channel: string, readonly allowSensitive: boolean }
-    readonly message: { readonly kind: string, readonly payload: Prisma.JsonValue }
+    readonly message: {
+      readonly kind: string
+      readonly payload: Prisma.JsonValue
+      readonly mediaPolicy: Prisma.JsonValue
+    }
     readonly variables: Readonly<Record<string, string | number | null>>
     readonly allowed: readonly {
       readonly name: string
@@ -380,6 +385,15 @@ export class NotificationEventConfigService {
       }
     }
 
+    if (input.message.kind === 'IMAGE') {
+      const policy = parseNotificationImageMediaPolicy(input.message.mediaPolicy)
+      return {
+        kind: input.message.kind,
+        payload: { mediaPolicy: policy },
+        warnings: policy === null ? ['图片附件策略无效'] : [],
+      }
+    }
+
     return {
       kind: input.message.kind,
       payload,
@@ -422,7 +436,7 @@ export class NotificationEventConfigService {
     const variables = notificationEventVariables(eventType)
     const normalizedChannels = input.channels.map(channel => ({
       input: channel,
-      items: this.validateContent(channel, variables),
+      items: this.validateContent(eventType, channel, variables),
     }))
 
     await this.prisma.$transaction(async (transaction) => {
@@ -637,12 +651,14 @@ export class NotificationEventConfigService {
   }
 
   private validateContent(
+    eventType: string,
     channel: NotificationEventChannelConfigInputDto,
     variables: readonly string[] | null,
   ) {
     if (channel.enabled === false && channel.messages.length === 0) {
       return []
     }
+    const mediaCapability = notificationEventMediaCapability(eventType)
     const result = validateNotificationContentGroup({
       method: channel.sendMethod as NotificationSendMethodValue,
       items: channel.messages.map(message => ({
@@ -652,6 +668,8 @@ export class NotificationEventConfigService {
         enabled: message.enabled,
       })),
       allowedVariables: variables,
+      mediaSources: mediaCapability?.sources.map(source => source.key) ?? null,
+      mediaMaxCount: mediaCapability?.maxCount ?? 0,
     })
     if (!result.ok) {
       throw new ApiException(

@@ -90,6 +90,7 @@ function basePrisma(configs: unknown[]) {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn().mockResolvedValue(1),
     },
+    wecomDeliveryMedia: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     notificationRenderedMessage: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     notificationDeliveryMessage: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $queryRaw: jest.fn().mockResolvedValue([{ id: USER_ID }]),
@@ -120,7 +121,6 @@ describe('SystemNotificationService event config branch', () => {
       eventType: EVENT_TYPE,
       source: { type: 'sales_order', id: 'order-1' },
       target: { kind: 'USERS', userIds: [USER_ID] },
-      templateKey: 'ignored.legacy.key',
       variables: {},
     })
 
@@ -133,14 +133,14 @@ describe('SystemNotificationService event config branch', () => {
     expect(prisma.notificationTemplate.findUnique).not.toHaveBeenCalled()
     expect(prisma.notification.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
-        templateKey: 'event-content',
+        templateKey: EVENT_TYPE,
         requestedChannels: ['IN_APP', 'WECOM'],
       }),
     }))
     expect(prisma.notificationInboxItem.createMany).toHaveBeenCalledWith({
       data: [expect.objectContaining({
         userId: USER_ID,
-        templateKey: 'event-content',
+        templateKey: EVENT_TYPE,
         titleSnapshot: '销售订单提交',
         bodySnapshot: '站内正文',
       })],
@@ -150,7 +150,7 @@ describe('SystemNotificationService event config branch', () => {
       data: [expect.objectContaining({
         transport: 'APP',
         recipientUserId: USER_ID,
-        templateKey: 'event-content',
+        templateKey: EVENT_TYPE,
         renderedContent: '企微正文',
       })],
     })
@@ -187,7 +187,6 @@ describe('SystemNotificationService event config branch', () => {
       eventType: EVENT_TYPE,
       source: { type: 'sales_order', id: 'order-1' },
       target: { kind: 'USERS', userIds: [USER_ID] },
-      templateKey: 'ignored.legacy.key',
       variables: {},
     })
 
@@ -199,7 +198,7 @@ describe('SystemNotificationService event config branch', () => {
         transport: 'ROBOT',
         targetId: 'target-1',
         mentionMode: 'ALL',
-        templateKey: 'event-content',
+        templateKey: EVENT_TYPE,
       })],
     })
     expect(prisma.notificationTemplate.findUnique).not.toHaveBeenCalled()
@@ -240,7 +239,6 @@ describe('SystemNotificationService event config branch', () => {
       eventType: EVENT_TYPE,
       source: { type: 'sales_order', id: 'order-1' },
       target: { kind: 'USERS', userIds: [USER_ID] },
-      templateKey: 'ignored.legacy.key',
       variables: {},
     })
 
@@ -280,7 +278,6 @@ describe('SystemNotificationService event config branch', () => {
       eventType: EVENT_TYPE,
       source: { type: 'sales_order', id: 'order-1' },
       target: { kind: 'USERS', userIds: [USER_ID] },
-      templateKey: 'ignored.legacy.key',
       variables: {},
     })
 
@@ -290,5 +287,56 @@ describe('SystemNotificationService event config branch', () => {
       skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED',
     })
     expect(prisma.wecomDelivery.createMany).not.toHaveBeenCalled()
+  })
+
+  it('maps business media into image attachment messages and delivery media', async () => {
+    const assetId = '33333333-3333-4333-8333-333333333333'
+    const config = wecomConfig({
+      allowSensitive: true,
+      messages: [
+        textMessage('采购单已审核通过', 0),
+        {
+          ...textMessage('', 1),
+          id: 'message-image',
+          kind: 'IMAGE',
+          payload: {},
+          mediaPolicy: { sourceKeys: ['purchase.orderImage'], maxCount: 1 },
+        },
+      ],
+    })
+    const prisma = basePrisma([config])
+    prisma.mediaAsset.findMany.mockResolvedValue([{
+      id: assetId,
+      mediaType: 'IMAGE',
+      status: 'READY',
+      deletedAt: null,
+      objectKey: 'assets/2026/11/order.png',
+    }])
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    await service.publish({
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      source: { type: 'purchase_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: { orderNo: 'PO-001' },
+      media: [{ assetId, sourceKey: 'purchase.orderImage' }],
+    })
+
+    expect(prisma.notificationMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: assetId,
+        sourceKey: 'purchase.orderImage',
+        blockedReason: null,
+      })],
+    })
+    expect(prisma.wecomDeliveryMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: assetId,
+        sortOrder: 0,
+      })],
+    })
   })
 })

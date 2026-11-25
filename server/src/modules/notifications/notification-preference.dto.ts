@@ -9,10 +9,10 @@ export type NotificationPreferenceChannel = (typeof NOTIFICATION_PREFERENCE_CHAN
 
 export type NotificationPreferenceUnavailableReason =
   | 'NOT_CONFIGURED'
-  | 'POLICY_DISABLED'
+  | 'CONFIG_DISABLED'
   | 'CHANNEL_DISABLED'
   | 'GROUP_TARGET'
-  | 'TEMPLATE_MISSING'
+  | 'CONTENT_MISSING'
 
 export class NotificationPreferenceParamDto {
   @ApiProperty({ maxLength: 64 })

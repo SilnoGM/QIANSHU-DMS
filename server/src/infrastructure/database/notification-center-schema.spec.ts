@@ -49,8 +49,6 @@ const constants = readFileSync(
 )
 
 const PERMISSION_CODES = [
-  'notification-template:read',
-  'notification-template:update',
   'notification-policy:read',
   'notification-policy:update',
   'notification-record:read',

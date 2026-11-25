@@ -175,53 +175,6 @@ export const NOTIFICATION_EVENT_LABELS: Readonly<Record<NotificationEventType, s
   AD_ACCOUNT_BALANCE_LOW: '广告户余额预警',
 })
 
-/** 事件在管理端归入的模板业务域，与模板 domain 枚举保持一致。 */
-export const NOTIFICATION_EVENT_TEMPLATE_DOMAIN: Readonly<Record<NotificationEventType, 'SALES' | 'PURCHASE' | 'SHIPMENT' | 'FINANCE' | 'INVOICE' | 'RECONCILIATION' | 'OPERATIONS' | 'SYSTEM'>> = Object.freeze({
-  PURCHASE_REVIEW_PENDING: 'PURCHASE',
-  INVOICE_REQUEST_REVIEW_PENDING: 'INVOICE',
-  SLH_RECONCILIATION_COMPLETED: 'RECONCILIATION',
-  SHIPMENT_ARRIVED: 'SHIPMENT',
-  FUND_WITHDRAWAL_REVIEW_PENDING: 'FINANCE',
-  PACKAGING_COST_PAYMENT_PENDING: 'FINANCE',
-  PURCHASE_PAYABLE_PENDING: 'FINANCE',
-  SALES_RECEIPT_REVIEW_PENDING: 'SALES',
-  SALES_RECEIPT_VOUCHER_SENT: 'SALES',
-  SALES_RECEIPT_APPROVED: 'SALES',
-  SALES_RECEIPT_REJECTED: 'SALES',
-  PURCHASE_REVIEW_APPROVED: 'PURCHASE',
-  PURCHASE_REVIEW_REJECTED: 'PURCHASE',
-  PURCHASE_ORDER_CANCELLED: 'PURCHASE',
-  STORAGE_CLAIM_REQUEST_PENDING: 'SHIPMENT',
-  STORAGE_CLAIM_REQUEST_APPROVED: 'SHIPMENT',
-  STORAGE_CLAIM_REQUEST_REJECTED: 'SHIPMENT',
-  SHIPMENT_RELEASED_TO_STORAGE: 'SHIPMENT',
-  FUND_WITHDRAWAL_APPROVED: 'FINANCE',
-  FUND_WITHDRAWAL_REJECTED: 'FINANCE',
-  PACKAGING_COST_PAID: 'FINANCE',
-  INVOICE_REQUEST_RETURNED: 'INVOICE',
-  INVOICE_REQUEST_NOTIFIED: 'INVOICE',
-  INVOICE_REQUEST_ISSUED: 'INVOICE',
-  INVOICE_REQUEST_SETTLED: 'INVOICE',
-  INVOICE_REQUEST_CANCELLED: 'INVOICE',
-  MACHINE_VIEWING_APPOINTMENT_CREATED: 'OPERATIONS',
-  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: 'OPERATIONS',
-  PROXY_NODE_EXPIRING: 'OPERATIONS',
-  ADVERTISING_RECHARGE_PENDING: 'OPERATIONS',
-  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: 'OPERATIONS',
-  ADVERTISING_RECHARGE_PAID: 'OPERATIONS',
-  ADVERTISING_RECHARGE_REJECTED: 'OPERATIONS',
-  ADVERTISING_RECHARGE_VOIDED: 'OPERATIONS',
-  SALES_ORDER_SUBMITTED: 'SALES',
-  SALES_ORDER_COMPLETED: 'SALES',
-  PURCHASE_ORDER_COMPLETED: 'PURCHASE',
-  SHIPMENT_SIGNED: 'SHIPMENT',
-  SALES_ORDER_TERMINATED: 'SALES',
-  FUND_ACCOUNT_ADJUSTED: 'FINANCE',
-  PROXY_NODE_EXPIRED: 'OPERATIONS',
-  FUND_ACCOUNT_REVERSED: 'FINANCE',
-  AD_ACCOUNT_BALANCE_LOW: 'OPERATIONS',
-})
-
 /** 已有业务发布点的事件；未登记的事件允许提前配置但不会触发。 */
 export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = Object.freeze([
   'PURCHASE_REVIEW_PENDING',
@@ -269,55 +222,8 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
   'AD_ACCOUNT_BALANCE_LOW',
 ])
 
-/** 业务命令实际传入的默认模板键；没有触发源的事件留空。 */
-export const NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY: Readonly<Partial<Record<NotificationEventType, string>>> = Object.freeze({
-  PURCHASE_REVIEW_PENDING: 'purchase.review.pending',
-  INVOICE_REQUEST_REVIEW_PENDING: 'invoice.review.pending',
-  SLH_RECONCILIATION_COMPLETED: 'slh.reconciliation.completed',
-  SHIPMENT_ARRIVED: 'shipment.arrived',
-  PURCHASE_REVIEW_APPROVED: 'purchase.review.approved',
-  PURCHASE_REVIEW_REJECTED: 'purchase.review.rejected',
-  PURCHASE_ORDER_CANCELLED: 'purchase.order.cancelled',
-  SALES_RECEIPT_REVIEW_PENDING: 'sales.receipt.pending',
-  SALES_RECEIPT_VOUCHER_SENT: 'sales.receipt.voucher-sent',
-  SALES_RECEIPT_APPROVED: 'sales.receipt.approved',
-  SALES_RECEIPT_REJECTED: 'sales.receipt.rejected',
-  STORAGE_CLAIM_REQUEST_PENDING: 'shipment.storage-claim.pending',
-  STORAGE_CLAIM_REQUEST_APPROVED: 'shipment.storage-claim.approved',
-  STORAGE_CLAIM_REQUEST_REJECTED: 'shipment.storage-claim.rejected',
-  SHIPMENT_RELEASED_TO_STORAGE: 'shipment.released-to-storage',
-  FUND_WITHDRAWAL_REVIEW_PENDING: 'fund.withdrawal.pending',
-  FUND_WITHDRAWAL_APPROVED: 'fund.withdrawal.approved',
-  FUND_WITHDRAWAL_REJECTED: 'fund.withdrawal.rejected',
-  PACKAGING_COST_PAYMENT_PENDING: 'packaging.payment.pending',
-  PACKAGING_COST_PAID: 'packaging.payment.paid',
-  PURCHASE_PAYABLE_PENDING: 'purchase.payable.pending',
-  INVOICE_REQUEST_RETURNED: 'invoice.returned',
-  INVOICE_REQUEST_NOTIFIED: 'invoice.notified',
-  INVOICE_REQUEST_ISSUED: 'invoice.issued',
-  INVOICE_REQUEST_SETTLED: 'invoice.settled',
-  INVOICE_REQUEST_CANCELLED: 'invoice.cancelled',
-  MACHINE_VIEWING_APPOINTMENT_CREATED: 'operations.machine-viewing.created',
-  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: 'operations.machine-viewing.rescheduled',
-  PROXY_NODE_EXPIRING: 'operations.proxy-node.expiring',
-  ADVERTISING_RECHARGE_PENDING: 'operations.advertising-recharge.pending',
-  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: 'operations.advertising-recharge.payment-code',
-  ADVERTISING_RECHARGE_PAID: 'operations.advertising-recharge.paid',
-  ADVERTISING_RECHARGE_REJECTED: 'operations.advertising-recharge.rejected',
-  ADVERTISING_RECHARGE_VOIDED: 'operations.advertising-recharge.voided',
-  SALES_ORDER_SUBMITTED: 'sales.order.submitted',
-  SALES_ORDER_COMPLETED: 'sales.order.completed',
-  PURCHASE_ORDER_COMPLETED: 'purchase.order.completed',
-  SHIPMENT_SIGNED: 'shipment.signed',
-  SALES_ORDER_TERMINATED: 'sales.order.terminated',
-  FUND_ACCOUNT_ADJUSTED: 'fund.account.adjusted',
-  PROXY_NODE_EXPIRED: 'operations.proxy-node.expired',
-  FUND_ACCOUNT_REVERSED: 'fund.account.reversed',
-  AD_ACCOUNT_BALANCE_LOW: 'operations.ad-account.balance-low',
-})
-
 /**
- * 事件向模板承诺的变量集合，用于策略绑定模板时校验占位符兼容性。
+ * 事件向内容承诺的变量集合，用于校验占位符兼容性。
  * 尚无触发源的事件不登记，避免阻断管理员提前配置；接入事件时同步补变量。
  */
 export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationEventType, readonly string[]>>> = Object.freeze({
@@ -401,9 +307,9 @@ export const NOTIFICATION_EVENT_VARIABLES: Readonly<Partial<Record<NotificationE
 })
 
 /**
- * 已验收过附件能力的事件清单，服务管理端提示、模板来源选择与来源键校验。
+ * 已验收过附件能力的事件清单，服务管理端提示、IMAGE 内容项来源选择与来源键校验。
  *
- * 是否真的发送附件仍由模板的 `mediaPolicy` 决定；来源键必须在这里声明，
+ * 是否真的发送附件仍由事件渠道的 IMAGE 内容项决定；来源键必须在这里声明，
  * 业务乱传的键会在发布时被拦下并留痕。
  */
 export interface NotificationEventMediaSource {
@@ -1430,15 +1336,14 @@ export interface SystemNotificationPublishCommand {
   readonly eventType: NotificationEventType
   readonly source: { readonly type: string, readonly id: string }
   readonly target: NotificationTarget
-  readonly templateKey: string
   readonly variables: Readonly<Record<string, string | number | null>>
   /**
-   * 业务附件（一期仅图片）。这里只接收资产 ID：媒体是否可用、模板是否允许、
+   * 业务附件（一期仅图片）。这里只接收资产 ID：媒体是否可用、事件渠道内容是否允许、
    * 数量上限都在发布事务内统一裁决，业务模块不感知渠道与投递细节。
    */
   readonly media?: readonly NotificationMediaInput[]
   readonly dedupeKey?: string
-  /** 可选兜底；事件存在启用的渠道策略时以策略 priority 为准。 */
+  /** 可选兜底；事件渠道配置存在时以配置的 TTL/静默为准。 */
   readonly priority?: NotificationPriority
   readonly expiresAt?: string
   readonly channels?: readonly NotificationChannel[]

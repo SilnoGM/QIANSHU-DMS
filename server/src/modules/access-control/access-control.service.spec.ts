@@ -148,8 +148,6 @@ describe('permission constants', () => {
       'machine-viewings:read',
       'machine-viewings:create',
       'machine-viewings:update',
-      'notification-template:read',
-      'notification-template:update',
       'notification-policy:read',
       'notification-policy:update',
       'notification-record:read',
@@ -167,7 +165,7 @@ describe('permission constants', () => {
       'network-nodes:read',
       'system-status:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 135)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 133)
   })
 })
 

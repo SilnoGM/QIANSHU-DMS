@@ -250,11 +250,11 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     if (notification.priority === 'HIGH') {
       return false
     }
-    const policy = await this.prisma.notificationChannelPolicy.findUnique({
+    const eventChannel = await this.prisma.notificationEventChannel.findUnique({
       where: { eventType_channel: { eventType: notification.eventType, channel: 'WECOM' } },
       select: { quietHours: true },
     })
-    const quietHours = parseNotificationQuietHours(policy?.quietHours)
+    const quietHours = parseNotificationQuietHours(eventChannel?.quietHours)
       ?? parseNotificationQuietHours(defaultQuietHours)
     if (quietHours === null || !isWithinQuietHours(new Date(), quietHours)) {
       return false
@@ -343,7 +343,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
 
     const items = await this.findDeliveryMessages(delivery.id)
     if (items.length > 0) {
-      await this.deliverMessageItems({
+      const outcome = await this.deliverMessageItems({
         delivery,
         items,
         notificationId: notification.id,
@@ -390,6 +390,13 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           return result
         },
       })
+      if (outcome === 'ACCEPTED') {
+        const mediaFailed = await this.sendAppMedia(delivery, token.accessToken, app.agentId, binding.wecomUserId)
+        await this.finalizeDelivery(delivery.id, mediaFailed)
+      }
+      else if (outcome !== 'RETRYING') {
+        await this.skipDeliveryMedia(delivery.id, '正文消息未全部发送')
+      }
       return
     }
 
@@ -448,7 +455,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     const mention = await this.resolveMention(delivery, notification.eventType)
     const items = await this.findDeliveryMessages(delivery.id)
     if (items.length > 0) {
-      await this.deliverMessageItems({
+      const outcome = await this.deliverMessageItems({
         delivery,
         items,
         notificationId: notification.id,
@@ -487,6 +494,13 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           })
         },
       })
+      if (outcome === 'ACCEPTED') {
+        const mediaFailed = await this.sendRobotMedia(delivery, webhookKey)
+        await this.finalizeDelivery(delivery.id, mediaFailed)
+      }
+      else if (outcome !== 'RETRYING') {
+        await this.skipDeliveryMedia(delivery.id, '正文消息未全部发送')
+      }
       return
     }
 
@@ -518,18 +532,11 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     delivery: ClaimedDelivery,
     eventType: string,
   ): Promise<{ readonly mode: string, readonly userIds: readonly string[], readonly skipped: number }> {
-    const policy = await this.prisma.notificationChannelPolicy.findUnique({
+    const config = await this.prisma.notificationEventChannel.findUnique({
       where: { eventType_channel: { eventType, channel: 'WECOM' } },
       select: { targetConfig: true },
     })
-    let targetConfig = policy?.targetConfig ?? null
-    if (policy === null) {
-      const config = await this.prisma.notificationEventChannel.findUnique({
-        where: { eventType_channel: { eventType, channel: 'WECOM' } },
-        select: { targetConfig: true },
-      })
-      targetConfig = config?.targetConfig ?? null
-    }
+    const targetConfig = config?.targetConfig ?? null
     const mention = parseWecomMentionConfig(asRecord(targetConfig)?.mention)
     if (mention.mode === 'ALL') {
       return { mode: 'ALL', userIds: ['@all'], skipped: 0 }
@@ -766,7 +773,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     readonly notificationId: string
     readonly send: (item: DeliveryMessageRow, isFirstText: boolean) => Promise<WecomTransportResult>
     readonly onFirstAccepted?: () => Promise<void>
-  }): Promise<void> {
+  }): Promise<'ACCEPTED' | 'PARTIAL' | 'FAILED' | 'RETRYING'> {
     let sentAny = false
     let sentText = false
     for (const item of input.items) {
@@ -777,8 +784,9 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       }
       if (item.status !== 'PENDING' && item.status !== 'SENDING') {
         await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-        await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
-        return
+        const status = sentAny ? 'PARTIAL' : 'FAILED'
+        await this.finalizeMessageDelivery(input.delivery.id, status)
+        return status
       }
 
       const isFirstText = item.renderedMessage.kind === 'TEXT' && !sentText
@@ -824,8 +832,9 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
             },
           })
           await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-          await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
-          return
+          const status = sentAny ? 'PARTIAL' : 'FAILED'
+          await this.finalizeMessageDelivery(input.delivery.id, status)
+          return status
         }
         const delay = result.code.includes('RATE_LIMITED')
           ? RATE_LIMIT_RETRY_MS
@@ -839,7 +848,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           },
         })
         await this.failDelivery(input.delivery, result.code, result.message, input.notificationId, result.invalidUserIds)
-        return
+        return 'RETRYING'
       }
 
       await this.prisma.notificationDeliveryMessage.update({
@@ -852,11 +861,24 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         },
       })
       await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-      await this.finalizeMessageDelivery(input.delivery.id, sentAny ? 'PARTIAL' : 'FAILED')
-      return
+      const status = sentAny ? 'PARTIAL' : 'FAILED'
+      await this.finalizeMessageDelivery(input.delivery.id, status)
+      return status
     }
 
     await this.finalizeMessageDelivery(input.delivery.id, 'ACCEPTED')
+    return 'ACCEPTED'
+  }
+
+  private async skipDeliveryMedia(deliveryId: string, reason: string): Promise<void> {
+    await this.prisma.wecomDeliveryMedia.updateMany({
+      where: { deliveryId, status: 'PENDING' },
+      data: {
+        status: 'SKIPPED',
+        failureCode: 'PREVIOUS_MESSAGE_FAILED',
+        failureMessage: reason.slice(0, 255),
+      },
+    })
   }
 
   private async skipRemainingMessages(deliveryId: string, afterSortOrder: number): Promise<void> {

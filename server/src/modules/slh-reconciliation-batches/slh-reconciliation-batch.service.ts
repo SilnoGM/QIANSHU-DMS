@@ -406,7 +406,6 @@ export class SlhReconciliationBatchService {
           eventType: 'SLH_RECONCILIATION_COMPLETED',
           source: { type: 'SLH_RECONCILIATION_BATCH', id: batchId },
           target: { kind: 'PERMISSION', permissionCode: 'slh-bills:reconcile' },
-          templateKey: 'slh.reconciliation.completed',
           variables: {
             batchNo: batch.batchNo,
             completedAt: formatNotificationDateTime(completedAt),

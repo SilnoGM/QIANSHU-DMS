@@ -26,8 +26,8 @@ export type NotificationMessageKindValue = (typeof NOTIFICATION_MESSAGE_KINDS)[n
  */
 export const IMPLEMENTED_MESSAGE_KINDS_BY_METHOD: Readonly<Record<NotificationSendMethodValue, readonly NotificationMessageKindValue[]>> = Object.freeze({
   IN_APP: ['TEXT'],
-  APP: ['TEXT', 'MPNEWS'],
-  ROBOT: ['TEXT'],
+  APP: ['TEXT', 'MPNEWS', 'IMAGE'],
+  ROBOT: ['TEXT', 'IMAGE'],
 })
 
 export const MPNEWS_MAX_CONTENT_BYTES = 666 * 1024
@@ -52,6 +52,15 @@ export interface NotificationMpnewsPayload {
   readonly content: string
 }
 
+/**
+ * 图片附件项不绑定固定资产，而是在发布时从业务命令传入的 media 中按来源键选取。
+ * `sourceKeys` 为空表示事件契约声明的全部来源；`maxCount` 是该消息项的数量上限。
+ */
+export interface NotificationImageMediaPolicy {
+  readonly sourceKeys: readonly string[]
+  readonly maxCount: number
+}
+
 export interface NotificationContentItemInput {
   readonly kind: NotificationMessageKindValue
   readonly payload: unknown
@@ -62,7 +71,7 @@ export interface NotificationContentItemInput {
 
 export interface NormalizedNotificationContentItem {
   readonly kind: NotificationMessageKindValue
-  readonly payload: NotificationTextPayload | NotificationMpnewsPayload
+  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | Record<string, never>
   readonly mediaPolicy: unknown
   readonly enabled: boolean
   readonly sortOrder: number
@@ -293,6 +302,99 @@ export function hashNotificationContent(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
+/** 图片附件策略的唯一解析入口；保存校验与发布派发必须使用同一口径。 */
+export function parseNotificationImageMediaPolicy(
+  value: unknown,
+): NotificationImageMediaPolicy | null {
+  const record = asRecord(value)
+  if (record === null || !Array.isArray(record.sourceKeys)) {
+    return null
+  }
+  const sourceKeys: string[] = []
+  for (const item of record.sourceKeys) {
+    if (typeof item !== 'string') {
+      return null
+    }
+    const sourceKey = item.trim()
+    if (
+      sourceKey.length === 0
+      || sourceKey.length > 64
+      || sourceKeys.includes(sourceKey)
+    ) {
+      return null
+    }
+    sourceKeys.push(sourceKey)
+  }
+  const maxCount = record.maxCount
+  if (
+    typeof maxCount !== 'number'
+    || !Number.isSafeInteger(maxCount)
+    || maxCount < 1
+  ) {
+    return null
+  }
+  return { sourceKeys, maxCount }
+}
+
+function validateImage(input: {
+  readonly mediaPolicy: unknown
+  readonly allowedSources: readonly string[] | null
+  readonly maximumCount: number
+  readonly itemIndex: number
+}): {
+  readonly mediaPolicy?: NotificationImageMediaPolicy
+  readonly issues: readonly NotificationContentIssue[]
+} {
+  if (
+    input.allowedSources === null
+    || input.allowedSources.length === 0
+    || input.maximumCount < 1
+  ) {
+    return {
+      issues: [issue(
+        'NOTIFICATION_CONTENT_MEDIA_UNSUPPORTED',
+        '该事件未接入图片附件能力',
+        input.itemIndex,
+        'mediaPolicy',
+      )],
+    }
+  }
+  const mediaPolicy = parseNotificationImageMediaPolicy(input.mediaPolicy)
+  if (mediaPolicy === null) {
+    return {
+      issues: [issue(
+        'NOTIFICATION_CONTENT_MEDIA_POLICY_INVALID',
+        '图片附件必须声明来源与数量上限',
+        input.itemIndex,
+        'mediaPolicy',
+      )],
+    }
+  }
+  const allowedSources = new Set(input.allowedSources)
+  const undeclared = mediaPolicy.sourceKeys.filter(sourceKey => !allowedSources.has(sourceKey))
+  if (undeclared.length > 0) {
+    return {
+      issues: [issue(
+        'NOTIFICATION_CONTENT_MEDIA_SOURCE_INVALID',
+        `图片附件来源未声明：${undeclared.join('、')}`,
+        input.itemIndex,
+        'mediaPolicy',
+      )],
+    }
+  }
+  if (mediaPolicy.maxCount > input.maximumCount) {
+    return {
+      issues: [issue(
+        'NOTIFICATION_CONTENT_MEDIA_LIMIT_INVALID',
+        `图片附件数量上限不能超过 ${input.maximumCount}`,
+        input.itemIndex,
+        'mediaPolicy',
+      )],
+    }
+  }
+  return { mediaPolicy, issues: [] }
+}
+
 export interface NotificationContentAssetIds {
   readonly coverAssetId: string | null
   readonly inlineAssetIds: readonly string[]
@@ -397,13 +499,17 @@ export function renderMpnewsHtml(input: {
 
 
 /**
- * 渠道内容组的唯一校验入口。阶段一只开放 TEXT 与 MPNEWS；未实现类型明确拒绝，
+ * 渠道内容组的唯一校验入口。当前开放 TEXT、MPNEWS 与图片附件；未实现类型明确拒绝，
  * 不把模型枚举当成可用能力。
  */
 export function validateNotificationContentGroup(input: {
   readonly method: NotificationSendMethodValue
   readonly items: readonly NotificationContentItemInput[]
   readonly allowedVariables: readonly string[] | null
+  /** 事件契约声明的业务附件来源；图片附件项只能引用这里列出的键。 */
+  readonly mediaSources?: readonly string[] | null
+  /** 事件契约允许的单次附件数量上限。 */
+  readonly mediaMaxCount?: number
 }): NotificationContentValidationResult {
   const issues: NotificationContentIssue[] = []
   const allowedKinds = IMPLEMENTED_MESSAGE_KINDS_BY_METHOD[input.method]
@@ -416,6 +522,13 @@ export function validateNotificationContentGroup(input: {
   }
   if (enabledItems.filter(item => item.kind === 'MPNEWS').length > 1) {
     issues.push(issue('NOTIFICATION_CONTENT_MPSNEWS_MULTIPLE', '同一渠道配置只允许一条 mpnews 消息'))
+  }
+  if (
+    input.method !== 'IN_APP'
+    && !enabledItems.some(item => item.kind === 'TEXT' || item.kind === 'MPNEWS')
+  ) {
+    // 企业微信派发以正文消息为投递主体，图片附件只跟在正文之后；纯图片配置没有可重试的正文。
+    issues.push(issue('NOTIFICATION_CONTENT_TEXT_REQUIRED', '企业微信渠道至少需要一条文本消息'))
   }
 
   const normalized: NormalizedNotificationContentItem[] = []
@@ -469,6 +582,26 @@ export function validateNotificationContentGroup(input: {
           enabled: item.enabled !== false,
           sortOrder: item.sortOrder ?? index,
           contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: item.mediaPolicy ?? {} }),
+        })
+      }
+      return
+    }
+    if (item.kind === 'IMAGE') {
+      const result = validateImage({
+        mediaPolicy: item.mediaPolicy,
+        allowedSources: input.mediaSources ?? null,
+        maximumCount: input.mediaMaxCount ?? 0,
+        itemIndex: index,
+      })
+      issues.push(...result.issues)
+      if (result.mediaPolicy !== undefined) {
+        normalized.push({
+          kind: item.kind,
+          payload: {},
+          mediaPolicy: result.mediaPolicy,
+          enabled: item.enabled !== false,
+          sortOrder: item.sortOrder ?? index,
+          contentHash: hashNotificationContent({ kind: item.kind, mediaPolicy: result.mediaPolicy }),
         })
       }
     }
