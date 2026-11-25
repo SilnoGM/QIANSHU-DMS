@@ -6,6 +6,7 @@ import type {
   NotificationEventConfigUpdateDto,
 } from '@/api/generated/types.gen'
 
+import dayjs from 'dayjs'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getApiClientFailureMessage } from '@/api/errors'
@@ -13,6 +14,7 @@ import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useAppAuth } from '@/composables/app/auth'
 import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
+import { notificationDomainLabel } from '../notification-domain.logic'
 import RichTextEditor from './components/RichTextEditor.vue'
 
 defineOptions({ name: 'SystemNotificationEventDetail' })
@@ -40,6 +42,8 @@ interface ChannelDraft {
   quietEnd: string
   allowSensitive: boolean
   expectedVersion: number
+  updatedAt: string
+  updatedByName: string | null
   messages: MessageDraft[]
 }
 
@@ -101,6 +105,8 @@ function channelFromDto(channel: NotificationEventChannelConfigDto): ChannelDraf
     quietEnd: typeof channel.quietHours?.end === 'string' ? channel.quietHours.end : '',
     allowSensitive: channel.allowSensitive,
     expectedVersion: channel.version,
+    updatedAt: channel.updatedAt,
+    updatedByName: channel.updatedByName,
     messages: channel.messages.map(message => ({
       kind: message.kind,
       payload: { ...message.payload },
@@ -122,6 +128,8 @@ function defaultChannel(channel: Channel): ChannelDraft {
     quietEnd: '',
     allowSensitive: false,
     expectedVersion: 0,
+    updatedAt: '',
+    updatedByName: null,
     messages: [],
   }
 }
@@ -426,6 +434,35 @@ function messageSummary(message: MessageDraft): string {
   return message.kind
 }
 
+function messageKindLabel(kind: MessageKind): string {
+  const labels: Partial<Record<MessageKind, string>> = {
+    TEXT: '文本',
+    MPNEWS: 'mpnews',
+    IMAGE: '图片附件',
+  }
+  return labels[kind] ?? kind
+}
+
+function channelDescription(channel: Channel): string {
+  return channel === 'IN_APP' ? '写入站内收件箱' : '发送到员工或内部群'
+}
+
+function draftUpdatedAt(draft: ChannelDraft): string {
+  return draft.updatedAt === '' ? '尚未保存' : dayjs(draft.updatedAt).format('YYYY-MM-DD HH:mm')
+}
+
+function draftUpdatedBy(draft: ChannelDraft): string {
+  return draft.updatedByName ?? '—'
+}
+
+function messageKindCounts(draft: ChannelDraft): Array<{ kind: MessageKind, count: number }> {
+  const counts = new Map<MessageKind, number>()
+  for (const message of draft.messages) {
+    counts.set(message.kind, (counts.get(message.kind) ?? 0) + 1)
+  }
+  return [...counts.entries()].map(([kind, count]) => ({ kind, count }))
+}
+
 function validateDraft(draft: ChannelDraft): string | null {
   if (!draft.enabled) {
     return null
@@ -534,13 +571,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <FaPageHeader :title="event?.label ?? '事件配置'" :description="event?.eventType ?? '加载中…'">
+  <FaPageHeader title="事件配置" description="配置站内与企业微信渠道、收件人与消息内容。">
     <div class="flex gap-2">
       <FaButton variant="outline" @click="goBack">
+        <FaIcon name="i-lucide:arrow-left" />
         返回
       </FaButton>
-      <FaButton v-if="canUpdate && event !== null" :loading="saving" @click="save">
-        保存
+      <FaButton
+        v-if="canUpdate && event !== null"
+        :loading="saving"
+        :disabled="saving || !dirty"
+        @click="save"
+      >
+        {{ dirty ? '保存修改' : '已保存' }}
       </FaButton>
     </div>
   </FaPageHeader>
@@ -554,138 +597,228 @@ onBeforeUnmount(() => {
     <FaAlert v-else-if="error !== null" variant="destructive" role="alert" :title="error" />
 
     <div v-else-if="event !== null" class="flex flex-col gap-4" data-testid="notification-event-detail">
-      <div class="p-4 border border-border rounded-lg bg-card">
-        <div class="flex flex-wrap gap-2 items-center justify-between">
-          <div>
-            <div class="text-lg font-medium">
-              {{ event.label }}
+      <div class="p-4 border border-border rounded-xl bg-card">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap gap-2 items-center">
+              <span class="text-lg font-semibold">{{ event.label }}</span>
+              <span class="text-xs text-muted-foreground px-2 py-0.5 border border-border rounded-full bg-muted/50">
+                {{ notificationDomainLabel(event.domain) }}
+              </span>
+              <span
+                v-if="event.implemented"
+                class="text-xs text-emerald-700 px-2 py-0.5 border border-emerald-600/25 rounded-full bg-emerald-500/10 dark:text-emerald-400"
+              >
+                已接入发布
+              </span>
+              <span
+                v-else
+                class="text-xs text-amber-700 px-2 py-0.5 border border-amber-500/25 rounded-full bg-amber-500/10 dark:text-amber-400"
+              >
+                未接入发布
+              </span>
+              <span
+                v-if="dirty"
+                class="text-xs text-amber-700 px-2 py-0.5 border border-amber-500/25 rounded-full bg-amber-500/10 dark:text-amber-400"
+              >
+                未保存
+              </span>
             </div>
-            <div class="text-xs text-muted-foreground font-mono">
+            <div class="text-xs text-muted-foreground font-mono mt-1.5 break-all">
               {{ event.eventType }}
             </div>
           </div>
-          <span v-if="!canUpdate" class="text-sm text-muted-foreground">只读</span>
+          <span v-if="!canUpdate" class="text-xs text-muted-foreground px-2 py-0.5 border border-border rounded-full">
+            只读
+          </span>
         </div>
-        <div class="text-sm text-muted-foreground mt-2">
-          变量：{{ event.variables.length === 0 ? '未声明' : event.variables.join('、') }}
+        <div class="mt-4">
+          <div class="text-xs text-muted-foreground font-medium">
+            可用变量
+          </div>
+          <div v-if="event.variables.length > 0" class="mt-2 pr-1 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+            <span
+              v-for="variable in event.variables"
+              :key="variable"
+              class="text-[11px] font-mono px-1.5 py-0.5 border border-border rounded bg-muted/50"
+            >
+              {{ variable }}
+            </span>
+          </div>
+          <div v-else class="text-xs text-muted-foreground mt-1">
+            未声明变量；内容中不要使用占位符。
+          </div>
         </div>
       </div>
 
-      <div class="border-b border-border flex gap-2">
+      <div class="gap-3 grid sm:grid-cols-2">
         <button
           v-for="channel in (['IN_APP', 'WECOM'] as const)"
           :key="channel"
           type="button"
-          class="text-sm px-4 py-2 transition-colors"
+          class="p-4 text-left border rounded-xl flex gap-3 transition-colors items-center"
           :class="activeChannel === channel
-            ? 'border-primary text-primary border-b-2 font-medium'
-            : 'text-muted-foreground hover:text-foreground'"
+            ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/15'
+            : 'border-border bg-card hover:bg-muted/30'"
           @click="activeChannel = channel"
         >
-          {{ channel === 'IN_APP' ? '站内通知' : '企业微信' }}
-          <span class="text-xs ml-1">{{ drafts.find(item => item.channel === channel)?.enabled ? '已启用' : '未启用' }}</span>
+          <span
+            class="border border-border rounded-lg bg-background flex shrink-0 size-9 items-center justify-center"
+            :class="activeChannel === channel ? 'text-primary' : 'text-muted-foreground'"
+          >
+            <FaIcon :name="channel === 'IN_APP' ? 'i-lucide:bell' : 'i-lucide:message-circle'" />
+          </span>
+          <span class="min-w-0">
+            <span class="font-medium flex gap-2 items-center">
+              {{ channel === 'IN_APP' ? '站内通知' : '企业微信' }}
+              <span v-if="activeChannel === channel" class="text-[10px] text-primary font-normal">当前编辑</span>
+            </span>
+            <span class="text-xs text-muted-foreground mt-0.5 block">{{ channelDescription(channel) }}</span>
+          </span>
+          <span class="text-xs ml-auto inline-flex gap-1.5 whitespace-nowrap items-center">
+            <span
+              class="rounded-full size-1.5"
+              :class="drafts.find(item => item.channel === channel)?.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+            />
+            {{ drafts.find(item => item.channel === channel)?.enabled ? '已启用' : '未启用' }}
+          </span>
         </button>
       </div>
 
-      <div v-if="activeDraft !== null" class="gap-4 grid xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div v-if="activeDraft !== null" class="gap-4 grid items-start xl:grid-cols-[minmax(0,1fr)_330px]">
         <div class="flex flex-col gap-4">
-          <div class="p-4 border border-border rounded-lg bg-card">
-            <label class="font-medium flex gap-2 items-center">
-              <FaSwitch v-model="activeDraft.enabled" :disabled="!canUpdate" @update:model-value="markDirty" />
-              启用该渠道
-            </label>
-
-            <div v-if="activeDraft.channel === 'WECOM'" class="mt-4 flex flex-col gap-2">
-              <span class="text-sm font-medium">发送方式</span>
-              <div class="flex gap-2">
-                <FaButton
-                  v-for="option in SEND_METHOD_OPTIONS"
-                  :key="option.value"
-                  :variant="activeDraft.sendMethod === option.value ? 'default' : 'outline'"
-                  size="sm"
-                  :disabled="!canUpdate"
-                  @click="changeSendMethod(activeDraft, option.value)"
-                >
-                  {{ option.label }}
-                </FaButton>
-              </div>
-            </div>
-
-            <div class="mt-4 gap-3 grid md:grid-cols-2">
-              <label class="text-sm flex flex-col gap-1">
-                <span class="font-medium">收件人/目标</span>
-                <FaSelect
-                  :model-value="activeDraft.targetMode"
-                  :options="targetModeOptions(activeDraft)"
-                  :disabled="!canUpdate"
-                  @update:model-value="value => changeTargetMode(activeDraft!, value as TargetMode)"
-                />
-              </label>
-              <label class="text-sm flex flex-col gap-1">
-                <span class="font-medium">目标值</span>
-                <FaInput
-                  :model-value="targetValues(activeDraft)"
-                  :disabled="!canUpdate || activeDraft.targetMode === 'COMMAND_TARGET'"
-                  :placeholder="TARGET_VALUE_HINT[activeDraft.targetMode]"
-                  @update:model-value="value => setTargetValues(activeDraft!, value ?? '')"
-                />
-              </label>
-            </div>
-
-            <div v-if="activeDraft.channel === 'WECOM'" class="mt-4 gap-3 grid md:grid-cols-3">
-              <label class="text-sm flex flex-col gap-1">
-                <span class="font-medium">TTL（秒）</span>
-                <FaInput
-                  :model-value="activeDraft.ttlSeconds === null ? '' : String(activeDraft.ttlSeconds)"
-                  type="number"
-                  :disabled="!canUpdate"
-                  @update:model-value="value => { activeDraft!.ttlSeconds = (value ?? '') === '' ? null : Number(value); markDirty() }"
-                />
-              </label>
-              <label class="text-sm flex flex-col gap-1">
-                <span class="font-medium">静默开始</span>
-                <FaInput
-                  :model-value="activeDraft.quietStart"
-                  type="time"
-                  :disabled="!canUpdate"
-                  @update:model-value="value => { activeDraft!.quietStart = value ?? ''; markDirty() }"
-                />
-              </label>
-              <label class="text-sm flex flex-col gap-1">
-                <span class="font-medium">静默结束</span>
-                <FaInput
-                  :model-value="activeDraft.quietEnd"
-                  type="time"
-                  :disabled="!canUpdate"
-                  @update:model-value="value => { activeDraft!.quietEnd = value ?? ''; markDirty() }"
-                />
-              </label>
-            </div>
-
-            <label v-if="activeDraft.channel === 'WECOM'" class="text-sm mt-4 flex gap-2 items-center">
-              <FaSwitch v-model="activeDraft.allowSensitive" :disabled="!canUpdate" @update:model-value="markDirty" />
-              允许敏感内容
-            </label>
-          </div>
-
-          <div class="p-4 border border-border rounded-lg bg-card">
-            <div class="flex flex-wrap gap-2 items-center justify-between">
+          <section class="border border-border rounded-xl bg-card">
+            <div class="p-4 border-b border-border flex flex-wrap gap-2 items-center justify-between">
               <div>
                 <div class="font-medium">
-                  消息内容
+                  渠道设置
                 </div>
-                <div class="text-xs text-muted-foreground">
-                  支持文本、mpnews 与业务图片附件；正文图片仅允许 DMS 资产。
+                <div class="text-xs text-muted-foreground mt-0.5">
+                  收件人、发送方式与投递策略
+                </div>
+              </div>
+              <label class="text-sm flex gap-2 items-center">
+                <FaSwitch v-model="activeDraft.enabled" :disabled="!canUpdate" @update:model-value="markDirty" />
+                <span :class="activeDraft.enabled ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'">
+                  {{ activeDraft.enabled ? '已启用' : '未启用' }}
+                </span>
+              </label>
+            </div>
+
+            <div class="p-4 flex flex-col gap-4">
+              <div v-if="activeDraft.channel === 'WECOM'" class="flex flex-col gap-2">
+                <span class="text-xs text-muted-foreground font-medium">发送方式</span>
+                <div class="p-1 rounded-lg bg-muted inline-flex gap-1 w-fit">
+                  <button
+                    v-for="option in SEND_METHOD_OPTIONS"
+                    :key="option.value"
+                    type="button"
+                    class="text-sm px-3 py-1.5 rounded-md transition-colors"
+                    :class="activeDraft.sendMethod === option.value
+                      ? 'bg-background text-foreground font-medium shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'"
+                    :disabled="!canUpdate"
+                    @click="changeSendMethod(activeDraft, option.value)"
+                  >
+                    {{ option.label }}
+                  </button>
+                </div>
+                <span class="text-xs text-muted-foreground">
+                  {{ activeDraft.sendMethod === 'ROBOT' ? '发送到内部群，目标固定为群 key。' : '发送给已绑定企业微信的员工。' }}
+                </span>
+              </div>
+
+              <div class="gap-3 grid md:grid-cols-2">
+                <label class="text-sm flex flex-col gap-1">
+                  <span class="font-medium">收件人/目标</span>
+                  <FaSelect
+                    :model-value="activeDraft.targetMode"
+                    :options="targetModeOptions(activeDraft)"
+                    :disabled="!canUpdate"
+                    @update:model-value="value => changeTargetMode(activeDraft!, value as TargetMode)"
+                  />
+                </label>
+                <label class="text-sm flex flex-col gap-1">
+                  <span class="font-medium">目标值</span>
+                  <FaInput
+                    :model-value="targetValues(activeDraft)"
+                    :disabled="!canUpdate || activeDraft.targetMode === 'COMMAND_TARGET'"
+                    :placeholder="TARGET_VALUE_HINT[activeDraft.targetMode]"
+                    @update:model-value="value => setTargetValues(activeDraft!, value ?? '')"
+                  />
+                  <span v-if="activeDraft.targetMode === 'COMMAND_TARGET'" class="text-xs text-muted-foreground">
+                    动态目标无需填写，发布时由业务传入。
+                  </span>
+                </label>
+              </div>
+
+              <div v-if="activeDraft.channel === 'WECOM'" class="p-3 border border-border/70 rounded-lg bg-muted/20">
+                <div class="text-xs text-muted-foreground font-medium">
+                  投递策略
+                </div>
+                <div class="mt-3 gap-3 grid md:grid-cols-3">
+                  <label class="text-sm flex flex-col gap-1">
+                    <span class="font-medium">TTL（秒）</span>
+                    <FaInput
+                      :model-value="activeDraft.ttlSeconds === null ? '' : String(activeDraft.ttlSeconds)"
+                      type="number"
+                      :disabled="!canUpdate"
+                      @update:model-value="value => { activeDraft!.ttlSeconds = (value ?? '') === '' ? null : Number(value); markDirty() }"
+                    />
+                  </label>
+                  <label class="text-sm flex flex-col gap-1">
+                    <span class="font-medium">静默开始</span>
+                    <FaInput
+                      :model-value="activeDraft.quietStart"
+                      type="time"
+                      :disabled="!canUpdate"
+                      @update:model-value="value => { activeDraft!.quietStart = value ?? ''; markDirty() }"
+                    />
+                  </label>
+                  <label class="text-sm flex flex-col gap-1">
+                    <span class="font-medium">静默结束</span>
+                    <FaInput
+                      :model-value="activeDraft.quietEnd"
+                      type="time"
+                      :disabled="!canUpdate"
+                      @update:model-value="value => { activeDraft!.quietEnd = value ?? ''; markDirty() }"
+                    />
+                  </label>
+                </div>
+                <label class="text-sm mt-3 flex flex-wrap gap-2 items-center">
+                  <FaSwitch v-model="activeDraft.allowSensitive" :disabled="!canUpdate" @update:model-value="markDirty" />
+                  允许敏感内容
+                  <span class="text-xs text-muted-foreground">关闭时图片附件与敏感变量会被拦截</span>
+                </label>
+              </div>
+              <div v-else class="text-xs text-muted-foreground p-3 border border-border rounded-lg border-dashed bg-muted/20">
+                站内通知写入收件箱，不支持 TTL、静默时段与敏感内容开关。
+              </div>
+            </div>
+          </section>
+
+          <section class="border border-border rounded-xl bg-card">
+            <div class="p-4 border-b border-border flex flex-wrap gap-2 items-center justify-between">
+              <div>
+                <div class="font-medium flex gap-2 items-center">
+                  消息内容
+                  <span class="text-xs text-muted-foreground font-normal px-1.5 py-0.5 rounded bg-muted">
+                    {{ activeDraft.messages.length }} 条
+                  </span>
+                </div>
+                <div class="text-xs text-muted-foreground mt-0.5">
+                  按顺序发送；图片附件在全部正文之后发送。
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">
                 <FaButton
-                  v-if="canUpdate && activeDraft.channel === 'WECOM' && event?.media != null"
-                  variant="outline"
+                  v-if="canUpdate && (activeDraft.channel === 'WECOM' || activeDraft.messages.length === 0)"
+                  :variant="activeDraft.messages.length === 0 ? 'default' : 'outline'"
                   size="sm"
-                  @click="addImageMessage"
+                  @click="addTextMessage"
                 >
-                  添加图片附件
+                  <FaIcon name="i-lucide:type" />
+                  文本消息
                 </FaButton>
                 <FaButton
                   v-if="canUpdate && activeDraft.channel === 'WECOM' && activeDraft.sendMethod === 'APP'"
@@ -693,205 +826,273 @@ onBeforeUnmount(() => {
                   size="sm"
                   @click="addMpnewsMessage"
                 >
-                  添加 mpnews 消息
+                  <FaIcon name="i-lucide:newspaper" />
+                  mpnews
                 </FaButton>
                 <FaButton
-                  v-if="canUpdate && (activeDraft.channel === 'WECOM' || activeDraft.messages.length === 0)"
+                  v-if="canUpdate && activeDraft.channel === 'WECOM' && event?.media != null"
                   variant="outline"
                   size="sm"
-                  @click="addTextMessage"
+                  @click="addImageMessage"
                 >
+                  <FaIcon name="i-lucide:image-plus" />
+                  图片附件
+                </FaButton>
+              </div>
+            </div>
+
+            <div class="p-4 flex flex-col gap-3">
+              <FaAlert
+                v-if="activeValidationError !== null"
+                variant="destructive"
+                :title="activeValidationError"
+              />
+
+              <div
+                v-if="activeDraft.messages.length === 0"
+                class="px-4 py-8 border border-border rounded-xl border-dashed flex flex-col gap-2 min-h-40 items-center justify-center"
+              >
+                <span class="text-muted-foreground rounded-full bg-muted flex size-10 items-center justify-center">
+                  <FaIcon name="i-lucide:message-square-plus" class="size-5" />
+                </span>
+                <span class="text-sm font-medium">尚未配置消息内容</span>
+                <span class="text-xs text-muted-foreground">从右上角添加文本、mpnews 或图片附件。</span>
+                <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="addTextMessage">
                   添加文本消息
                 </FaButton>
               </div>
-            </div>
 
-            <FaAlert
-              v-if="activeValidationError !== null"
-              variant="destructive"
-              class="mt-3"
-              :title="activeValidationError"
-            />
-
-            <div v-if="activeDraft.messages.length === 0" class="text-sm text-muted-foreground py-8 text-center">
-              尚未配置消息内容
-            </div>
-
-            <div v-else class="mt-4 flex flex-col gap-3">
-              <div
-                v-for="(message, index) in activeDraft.messages"
-                :key="`${message.kind}-${index}`"
-                class="p-3 border border-border rounded-md"
-              >
-                <div class="flex flex-wrap gap-2 items-center">
-                  <span class="text-xs font-mono px-2 py-0.5 rounded bg-muted">{{ message.kind }}</span>
-                  <span class="text-xs text-muted-foreground">{{ messageSummary(message) }}</span>
-                  <div class="ml-auto flex gap-1">
-                    <FaButton variant="ghost" size="sm" :disabled="!canUpdate || index === 0" @click="moveMessage(index, -1)">
-                      上移
-                    </FaButton>
-                    <FaButton variant="ghost" size="sm" :disabled="!canUpdate || index === activeDraft.messages.length - 1" @click="moveMessage(index, 1)">
-                      下移
-                    </FaButton>
-                    <FaButton variant="ghost" size="sm" :disabled="!canUpdate" @click="removeMessage(index)">
-                      删除
-                    </FaButton>
-                  </div>
-                </div>
-
-                <FaTextarea
-                  v-if="message.kind === 'TEXT'"
-                  class="mt-2"
-                  :model-value="textContent(message)"
-                  :disabled="!canUpdate"
-                  :maxlength="2048"
-                  input-class="min-h-28"
-                  placeholder="输入文本内容，支持 {{变量}} 占位符"
-                  @update:model-value="value => setTextContent(message, value ?? '')"
-                />
-                <template v-else-if="message.kind === 'IMAGE'">
-                  <div class="mt-3 flex flex-col gap-3">
-                    <p class="text-xs text-muted-foreground m-0">
-                      发布时从业务附件中按来源选取，最多 {{ event?.media?.maxCount ?? 0 }} 张；图片在全部文本消息之后发送。
-                    </p>
-                    <div class="gap-2 grid md:grid-cols-2">
-                      <label
-                        v-for="source in event?.media?.sources ?? []"
-                        :key="source.key"
-                        class="text-sm flex gap-2 items-center"
+              <div v-else class="flex flex-col gap-3">
+                <div
+                  v-for="(message, index) in activeDraft.messages"
+                  :key="`${message.kind}-${index}`"
+                  class="border border-border rounded-xl overflow-hidden"
+                >
+                  <div class="px-3 py-2 border-b border-border bg-muted/30 flex flex-wrap gap-2 items-center">
+                    <span class="text-[10px] font-medium border border-border rounded-full bg-background flex shrink-0 size-5 items-center justify-center">
+                      {{ index + 1 }}
+                    </span>
+                    <span class="text-xs font-mono px-1.5 py-0.5 border border-border rounded bg-background">
+                      {{ messageKindLabel(message.kind) }}
+                    </span>
+                    <span class="text-xs text-muted-foreground flex-1 min-w-0 truncate">
+                      {{ messageSummary(message) }}
+                    </span>
+                    <div class="ml-auto flex gap-0.5">
+                      <FaButton
+                        variant="ghost"
+                        size="icon-sm"
+                        title="上移"
+                        :disabled="!canUpdate || index === 0"
+                        @click="moveMessage(index, -1)"
                       >
-                        <FaCheckbox
-                          :model-value="imageSourceKeys(message).includes(source.key)"
-                          :disabled="!canUpdate"
-                          @update:model-value="value => toggleImageSource(message, source.key, value === true)"
-                        />
-                        <span>{{ source.label }}</span>
-                        <span class="text-xs text-muted-foreground font-mono">{{ source.key }}</span>
-                      </label>
-                    </div>
-                    <label class="text-sm flex flex-col gap-1 max-w-40">
-                      <span class="font-medium">最多发送张数</span>
-                      <FaInput
-                        type="number"
-                        min="1"
-                        :max="event?.media?.maxCount ?? 1"
-                        :model-value="String(imageMaxCount(message))"
+                        <FaIcon name="i-lucide:arrow-up" />
+                      </FaButton>
+                      <FaButton
+                        variant="ghost"
+                        size="icon-sm"
+                        title="下移"
+                        :disabled="!canUpdate || index === activeDraft.messages.length - 1"
+                        @click="moveMessage(index, 1)"
+                      >
+                        <FaIcon name="i-lucide:arrow-down" />
+                      </FaButton>
+                      <FaButton
+                        variant="ghost"
+                        size="icon-sm"
+                        title="删除"
                         :disabled="!canUpdate"
-                        @update:model-value="value => setImageMaxCount(message, value ?? '1')"
-                      />
-                    </label>
-                  </div>
-                </template>
-                <template v-else-if="message.kind === 'MPNEWS'">
-                  <div class="mt-3 flex flex-col gap-3">
-                    <div class="text-sm p-3 border border-border rounded-md flex flex-wrap gap-3 items-center">
-                      <div class="text-xs text-muted-foreground">
-                        <div class="text-foreground font-medium">
-                          固定封面
-                        </div>
-                        <div>建议 1068×455 或等比例倍数，不超过 10 MiB。</div>
-                      </div>
-                      <img
-                        v-if="coverPreviewUrl(message) !== ''"
-                        :src="coverPreviewUrl(message)"
-                        alt="mpnews 封面预览"
-                        class="border border-border rounded bg-muted h-20 w-[188px] object-contain"
+                        @click="removeMessage(index)"
                       >
-                      <div v-else class="text-xs text-muted-foreground px-6 py-5 border border-border rounded border-dashed">
-                        未选择封面
+                        <FaIcon name="i-lucide:trash-2" />
+                      </FaButton>
+                    </div>
+                  </div>
+
+                  <div class="p-3">
+                    <FaTextarea
+                      v-if="message.kind === 'TEXT'"
+                      :model-value="textContent(message)"
+                      :disabled="!canUpdate"
+                      :maxlength="2048"
+                      input-class="min-h-28"
+                      placeholder="输入文本内容，支持 {{变量}} 占位符"
+                      @update:model-value="value => setTextContent(message, value ?? '')"
+                    />
+                    <div v-else-if="message.kind === 'IMAGE'" class="flex flex-col gap-3">
+                      <p class="text-xs text-muted-foreground m-0">
+                        从业务附件中按来源选取，最多 {{ event?.media?.maxCount ?? 0 }} 张；图片在全部文本消息之后发送。
+                      </p>
+                      <div class="p-3 border border-border/70 rounded-lg bg-muted/20 flex flex-col gap-3">
+                        <div class="text-xs text-muted-foreground font-medium">
+                          附件来源
+                        </div>
+                        <div class="gap-2 grid sm:grid-cols-2">
+                          <label
+                            v-for="source in event?.media?.sources ?? []"
+                            :key="source.key"
+                            class="text-sm px-3 py-2 border border-border rounded-lg bg-background flex gap-2 items-center hover:bg-muted/30"
+                          >
+                            <FaCheckbox
+                              :model-value="imageSourceKeys(message).includes(source.key)"
+                              :disabled="!canUpdate"
+                              @update:model-value="value => toggleImageSource(message, source.key, value === true)"
+                            />
+                            <span>{{ source.label }}</span>
+                            <span class="text-[10px] text-muted-foreground font-mono ml-auto truncate">{{ source.key }}</span>
+                          </label>
+                        </div>
+                        <label class="text-sm flex flex-col gap-1 max-w-40">
+                          <span class="font-medium">最多发送张数</span>
+                          <FaInput
+                            type="number"
+                            min="1"
+                            :max="event?.media?.maxCount ?? 1"
+                            :model-value="String(imageMaxCount(message))"
+                            :disabled="!canUpdate"
+                            @update:model-value="value => setImageMaxCount(message, value ?? '1')"
+                          />
+                        </label>
                       </div>
-                      <div class="flex flex-col gap-1">
-                        <span class="text-xs text-muted-foreground font-mono break-all">
-                          {{ coverAssetId(message) || '未配置资产' }}
-                        </span>
-                        <div class="flex gap-2">
-                          <FaButton
-                            v-if="canUpdate"
-                            variant="outline"
-                            size="sm"
-                            :loading="coverUploadingIndex === index"
-                            :disabled="coverUploadingIndex !== null"
-                            @click="chooseCover(index)"
-                          >
-                            选择封面
-                          </FaButton>
-                          <FaButton
-                            v-if="canUpdate && coverAssetId(message) !== ''"
-                            variant="ghost"
-                            size="sm"
-                            :disabled="coverUploadingIndex !== null"
-                            @click="clearCover(message)"
-                          >
-                            清除
-                          </FaButton>
+                    </div>
+                    <template v-else-if="message.kind === 'MPNEWS'">
+                      <div class="flex flex-col gap-4">
+                        <div class="p-3 border border-border/70 rounded-lg bg-muted/20 flex flex-col gap-2">
+                          <div class="flex flex-wrap gap-3 items-start">
+                            <img
+                              v-if="coverPreviewUrl(message) !== ''"
+                              :src="coverPreviewUrl(message)"
+                              alt="mpnews 封面预览"
+                              class="border border-border rounded-lg bg-background shrink-0 h-20 w-[188px] object-contain"
+                            >
+                            <div v-else class="text-xs text-muted-foreground border border-border rounded-lg border-dashed bg-background flex shrink-0 h-20 w-[188px] items-center justify-center">
+                              未选择封面
+                            </div>
+                            <div class="flex-1 min-w-0">
+                              <div class="text-sm font-medium">
+                                固定封面
+                              </div>
+                              <p class="text-xs text-muted-foreground mt-1">
+                                建议 1068×455 或等比例倍数，不超过 10 MiB。
+                              </p>
+                              <div class="mt-2 flex flex-wrap gap-2">
+                                <FaButton
+                                  v-if="canUpdate"
+                                  variant="outline"
+                                  size="sm"
+                                  :loading="coverUploadingIndex === index"
+                                  :disabled="coverUploadingIndex !== null"
+                                  @click="chooseCover(index)"
+                                >
+                                  <FaIcon name="i-lucide:image-up" />
+                                  选择封面
+                                </FaButton>
+                                <FaButton
+                                  v-if="canUpdate && coverAssetId(message) !== ''"
+                                  variant="ghost"
+                                  size="sm"
+                                  :disabled="coverUploadingIndex !== null"
+                                  @click="clearCover(message)"
+                                >
+                                  <FaIcon name="i-lucide:x" />
+                                  清除
+                                </FaButton>
+                              </div>
+                              <div class="text-[10px] text-muted-foreground font-mono mt-1 break-all">
+                                {{ coverAssetId(message) || '未配置资产' }}
+                              </div>
+                            </div>
+                          </div>
+                          <p v-if="(coverUploadErrors[index] ?? '') !== ''" class="text-xs text-destructive m-0">
+                            {{ coverUploadErrors[index] }}
+                          </p>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                          <div class="text-xs text-muted-foreground font-medium">
+                            文章信息
+                          </div>
+                          <div class="gap-3 grid md:grid-cols-2">
+                            <label class="text-sm flex flex-col gap-1">
+                              <span class="font-medium">标题</span>
+                              <FaInput
+                                :model-value="payloadString(message, 'title')"
+                                :disabled="!canUpdate"
+                                maxlength="128"
+                                @update:model-value="value => setPayloadString(message, 'title', value ?? '')"
+                              />
+                            </label>
+                            <label class="text-sm flex flex-col gap-1">
+                              <span class="font-medium">作者</span>
+                              <FaInput
+                                :model-value="payloadString(message, 'author')"
+                                :disabled="!canUpdate"
+                                maxlength="64"
+                                @update:model-value="value => setPayloadString(message, 'author', value ?? '')"
+                              />
+                            </label>
+                            <label class="text-sm flex flex-col gap-1">
+                              <span class="font-medium">摘要</span>
+                              <FaInput
+                                :model-value="payloadString(message, 'digest')"
+                                :disabled="!canUpdate"
+                                maxlength="512"
+                                @update:model-value="value => setPayloadString(message, 'digest', value ?? '')"
+                              />
+                            </label>
+                            <label class="text-sm flex flex-col gap-1">
+                              <span class="font-medium">阅读原文</span>
+                              <FaInput
+                                :model-value="payloadString(message, 'contentSourceUrl')"
+                                :disabled="!canUpdate"
+                                placeholder="https://"
+                                @update:model-value="value => setPayloadString(message, 'contentSourceUrl', value ?? '')"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                          <div class="text-xs text-muted-foreground font-medium">
+                            正文
+                          </div>
+                          <RichTextEditor
+                            :model-value="payloadString(message, 'content')"
+                            :disabled="!canUpdate"
+                            @update:model-value="value => setPayloadString(message, 'content', value)"
+                          />
+                          <p class="text-xs text-muted-foreground m-0">
+                            正文图片仅允许 DMS 资产，单张不超过 2 MiB；保存前图片使用本地预览。
+                          </p>
                         </div>
                       </div>
-                      <p v-if="(coverUploadErrors[index] ?? '') !== ''" class="text-xs text-destructive m-0 w-full">
-                        {{ coverUploadErrors[index] }}
-                      </p>
+                    </template>
+                    <div v-else class="text-sm text-muted-foreground">
+                      该类型暂未开放前端编辑。
                     </div>
-                    <div class="gap-3 grid md:grid-cols-2">
-                      <label class="text-sm flex flex-col gap-1">
-                        <span class="font-medium">标题</span>
-                        <FaInput
-                          :model-value="payloadString(message, 'title')"
-                          :disabled="!canUpdate"
-                          maxlength="128"
-                          @update:model-value="value => setPayloadString(message, 'title', value ?? '')"
-                        />
-                      </label>
-                      <label class="text-sm flex flex-col gap-1">
-                        <span class="font-medium">作者</span>
-                        <FaInput
-                          :model-value="payloadString(message, 'author')"
-                          :disabled="!canUpdate"
-                          maxlength="64"
-                          @update:model-value="value => setPayloadString(message, 'author', value ?? '')"
-                        />
-                      </label>
-                      <label class="text-sm flex flex-col gap-1">
-                        <span class="font-medium">摘要</span>
-                        <FaInput
-                          :model-value="payloadString(message, 'digest')"
-                          :disabled="!canUpdate"
-                          maxlength="512"
-                          @update:model-value="value => setPayloadString(message, 'digest', value ?? '')"
-                        />
-                      </label>
-                      <label class="text-sm flex flex-col gap-1">
-                        <span class="font-medium">阅读原文</span>
-                        <FaInput
-                          :model-value="payloadString(message, 'contentSourceUrl')"
-                          :disabled="!canUpdate"
-                          placeholder="https://"
-                          @update:model-value="value => setPayloadString(message, 'contentSourceUrl', value ?? '')"
-                        />
-                      </label>
-                    </div>
-                    <RichTextEditor
-                      :model-value="payloadString(message, 'content')"
-                      :disabled="!canUpdate"
-                      @update:model-value="value => setPayloadString(message, 'content', value)"
-                    />
-                    <p class="text-xs text-muted-foreground m-0">
-                      正文图片仅允许 DMS 资产，单张不超过 2 MiB；保存前图片使用本地预览。
-                    </p>
                   </div>
-                </template>
-                <div v-else class="text-sm text-muted-foreground mt-2">
-                  该类型暂未开放前端编辑。
                 </div>
               </div>
             </div>
-          </div>
+          </section>
         </div>
 
-        <div class="flex flex-col gap-3">
-          <div class="p-4 border border-border rounded-lg bg-card">
-            <div class="font-medium">
-              配置摘要
+        <aside class="flex flex-col gap-3 xl:top-4 xl:sticky">
+          <section class="border border-border rounded-xl bg-card">
+            <div class="p-4 border-b border-border">
+              <div class="font-medium">
+                配置摘要
+              </div>
             </div>
-            <dl class="text-sm mt-3 gap-x-3 gap-y-2 grid grid-cols-[auto_1fr]">
+            <dl class="text-sm p-4 gap-x-3 gap-y-3 grid grid-cols-[auto_1fr]">
+              <dt class="text-muted-foreground">
+                状态
+              </dt>
+              <dd class="inline-flex gap-1.5 items-center">
+                <span
+                  class="rounded-full size-1.5"
+                  :class="activeDraft.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+                />
+                {{ activeDraft.enabled ? '已启用' : '未启用' }}
+              </dd>
               <dt class="text-muted-foreground">
                 渠道
               </dt>
@@ -903,17 +1104,60 @@ onBeforeUnmount(() => {
               <dt class="text-muted-foreground">
                 消息数
               </dt>
-              <dd>{{ activeDraft.messages.length }} 条</dd>
+              <dd class="flex flex-col gap-1.5">
+                <span>{{ activeDraft.messages.length }} 条</span>
+                <span v-if="messageKindCounts(activeDraft).length > 0" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="item in messageKindCounts(activeDraft)"
+                    :key="item.kind"
+                    class="text-[10px] text-muted-foreground px-1.5 py-0.5 border border-border rounded bg-muted/50"
+                  >
+                    {{ messageKindLabel(item.kind) }} {{ item.count }}
+                  </span>
+                </span>
+              </dd>
               <dt class="text-muted-foreground">
                 版本
               </dt>
               <dd>{{ activeDraft.expectedVersion }}</dd>
+              <dt class="text-muted-foreground">
+                最后更新
+              </dt>
+              <dd class="flex flex-col gap-0.5">
+                <span class="text-xs tabular-nums">{{ draftUpdatedAt(activeDraft) }}</span>
+                <span class="text-[11px] text-muted-foreground">{{ draftUpdatedBy(activeDraft) }}</span>
+              </dd>
             </dl>
+          </section>
+
+          <div
+            v-if="activeValidationError !== null"
+            class="p-4 border border-destructive/30 rounded-xl bg-destructive/5"
+          >
+            <div class="text-xs text-destructive font-medium">
+              配置需要处理
+            </div>
+            <div class="text-xs text-destructive/90 mt-1">
+              {{ activeValidationError }}
+            </div>
           </div>
-          <div v-if="dirty" class="text-sm text-amber-700 p-3 border border-amber-500/30 rounded-lg bg-amber-500/10 dark:text-amber-400">
-            有未保存的修改。
+
+          <div
+            v-if="dirty"
+            class="p-4 border border-amber-500/30 rounded-xl bg-amber-500/10"
+          >
+            <div class="text-sm text-amber-700 font-medium flex gap-2 items-center dark:text-amber-400">
+              <FaIcon name="i-lucide:circle-alert" class="size-4" />
+              有未保存的修改
+            </div>
+            <p class="text-xs text-amber-700/80 mt-1 dark:text-amber-400/80">
+              保存后才会影响后续发布。
+            </p>
           </div>
-        </div>
+          <div v-else class="text-xs text-muted-foreground p-4 border border-border rounded-xl bg-card">
+            当前渠道配置已保存。
+          </div>
+        </aside>
       </div>
     </div>
   </FaPageMain>

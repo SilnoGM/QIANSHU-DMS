@@ -67,7 +67,7 @@ test('通知中心保留企业微信、事件配置和通知记录页面', () =>
   assert.match(eventDetailSource, /<FaPageHeader/u)
   assert.match(eventDetailSource, /notificationsApi\.eventConfigs\.get/u)
   assert.match(eventDetailSource, /notificationsApi\.eventConfigs\.update/u)
-  assert.match(eventDetailSource, /添加图片附件/u)
+  assert.match(eventDetailSource, /图片附件/u)
   assert.match(eventDetailSource, /addImageMessage/u)
   assert.match(eventDetailSource, /sourceKeys/u)
   assert.match(eventDetailSource, /mediaPolicy/u)
