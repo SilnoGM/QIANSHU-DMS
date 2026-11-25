@@ -682,7 +682,7 @@ onBeforeUnmount(() => {
                         v-if="coverPreviewUrl(message) !== ''"
                         :src="coverPreviewUrl(message)"
                         alt="mpnews 封面预览"
-                        class="border border-border rounded h-20 w-[47] object-cover"
+                        class="border border-border rounded bg-muted h-20 w-[188px] object-contain"
                       >
                       <div v-else class="text-xs text-muted-foreground px-6 py-5 border border-border rounded border-dashed">
                         未选择封面
