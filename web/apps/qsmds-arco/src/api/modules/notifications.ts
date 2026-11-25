@@ -2,8 +2,6 @@ import type { AxiosInstance } from 'axios'
 
 import type {
   NotificationCancelResultDto,
-  NotificationChannelPolicyDto,
-  NotificationChannelPolicyUpdateDto,
   NotificationContentMediaUploadDto,
   NotificationEventConfigDto,
   NotificationEventConfigPreviewDto,
@@ -24,11 +22,6 @@ import type {
   NotificationRecordOptionsDto,
   NotificationRecordPageDto,
   NotificationsRecordsListData,
-  NotificationTemplateCreateDto,
-  NotificationTemplateDto,
-  NotificationTemplatePreviewDto,
-  NotificationTemplatePreviewResultDto,
-  NotificationTemplateUpdateDto,
   WecomAppCreateDto,
   WecomAppDto,
   WecomAppSecretUpdateDto,
@@ -99,22 +92,6 @@ export function createNotificationsApi(client: AxiosInstance) {
       },
       contentUrl: (assetId: string) =>
         `/api/notifications/content-media/${encodeURIComponent(assetId)}/content`,
-    },
-    templates: {
-      list: (channel: string, signal: AbortSignal) =>
-        client.get<NotificationTemplateDto[]>('notifications/templates', { errorPresentation: 'local', params: { channel }, signal }),
-      create: (input: NotificationTemplateCreateDto) =>
-        client.post<NotificationTemplateDto>('notifications/templates', input, { errorPresentation: 'local', retry: false }),
-      update: (id: string, input: NotificationTemplateUpdateDto) =>
-        client.patch<NotificationTemplateDto>(path('notifications', 'templates', id), input, { errorPresentation: 'local', retry: false }),
-      preview: (id: string, input: NotificationTemplatePreviewDto) =>
-        client.post<NotificationTemplatePreviewResultDto>(path('notifications', 'templates', id, 'preview'), input, { errorPresentation: 'local', retry: false }),
-    },
-    policies: {
-      list: (query: { eventType?: string, channel?: 'IN_APP' | 'WECOM' }, signal: AbortSignal) =>
-        client.get<NotificationChannelPolicyDto[]>('notifications/channel-policies', { errorPresentation: 'local', params: query, signal }),
-      update: (eventType: string, channel: 'IN_APP' | 'WECOM', input: NotificationChannelPolicyUpdateDto) =>
-        client.put<NotificationChannelPolicyDto>(path('notifications', 'channel-policies', eventType, channel), input, { errorPresentation: 'local', retry: false }),
     },
     records: {
       list: (query: NotificationRecordListQuery, signal: AbortSignal) =>

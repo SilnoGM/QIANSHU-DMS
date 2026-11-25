@@ -228,10 +228,10 @@ defineExpose({ reload })
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label">
-              逻辑模板
+              内容标识
             </dt>
             <dd class="qs-type-body m-0 mt-1 break-all">
-              {{ detail.templateKey }}
+              {{ detail.contentKey }}
             </dd>
           </div>
           <div class="min-w-0">
@@ -394,8 +394,8 @@ defineExpose({ reload })
             <p class="qs-type-meta m-0 mt-2 p-2 rounded bg-muted/30 whitespace-pre-wrap break-words">
               {{ delivery.renderedContent }}
             </p>
-            <p v-if="delivery.templateKey !== detail.templateKey" class="qs-type-meta text-muted-foreground m-0 mt-1 break-all">
-              实际模板：{{ delivery.templateKey }}
+            <p v-if="delivery.contentKey !== detail.contentKey" class="qs-type-meta text-muted-foreground m-0 mt-1 break-all">
+              实际内容标识：{{ delivery.contentKey }}
             </p>
             <p v-if="delivery.failureMessage !== null" class="qs-type-meta text-destructive m-0 mt-1">
               {{ delivery.failureMessage }}

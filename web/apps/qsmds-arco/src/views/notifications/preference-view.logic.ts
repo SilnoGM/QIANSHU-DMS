@@ -62,10 +62,10 @@ export function countMutedChannels(
 
 const UNAVAILABLE_LABELS: Record<string, string> = {
   NOT_CONFIGURED: '管理员未配置',
-  POLICY_DISABLED: '已停用',
+  CONFIG_DISABLED: '已停用',
   CHANNEL_DISABLED: '渠道未启用',
   GROUP_TARGET: '仅发送到群',
-  TEMPLATE_MISSING: '模板未配置',
+  CONTENT_MISSING: '内容未配置',
 }
 
 export interface PreferenceGroup {

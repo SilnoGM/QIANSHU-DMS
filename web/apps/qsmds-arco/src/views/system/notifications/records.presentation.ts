@@ -1,5 +1,5 @@
 import type { NotificationDeliveryDto, NotificationRecordDto } from '@/api/generated/types.gen'
-import { templateDomainLabel } from './template-key-grouping.logic'
+import { notificationDomainLabel } from './notification-domain.logic'
 
 export type RecordTone = 'danger' | 'info' | 'muted' | 'success' | 'warning'
 
@@ -122,7 +122,7 @@ export function channelClass(channel: 'IN_APP' | 'WECOM'): string {
 }
 
 export function domainLabel(domain: string): string {
-  return templateDomainLabel(domain)
+  return notificationDomainLabel(domain)
 }
 
 export function sourceTypeLabel(sourceType: string): string {

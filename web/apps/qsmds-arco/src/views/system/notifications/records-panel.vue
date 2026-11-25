@@ -26,6 +26,7 @@ import { useAppAuth } from '@/composables/app/auth'
 import { hasVisibleTableColumn } from '../shared/table-query'
 import NotificationRecordCancelModal from './components/NotificationRecordCancelModal.vue'
 import NotificationRecordDetailDrawer from './components/NotificationRecordDetailDrawer.vue'
+import { NOTIFICATION_DOMAIN_OPTIONS } from './notification-domain.logic'
 import {
   buildRecordListQuery,
   buildRecordRouteQuery,
@@ -47,7 +48,6 @@ import {
   priorityLabel,
   sourceTypeLabel,
 } from './records.presentation'
-import { TEMPLATE_DOMAIN_OPTIONS } from './template-key-grouping.logic'
 
 defineOptions({ name: 'NotificationRecordsPanel' })
 
@@ -321,7 +321,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   {
     key: 'domain',
     label: '业务域',
-    options: TEMPLATE_DOMAIN_OPTIONS.map(option => ({ label: option.label, value: option.value })),
+    options: NOTIFICATION_DOMAIN_OPTIONS.map(option => ({ label: option.label, value: option.value })),
   },
   ...(eventOptions.value.length === 0
     ? []
@@ -367,7 +367,7 @@ const columns: QsGenericTableColumn<NotificationRecordDto>[] = [
   },
   { id: 'requestedByName', accessorKey: 'requestedByName', title: '请求人', width: 140 },
   { id: 'priority', accessorKey: 'priority', title: '优先级', width: 80 },
-  { id: 'templateKey', accessorKey: 'templateKey', title: '模板键', minWidth: 160 },
+  { id: 'contentKey', accessorKey: 'contentKey', title: '内容标识', minWidth: 160 },
 ]
 
 const actionColumnWidth = 128
@@ -557,8 +557,8 @@ defineExpose({ refresh: loadRecords })
         </FaTag>
       </template>
 
-      <template #cell-templateKey="{ row }">
-        <QsCopyableText label="模板键" :text="row.original.templateKey" />
+      <template #cell-contentKey="{ row }">
+        <QsCopyableText label="内容标识" :text="row.original.contentKey" />
       </template>
 
       <template #actions="{ row }">

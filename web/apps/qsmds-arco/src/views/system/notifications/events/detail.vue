@@ -247,6 +247,57 @@ function addMpnewsMessage(): void {
   markDirty()
 }
 
+function addImageMessage(): void {
+  const draft = activeDraft.value
+  const media = event.value?.media
+  if (draft === null || draft.channel !== 'WECOM' || media === null || media === undefined) {
+    return
+  }
+  draft.messages.push({
+    kind: 'IMAGE',
+    payload: {},
+    mediaPolicy: {
+      sourceKeys: media.sources.map(source => source.key),
+      maxCount: media.maxCount,
+    },
+    enabled: true,
+  })
+  markDirty()
+}
+
+function imageSourceKeys(message: MessageDraft): string[] {
+  const value = message.mediaPolicy.sourceKeys
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function imageMaxCount(message: MessageDraft): number {
+  const value = message.mediaPolicy.maxCount
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
+function toggleImageSource(message: MessageDraft, sourceKey: string, checked: boolean): void {
+  const selected = new Set(imageSourceKeys(message))
+  if (checked) {
+    selected.add(sourceKey)
+  }
+  else {
+    selected.delete(sourceKey)
+  }
+  const ordered = (event.value?.media?.sources ?? [])
+    .map(source => source.key)
+    .filter(key => selected.has(key))
+  message.mediaPolicy = { ...message.mediaPolicy, sourceKeys: ordered }
+  markDirty()
+}
+
+function setImageMaxCount(message: MessageDraft, value: string): void {
+  const maximum = event.value?.media?.maxCount ?? 1
+  const parsed = Number(value)
+  const maxCount = Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : 1
+  message.mediaPolicy = { ...message.mediaPolicy, maxCount }
+  markDirty()
+}
+
 function removeMessage(index: number): void {
   activeDraft.value?.messages.splice(index, 1)
   markDirty()
@@ -368,6 +419,10 @@ function messageSummary(message: MessageDraft): string {
   if (message.kind === 'MPNEWS') {
     return typeof message.payload.title === 'string' ? message.payload.title : 'mpnews'
   }
+  if (message.kind === 'IMAGE') {
+    const count = imageSourceKeys(message).length
+    return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message)} 张`
+  }
   return message.kind
 }
 
@@ -384,10 +439,27 @@ function validateDraft(draft: ChannelDraft): string | null {
   }
   if (draft.channel === 'WECOM') {
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
-    const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT' ? ['TEXT'] : ['TEXT', 'MPNEWS']
+    const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
+      ? ['TEXT', 'IMAGE']
+      : ['TEXT', 'MPNEWS', 'IMAGE']
     const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
     if (unsupported !== undefined) {
       return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${unsupported.kind} 消息，请删除或切换发送方式`
+    }
+    if (!draft.messages.some(message => message.kind === 'TEXT' || message.kind === 'MPNEWS')) {
+      return '企业微信渠道至少需要一条文本消息'
+    }
+    const maximum = event.value?.media?.maxCount ?? 0
+    for (const message of draft.messages) {
+      if (message.kind !== 'IMAGE') {
+        continue
+      }
+      if (imageSourceKeys(message).length === 0) {
+        return '图片附件至少选择一个来源'
+      }
+      if (imageMaxCount(message) > maximum) {
+        return `图片附件数量上限不能超过 ${maximum}`
+      }
     }
   }
   return null
@@ -603,10 +675,18 @@ onBeforeUnmount(() => {
                   消息内容
                 </div>
                 <div class="text-xs text-muted-foreground">
-                  支持文本与 mpnews；正文图片仅允许 DMS 资产。
+                  支持文本、mpnews 与业务图片附件；正文图片仅允许 DMS 资产。
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">
+                <FaButton
+                  v-if="canUpdate && activeDraft.channel === 'WECOM' && event?.media != null"
+                  variant="outline"
+                  size="sm"
+                  @click="addImageMessage"
+                >
+                  添加图片附件
+                </FaButton>
                 <FaButton
                   v-if="canUpdate && activeDraft.channel === 'WECOM' && activeDraft.sendMethod === 'APP'"
                   variant="outline"
@@ -669,6 +749,39 @@ onBeforeUnmount(() => {
                   placeholder="输入文本内容，支持 {{变量}} 占位符"
                   @update:model-value="value => setTextContent(message, value ?? '')"
                 />
+                <template v-else-if="message.kind === 'IMAGE'">
+                  <div class="mt-3 flex flex-col gap-3">
+                    <p class="text-xs text-muted-foreground m-0">
+                      发布时从业务附件中按来源选取，最多 {{ event?.media?.maxCount ?? 0 }} 张；图片在全部文本消息之后发送。
+                    </p>
+                    <div class="gap-2 grid md:grid-cols-2">
+                      <label
+                        v-for="source in event?.media?.sources ?? []"
+                        :key="source.key"
+                        class="text-sm flex gap-2 items-center"
+                      >
+                        <FaCheckbox
+                          :model-value="imageSourceKeys(message).includes(source.key)"
+                          :disabled="!canUpdate"
+                          @update:model-value="value => toggleImageSource(message, source.key, value === true)"
+                        />
+                        <span>{{ source.label }}</span>
+                        <span class="text-xs text-muted-foreground font-mono">{{ source.key }}</span>
+                      </label>
+                    </div>
+                    <label class="text-sm flex flex-col gap-1 max-w-40">
+                      <span class="font-medium">最多发送张数</span>
+                      <FaInput
+                        type="number"
+                        min="1"
+                        :max="event?.media?.maxCount ?? 1"
+                        :model-value="String(imageMaxCount(message))"
+                        :disabled="!canUpdate"
+                        @update:model-value="value => setImageMaxCount(message, value ?? '1')"
+                      />
+                    </label>
+                  </div>
+                </template>
                 <template v-else-if="message.kind === 'MPNEWS'">
                   <div class="mt-3 flex flex-col gap-3">
                     <div class="text-sm p-3 border border-border rounded-md flex flex-wrap gap-3 items-center">

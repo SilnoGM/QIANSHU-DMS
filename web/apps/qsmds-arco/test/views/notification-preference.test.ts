@@ -52,7 +52,7 @@ test('接收设置只保留至少一个渠道可调整的事件', () => {
       { channel: 'WECOM', available: false, unavailableReason: 'CHANNEL_DISABLED' },
     ]),
     preferenceEvent('SALES_ORDER_SUBMITTED', 'sales', [
-      { channel: 'IN_APP', available: false, unavailableReason: 'TEMPLATE_MISSING' },
+      { channel: 'IN_APP', available: false, unavailableReason: 'CONTENT_MISSING' },
       { channel: 'WECOM', available: false, unavailableReason: 'NOT_CONFIGURED' },
     ]),
     preferenceEvent('WECOM_CHANNEL_OFFLINE', 'system', [
