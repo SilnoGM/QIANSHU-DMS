@@ -73,6 +73,31 @@ describe('WecomAppHttpTransport', () => {
     })).resolves.toMatchObject({ ok: false, kind: 'RATE_LIMITED' })
   })
 
+  it('classifies an untrusted egress IP with an actionable message', async () => {
+    jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse({
+        errcode: 60020,
+        errmsg: 'not allow to access from your ip, hint: [179557...]',
+      }))
+    const transport = new WecomAppHttpTransport(configService())
+
+    const result = await transport.sendText({
+      accessToken: 'token-1',
+      agentId: 1000001,
+      toUser: 'zhangsan',
+      content: 'x',
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'WECOM_APP_IP_NOT_ALLOWED',
+    })
+    if (result.ok) {
+      throw new Error('expected an untrusted IP failure')
+    }
+    expect(result.message).toContain('可信 IP')
+  })
+
   it('classifies an invalid recipient and keeps invaliduser', async () => {
     jest.spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse({

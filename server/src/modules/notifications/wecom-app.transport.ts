@@ -264,7 +264,12 @@ function classifyAppFailure(
     }
   }
   if (errcode === 60020) {
-    return { ok: false, kind: 'REJECTED', code: 'WECOM_APP_IP_NOT_ALLOWED', message: errmsg || '服务器 IP 不在企业微信可信列表' }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: 'WECOM_APP_IP_NOT_ALLOWED',
+      message: '当前服务器出口 IP 不在企业微信应用可信 IP 列表，请在企业微信后台添加后重试',
+    }
   }
   if (httpStatus >= 500) {
     return { ok: false, kind: 'NETWORK', code: 'WECOM_APP_UPSTREAM', message: `企业微信应用消息上游返回 ${httpStatus}` }
