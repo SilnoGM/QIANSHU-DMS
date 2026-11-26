@@ -72,6 +72,7 @@ const coverPreviewUrls = ref<Record<string, string>>({})
 const userOptions = ref<TargetValueOption[]>([])
 const roleOptions = ref<TargetValueOption[]>([])
 const permissionOptions = ref<TargetValueOption[]>([])
+const groupOptions = ref<TargetValueOption[]>([])
 const targetOptionsLoading = ref(false)
 const targetOptionsError = ref<string | null>(null)
 let targetOptionsController: AbortController | null = null
@@ -94,14 +95,6 @@ const SEND_METHOD_OPTIONS: Array<{ label: string, value: SendMethod }> = [
   { label: '应用消息', value: 'APP' },
   { label: '群机器人', value: 'ROBOT' },
 ]
-
-const TARGET_VALUE_HINT: Record<TargetMode, string> = {
-  COMMAND_TARGET: '由业务发布时传入，无需填写',
-  USERS: '填写 user id，多个用逗号分隔',
-  ROLE: '填写角色 code，多个用逗号分隔',
-  PERMISSION: '填写权限 code',
-  GROUP: '填写内部群 key，多个用逗号分隔',
-}
 
 function channelFromDto(channel: NotificationEventChannelConfigDto): ChannelDraft {
   return {
@@ -192,10 +185,11 @@ async function loadTargetOptions(): Promise<void> {
   targetOptionsLoading.value = true
   targetOptionsError.value = null
   try {
-    const [users, roles, permissions] = await Promise.allSettled([
+    const [users, roles, permissions, groups] = await Promise.allSettled([
       loadActiveUsers(signal),
       managementApi.roles.list(),
       managementApi.permissions.list(),
+      notificationsApi.wecom.targets.list(signal),
     ])
     if (signal.aborted) {
       return
@@ -231,6 +225,19 @@ async function loadTargetOptions(): Promise<void> {
     else {
       failed = true
     }
+    if (groups.status === 'fulfilled') {
+      groupOptions.value = groups.value.data
+        .filter(target => target.enabled && target.internalOnly)
+        .map(target => ({
+          label: target.name,
+          value: target.key,
+          description: target.purpose === null ? target.key : `${target.key} · ${target.purpose}`,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+    }
+    else {
+      failed = true
+    }
     if (failed) {
       targetOptionsError.value = '部分目标选项加载失败；仍可保存或移除已有值。'
     }
@@ -246,47 +253,12 @@ function markDirty(): void {
   dirty.value = true
 }
 
-function targetValues(draft: ChannelDraft): string {
-  const key = draft.targetMode === 'USERS'
-    ? 'userIds'
-    : draft.targetMode === 'ROLE'
-      ? 'roleCodes'
-      : draft.targetMode === 'PERMISSION'
-        ? 'permissionCode'
-        : draft.targetMode === 'GROUP' ? 'targetKeys' : null
-  if (key === null) {
-    return ''
-  }
-  const value = draft.targetConfig[key]
-  return Array.isArray(value) ? value.join(', ') : typeof value === 'string' ? value : ''
-}
-
-function setTargetValues(draft: ChannelDraft, value: string): void {
-  const key = draft.targetMode === 'USERS'
-    ? 'userIds'
-    : draft.targetMode === 'ROLE'
-      ? 'roleCodes'
-      : draft.targetMode === 'PERMISSION'
-        ? 'permissionCode'
-        : draft.targetMode === 'GROUP' ? 'targetKeys' : null
-  if (key === null) {
-    draft.targetConfig = {}
-  }
-  else if (key === 'permissionCode') {
-    draft.targetConfig = { permissionCode: value.trim() }
-  }
-  else {
-    draft.targetConfig = { [key]: value.split(',').map(item => item.trim()).filter(Boolean) }
-  }
-  markDirty()
-}
-
-function targetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes'): string[] {
+function targetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes' | 'targetKeys'): string[] {
   const value = draft.targetConfig[key]
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
-function setTargetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes', values: string[]): void {
+function setTargetArray(draft: ChannelDraft, key: 'userIds' | 'roleCodes' | 'targetKeys', values: string[]): void {
   draft.targetConfig = { ...draft.targetConfig, [key]: values }
   markDirty()
 }
@@ -881,13 +853,19 @@ onBeforeUnmount(() => {
                     empty-text="没有匹配的权限"
                     @change="value => setPermissionValue(activeDraft!, value)"
                   />
-                  <FaInput
+                  <TargetValuePicker
                     v-else-if="activeDraft.targetMode === 'GROUP'"
-                    :model-value="targetValues(activeDraft)"
+                    :model-value="targetArray(activeDraft, 'targetKeys')"
+                    :options="groupOptions"
+                    :loading="targetOptionsLoading"
                     :disabled="!canUpdate"
-                    :placeholder="TARGET_VALUE_HINT[activeDraft.targetMode]"
-                    @update:model-value="value => setTargetValues(activeDraft!, value ?? '')"
+                    placeholder="选择内部群"
+                    empty-text="没有可用的内部群"
+                    @update:model-value="values => setTargetArray(activeDraft!, 'targetKeys', values)"
                   />
+                  <span v-if="activeDraft.targetMode === 'GROUP'" class="text-xs text-muted-foreground">
+                    仅列出已启用且标记为内部群的群机器人目标。
+                  </span>
                   <div v-else class="text-xs text-muted-foreground px-3 border border-border rounded-md border-dashed flex h-9 items-center">
                     由业务发布时动态传入
                   </div>
