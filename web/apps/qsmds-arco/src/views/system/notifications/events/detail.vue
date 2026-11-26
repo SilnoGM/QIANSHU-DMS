@@ -294,6 +294,23 @@ function changeTargetMode(draft: ChannelDraft, mode: TargetMode): void {
   markDirty()
 }
 
+function targetSummary(draft: ChannelDraft): string {
+  switch (draft.targetMode) {
+    case 'COMMAND_TARGET':
+      return event.value?.dynamicTargetLabel ?? '由业务发布时传入'
+    case 'USERS':
+      return `指定成员（${targetArray(draft, 'userIds').length}）`
+    case 'ROLE':
+      return `角色（${targetArray(draft, 'roleCodes').length}）`
+    case 'PERMISSION': {
+      const permission = permissionValue(draft)
+      return permission === undefined ? '权限未配置' : `权限 · ${permission}`
+    }
+    case 'GROUP':
+      return `内部群（${targetArray(draft, 'targetKeys').length}）`
+  }
+}
+
 function addTextMessage(): void {
   const draft = activeDraft.value
   if (draft === null) {
@@ -866,11 +883,12 @@ onBeforeUnmount(() => {
                   <span v-if="activeDraft.targetMode === 'GROUP'" class="text-xs text-muted-foreground">
                     仅列出已启用且标记为内部群的群机器人目标。
                   </span>
-                  <div v-else class="text-xs text-muted-foreground px-3 border border-border rounded-md border-dashed flex h-9 items-center">
-                    由业务发布时动态传入
+                  <div v-else class="text-sm px-3 border border-border rounded-md bg-muted/30 flex gap-2 h-9 items-center">
+                    <FaIcon name="i-lucide:waypoints" class="text-muted-foreground shrink-0 size-4" />
+                    <span class="truncate">{{ event?.dynamicTargetLabel ?? '由业务发布时传入' }}</span>
                   </div>
                   <span v-if="activeDraft.targetMode === 'COMMAND_TARGET'" class="text-xs text-muted-foreground">
-                    动态目标无需填写，发布时由业务传入。
+                    发布时按业务单据解析，不是固定收件人。
                   </span>
                 </div>
               </div>
@@ -1228,6 +1246,12 @@ onBeforeUnmount(() => {
                 方式
               </dt>
               <dd>{{ activeDraft.channel === 'IN_APP' ? '站内' : activeDraft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息' }}</dd>
+              <dt class="text-muted-foreground">
+                收件人
+              </dt>
+              <dd class="break-words">
+                {{ targetSummary(activeDraft) }}
+              </dd>
               <dt class="text-muted-foreground">
                 消息数
               </dt>

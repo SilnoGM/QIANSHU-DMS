@@ -223,6 +223,62 @@ export const IMPLEMENTED_NOTIFICATION_EVENT_TYPES: readonly NotificationEventTyp
 ])
 
 /**
+ * `COMMAND_TARGET` 模式下业务发布时如何解析收件人。
+ *
+ * 动态目标没有固定值，管理端用它说明“发布时会把通知发给谁”；
+ * 新增有触发源的事件时必须同步补这里，避免配置页只显示笼统的“动态传入”。
+ */
+export const NOTIFICATION_EVENT_DYNAMIC_TARGET_LABELS: Readonly<Record<NotificationEventType, string>> = Object.freeze({
+  PURCHASE_REVIEW_PENDING: '拥有采购审核权限的人',
+  INVOICE_REQUEST_REVIEW_PENDING: '拥有开票审核权限的人',
+  SLH_RECONCILIATION_COMPLETED: '拥有对账权限的人',
+  SHIPMENT_ARRIVED: '拥有采购单查看权限的人',
+  FUND_WITHDRAWAL_REVIEW_PENDING: '提现申请人',
+  PACKAGING_COST_PAYMENT_PENDING: '拥有打木架付款权限的人',
+  PURCHASE_PAYABLE_PENDING: '拥有采购付款权限的人',
+  SALES_RECEIPT_REVIEW_PENDING: '拥有收款审核权限的人',
+  SALES_RECEIPT_VOUCHER_SENT: '拥有收款审核权限的人',
+  SALES_RECEIPT_APPROVED: '收款提交人',
+  SALES_RECEIPT_REJECTED: '收款提交人',
+  PURCHASE_REVIEW_APPROVED: '采购单创建人',
+  PURCHASE_REVIEW_REJECTED: '采购单创建人',
+  PURCHASE_ORDER_CANCELLED: '采购单创建人',
+  STORAGE_CLAIM_REQUEST_PENDING: '拥有仓储认领权限的人',
+  STORAGE_CLAIM_REQUEST_APPROVED: '认领申请人',
+  STORAGE_CLAIM_REQUEST_REJECTED: '认领申请人',
+  SHIPMENT_RELEASED_TO_STORAGE: '采购人员角色',
+  FUND_WITHDRAWAL_APPROVED: '提现申请人',
+  FUND_WITHDRAWAL_REJECTED: '提现申请人',
+  PACKAGING_COST_PAID: '打木架费用提报人',
+  INVOICE_REQUEST_RETURNED: '开票申请人',
+  INVOICE_REQUEST_NOTIFIED: '开票申请人',
+  INVOICE_REQUEST_ISSUED: '开票申请人',
+  INVOICE_REQUEST_SETTLED: '开票申请人',
+  INVOICE_REQUEST_CANCELLED: '开票申请人',
+  MACHINE_VIEWING_APPOINTMENT_CREATED: '采购人员角色',
+  MACHINE_VIEWING_APPOINTMENT_RESCHEDULED: '采购人员角色',
+  PROXY_NODE_EXPIRING: '节点负责人；未绑定时发给拥有代理节点管理权限的人',
+  ADVERTISING_RECHARGE_PENDING: '拥有广告充值付款权限的人',
+  ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED: '系统管理员角色',
+  ADVERTISING_RECHARGE_PAID: '充值申请人',
+  ADVERTISING_RECHARGE_REJECTED: '充值申请人',
+  ADVERTISING_RECHARGE_VOIDED: '充值申请人',
+  SALES_ORDER_SUBMITTED: '销售单创建人',
+  SALES_ORDER_COMPLETED: '销售单出单人',
+  PURCHASE_ORDER_COMPLETED: '采购单创建人',
+  SHIPMENT_SIGNED: '销售单出单人',
+  SALES_ORDER_TERMINATED: '采购人员角色',
+  FUND_ACCOUNT_ADJUSTED: '调账归属用户',
+  PROXY_NODE_EXPIRED: '节点负责人；未绑定时发给拥有代理节点管理权限的人',
+  FUND_ACCOUNT_REVERSED: '原流水归属用户',
+  AD_ACCOUNT_BALANCE_LOW: '广告户绑定负责人；未绑定时发给拥有广告户管理权限的人',
+})
+
+export function notificationEventDynamicTargetLabel(eventType: string): string | null {
+  return (NOTIFICATION_EVENT_DYNAMIC_TARGET_LABELS as Readonly<Record<string, string>>)[eventType] ?? null
+}
+
+/**
  * 事件向内容承诺的变量集合，用于校验占位符兼容性。
  * 尚无触发源的事件不登记，避免阻断管理员提前配置；接入事件时同步补变量。
  */

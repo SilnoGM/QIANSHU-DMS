@@ -78,6 +78,7 @@ test('通知中心保留企业微信、事件配置和通知记录页面', () =>
   assert.match(eventDetailSource, /managementApi\.permissions\.list/u)
   assert.match(eventDetailSource, /notificationsApi\.wecom\.targets\.list/u)
   assert.match(eventDetailSource, /groupOptions/u)
+  assert.match(eventDetailSource, /dynamicTargetLabel/u)
 
   assert.match(recordsPageSource, /<FaPageHeader/u)
   assert.match(recordsPageSource, /title="通知记录"/u)

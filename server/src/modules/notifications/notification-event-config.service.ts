@@ -34,6 +34,7 @@ import {
   NOTIFICATION_EVENT_DOMAIN,
   NOTIFICATION_EVENT_LABELS,
   NOTIFICATION_EVENT_TYPES,
+  notificationEventDynamicTargetLabel,
   notificationEventMediaCapability,
   notificationEventVariableDefinitions,
   notificationEventVariables,
@@ -212,6 +213,7 @@ export class NotificationEventConfigService {
           })),
       variablesKnown: variables !== null,
       implemented: (IMPLEMENTED_NOTIFICATION_EVENT_TYPES as readonly string[]).includes(eventType),
+      dynamicTargetLabel: notificationEventDynamicTargetLabel(eventType),
       media: notificationEventMediaCapability(eventType) === null
         ? null
         : {

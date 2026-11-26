@@ -95,6 +95,12 @@ export class NotificationEventConfigDto {
   @ApiProperty({ type: () => [NotificationEventVariableDto] }) variableDefinitions!: NotificationEventVariableDto[]
   @ApiProperty() variablesKnown!: boolean
   @ApiProperty() implemented!: boolean
+  @ApiProperty({
+    type: 'string',
+    nullable: true,
+    description: 'COMMAND_TARGET 动态目标的业务解析说明；固定目标模式无意义',
+  })
+  dynamicTargetLabel!: string | null
   @ApiProperty({ type: () => NotificationEventMediaDto, nullable: true }) media!: NotificationEventMediaDto | null
   @ApiProperty({ type: () => [NotificationEventChannelConfigDto] }) channels!: NotificationEventChannelConfigDto[]
 }

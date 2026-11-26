@@ -134998,6 +134998,11 @@
           "implemented": {
             "type": "boolean"
           },
+          "dynamicTargetLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "COMMAND_TARGET 动态目标的业务解析说明；固定目标模式无意义"
+          },
           "media": {
             "nullable": true,
             "type": "object",
@@ -135022,6 +135027,7 @@
           "variableDefinitions",
           "variablesKnown",
           "implemented",
+          "dynamicTargetLabel",
           "media",
           "channels"
         ]
