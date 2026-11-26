@@ -9,13 +9,21 @@ import { MediaAssetLifecycleError, MediaAssetService } from '../media/media-asse
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
 import type { NotificationEventConfigContext } from './notification-event-config.service'
-import type { NotificationContentMediaUploadDto } from './notification-content-media.dto'
+import type {
+  NotificationContentFileUploadDto,
+  NotificationContentMediaUploadDto,
+} from './notification-content-media.dto'
 import {
   NotificationContentMediaMultipartParser,
   type NotificationContentMediaMultipartRequest,
 } from './notification-content-media-multipart.parser'
 
 const MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+const FILE_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 export interface NotificationContentMediaContent {
@@ -104,6 +112,69 @@ export class NotificationContentMediaService {
         throw contentMediaFailure(
           'NOTIFICATION_CONTENT_MEDIA_INVALID',
           '图片文件无效，请重新选择',
+        )
+      }
+      throw error
+    }
+  }
+
+  async uploadFile(
+    context: NotificationEventConfigContext,
+    request: NotificationContentMediaMultipartRequest,
+  ): Promise<NotificationContentFileUploadDto> {
+    try {
+      return await this.multipart.parse(request, async (input) => {
+        if (!FILE_MIME_TYPES.includes(input.declaredMimeType ?? '')) {
+          throw contentMediaFailure(
+            'NOTIFICATION_CONTENT_FILE_INVALID',
+            '仅支持 PDF、DOCX、XLSX 文件',
+          )
+        }
+        const prepared = await this.media.prepare({
+          actorUserId: context.actorUserId,
+          allowedTypes: ['DOCUMENT'],
+          declaredMimeType: input.declaredMimeType,
+          originalFilename: input.originalFilename,
+          pool: 'notification',
+          requestedType: 'DOCUMENT',
+          stream: input.stream,
+        })
+        if (prepared.trustedMetadata.mediaType !== 'DOCUMENT') {
+          throw contentMediaFailure(
+            'NOTIFICATION_CONTENT_FILE_INVALID',
+            '仅支持 PDF、DOCX、XLSX 文件',
+          )
+        }
+        const row = await this.prisma.mediaAsset.findUniqueOrThrow({
+          where: { id: prepared.id },
+          select: { originalFilename: true },
+        })
+        return {
+          assetId: prepared.id,
+          mimeType: prepared.trustedMetadata.mimeType,
+          sizeBytes: prepared.trustedMetadata.sizeBytes.toString(),
+          originalFilename: row.originalFilename,
+        }
+      }, { maxBytes: 20 * 1024 * 1024 })
+    }
+    catch (error) {
+      if (error instanceof MediaAssetLifecycleError) {
+        if (error.code === 'MEDIA_ASSET_CONTENT_TOO_LARGE') {
+          throw contentMediaFailure(
+            'NOTIFICATION_CONTENT_MEDIA_TOO_LARGE',
+            '内容文件不得超过 20 MiB',
+          )
+        }
+        if (['MEDIA_ASSET_STORAGE_FAILED', 'MEDIA_ASSET_VALIDATOR_UNAVAILABLE', 'MEDIA_ASSET_PERSISTENCE_FAILED'].includes(error.code)) {
+          throw contentMediaFailure(
+            'MEDIA_STORAGE_UNAVAILABLE',
+            '文件存储暂时不可用',
+            503,
+          )
+        }
+        throw contentMediaFailure(
+          'NOTIFICATION_CONTENT_FILE_INVALID',
+          '文件无效，请重新选择',
         )
       }
       throw error

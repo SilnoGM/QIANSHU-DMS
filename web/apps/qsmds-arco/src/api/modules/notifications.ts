@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 
 import type {
   NotificationCancelResultDto,
+  NotificationContentFileUploadDto,
   NotificationContentMediaUploadDto,
   NotificationEventConfigDto,
   NotificationEventConfigPreviewDto,
@@ -85,6 +86,15 @@ export function createNotificationsApi(client: AxiosInstance) {
         const body = new FormData()
         body.append('file', file)
         return client.post<NotificationContentMediaUploadDto>('notifications/content-media', body, {
+          errorPresentation: 'local',
+          retry: false,
+          signal,
+        })
+      },
+      uploadFile: (file: File, signal: AbortSignal) => {
+        const body = new FormData()
+        body.append('file', file)
+        return client.post<NotificationContentFileUploadDto>('notifications/content-media/files', body, {
           errorPresentation: 'local',
           retry: false,
           signal,

@@ -8,6 +8,7 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { MediaValidationError } from '../media/media-validation'
 
 const MAXIMUM_FILE_BYTES = 10 * 1024 * 1024
+const MAXIMUM_FILE_UPLOAD_BYTES = 20 * 1024 * 1024
 const MAXIMUM_MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
 export interface NotificationContentMediaMultipartRequest extends Readable {
@@ -28,11 +29,11 @@ function multipartError(): ApiException {
   )
 }
 
-function fileTooLargeError(): ApiException {
+function fileTooLargeError(maxBytes: number): ApiException {
   return new ApiException(
     HttpStatus.UNPROCESSABLE_ENTITY,
     'NOTIFICATION_CONTENT_MEDIA_TOO_LARGE',
-    '内容图片不得超过 10 MiB',
+    `内容文件不得超过 ${Math.floor(maxBytes / (1024 * 1024))} MiB`,
   )
 }
 
@@ -56,13 +57,18 @@ export class NotificationContentMediaMultipartParser {
   async parse<T>(
     request: NotificationContentMediaMultipartRequest,
     handler: (input: NotificationContentMediaUploadInput) => Promise<T>,
+    options: { readonly maxBytes?: number } = {},
   ): Promise<T> {
+    const maxBytes = Math.min(
+      MAXIMUM_FILE_UPLOAD_BYTES,
+      Math.max(1, options.maxBytes ?? MAXIMUM_FILE_BYTES),
+    )
     const length = declaredContentLength(request.headers)
     if (
       length !== null
-      && length > MAXIMUM_FILE_BYTES + MAXIMUM_MULTIPART_OVERHEAD_BYTES
+      && length > maxBytes + MAXIMUM_MULTIPART_OVERHEAD_BYTES
     ) {
-      throw fileTooLargeError()
+      throw fileTooLargeError(maxBytes)
     }
 
     let multipart: busboy.Busboy
@@ -74,7 +80,7 @@ export class NotificationContentMediaMultipartParser {
           fieldNameSize: 64,
           fieldSize: 64,
           fields: 0,
-          fileSize: MAXIMUM_FILE_BYTES + 1,
+          fileSize: maxBytes + 1,
           files: 1,
           headerPairs: 100,
         },
@@ -108,7 +114,7 @@ export class NotificationContentMediaMultipartParser {
       fileSeen = true
       bridge = new PassThrough()
       bridge.on('error', () => undefined)
-      file.once('limit', () => fail(fileTooLargeError()))
+      file.once('limit', () => fail(fileTooLargeError(maxBytes)))
       file.once('error', () => fail())
       file.pipe(bridge, { end: false })
       handlerOutcome = Promise.resolve()

@@ -11,6 +11,7 @@ import { MediaAssetRetentionService } from '../media/media-retention.service'
 import {
   extractMpnewsMediaSourceSlots,
   extractNotificationContentAssetIds,
+  FILE_MAX_BYTES,
   parseNotificationImageMediaPolicy,
   renderMpnewsHtml,
   validateNotificationContentGroup,
@@ -471,6 +472,23 @@ export class NotificationEventConfigService {
       }
     }
 
+    if (input.message.kind === 'FILE') {
+      const mediaAssetId = typeof payload.mediaAssetId === 'string' && payload.mediaAssetId.length > 0
+        ? payload.mediaAssetId
+        : null
+      const policy = asRecord(input.message.mediaPolicy)
+      const sourceKeys = Array.isArray(policy?.sourceKeys) ? policy.sourceKeys : []
+      return {
+        kind: input.message.kind,
+        payload: {
+          mediaAssetId,
+          filename: typeof payload.filename === 'string' ? payload.filename : null,
+          sourceKeys,
+        },
+        warnings: mediaAssetId === null && sourceKeys.length === 0 ? ['文件消息尚未选择文件来源'] : [],
+      }
+    }
+
     if (input.message.kind === 'IMAGE') {
       const policy = parseNotificationImageMediaPolicy(input.message.mediaPolicy)
       return {
@@ -602,6 +620,7 @@ export class NotificationEventConfigService {
         for (const item of channel.items) {
           const extracted = extractNotificationContentAssetIds({ kind: item.kind, payload: item.payload })
           if (extracted.coverAssetId !== null) assetIds.add(extracted.coverAssetId)
+          if (extracted.fileAssetId !== null) assetIds.add(extracted.fileAssetId)
           for (const assetId of extracted.inlineAssetIds) assetIds.add(assetId)
         }
         const assets = assetIds.size === 0
@@ -625,21 +644,27 @@ export class NotificationEventConfigService {
         const mediaRows: Array<{
           messageId: string
           mediaAssetId: string
-          role: 'COVER' | 'INLINE'
+          role: 'COVER' | 'INLINE' | 'FILE' | 'NEWS_IMAGE'
           sortOrder: number
         }> = []
         for (const [index, item] of channel.items.entries()) {
           const extracted = extractNotificationContentAssetIds({ kind: item.kind, payload: item.payload })
-          const refs: Array<{ assetId: string, role: 'COVER' | 'INLINE' }> = []
+          const refs: Array<{ assetId: string, role: 'COVER' | 'INLINE' | 'FILE' | 'NEWS_IMAGE' }> = []
           if (extracted.coverAssetId !== null) {
             refs.push({ assetId: extracted.coverAssetId, role: 'COVER' })
+          }
+          if (extracted.fileAssetId !== null) {
+            refs.push({ assetId: extracted.fileAssetId, role: 'FILE' })
           }
           for (const assetId of extracted.inlineAssetIds) {
             refs.push({ assetId, role: 'INLINE' })
           }
           for (const [sortOrder, ref] of refs.entries()) {
             const asset = assetById.get(ref.assetId)
-            const maxBytes = ref.role === 'COVER' ? 10n * 1_024n * 1_024n : 2n * 1_024n * 1_024n
+            const maxBytes = ref.role === 'COVER'
+              ? 10n * 1_024n * 1_024n
+              : ref.role === 'FILE' ? FILE_MAX_BYTES : 2n * 1_024n * 1_024n
+            const expectedMediaType = ref.role === 'FILE' ? 'DOCUMENT' : 'IMAGE'
             // UPLOADING 只接受本次操作者刚上传且未过期的草稿；别人的在途上传不能被激活挪用。
             const uploadedByActor = asset !== undefined
               && asset.status === 'UPLOADING'
@@ -648,7 +673,7 @@ export class NotificationEventConfigService {
               && asset.uploadExpiresAt.getTime() > now.getTime()
             if (
               asset === undefined
-              || asset.mediaType !== 'IMAGE'
+              || asset.mediaType !== expectedMediaType
               || asset.deletedAt !== null
               || asset.objectKey === null
               || asset.sizeBytes === null

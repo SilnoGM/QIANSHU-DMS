@@ -278,6 +278,72 @@ export class WecomAppHttpTransport implements WecomAppTransport {
     }
   }
 
+  async uploadFile(input: {
+    readonly accessToken: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    const url = new URL('/cgi-bin/media/upload', config.baseUrl)
+    url.searchParams.set('access_token', input.accessToken)
+    url.searchParams.set('type', 'file')
+    const form = new FormData()
+    form.append('media', new Blob([new Uint8Array(input.buffer)], { type: input.mimeType }), input.filename)
+
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, { method: 'POST', body: form, redirect: 'error' })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: 'WECOM_FILE_TIMEOUT', message: '企业微信文件上传超时' }
+        : { ok: false, kind: 'NETWORK', code: 'WECOM_FILE_NETWORK', message: '企业微信文件上传网络请求失败' }
+    }
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_RESPONSE_TOO_LARGE', message: '企业微信文件上传响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: 'WECOM_FILE_INVALID_JSON', message: '企业微信文件上传返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      const mediaId = typeof payload?.media_id === 'string' ? payload.media_id : ''
+      return mediaId.length > 0
+        ? { ok: true, mediaId }
+        : { ok: false, kind: 'UNKNOWN', code: 'WECOM_FILE_INVALID_RESPONSE', message: '企业微信未返回 media_id' }
+    }
+    if (errcode === 40006) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_TOO_LARGE', message: errmsg || '企业微信文件超过 20MB' }
+    }
+    if (errcode === 40007) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_INVALID', message: errmsg || '企业微信 media_id 无效' }
+    }
+    if (errcode === 45009) {
+      return { ok: false, kind: 'RATE_LIMITED', code: 'WECOM_FILE_RATE_LIMITED', message: '企业微信文件上传被限流' }
+    }
+    if (errcode === 40001 || errcode === 42001 || errcode === 40014) {
+      return { ok: false, kind: 'TOKEN_INVALID', code: 'WECOM_FILE_TOKEN_INVALID', message: errmsg || '企业微信 access_token 无效' }
+    }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: `WECOM_FILE_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
+      message: errmsg || '企业微信文件上传被拒绝',
+    }
+  }
+
   async uploadImageUrl(input: {
     readonly accessToken: string
     readonly buffer: Buffer
@@ -429,6 +495,24 @@ export class WecomAppHttpTransport implements WecomAppTransport {
       }
     }
     return classifyAppFailure(errcode, errmsg, response.status, payload)
+  }
+
+  async sendFile(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly mediaId: string
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    return this.sendJsonMessage(config.baseUrl, input.accessToken, {
+      touser: input.toUser,
+      agentid: input.agentId,
+      msgtype: 'file',
+      file: { media_id: input.mediaId },
+    }, 'FILE')
   }
 
   async sendImage(input: {

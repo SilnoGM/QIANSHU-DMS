@@ -136,6 +136,62 @@ describe('notification content group validation', () => {
     expect(textcard.ok).toBe(true)
   })
 
+  it('accepts fixed and dynamic file messages', () => {
+    const assetId = '00000000-0000-4000-8000-000000000222'
+    const fixed = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'FILE', payload: { mediaAssetId: assetId }, mediaPolicy: {} }],
+      allowedVariables: null,
+    })
+    expect(fixed.ok).toBe(true)
+
+    const dynamic = validateNotificationContentGroup({
+      method: 'ROBOT',
+      items: [{
+        kind: 'FILE',
+        payload: { mediaAssetId: null },
+        mediaPolicy: { sourceKeys: ['purchase.deliveryFile'], maxCount: 1 },
+      }],
+      allowedVariables: null,
+      mediaSources: ['purchase.deliveryFile'],
+      mediaMaxCount: 3,
+    })
+    expect(dynamic.ok).toBe(true)
+  })
+
+  it('rejects file message without media or with ambiguous media sources', () => {
+    const empty = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'FILE', payload: {}, mediaPolicy: {} }],
+      allowedVariables: null,
+    })
+    expect(empty.ok).toBe(false)
+
+    const ambiguous = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{
+        kind: 'FILE',
+        payload: { mediaAssetId: '00000000-0000-4000-8000-000000000222' },
+        mediaPolicy: { sourceKeys: ['purchase.deliveryFile'], maxCount: 1 },
+      }],
+      allowedVariables: null,
+      mediaSources: ['purchase.deliveryFile'],
+    })
+    expect(ambiguous.ok).toBe(false)
+
+    const undeclared = validateNotificationContentGroup({
+      method: 'ROBOT',
+      items: [{
+        kind: 'FILE',
+        payload: {},
+        mediaPolicy: { sourceKeys: ['unknown.file'], maxCount: 1 },
+      }],
+      allowedVariables: null,
+      mediaSources: ['purchase.deliveryFile'],
+    })
+    expect(undeclared.ok).toBe(false)
+  })
+
   it('rejects textcard with unsafe link and markdown on unsupported method', () => {
     const unsafe = validateNotificationContentGroup({
       method: 'APP',

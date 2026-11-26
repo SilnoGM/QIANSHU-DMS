@@ -22,6 +22,7 @@ import {
   messageKindLabel,
   validateMessageDraft,
 } from '../../message-editor.logic'
+import FileMessageEditor from './FileMessageEditor.vue'
 import ImageMessageEditor from './ImageMessageEditor.vue'
 import MarkdownMessageEditor from './MarkdownMessageEditor.vue'
 import MpnewsMessageEditor from './MpnewsMessageEditor.vue'
@@ -159,7 +160,7 @@ function discardAndClose(): void {
 }
 
 function insertVariable(name: string): void {
-  if (props.kind === 'IMAGE') {
+  if (props.kind === 'IMAGE' || props.kind === 'FILE') {
     return
   }
   editorRef.value?.insertVariable?.(name)
@@ -217,6 +218,13 @@ function insertVariable(name: string): void {
           :disabled="!canUpdate"
           :errors="errors"
         />
+        <FileMessageEditor
+          v-else-if="kind === 'FILE'"
+          v-model="draft"
+          :media-sources="media?.sources ?? []"
+          :disabled="!canUpdate"
+          :errors="errors"
+        />
         <ImageMessageEditor
           v-else-if="kind === 'IMAGE'"
           v-model="draft.mediaPolicy"
@@ -242,14 +250,14 @@ function insertVariable(name: string): void {
 
       <aside class="min-w-0 lg:pl-4 lg:border-l lg:border-border">
         <VariablePalette
-          v-if="kind !== 'IMAGE'"
+          v-if="kind !== 'IMAGE' && kind !== 'FILE'"
           :variables="variables"
           :variables-known="variablesKnown"
           :disabled="!canUpdate"
           @insert="insertVariable"
         />
         <div v-else class="text-xs text-muted-foreground">
-          图片附件使用业务附件来源，不使用变量。
+          {{ kind === 'IMAGE' ? '图片附件使用业务附件来源，不使用变量。' : '文件消息使用固定文件或业务附件，不使用变量。' }}
         </div>
       </aside>
     </div>

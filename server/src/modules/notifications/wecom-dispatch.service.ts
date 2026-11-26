@@ -373,6 +373,19 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         mediaItems,
         notificationId: notification.id,
         sendMessage: async (item) => {
+          if (item.renderedMessage.kind === 'FILE') {
+            const result = await this.sendAppFileItem({
+              item,
+              delivery,
+              accessToken: token.accessToken,
+              agentId: app.agentId!,
+              toUser: binding.wecomUserId,
+            })
+            if (!result.ok && result.kind === 'TOKEN_INVALID') {
+              this.tokenService.invalidate(app.key)
+            }
+            return result
+          }
           if (item.renderedMessage.kind === 'MPNEWS') {
             const result = await this.sendAppMpnewsItem({
               item,
@@ -522,6 +535,9 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         notificationId: notification.id,
         sendMessage: async (item, isFirstText) => {
           const payload = asRecord(item.renderedMessage.payloadSnapshot)
+          if (item.renderedMessage.kind === 'FILE') {
+            return this.sendRobotFileItem({ item, delivery, webhookKey })
+          }
           if (item.renderedMessage.kind === 'MARKDOWN' || item.renderedMessage.kind === 'MARKDOWN_V2') {
             const content = typeof payload?.content === 'string' ? payload.content : ''
             if (content.trim().length === 0) {
@@ -624,6 +640,144 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       userIds: [...new Set(bindings.map(binding => binding.wecomUserId))],
       skipped: mention.userIds.length - bindings.length,
     }
+  }
+
+  private async sendAppFileItem(input: {
+    readonly item: DeliveryMessageRow
+    readonly delivery: ClaimedDelivery
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+  }): Promise<WecomTransportResult> {
+    const appId = input.delivery.app_id
+    if (appId === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_APP_MISSING', message: '文件投递缺少应用' }
+    }
+    const assetId = this.fileAssetId(input.item)
+    if (assetId === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_PAYLOAD_INVALID', message: '文件消息没有可用资产' }
+    }
+    const asset = await this.prisma.mediaAsset.findUnique({
+      where: { id: assetId },
+      select: {
+        mediaType: true,
+        status: true,
+        deletedAt: true,
+        objectKey: true,
+        mimeType: true,
+        originalFilename: true,
+        sizeBytes: true,
+      },
+    })
+    if (
+      asset === null
+      || asset.mediaType !== 'DOCUMENT'
+      || asset.status !== 'READY'
+      || asset.deletedAt !== null
+      || asset.objectKey === null
+      || asset.sizeBytes === null
+      || asset.sizeBytes > 20n * 1_024n * 1_024n
+    ) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_INVALID', message: '文件资产不可用或超过 20MB' }
+    }
+    const cacheKey = `app-file:${appId}:${assetId}`
+    let mediaId = await this.readMediaCache(cacheKey)
+    if (mediaId === null) {
+      let buffer: Buffer
+      try {
+        buffer = await this.mediaService.read(asset.objectKey)
+      }
+      catch {
+        return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_READ_FAILED', message: '读取文件资产失败' }
+      }
+      const upload = await this.appTransport.uploadFile({
+        accessToken: input.accessToken,
+        buffer,
+        mimeType: asset.mimeType ?? 'application/octet-stream',
+        filename: asset.originalFilename,
+      })
+      if (!upload.ok) {
+        return upload
+      }
+      mediaId = upload.mediaId
+      await this.writeMediaCache(cacheKey, mediaId, new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000))
+    }
+    return this.appTransport.sendFile({
+      accessToken: input.accessToken,
+      agentId: input.agentId,
+      toUser: input.toUser,
+      mediaId,
+    })
+  }
+
+  private async sendRobotFileItem(input: {
+    readonly item: DeliveryMessageRow
+    readonly delivery: ClaimedDelivery
+    readonly webhookKey: string
+  }): Promise<WecomTransportResult> {
+    if (input.delivery.target_id === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_TARGET_MISSING', message: '文件投递缺少群目标' }
+    }
+    const assetId = this.fileAssetId(input.item)
+    if (assetId === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_PAYLOAD_INVALID', message: '文件消息没有可用资产' }
+    }
+    const asset = await this.prisma.mediaAsset.findUnique({
+      where: { id: assetId },
+      select: {
+        mediaType: true,
+        status: true,
+        deletedAt: true,
+        objectKey: true,
+        mimeType: true,
+        originalFilename: true,
+        sizeBytes: true,
+      },
+    })
+    if (
+      asset === null
+      || asset.mediaType !== 'DOCUMENT'
+      || asset.status !== 'READY'
+      || asset.deletedAt !== null
+      || asset.objectKey === null
+      || asset.sizeBytes === null
+      || asset.sizeBytes > 20n * 1_024n * 1_024n
+    ) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_INVALID', message: '文件资产不可用或超过 20MB' }
+    }
+    const cacheKey = `robot-file:${input.delivery.target_id}:${assetId}`
+    let mediaId = await this.readMediaCache(cacheKey)
+    if (mediaId === null) {
+      let buffer: Buffer
+      try {
+        buffer = await this.mediaService.read(asset.objectKey)
+      }
+      catch {
+        return { ok: false, kind: 'REJECTED', code: 'WECOM_FILE_READ_FAILED', message: '读取文件资产失败' }
+      }
+      const upload = await this.robotTransport.uploadFile({
+        webhookKey: input.webhookKey,
+        buffer,
+        mimeType: asset.mimeType ?? 'application/octet-stream',
+        filename: asset.originalFilename,
+      })
+      if (!upload.ok) {
+        return upload
+      }
+      mediaId = upload.mediaId
+      await this.writeMediaCache(cacheKey, mediaId, new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000))
+    }
+    return this.robotTransport.sendFile({
+      webhookKey: input.webhookKey,
+      mediaId,
+    })
+  }
+
+  private fileAssetId(item: DeliveryMessageRow): string | null {
+    const payload = asRecord(item.renderedMessage.payloadSnapshot)
+    return typeof payload?.mediaAssetId === 'string' && payload.mediaAssetId.length > 0
+      ? payload.mediaAssetId
+      : null
   }
 
   private async sendAppMpnewsItem(input: {

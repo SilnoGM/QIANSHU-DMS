@@ -18,9 +18,11 @@ const MESSAGE_FIELD_LABELS: Readonly<Record<string, string>> = {
   description: '描述',
   digest: '摘要',
   enabled: '启用状态',
+  filename: '文件名',
   kind: '消息类型',
   linkUrl: '链接',
   maxCount: '最多发送张数',
+  mediaAssetId: '文件资产',
   mediaPolicy: '附件来源',
   message: '消息',
   title: '标题',
@@ -196,6 +198,17 @@ export function createDefaultMessageDraft(
         description: '',
         url: '',
         btntxt: null,
+      },
+      mediaPolicy: {},
+      enabled: true,
+    }
+  }
+  if (kind === 'FILE') {
+    return {
+      kind,
+      payload: {
+        mediaAssetId: null,
+        filename: null,
       },
       mediaPolicy: {},
       enabled: true,
@@ -409,6 +422,39 @@ export function validateMessageDraft(
       ['url', url],
       ['btntxt', btntxt],
     ], context, add)
+    return issues
+  }
+
+  if (message.kind === 'FILE') {
+    const fixedAssetId = stringValue(payload, 'mediaAssetId')
+    const filename = optionalString(payload, 'filename')
+    const policy = asRecord(message.mediaPolicy)
+    const sourceKeys = Array.isArray(policy?.sourceKeys)
+      ? policy.sourceKeys.filter((key): key is string => typeof key === 'string' && key.length > 0)
+      : []
+    const hasFixed = fixedAssetId.length > 0
+    const hasDynamic = sourceKeys.length > 0
+    if (hasFixed && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(fixedAssetId)) {
+      add('mediaAssetId', '文件资产 ID 无效')
+    }
+    if (filename !== null && filename.length > 255) {
+      add('filename', '文件名不能超过 255 字符')
+    }
+    if (hasFixed && hasDynamic) {
+      add('mediaPolicy', '不能同时使用固定文件和业务附件')
+    }
+    if (!hasFixed && !hasDynamic) {
+      add('mediaAssetId', '请上传文件或选择业务附件来源')
+    }
+    if (hasDynamic) {
+      const unknown = sourceKeys.filter(key => !context.mediaSources.includes(key))
+      if (unknown.length > 0) {
+        add('mediaPolicy', `文件来源未声明：${unknown.join('、')}`)
+      }
+      if (policy?.maxCount !== 1) {
+        add('mediaPolicy', '文件消息只能配置一个业务附件')
+      }
+    }
     return issues
   }
 

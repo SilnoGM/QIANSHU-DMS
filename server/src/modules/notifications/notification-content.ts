@@ -26,8 +26,8 @@ export type NotificationMessageKindValue = (typeof NOTIFICATION_MESSAGE_KINDS)[n
  */
 export const IMPLEMENTED_MESSAGE_KINDS_BY_METHOD: Readonly<Record<NotificationSendMethodValue, readonly NotificationMessageKindValue[]>> = Object.freeze({
   IN_APP: ['TEXT'],
-  APP: ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'IMAGE'],
-  ROBOT: ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'IMAGE'],
+  APP: ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE'],
+  ROBOT: ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'FILE', 'IMAGE'],
 })
 
 export const MPNEWS_MAX_CONTENT_BYTES = 666 * 1024
@@ -41,6 +41,12 @@ const MAX_DIGEST_BYTES = 512
 const TEXTCARD_DESCRIPTION_MAX_BYTES = 512
 const TEXTCARD_URL_MAX_LENGTH = 2_048
 const TEXTCARD_BUTTON_MAX_BYTES = 16
+export const FILE_MAX_BYTES = 20n * 1_024n * 1_024n
+
+export interface NotificationFilePayload {
+  readonly mediaAssetId: string | null
+  readonly filename?: string | null
+}
 
 export interface NotificationMarkdownPayload {
   readonly content: string
@@ -87,7 +93,7 @@ export interface NotificationContentItemInput {
 
 export interface NormalizedNotificationContentItem {
   readonly kind: NotificationMessageKindValue
-  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | NotificationMarkdownPayload | NotificationTextcardPayload | Record<string, never>
+  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | NotificationMarkdownPayload | NotificationTextcardPayload | NotificationFilePayload | Record<string, never>
   readonly mediaPolicy: unknown
   readonly enabled: boolean
   readonly sortOrder: number
@@ -427,6 +433,62 @@ function validateTextcard(input: {
   }
 }
 
+function validateFile(input: {
+  readonly payload: unknown
+  readonly mediaPolicy: unknown
+  readonly mediaSources: readonly string[] | null
+  readonly itemIndex: number
+}): {
+  readonly payload?: NotificationFilePayload
+  readonly mediaPolicy?: { readonly sourceKeys: readonly string[], readonly maxCount: 1 } | Record<string, never>
+  readonly issues: readonly NotificationContentIssue[]
+} {
+  const record = asRecord(input.payload)
+  const fixed = asTrimmedString(record?.mediaAssetId)
+  const filename = record?.filename === null || record?.filename === undefined
+    ? null
+    : asTrimmedString(record.filename)
+  const policy = asRecord(input.mediaPolicy)
+  const rawSourceKeys = policy?.sourceKeys
+  const sourceKeys = Array.isArray(rawSourceKeys)
+    ? rawSourceKeys.filter((key): key is string => typeof key === 'string' && key.length > 0)
+    : []
+  const issues: NotificationContentIssue[] = []
+  if (fixed !== null && !UUID_PATTERN.test(fixed)) {
+    issues.push(issue('NOTIFICATION_CONTENT_FILE_ASSET_INVALID', '文件资产 ID 无效', input.itemIndex, 'mediaAssetId'))
+  }
+  if (filename !== null && filename.length > 255) {
+    issues.push(issue('NOTIFICATION_CONTENT_FILE_FILENAME_TOO_LONG', '文件名不能超过 255 字符', input.itemIndex, 'filename'))
+  }
+  const hasFixed = fixed !== null && fixed.length > 0
+  const hasDynamic = sourceKeys.length > 0
+  if (hasFixed && hasDynamic) {
+    issues.push(issue('NOTIFICATION_CONTENT_FILE_MEDIA_AMBIGUOUS', '文件消息不能同时使用固定资产和业务来源', input.itemIndex, 'mediaPolicy'))
+  }
+  if (!hasFixed && !hasDynamic) {
+    issues.push(issue('NOTIFICATION_CONTENT_FILE_MEDIA_REQUIRED', '文件消息必须上传文件或选择业务来源', input.itemIndex, 'mediaPolicy'))
+  }
+  if (hasDynamic) {
+    const declared = new Set(input.mediaSources ?? [])
+    const unknown = sourceKeys.filter(key => !declared.has(key))
+    if (unknown.length > 0) {
+      issues.push(issue('NOTIFICATION_CONTENT_FILE_SOURCE_UNDECLARED', `文件来源未声明：${unknown.join('、')}`, input.itemIndex, 'mediaPolicy'))
+    }
+    if (policy?.maxCount !== undefined && policy.maxCount !== 1) {
+      issues.push(issue('NOTIFICATION_CONTENT_FILE_LIMIT_INVALID', '文件消息只能配置一个业务附件', input.itemIndex, 'mediaPolicy'))
+    }
+  }
+  return {
+    ...(issues.length === 0
+      ? {
+          payload: { mediaAssetId: hasFixed ? fixed : null, filename },
+          mediaPolicy: hasDynamic ? { sourceKeys, maxCount: 1 as const } : {},
+        }
+      : {}),
+    issues,
+  }
+}
+
 function validateMpnews(input: {
   readonly payload: unknown
   readonly allowedVariables: readonly string[] | null
@@ -642,17 +704,26 @@ function validateImage(input: {
 export interface NotificationContentAssetIds {
   readonly coverAssetId: string | null
   readonly inlineAssetIds: readonly string[]
+  readonly fileAssetId: string | null
 }
 
-/** 从 mpnews payload 提取封面与正文图片资产 ID；其他类型返回空。 */
+/** 从内容 payload 提取固定媒体资产 ID；业务动态来源不在此列。 */
 export function extractNotificationContentAssetIds(item: {
   readonly kind: string
   readonly payload: unknown
 }): NotificationContentAssetIds {
-  if (item.kind !== 'MPNEWS') {
-    return { coverAssetId: null, inlineAssetIds: [] }
-  }
   const record = asRecord(item.payload)
+  if (item.kind === 'FILE') {
+    const fileAssetId = asTrimmedString(record?.mediaAssetId)
+    return {
+      coverAssetId: null,
+      inlineAssetIds: [],
+      fileAssetId: fileAssetId !== null && UUID_PATTERN.test(fileAssetId) ? fileAssetId : null,
+    }
+  }
+  if (item.kind !== 'MPNEWS') {
+    return { coverAssetId: null, inlineAssetIds: [], fileAssetId: null }
+  }
   const cover = asRecord(record?.cover)
   const coverAssetId = asTrimmedString(cover?.mediaAssetId)
   const content = typeof record?.content === 'string' ? record.content : ''
@@ -665,6 +736,7 @@ export function extractNotificationContentAssetIds(item: {
   return {
     coverAssetId: coverAssetId !== null && UUID_PATTERN.test(coverAssetId) ? coverAssetId : null,
     inlineAssetIds: [...inline].filter(assetId => UUID_PATTERN.test(assetId)),
+    fileAssetId: null,
   }
 }
 
@@ -866,6 +938,26 @@ export function validateNotificationContentGroup(input: {
           enabled: item.enabled !== false,
           sortOrder: item.sortOrder ?? index,
           contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: item.mediaPolicy ?? {} }),
+        })
+      }
+      return
+    }
+    if (item.kind === 'FILE') {
+      const result = validateFile({
+        payload: item.payload,
+        mediaPolicy: item.mediaPolicy,
+        mediaSources: input.mediaSources ?? null,
+        itemIndex: index,
+      })
+      issues.push(...result.issues)
+      if (result.payload !== undefined && result.mediaPolicy !== undefined) {
+        normalized.push({
+          kind: item.kind,
+          payload: result.payload,
+          mediaPolicy: result.mediaPolicy,
+          enabled: item.enabled !== false,
+          sortOrder: item.sortOrder ?? index,
+          contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: result.mediaPolicy }),
         })
       }
       return

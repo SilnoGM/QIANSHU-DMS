@@ -20,6 +20,7 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import {
+  NotificationContentFileUploadDto,
   NotificationContentMediaParamDto,
   NotificationContentMediaUploadDto,
 } from './notification-content-media.dto'
@@ -123,6 +124,34 @@ export class NotificationContentMediaController {
   ])
   upload(@Req() request: NotificationContentMediaMultipartRequest) {
     return this.media.upload(context(request), request)
+  }
+
+  @Post('files')
+  @HttpCode(201)
+  @RequirePermissions('notification-policy:update')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      additionalProperties: false,
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiContractResponse({ status: 201, type: NotificationContentFileUploadDto })
+  @contract('notifications_content_file_upload', true, [
+    {
+      status: 422,
+      codes: [
+        'NOTIFICATION_CONTENT_FILE_INVALID',
+        'NOTIFICATION_CONTENT_MEDIA_MULTIPART_INVALID',
+        'NOTIFICATION_CONTENT_MEDIA_TOO_LARGE',
+      ],
+    },
+    { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
+  ])
+  uploadFile(@Req() request: NotificationContentMediaMultipartRequest) {
+    return this.media.uploadFile(context(request), request)
   }
 
   @Get(':assetId/content')

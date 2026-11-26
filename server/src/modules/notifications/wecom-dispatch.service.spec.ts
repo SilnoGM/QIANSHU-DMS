@@ -113,6 +113,8 @@ function service(
     sendMpnews: jest.fn(),
     sendMarkdown: jest.fn(),
     sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
   },
   mediaOverrides: Record<string, unknown> = {},
 ): WecomDispatchService {
@@ -166,6 +168,8 @@ describe('WecomDispatchService', () => {
       sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendImage: jest.fn(),
       sendMarkdown: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -212,6 +216,8 @@ describe('WecomDispatchService', () => {
       sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendImage: jest.fn(),
       sendMarkdown: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -262,8 +268,10 @@ describe('WecomDispatchService', () => {
       sendMpnews: jest.fn(),
       sendMarkdown: jest.fn(),
       sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -314,8 +322,8 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn(), sendMarkdown: jest.fn(), sendTextcard: jest.fn() }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
+    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn(), sendMarkdown: jest.fn(), sendTextcard: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -348,7 +356,7 @@ describe('WecomDispatchService', () => {
           }),
         },
       })
-      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }
+      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }
       const instance = service(prisma, robot)
 
       await runDelivery(instance, robotDelivery())
@@ -419,8 +427,10 @@ describe('WecomDispatchService', () => {
       sendMpnews: jest.fn(),
       sendMarkdown: jest.fn(),
       sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -508,6 +518,8 @@ describe('WecomDispatchService', () => {
         .mockResolvedValueOnce({ ok: true, msgId: null }),
       sendImage: jest.fn(),
       sendMarkdown: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -613,6 +625,8 @@ describe('WecomDispatchService', () => {
       sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendImage: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendMarkdown: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
     const instance = service(prisma, robot, undefined, {
       read: jest.fn().mockResolvedValue(Buffer.from('image')),
@@ -706,6 +720,8 @@ describe('WecomDispatchService', () => {
       sendMpnews: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-2' }),
       sendMarkdown: jest.fn(),
       sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
     }
     const prepared = {
       ok: true,
@@ -713,7 +729,7 @@ describe('WecomDispatchService', () => {
       mimeType: 'image/png',
       filename: 'image.png',
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app, {
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app, {
       read: jest.fn().mockResolvedValue(Buffer.from('source')),
       prepareAppImage: jest.fn().mockResolvedValue(prepared),
       prepareMpnewsInlineImage: jest.fn().mockResolvedValue(prepared),

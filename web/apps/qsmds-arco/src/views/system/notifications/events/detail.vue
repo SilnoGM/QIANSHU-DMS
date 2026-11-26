@@ -411,6 +411,11 @@ function messageSummary(message: MessageDraft): string {
       ? message.payload.title
       : '未填写标题'
   }
+  if (message.kind === 'FILE') {
+    return typeof message.payload.filename === 'string' && message.payload.filename.length > 0
+      ? message.payload.filename
+      : '文件消息'
+  }
   if (message.kind === 'IMAGE') {
     const count = imageSourceKeys(message.mediaPolicy, mediaSourceKeys.value).length
     return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message.mediaPolicy)} 张`
@@ -430,6 +435,8 @@ function messageTypeDescription(message: MessageDraft): string {
       return '文本卡片'
     case 'MPNEWS':
       return '企微图文（封面 + 正文）'
+    case 'FILE':
+      return '文件'
     case 'IMAGE':
       return '业务附件图片'
     default:
@@ -515,6 +522,11 @@ const addMessageMenu = computed(() => {
         handle: () => openCreateMessage('MARKDOWN_V2'),
       })
     }
+    items.push({
+      label: messageKindLabel('FILE'),
+      icon: 'i-lucide:file-text',
+      handle: () => openCreateMessage('FILE'),
+    })
   }
   if (
     draft.channel === 'WECOM'
@@ -554,8 +566,8 @@ function validateDraft(draft: ChannelDraft): string | null {
     }
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
     const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
-      ? ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'IMAGE']
-      : ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'IMAGE']
+      ? ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'FILE', 'IMAGE']
+      : ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE']
     const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
     if (unsupported !== undefined) {
       return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${messageKindLabel(unsupported.kind)} 消息，请删除或切换发送方式`

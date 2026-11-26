@@ -64,6 +64,12 @@ export interface WecomAppTransport {
     readonly mimeType: string
     readonly filename: string
   }): Promise<WecomMediaUploadResult>
+  uploadFile(input: {
+    readonly accessToken: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult>
   uploadImageUrl(input: {
     readonly accessToken: string
     readonly buffer: Buffer
@@ -71,6 +77,12 @@ export interface WecomAppTransport {
     readonly filename: string
   }): Promise<WecomImageUrlResult>
   sendImage(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly mediaId: string
+  }): Promise<WecomTransportResult>
+  sendFile(input: {
     readonly accessToken: string
     readonly agentId: number
     readonly toUser: string
@@ -114,6 +126,16 @@ export interface WecomRobotTransport {
     readonly webhookKey: string
     readonly base64: string
     readonly md5: string
+  }): Promise<WecomTransportResult>
+  uploadFile(input: {
+    readonly webhookKey: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult>
+  sendFile(input: {
+    readonly webhookKey: string
+    readonly mediaId: string
   }): Promise<WecomTransportResult>
 }
 

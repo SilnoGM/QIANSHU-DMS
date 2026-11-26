@@ -72,9 +72,15 @@ interface NotificationInlineMediaAssignment {
   readonly sourceKey: string
 }
 
+interface NotificationFileMediaAssignment {
+  readonly mediaAssetId: string
+  readonly sourceKey: string | null
+}
+
 interface ResolvedEventMediaPlan {
   readonly attachments: readonly NotificationMediaAttachment[]
   readonly inlineByMessageId: ReadonlyMap<string, readonly NotificationInlineMediaAssignment[]>
+  readonly fileByMessageId: ReadonlyMap<string, NotificationFileMediaAssignment>
 }
 
 /** 非 UUID 输入不能进 SQL：PostgreSQL 会以 22P02 中止整个业务事务。 */
@@ -433,7 +439,7 @@ export class SystemNotificationService {
       input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '企业微信渠道未配置消息内容' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
     }
-    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'MPNEWS', 'IMAGE'].includes(message.kind))) {
+    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE'].includes(message.kind))) {
       input.warnings.push({ code: 'MESSAGE_KIND_NOT_IMPLEMENTED', message: '当前发布链路暂不支持该消息类型' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED' }
     }
@@ -474,6 +480,12 @@ export class SystemNotificationService {
           variables: input.variables,
         })
       }
+      if (message.kind === 'FILE') {
+        return this.renderEventFileMessage({
+          message,
+          resolved: mediaPlan.fileByMessageId.get(message.id),
+        })
+      }
       return this.renderEventTextMessage({
         command: input.command,
         channelConfig: input.channelConfig,
@@ -498,6 +510,7 @@ export class SystemNotificationService {
       if (item.kind === 'MARKDOWN' || item.kind === 'MARKDOWN_V2') return item.payload.content
       if (item.kind === 'TEXTCARD') return item.payload.title
       if (item.kind === 'MPNEWS') return item.payload.title
+      if (item.kind === 'FILE') return '文件消息'
       return ''
     }).filter(part => part.length > 0).join('\n\n')
 
@@ -654,20 +667,47 @@ export class SystemNotificationService {
     }))
     if (renderedRows.length > 0) {
       await transaction.notificationRenderedMessage.createMany({ data: renderedRows })
-      const inlineRows = renderedRows.flatMap((row, index) => {
+      const inlineRows = renderedRows.flatMap<{
+        id: string
+        renderedMessageId: string
+        mediaAssetId: string
+        role: 'INLINE' | 'FILE'
+        sourceKey: string | null
+        sortOrder: number
+      }>((row, index) => {
         const message = renderableMessages[index]
-        if (message?.kind !== 'MPNEWS') {
+        if (message === undefined) {
           return []
         }
-        const assignments = mediaPlan.inlineByMessageId.get(message.id) ?? []
-        return assignments.map(assignment => ({
-          id: randomUUID(),
-          renderedMessageId: row.id,
-          mediaAssetId: assignment.mediaAssetId,
-          role: 'INLINE' as const,
-          sourceKey: assignment.sourceKey,
-          sortOrder: assignment.slotIndex,
-        }))
+        if (message.kind === 'MPNEWS') {
+          const assignments = mediaPlan.inlineByMessageId.get(message.id) ?? []
+          return assignments.map(assignment => ({
+            id: randomUUID(),
+            renderedMessageId: row.id,
+            mediaAssetId: assignment.mediaAssetId,
+            role: 'INLINE' as const,
+            sourceKey: assignment.sourceKey,
+            sortOrder: assignment.slotIndex,
+          }))
+        }
+        if (message.kind === 'FILE') {
+          const resolved = mediaPlan.fileByMessageId.get(message.id)
+          const fixed = asRecord(message.payload)?.mediaAssetId
+          const mediaAssetId = resolved?.mediaAssetId
+            ?? (typeof fixed === 'string' && fixed.length > 0 ? fixed : null)
+          if (mediaAssetId === null) {
+            return []
+          }
+          return [{
+            id: randomUUID(),
+            renderedMessageId: row.id,
+            mediaAssetId,
+            role: 'FILE' as const,
+            sourceKey: resolved?.sourceKey ?? null,
+            sortOrder: 0,
+          }]
+        }
+        return []
       })
       if (inlineRows.length > 0) {
         await transaction.notificationRenderedMessageMedia.createMany({ data: inlineRows })
@@ -738,6 +778,13 @@ export class SystemNotificationService {
     }
     const totalInlineSlots = [...inlineSlotsByMessageId.values()]
       .reduce((total, slots) => total + slots.length, 0)
+    const dynamicFileCount = input.messages.filter((message) => {
+      if (message.kind !== 'FILE') return false
+      const payload = asRecord(message.payload)
+      if (typeof payload?.mediaAssetId === 'string' && payload.mediaAssetId.length > 0) return false
+      const policy = asRecord(message.mediaPolicy)
+      return Array.isArray(policy?.sourceKeys) && policy.sourceKeys.length > 0
+    }).length
     if (requested.length === 0) {
       if (totalInlineSlots > 0) {
         input.warnings.push({
@@ -745,9 +792,16 @@ export class SystemNotificationService {
           message: `${totalInlineSlots} 张正文业务图片未插入：缺少来源图片或资产不可用`,
         })
       }
+      if (dynamicFileCount > 0) {
+        input.warnings.push({
+          code: 'FILE_MEDIA_SKIPPED',
+          message: `${dynamicFileCount} 个文件消息未找到可用业务附件`,
+        })
+      }
       return {
         attachments: [],
         inlineByMessageId: new Map(),
+        fileByMessageId: new Map(),
       }
     }
 
@@ -762,6 +816,23 @@ export class SystemNotificationService {
       return policy === null ? [] : [{ policy, remaining: policy.maxCount }]
     })
     const hasInlineConsumers = inlineSlotsByMessageId.size > 0
+    const fileSpecs = input.messages.flatMap((message) => {
+      if (message.kind !== 'FILE') {
+        return []
+      }
+      const payload = asRecord(message.payload)
+      const fixedAssetId = typeof payload?.mediaAssetId === 'string' ? payload.mediaAssetId : ''
+      if (fixedAssetId.length > 0) {
+        return []
+      }
+      const policy = asRecord(message.mediaPolicy)
+      const rawSourceKeys = policy?.sourceKeys
+      const sourceKeys = Array.isArray(rawSourceKeys)
+        ? rawSourceKeys.filter((key): key is string => typeof key === 'string' && key.length > 0)
+        : []
+      return sourceKeys.length > 0 ? [{ message, sourceKeys }] : []
+    })
+    const hasMediaConsumers = hasInlineConsumers || fileSpecs.length > 0
     const queryable = requested
       .map(item => item.assetId)
       .filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
@@ -775,7 +846,8 @@ export class SystemNotificationService {
 
     const states = requested.map((item, sortOrder) => {
       let blockedReason: string | null = null
-      if (specs.length === 0 && !hasInlineConsumers) {
+      const asset = assetById.get(item.assetId)
+      if (specs.length === 0 && !hasMediaConsumers) {
         blockedReason = 'POLICY_DISABLED'
       }
       else if (!input.channelConfig.allowSensitive) {
@@ -785,30 +857,27 @@ export class SystemNotificationService {
       else if (item.sourceKey !== null && !declaredSources.has(item.sourceKey)) {
         blockedReason = 'SOURCE_NOT_DECLARED'
       }
-      else {
-        const asset = assetById.get(item.assetId)
-        if (asset === undefined) {
-          blockedReason = 'ASSET_NOT_FOUND'
-        }
-        else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
-          blockedReason = 'ASSET_NOT_READY'
-        }
-        else if (asset.mediaType !== 'IMAGE') {
-          blockedReason = 'KIND_NOT_ALLOWED'
-        }
+      else if (asset === undefined) {
+        blockedReason = 'ASSET_NOT_FOUND'
+      }
+      else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+        blockedReason = 'ASSET_NOT_READY'
       }
       return {
         assetId: item.assetId,
         sourceKey: item.sourceKey,
+        assetType: asset?.mediaType ?? null,
         sortOrder,
-        assignedTo: null as 'INLINE' | 'ATTACHMENT' | null,
+        assignedTo: null as 'INLINE' | 'ATTACHMENT' | 'FILE' | null,
         attachmentMessageSortOrder: null as number | null,
         blockedReason,
       }
     })
 
     const inlineByMessageId = new Map<string, NotificationInlineMediaAssignment[]>()
+    const fileByMessageId = new Map<string, NotificationFileMediaAssignment>()
     let skippedInlineCount = 0
+    let skippedFileCount = 0
 
     for (const message of input.messages) {
       if (message.kind === 'MPNEWS') {
@@ -821,7 +890,8 @@ export class SystemNotificationService {
           const state = states.find(candidate =>
             candidate.assignedTo === null
             && candidate.blockedReason === null
-            && candidate.sourceKey === sourceKey,
+            && candidate.sourceKey === sourceKey
+            && candidate.assetType === 'IMAGE',
           )
           if (state === undefined) {
             skippedInlineCount += 1
@@ -840,6 +910,30 @@ export class SystemNotificationService {
         continue
       }
 
+      if (message.kind === 'FILE') {
+        const spec = fileSpecs.find(candidate => candidate.message.id === message.id)
+        if (spec === undefined) {
+          continue
+        }
+        const state = states.find(candidate =>
+          candidate.assignedTo === null
+          && candidate.blockedReason === null
+          && candidate.assetType === 'DOCUMENT'
+          && candidate.sourceKey !== null
+          && spec.sourceKeys.includes(candidate.sourceKey),
+        )
+        if (state === undefined) {
+          skippedFileCount += 1
+          continue
+        }
+        state.assignedTo = 'FILE'
+        fileByMessageId.set(message.id, {
+          mediaAssetId: state.assetId,
+          sourceKey: state.sourceKey,
+        })
+        continue
+      }
+
       if (message.kind !== 'IMAGE') {
         continue
       }
@@ -853,6 +947,9 @@ export class SystemNotificationService {
           break
         }
         if (state.assignedTo !== null || state.blockedReason !== null) {
+          continue
+        }
+        if (state.assetType !== 'IMAGE') {
           continue
         }
         if (policy.sourceKeys.length > 0
@@ -873,7 +970,7 @@ export class SystemNotificationService {
     }> = []
     const attachments: NotificationMediaAttachment[] = []
     for (const state of states) {
-      if (state.assignedTo === 'INLINE') {
+      if (state.assignedTo === 'INLINE' || state.assignedTo === 'FILE') {
         continue
       }
       if (state.assignedTo === 'ATTACHMENT') {
@@ -923,9 +1020,16 @@ export class SystemNotificationService {
         message: `${skippedInlineCount} 张正文业务图片未插入：缺少来源图片或资产不可用`,
       })
     }
+    if (skippedFileCount > 0) {
+      input.warnings.push({
+        code: 'FILE_MEDIA_SKIPPED',
+        message: `${skippedFileCount} 个文件消息未找到可用业务附件`,
+      })
+    }
     return {
       attachments,
       inlineByMessageId,
+      fileByMessageId,
     }
   }
 
@@ -1143,6 +1247,30 @@ export class SystemNotificationService {
         btntxt: btntxt?.ok ? btntxt.content : null,
       },
       warnings: [...warnings],
+    }
+  }
+
+  private renderEventFileMessage(input: {
+    readonly message: EventChannelMessage
+    readonly resolved: NotificationFileMediaAssignment | undefined
+  }): {
+    readonly ok: true
+    readonly kind: 'FILE'
+    readonly payload: { readonly mediaAssetId: string | null, readonly filename?: string | null }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } {
+    const payload = asRecord(input.message.payload)
+    const fixedAssetId = typeof payload?.mediaAssetId === 'string' && payload.mediaAssetId.length > 0
+      ? payload.mediaAssetId
+      : null
+    return {
+      ok: true,
+      kind: 'FILE',
+      payload: {
+        mediaAssetId: fixedAssetId ?? input.resolved?.mediaAssetId ?? null,
+        filename: typeof payload?.filename === 'string' ? payload.filename : null,
+      },
+      warnings: [],
     }
   }
 

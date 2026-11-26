@@ -275,6 +275,27 @@ test('Markdown 与文本卡片校验', () => {
   assert.match(validateMessageDraft(textcard, context())[0]?.message ?? '', /http\/https/u)
 })
 
+test('文件消息校验固定文件与业务来源', () => {
+  const fixed = createDefaultMessageDraft('FILE', context())
+  fixed.payload = {
+    mediaAssetId: '00000000-0000-4000-8000-000000000222',
+    filename: '报价单.pdf',
+  }
+  assert.deepEqual(validateMessageDraft(fixed, context()), [])
+
+  const dynamic = createDefaultMessageDraft('FILE', context())
+  dynamic.payload = { mediaAssetId: null }
+  dynamic.mediaPolicy = { sourceKeys: ['salesOrder.contract'], maxCount: 1 }
+  assert.deepEqual(validateMessageDraft(dynamic, context()), [])
+
+  const empty = createDefaultMessageDraft('FILE', context())
+  assert.match(validateMessageDraft(empty, context())[0]?.message ?? '', /上传文件或选择业务附件/u)
+
+  const unknown = createDefaultMessageDraft('FILE', context())
+  unknown.mediaPolicy = { sourceKeys: ['unknown.file'], maxCount: 1 }
+  assert.match(validateMessageDraft(unknown, context())[0]?.message ?? '', /未声明/u)
+})
+
 test('消息草稿快照可区分未修改与已修改', () => {
   const draft = textDraft('你好')
   const clone = cloneMessageDraft(draft)

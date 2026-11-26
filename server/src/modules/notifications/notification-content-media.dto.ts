@@ -12,6 +12,13 @@ export class NotificationContentMediaUploadDto {
   @ApiProperty() originalFilename!: string
 }
 
+export class NotificationContentFileUploadDto {
+  @ApiProperty({ format: 'uuid' }) assetId!: string
+  @ApiProperty() mimeType!: string
+  @ApiProperty({ type: 'string', description: '字节数（BigInt 以字符串传输）' }) sizeBytes!: string
+  @ApiProperty() originalFilename!: string
+}
+
 export class NotificationContentMediaParamDto {
   @ApiProperty({ format: 'uuid' }) @IsString() @Matches(UUID_PATTERN) assetId!: string
 }

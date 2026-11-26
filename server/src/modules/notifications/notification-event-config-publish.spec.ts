@@ -359,6 +359,50 @@ describe('SystemNotificationService event config branch', () => {
     })
   })
 
+  it('renders fixed file messages and records the rendered file reference', async () => {
+    const assetId = '00000000-0000-4000-8000-000000000222'
+    const config = wecomConfig({
+      messages: [
+        textMessage('请查收文件', 0),
+        {
+          ...textMessage('', 1),
+          id: 'message-file',
+          kind: 'FILE',
+          payload: { mediaAssetId: assetId, filename: '报价单.pdf' },
+          mediaPolicy: {},
+        },
+      ],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    await service.publish({
+      eventType: EVENT_TYPE,
+      source: { type: 'sales_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: {},
+    })
+
+    expect(prisma.notificationRenderedMessage.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'FILE',
+          payloadSnapshot: { mediaAssetId: assetId, filename: '报价单.pdf' },
+        }),
+      ]),
+    })
+    expect(prisma.notificationRenderedMessageMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: assetId,
+        role: 'FILE',
+      })],
+    })
+  })
+
   it('skips WECOM when content contains an unimplemented kind', async () => {
     const config = wecomConfig({
       messages: [{

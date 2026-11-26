@@ -1444,6 +1444,7 @@ export type NotificationPublishWarningCode =
   | 'MESSAGE_KIND_NOT_IMPLEMENTED'
   | 'MPNEWS_METADATA_TRUNCATED'
   | 'MPNEWS_INLINE_MEDIA_SKIPPED'
+  | 'FILE_MEDIA_SKIPPED'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel

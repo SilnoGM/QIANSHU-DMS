@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
-import type { WecomRobotTransport, WecomTransportResult } from './wecom.types'
+import type { WecomMediaUploadResult, WecomRobotTransport, WecomTransportResult } from './wecom.types'
 import { utf8Bytes } from './wecom.types'
 
 const MAX_RESPONSE_BYTES = 64 * 1024
@@ -200,6 +200,75 @@ export class WecomRobotHttpTransport implements WecomRobotTransport {
       code: `WECOM_ROBOT_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
       message: errmsg || '企业微信群机器人请求被拒绝',
     }
+  }
+
+  async uploadFile(input: {
+    readonly webhookKey: string
+    readonly buffer: Buffer
+    readonly mimeType: string
+    readonly filename: string
+  }): Promise<WecomMediaUploadResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    if (input.webhookKey.trim().length === 0) {
+      return { ok: false, kind: 'WEBHOOK_INVALID', code: 'WECOM_ROBOT_KEY_MISSING', message: '群机器人 webhook key 为空' }
+    }
+    const url = new URL('/cgi-bin/webhook/upload_media', config.baseUrl)
+    url.searchParams.set('key', input.webhookKey)
+    url.searchParams.set('type', 'file')
+    const form = new FormData()
+    form.append('media', new Blob([new Uint8Array(input.buffer)], { type: input.mimeType }), input.filename)
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, { method: 'POST', body: form, redirect: 'error' })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: 'WECOM_ROBOT_FILE_TIMEOUT', message: '企业微信群机器人文件上传超时' }
+        : { ok: false, kind: 'NETWORK', code: 'WECOM_ROBOT_FILE_NETWORK', message: '企业微信群机器人文件上传网络请求失败' }
+    }
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_ROBOT_FILE_RESPONSE_TOO_LARGE', message: '企业微信群机器人文件上传响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: 'WECOM_ROBOT_FILE_INVALID_JSON', message: '企业微信群机器人文件上传返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      const mediaId = typeof payload?.media_id === 'string' ? payload.media_id : ''
+      return mediaId.length > 0
+        ? { ok: true, mediaId }
+        : { ok: false, kind: 'UNKNOWN', code: 'WECOM_ROBOT_FILE_INVALID_RESPONSE', message: '企业微信未返回 media_id' }
+    }
+    if (errcode === 45009 || response.status === 429) {
+      return { ok: false, kind: 'RATE_LIMITED', code: 'WECOM_ROBOT_FILE_RATE_LIMITED', message: '企业微信群机器人文件上传被限流' }
+    }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: `WECOM_ROBOT_FILE_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
+      message: errmsg || '企业微信群机器人文件上传被拒绝',
+    }
+  }
+
+  async sendFile(input: {
+    readonly webhookKey: string
+    readonly mediaId: string
+  }): Promise<WecomTransportResult> {
+    return this.sendJsonPayload(input.webhookKey, {
+      msgtype: 'file',
+      file: { media_id: input.mediaId },
+    }, 'FILE')
   }
 
   async sendImage(input: {

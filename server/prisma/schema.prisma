@@ -3535,10 +3535,12 @@ enum NotificationMessageKind {
   @@map("notification_message_kind")
 }
 
-/// 内容消息项引用的媒体角色：mpnews 固定封面与富文本正文图片。
+/// 内容消息项引用的媒体角色：mpnews 封面/正文图、文件消息与图文卡片图片。
 enum NotificationMessageMediaRole {
   COVER
   INLINE
+  FILE
+  NEWS_IMAGE
 
   @@map("notification_message_media_role")
 }
