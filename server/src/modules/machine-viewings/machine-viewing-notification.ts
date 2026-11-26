@@ -7,10 +7,12 @@ import {
 } from '../notifications/notification-display-labels'
 import {
   renderNotificationTemplate,
-  type NotificationTemplateVariable,
 } from '../notifications/notification-template.renderer'
 import type { SystemNotificationService } from '../notifications/system-notification.service'
-import type { SystemNotificationPublishResult } from '../notifications/notification.types'
+import {
+  notificationEventVariableDefinitions,
+  type SystemNotificationPublishResult,
+} from '../notifications/notification.types'
 import {
   formatMachineViewingDate,
   shanghaiCalendarDate,
@@ -157,7 +159,6 @@ export async function publishAppointmentNotification(
     eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
     source: { type: 'MACHINE_VIEWING_APPOINTMENT', id: appointment.id },
     target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
-    templateKey: 'operations.machine-viewing.created',
     variables: appointmentNotificationVariables(appointment),
     dedupeKey: appointmentNotificationDedupeKey(appointment.id, appointment.scheduleRevision),
     priority: 'NORMAL',
@@ -178,7 +179,6 @@ export async function publishRescheduleNotification(
     eventType: 'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED',
     source: { type: 'MACHINE_VIEWING_APPOINTMENT', id: next.id },
     target: { kind: 'ROLE', roleCodes: ['purchasing_staff'] },
-    templateKey: 'operations.machine-viewing.rescheduled',
     variables: rescheduleNotificationVariables(previous, next, now),
     dedupeKey: rescheduleNotificationDedupeKey(next.id, next.scheduleRevision),
     priority: 'NORMAL',
@@ -187,75 +187,79 @@ export async function publishRescheduleNotification(
   return isNotificationAccepted(transaction, result)
 }
 
-function parseTemplateVariables(value: Prisma.JsonValue): NotificationTemplateVariable[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  return value.flatMap(item => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
-      return []
-    }
-    const record = item as Record<string, unknown>
-    if (typeof record.name !== 'string' || record.name.length === 0) {
-      return []
-    }
-    return [{
-      name: record.name,
-      required: record.required === true,
-      sensitive: record.sensitive === true,
-      ...(typeof record.maxLength === 'number' ? { maxLength: record.maxLength } : {}),
-    }]
-  })
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function appointmentContentVariables(): Array<{
+  readonly name: string
+  readonly required: boolean
+  readonly maxLength: number
+  readonly sensitive: boolean
+}> {
+  return (notificationEventVariableDefinitions('MACHINE_VIEWING_APPOINTMENT_CREATED') ?? []).map(definition => ({
+    name: definition.name,
+    required: definition.required,
+    maxLength: definition.maxLength,
+    sensitive: definition.sensitive,
+  }))
 }
 
 /**
- * 手动标记只生成可复制的文案，不发布通知；优先取站内模板标题和小助理纯文本正文。
+ * 手动标记只生成可复制的文案，不发布通知；优先取站内模板标题和企业微信纯文本正文。
  */
 export async function renderManualAppointmentNotificationText(
   transaction: Prisma.TransactionClient,
   appointment: MachineViewingNoticeAppointment,
 ): Promise<MachineViewingManualNotificationText> {
-  const templates = await transaction.notificationTemplate.findMany({
+  const channels = await transaction.notificationEventChannel.findMany({
     where: {
-      key: 'operations.machine-viewing.created',
-      channel: { in: ['IN_APP', 'ASSISTANT'] },
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
+      channel: { in: ['IN_APP', 'WECOM'] },
       enabled: true,
     },
     select: {
-      bodyTemplate: true,
       channel: true,
-      linkUrlTemplate: true,
-      maxLength: true,
-      titleTemplate: true,
-      variables: true,
+      messages: {
+        where: { kind: 'TEXT', enabled: true },
+        orderBy: { sortOrder: 'asc' },
+        take: 1,
+        select: { payload: true },
+      },
     },
   })
-  const inApp = templates.find(template => template.channel === 'IN_APP')
-  const assistant = templates.find(template => template.channel === 'ASSISTANT')
-  const bodyTemplate = assistant ?? inApp
-  if (bodyTemplate === undefined) {
-    throw new MachineViewingNotificationTextUnavailableError('看机预约通知模板不可用')
+  const inApp = channels.find(channel => channel.channel === 'IN_APP' && channel.messages.length > 0)
+  const wecom = channels.find(channel => channel.channel === 'WECOM' && channel.messages.length > 0)
+  const bodyChannel = wecom ?? inApp
+  const bodyPayload = asRecord(bodyChannel?.messages[0]?.payload)
+  const bodyTemplate = typeof bodyPayload?.content === 'string' ? bodyPayload.content : null
+  if (bodyTemplate === null || bodyTemplate.trim().length === 0) {
+    throw new MachineViewingNotificationTextUnavailableError('看机预约通知内容不可用')
   }
   const variables = appointmentNotificationVariables(appointment)
+  const allowed = appointmentContentVariables()
   const body = renderNotificationTemplate({
-    body: bodyTemplate.bodyTemplate,
-    linkUrlTemplate: bodyTemplate.linkUrlTemplate,
+    body: bodyTemplate,
+    linkUrlTemplate: typeof bodyPayload?.linkUrl === 'string' ? bodyPayload.linkUrl : null,
     variables,
-    allowed: parseTemplateVariables(bodyTemplate.variables),
+    allowed,
     allowSensitive: true,
-    maxLength: bodyTemplate.maxLength,
+    maxLength: 2_000,
   })
   if (!body.ok) {
     throw new MachineViewingNotificationTextUnavailableError(body.message)
   }
   let title: string | null = null
-  if (inApp?.titleTemplate) {
+  const titleTemplate = asRecord(inApp?.messages[0]?.payload)?.title
+  if (typeof titleTemplate === 'string' && titleTemplate.trim().length > 0) {
     const renderedTitle = renderNotificationTemplate({
-      body: inApp.titleTemplate,
+      body: titleTemplate,
       variables,
-      allowed: parseTemplateVariables(inApp.variables),
+      allowed,
       allowSensitive: true,
-      maxLength: inApp.maxLength,
+      maxLength: 200,
     })
     if (!renderedTitle.ok) {
       throw new MachineViewingNotificationTextUnavailableError(renderedTitle.message)

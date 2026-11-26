@@ -1,4 +1,6 @@
-# 千树小助理运维手册
+# 千树小助理运维手册（已退役）
+
+> 2026-11-25 起千树小助理渠道已退役，代码、权限与数据均已移除。本文仅保留历史运维记录；当前通知渠道为站内通知与企业微信，见 [企业微信渠道](./wecom.md)。
 
 ## 文档信息
 
@@ -26,7 +28,7 @@
 3. 公司号已加入财务群、运营群；两个群都已保存到通讯录，否则 `fetchContactsList` 同步不到。
 4. 财务群、运营群标记为 `internalOnly = true`，成员均为有权查看金额与客户名称的内部员工。
 5. 审核人、测试员工已添加公司号为好友；非好友不可发送。
-6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`、`NOTIFICATION_MEDIA_URL_SECRET`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）与 `ASSISTANT_SEND_INTERVAL_JITTER_MS`（默认 2000，实际冷却 3000~5000ms 随机）。Token 与签名密钥只放环境变量或密钥服务，不写文档、日志、示例。
+6. 环境变量已配置：`ASSISTANT_GEWE_BASE_URL`、`ASSISTANT_GEWE_TOKEN`、`ASSISTANT_WORKER_ENABLED`；可选 `ASSISTANT_MIN_SEND_INTERVAL_MS`（默认 3000）与 `ASSISTANT_SEND_INTERVAL_JITTER_MS`（默认 2000，实际冷却 3000~5000ms 随机）。Token 只放环境变量或密钥服务，不写文档、日志、示例。
 7. 管理端可以打开「通知中心 > 千树小助理」，账号状态显示 `ONLINE`。
 
 ## 3. 日常检查

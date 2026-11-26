@@ -3,7 +3,7 @@ import type { NotificationOverviewDto } from '@/api/generated/types.gen'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
-import { formatNotificationDateTime } from './template-key-grouping.logic'
+import { formatNotificationDateTime } from './notification-domain.logic'
 
 defineOptions({ name: 'NotificationOverviewPanel' })
 

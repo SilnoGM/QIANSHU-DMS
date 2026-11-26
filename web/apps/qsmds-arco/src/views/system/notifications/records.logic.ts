@@ -2,7 +2,7 @@ import type { NotificationDeliveryDto, NotificationRecordDto } from '@/api/gener
 import { deliveryStatusLabel } from './records.presentation'
 
 export interface RecordDeliverySummaryItem {
-  channel: 'IN_APP' | 'ASSISTANT'
+  channel: 'IN_APP' | 'WECOM'
   detail: string | null
   label: string
   tone: 'danger' | 'normal' | 'warning'
@@ -27,30 +27,30 @@ export function deliveryTotal(counts: Record<string, number>): number {
   return Object.values(counts).reduce((total, count) => total + count, 0)
 }
 
-export function pendingDeliveryCount(record: Pick<NotificationRecordDto, 'deliveryCounts'>): number {
-  return record.deliveryCounts.PENDING ?? 0
+export function pendingDeliveryCount(record: Pick<NotificationRecordDto, 'wecomDeliveryCounts'>): number {
+  return record.wecomDeliveryCounts?.PENDING ?? 0
 }
 
-export function failedDeliveryCount(record: Pick<NotificationRecordDto, 'deliveryCounts'>): number {
-  return record.deliveryCounts.FAILED ?? 0
+export function failedDeliveryCount(record: Pick<NotificationRecordDto, 'wecomDeliveryCounts'>): number {
+  return record.wecomDeliveryCounts?.FAILED ?? 0
 }
 
 export function inAppReadCount(record: Pick<NotificationRecordDto, 'inAppItemCount' | 'inAppUnreadCount'>): number {
   return Math.max(0, record.inAppItemCount - record.inAppUnreadCount)
 }
 
-export function canCancelRecord(record: Pick<NotificationRecordDto, 'deliveryCounts' | 'status'>, canManage: boolean): boolean {
+export function canCancelRecord(record: Pick<NotificationRecordDto, 'wecomDeliveryCounts' | 'status'>, canManage: boolean): boolean {
   return canManage
     && record.status === 'PENDING'
     && pendingDeliveryCount(record) > 0
 }
 
 /**
- * 表格只展示“站内多少人、小助理多少人”以及需要立即关注的数量，
+ * 表格只展示“站内多少人、企业微信多少人”以及需要立即关注的数量，
  * 完整状态分布留在详情抽屉，避免列表单元格变成状态字典。
  */
 export function recordDeliverySummary(
-  record: Pick<NotificationRecordDto, 'channels' | 'deliveryCounts' | 'inAppItemCount' | 'inAppUnreadCount'>,
+  record: Pick<NotificationRecordDto, 'channels' | 'wecomDeliveryCounts' | 'inAppItemCount' | 'inAppUnreadCount'>,
 ): RecordDeliverySummaryItem[] {
   const items: RecordDeliverySummaryItem[] = []
 
@@ -64,12 +64,13 @@ export function recordDeliverySummary(
     })
   }
 
-  if (record.channels.includes('ASSISTANT')) {
-    const total = deliveryTotal(record.deliveryCounts)
-    const failed = failedDeliveryCount(record)
+  if (record.channels.includes('WECOM')) {
+    const counts = record.wecomDeliveryCounts ?? {}
+    const total = deliveryTotal(counts)
+    const failed = counts.FAILED ?? 0
     items.push({
-      channel: 'ASSISTANT',
-      label: `小助理 ${total} 人`,
+      channel: 'WECOM',
+      label: `企业微信 ${total} 人`,
       tone: failed > 0 ? 'danger' : 'normal',
       detail: total === 0 ? '未生成交付' : failed > 0 ? `失败 ${failed}` : null,
     })
@@ -79,13 +80,13 @@ export function recordDeliverySummary(
 }
 
 export function deliveryStatusEntries(
-  record: Pick<NotificationRecordDto, 'deliveryCounts'>,
+  record: Pick<NotificationRecordDto, 'wecomDeliveryCounts'>,
 ): Array<{ count: number, label: string, status: NotificationDeliveryDto['status'] }> {
   return DELIVERY_STATUS_ORDER
     .map(status => ({
       status,
       label: deliveryStatusLabel(status),
-      count: record.deliveryCounts[status] ?? 0,
+      count: record.wecomDeliveryCounts?.[status] ?? 0,
     }))
     .filter(item => item.count > 0)
 }

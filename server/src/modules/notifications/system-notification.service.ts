@@ -6,9 +6,12 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import {
-  DISABLED_NOTIFICATION_MEDIA_POLICY,
-  parseNotificationMediaPolicy,
-} from './notification-media'
+  extractMpnewsMediaSourceSlots,
+  extractNotificationContentAssetIds,
+  mpnewsHasStaticTextOutsideImages,
+  parseNotificationImageMediaPolicy,
+  renderMpnewsHtml,
+} from './notification-content'
 import { renderNotificationTemplate, type NotificationTemplateVariable } from './notification-template.renderer'
 import {
   hashNotificationNumberIdempotencyKey,
@@ -22,8 +25,10 @@ import {
   MAX_NOTIFICATION_TTL_SECONDS,
   MAX_NOTIFICATION_VARIABLES,
   MAX_NOTIFICATION_VARIABLE_LENGTH,
+  NOTIFICATION_EVENT_LABELS,
   NOTIFICATION_EVENT_TYPES,
   notificationEventMediaCapability,
+  notificationEventVariableDefinitions,
   type NotificationChannel,
   type NotificationPublishWarningCode,
   type NotificationSkipReason,
@@ -32,8 +37,20 @@ import {
   type SystemNotificationPublishOptions,
   type SystemNotificationPublishResult,
 } from './notification.types'
+import {
+  parseWecomMentionConfig,
+  utf8Bytes,
+  WECOM_DEFAULT_MAX_BYTES,
+  type WecomMentionConfig,
+} from './wecom.types'
 
 type Transaction = Prisma.TransactionClient
+
+type EventChannelConfig = Prisma.NotificationEventChannelGetPayload<{
+  include: { messages: true }
+}>
+
+type EventChannelMessage = EventChannelConfig['messages'][number]
 
 interface ResolvedChannelResult {
   readonly channel: NotificationChannel
@@ -46,6 +63,24 @@ interface ResolvedChannelResult {
 interface NotificationMediaAttachment {
   readonly mediaAssetId: string
   readonly sortOrder: number
+  readonly messageSortOrder: number
+}
+
+interface NotificationInlineMediaAssignment {
+  readonly slotIndex: number
+  readonly mediaAssetId: string
+  readonly sourceKey: string
+}
+
+interface NotificationFileMediaAssignment {
+  readonly mediaAssetId: string
+  readonly sourceKey: string | null
+}
+
+interface ResolvedEventMediaPlan {
+  readonly attachments: readonly NotificationMediaAttachment[]
+  readonly inlineByMessageId: ReadonlyMap<string, readonly NotificationInlineMediaAssignment[]>
+  readonly fileByMessageId: ReadonlyMap<string, NotificationFileMediaAssignment>
 }
 
 /** 非 UUID 输入不能进 SQL：PostgreSQL 会以 22P02 中止整个业务事务。 */
@@ -59,25 +94,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : []
-}
-
-function parseTemplateVariables(value: Prisma.JsonValue): NotificationTemplateVariable[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  return value.flatMap(item => {
-    const record = asRecord(item)
-    const name = typeof record?.name === 'string' ? record.name : null
-    if (name === null) {
-      return []
-    }
-    return [{
-      name,
-      required: record?.required !== false,
-      maxLength: typeof record?.maxLength === 'number' ? record.maxLength : MAX_NOTIFICATION_VARIABLE_LENGTH,
-      sensitive: record?.sensitive === true,
-    }]
-  })
 }
 
 function parseTargetConfig(value: Prisma.JsonValue): {
@@ -111,17 +127,16 @@ function sanitizeVariables(input: Readonly<Record<string, string | number | null
   return result
 }
 
-function notificationFailureCode(
-  code: 'TEMPLATE_VARIABLE_MISSING' | 'TEMPLATE_TOO_LONG',
-): NotificationPublishWarningCode {
-  return code === 'TEMPLATE_VARIABLE_MISSING' ? 'TEMPLATE_VARIABLE_MISSING' : 'TEMPLATE_NOT_FOUND'
-}
+/**
+ * 内容渲染阶段可传递的内部警告；发布层再映射为 NotificationPublishWarningCode。
+ */
+type NotificationRenderWarning = 'SENSITIVE_VARIABLE_MASKED' | 'MPNEWS_METADATA_TRUNCATED'
 
 /**
  * 业务侧唯一发布入口。
  *
- * 只写数据库：解析事件 × 渠道策略、收件人、模板和幂等键，创建逻辑通知与站外交付；
- * 不调用 GeWe、不做重试。配置或模板问题不抛异常，避免通知问题回滚业务事务。
+ * 只写数据库：解析事件渠道配置、收件人、内容与幂等键，创建逻辑通知与站外交付；
+ * 不调用企业微信、不做重试。配置或内容问题不抛异常，避免通知问题回滚业务事务。
  * 通知编号是唯一例外：新通知必须在同一事务取得编号，编号域不可用时失败关闭。
  */
 @Injectable()
@@ -180,21 +195,25 @@ export class SystemNotificationService {
       ? command.eventType
       : null
     const warnings: Array<{ code: NotificationPublishWarningCode, message: string }> = []
-    const policies = eventType === null
+    const eventChannels = eventType === null
       ? []
-      : await transaction.notificationChannelPolicy.findMany({
-        where: { eventType, enabled: true },
-      })
+      : await transaction.notificationEventChannel.findMany({
+          where: { eventType },
+          include: {
+            messages: {
+              where: { enabled: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        })
     const requestedChannels = command.channels === undefined ? null : new Set(command.channels)
-    const selectedPolicies = requestedChannels === null
-      ? policies
-      : policies.filter(policy => requestedChannels.has(policy.channel))
-    const primaryPolicy = selectedPolicies.find(policy => policy.channel === 'ASSISTANT') ?? selectedPolicies[0]
-    const expiresAt = primaryPolicy?.channel === 'ASSISTANT'
-      ? this.resolveExpiresAt(command, primaryPolicy.ttlSeconds, now)
-      : null
-    // 优先级由事件×渠道策略统一维护，避免业务代码硬编码 HIGH 覆盖管理端配置。
-    const priority = primaryPolicy?.priority ?? command.priority ?? 'NORMAL'
+    const selectedEventChannels = eventChannels.filter(channel => channel.enabled
+      && (requestedChannels === null || requestedChannels.has(channel.channel)))
+    const primaryEventChannel = selectedEventChannels.find(channel => channel.channel === 'WECOM')
+    const expiresAt = primaryEventChannel === undefined
+      ? null
+      : this.resolveExpiresAt(command, primaryEventChannel.ttlSeconds, now)
+    const priority = command.priority ?? 'NORMAL'
     const variables = sanitizeVariables(command.variables)
 
     // 编号与通知同事务：重复通知在入口已返回，不会消耗编号；业务回滚会一并回滚发号。
@@ -215,8 +234,8 @@ export class SystemNotificationService {
         dedupeKey,
         priority,
         status: 'PENDING',
-        templateKey: command.templateKey.slice(0, 64),
-        requestedChannels: selectedPolicies.map(policy => policy.channel),
+        templateKey: (eventType ?? command.eventType).slice(0, 64),
+        requestedChannels: selectedEventChannels.map(channel => channel.channel),
         variables,
         expiresAt,
         publishedAt: now,
@@ -230,8 +249,8 @@ export class SystemNotificationService {
       await this.finishNotification(transaction, notification.id, 'FAILED', now)
       return { notificationId: notification.id, duplicated: false, channels: [], warnings }
     }
-    if (selectedPolicies.length === 0) {
-      warnings.push({ code: 'EVENT_NOT_CONFIGURED', message: '事件没有启用的渠道策略' })
+    if (selectedEventChannels.length === 0) {
+      warnings.push({ code: 'EVENT_NOT_CONFIGURED', message: '事件没有启用的渠道配置' })
       await this.finishNotification(transaction, notification.id, 'FAILED', now)
       return { notificationId: notification.id, duplicated: false, channels: [], warnings }
     }
@@ -240,99 +259,41 @@ export class SystemNotificationService {
       return { notificationId: notification.id, duplicated: false, channels: [], warnings }
     }
 
-    // 附件归属整条通知，与渠道循环分离：被策略拦下的附件也要留痕，供记录页排障。
-    const media = await this.prepareNotificationMedia(transaction, {
-      notificationId: notification.id,
-      command,
-      policies: selectedPolicies,
-      warnings,
-    })
-
     const channelResults: ResolvedChannelResult[] = []
-    for (const policy of selectedPolicies) {
-      const templateKey = this.resolveTemplateKey(policy.templateKey, command.templateKey)
-      if (policy.channel === 'IN_APP') {
-        const channelResult = await this.createInAppItems(transaction, {
+    for (const channelConfig of selectedEventChannels) {
+      if (channelConfig.channel === 'IN_APP') {
+        channelResults.push(await this.createInAppItemsFromEventConfig(transaction, {
           notificationId: notification.id,
-          policy,
-          templateKey,
+          channelConfig,
           command,
           variables,
           now,
           warnings,
-        })
-        channelResults.push(channelResult)
+        }))
         continue
       }
-      if (policy.channel !== 'ASSISTANT') {
-        warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: `渠道 ${String(policy.channel)} 尚未实现` })
-        continue
+      if (channelConfig.channel === 'WECOM') {
+        channelResults.push(await this.createWecomDeliveriesFromEventConfig(transaction, {
+          notificationId: notification.id,
+          channelConfig,
+          command,
+          variables,
+          now,
+          warnings,
+        }))
       }
-
-      const setting = await transaction.notificationChannelSettings.findUnique({
-        where: { channel: 'ASSISTANT' },
-        select: { enabled: true },
-      })
-      if (setting === null || !setting.enabled) {
-        warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '千树小助理渠道未启用' })
-        channelResults.push({
-          channel: 'ASSISTANT',
-          status: 'SKIPPED',
-          recipientCount: 0,
-          skippedCount: 0,
-          skipReason: 'CHANNEL_DISABLED',
-        })
-        continue
-      }
-
-      const template = await transaction.notificationTemplate.findUnique({
-        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
-      })
-      if (template === null || !template.enabled) {
-        warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站外模板不存在或已停用' })
-        await this.finishNotification(transaction, notification.id, 'FAILED', now)
-        return { notificationId: notification.id, duplicated: false, channels: channelResults, warnings }
-      }
-
-      const render = renderNotificationTemplate({
-        body: template.bodyTemplate,
-        linkUrlTemplate: template.linkUrlTemplate,
-        variables,
-        allowed: parseTemplateVariables(template.variables),
-        allowSensitive: policy.allowSensitive,
-        maxLength: template.maxLength,
-      })
-      if (!render.ok) {
-        warnings.push({ code: notificationFailureCode(render.code), message: render.message })
-        await this.finishNotification(transaction, notification.id, 'FAILED', now)
-        return { notificationId: notification.id, duplicated: false, channels: channelResults, warnings }
-      }
-      if (render.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
-        warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
-      }
-
-      const channelResult = await this.createAssistantDeliveries(transaction, {
-        notificationId: notification.id,
-        policy,
-        templateKey,
-        templateVersion: template.version,
-        content: render.content,
-        media,
-        command,
-        now,
-        warnings,
-      })
-      channelResults.push(channelResult)
     }
 
-    const total = await transaction.assistantDelivery.count({ where: { notificationId: notification.id } })
-    const pending = await transaction.assistantDelivery.count({
-      where: { notificationId: notification.id, status: 'PENDING' },
-    })
-    const inboxTotal = await transaction.notificationInboxItem.count({ where: { notificationId: notification.id } })
+    const [wecomTotal, wecomPending, inboxTotal] = await Promise.all([
+      transaction.wecomDelivery.count({ where: { notificationId: notification.id } }),
+      transaction.wecomDelivery.count({ where: { notificationId: notification.id, status: 'PENDING' } }),
+      transaction.notificationInboxItem.count({ where: { notificationId: notification.id } }),
+    ])
+    const total = wecomTotal
+    const pending = wecomPending
     // 全员关闭时投递与收件箱计数都是 0，按常规规则会被误判为 FAILED；
     // 只有「所有渠道都跳过、且其中至少一个是用户主动关闭」才归为 SKIPPED，
-    // 其余全跳过（模板缺失、目标不可用等）仍保留 FAILED 以暴露配置问题。
+    // 其余全跳过（内容缺失、目标不可用等）仍保留 FAILED 以暴露配置问题。
     const allChannelsSkipped = channelResults.length > 0
       && channelResults.every(result => result.status === 'SKIPPED')
     const mutedByUser = channelResults.some(result => result.skipReason === 'USER_MUTED')
@@ -361,28 +322,13 @@ export class SystemNotificationService {
   }
 
   /**
-   * 渠道策略显式绑定模板时以策略为准；显式绑定但模板不存在时不做回退，
-   * 否则配置错误会被命令默认键静默掩盖。
+   * 新内容模型的站内发布：渠道配置自带唯一 TEXT，不再查模板。
    */
-  private resolveTemplateKey(policyKey: string | null, fallbackKey: string): string {
-    const trimmed = policyKey?.trim()
-    return trimmed !== undefined && trimmed.length > 0 ? trimmed : fallbackKey
-  }
-
-  /**
-   * 站内渠道在业务事务内写收件箱快照；不依赖 worker、不设置 TTL。
-   * 目标解析与站外一致：GROUP 对 IN_APP 非法，其余模式复用同一套用户解析。
-   */
-  private async createInAppItems(
+  private async createInAppItemsFromEventConfig(
     transaction: Transaction,
     input: {
       readonly notificationId: string
-      readonly policy: {
-        readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
-        readonly targetConfig: Prisma.JsonValue
-        readonly allowSensitive: boolean
-      }
-      readonly templateKey: string
+      readonly channelConfig: EventChannelConfig
       readonly command: SystemNotificationPublishCommand
       readonly variables: Readonly<Record<string, string | number | null>>
       readonly now: Date
@@ -397,49 +343,32 @@ export class SystemNotificationService {
       input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '站内通知渠道未启用' })
       return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
     }
-    if (input.policy.targetMode === 'GROUP') {
+    if (input.channelConfig.targetMode === 'GROUP') {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '站内通知不能使用群目标' })
       return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'TARGET_DISABLED' }
     }
-
-    const template = await transaction.notificationTemplate.findUnique({
-      where: { key_channel: { key: input.templateKey, channel: 'IN_APP' } },
-    })
-    if (template === null || !template.enabled) {
-      input.warnings.push({ code: 'TEMPLATE_NOT_FOUND', message: '站内模板不存在或已停用' })
-      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    const messages = input.channelConfig.messages.filter(message => message.enabled)
+    if (messages.length !== 1 || messages[0]?.kind !== 'TEXT') {
+      input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '站内通知必须配置且只配置一条文本消息' })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
     }
-
-    const allowed = parseTemplateVariables(template.variables)
-    const title = renderNotificationTemplate({
-      body: template.titleTemplate?.trim() || template.name,
+    const rendered = this.renderEventTextMessage({
+      command: input.command,
+      channelConfig: input.channelConfig,
+      message: messages[0],
       variables: input.variables,
-      allowed,
-      allowSensitive: input.policy.allowSensitive,
-      maxLength: 200,
     })
-    const body = renderNotificationTemplate({
-      body: template.bodyTemplate,
-      linkUrlTemplate: template.linkUrlTemplate,
-      variables: input.variables,
-      allowed,
-      allowSensitive: input.policy.allowSensitive,
-      maxLength: template.maxLength,
-    })
-    if (!title.ok || !body.ok) {
-      input.warnings.push({
-        code: 'TEMPLATE_VARIABLE_MISSING',
-        message: !title.ok ? title.message : !body.ok ? body.message : '站内模板渲染失败',
-      })
-      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_NOT_CONFIGURED' }
+    if (!rendered.ok) {
+      input.warnings.push({ code: 'CONTENT_RENDER_FAILED', message: rendered.message })
+      return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
     }
-    if (body.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
+    if (rendered.warnings.includes('SENSITIVE_VARIABLE_MASKED')) {
       input.warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
     }
 
-    const target = input.policy.targetMode === 'COMMAND_TARGET'
+    const target = input.channelConfig.targetMode === 'COMMAND_TARGET'
       ? input.command.target
-      : this.targetFromPolicy(input.policy)
+      : this.targetFromPolicy(input.channelConfig)
     if (target === null) {
       input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到站内收件人' })
       return { channel: 'IN_APP', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
@@ -467,11 +396,11 @@ export class SystemNotificationService {
         notificationId: input.notificationId,
         userId,
         eventType: input.command.eventType.slice(0, 64),
-        templateKey: input.templateKey,
-        templateVersion: template.version,
-        titleSnapshot: title.content,
-        bodySnapshot: body.content,
-        linkUrlSnapshot: body.linkUrl,
+        templateKey: input.command.eventType.slice(0, 64),
+        templateVersion: input.channelConfig.version,
+        titleSnapshot: rendered.title,
+        bodySnapshot: rendered.content,
+        linkUrlSnapshot: rendered.linkUrl,
         createdAt: input.now,
       })),
       skipDuplicates: true,
@@ -480,92 +409,480 @@ export class SystemNotificationService {
   }
 
   /**
-   * 裁决业务附件：模板策略、数量上限、资产状态与敏感开关都在这里统一处理。
-   *
-   * 被拦下的附件同样写入 `notification_media` 并记录原因；发布本身不抛异常，
-   * 保证通知配置问题不会回滚业务事务。
+   * 新内容模型的企微发布：一个渠道配置只有一种发送方式，内容项物化为通知级
+   * 渲染快照与逐收件人/群的投递消息项。阶段一只支持 TEXT；其余类型明确跳过。
    */
-  private async prepareNotificationMedia(
+  private async createWecomDeliveriesFromEventConfig(
     transaction: Transaction,
     input: {
       readonly notificationId: string
+      readonly channelConfig: EventChannelConfig
       readonly command: SystemNotificationPublishCommand
-      readonly policies: readonly {
-        readonly channel: NotificationChannel
-        readonly templateKey: string | null
-        readonly allowSensitive: boolean
-      }[]
+      readonly variables: Readonly<Record<string, string | number | null>>
+      readonly now: Date
       readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
     },
-  ): Promise<readonly NotificationMediaAttachment[]> {
-    const requested = this.uniqueMediaItems(input.command.media)
-    if (requested.length === 0) {
-      return []
+  ): Promise<ResolvedChannelResult> {
+    const setting = await transaction.notificationChannelSettings.findUnique({
+      where: { channel: 'WECOM' },
+      select: { enabled: true },
+    })
+    if (setting === null || !setting.enabled) {
+      input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '企业微信通知渠道未启用' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
     }
 
-    const policy = input.policies.find(candidate => candidate.channel === 'ASSISTANT')
-    const templateKey = policy === undefined
-      ? null
-      : this.resolveTemplateKey(policy.templateKey, input.command.templateKey)
-    const template = templateKey === null
-      ? null
-      : await transaction.notificationTemplate.findUnique({
-        where: { key_channel: { key: templateKey, channel: 'ASSISTANT' } },
-        select: { enabled: true, mediaPolicy: true },
-      })
-    const mediaPolicy = template !== null && template.enabled
-      ? parseNotificationMediaPolicy(template.mediaPolicy)
-      : DISABLED_NOTIFICATION_MEDIA_POLICY
-    // 来源键必须由事件契约声明；模板再从中挑选真正要发的来源。
-    const declaredSources = new Set(
-      (notificationEventMediaCapability(input.command.eventType)?.sources ?? []).map(source => source.key),
-    )
-    const selectedSources = new Set(mediaPolicy.sources)
+    const messages = input.channelConfig.messages
+      .filter(message => message.enabled)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+    if (messages.length === 0) {
+      input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '企业微信渠道未配置消息内容' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
+    }
+    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'NEWS', 'MPNEWS', 'FILE', 'IMAGE'].includes(message.kind))) {
+      input.warnings.push({ code: 'MESSAGE_KIND_NOT_IMPLEMENTED', message: '当前发布链路暂不支持该消息类型' })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED' }
+    }
 
+    // 附件和正文业务图片共用同一组 command.media，按渠道消息顺序统一分配。
+    const mediaPlan = await this.resolveEventNotificationMedia(transaction, {
+      notificationId: input.notificationId,
+      eventType: input.command.eventType,
+      channelConfig: input.channelConfig,
+      messages,
+      command: input.command,
+      warnings: input.warnings,
+    })
+    const renderableMessages = messages.filter(message => message.kind !== 'IMAGE')
+    const rendered = renderableMessages.map((message) => {
+      if (message.kind === 'MPNEWS') {
+        return this.renderEventMpnewsMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+          inlineMedia: mediaPlan.inlineByMessageId.get(message.id) ?? [],
+        })
+      }
+      if (message.kind === 'MARKDOWN' || message.kind === 'MARKDOWN_V2') {
+        return this.renderEventMarkdownMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+        })
+      }
+      if (message.kind === 'TEXTCARD') {
+        return this.renderEventTextcardMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+        })
+      }
+      if (message.kind === 'FILE') {
+        return this.renderEventFileMessage({
+          message,
+          resolved: mediaPlan.fileByMessageId.get(message.id),
+        })
+      }
+      if (message.kind === 'NEWS') {
+        return this.renderEventNewsMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+        })
+      }
+      return this.renderEventTextMessage({
+        command: input.command,
+        channelConfig: input.channelConfig,
+        message,
+        variables: input.variables,
+      })
+    })
+    const failed = rendered.find(item => !item.ok)
+    if (failed !== undefined && !failed.ok) {
+      input.warnings.push({ code: 'CONTENT_RENDER_FAILED', message: failed.message })
+      return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
+    }
+    const renderedItems = rendered.flatMap(item => item.ok ? [item] : [])
+    if (renderedItems.some(item => item.warnings.includes('SENSITIVE_VARIABLE_MASKED'))) {
+      input.warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
+    }
+    if (renderedItems.some(item => item.warnings.includes('MPNEWS_METADATA_TRUNCATED'))) {
+      input.warnings.push({ code: 'MPNEWS_METADATA_TRUNCATED', message: 'mpnews 标题、作者或摘要超过企业微信字节限制，已截断' })
+    }
+    const summary = renderedItems.map((item) => {
+      if (item.kind === 'TEXT') return item.content
+      if (item.kind === 'MARKDOWN' || item.kind === 'MARKDOWN_V2') return item.payload.content
+      if (item.kind === 'TEXTCARD') return item.payload.title
+      if (item.kind === 'MPNEWS') return item.payload.title
+      if (item.kind === 'NEWS') return item.payload.articles[0]?.title ?? '图文卡片'
+      if (item.kind === 'FILE') return '文件消息'
+      return ''
+    }).filter(part => part.length > 0).join('\n\n')
+
+    const targetConfig = asRecord(input.channelConfig.targetConfig)
+    const mention = parseWecomMentionConfig(targetConfig?.mention)
+    const deliveryBase = {
+      notificationId: input.notificationId,
+      templateKey: input.command.eventType.slice(0, 64),
+      templateVersion: input.channelConfig.version,
+      renderedContent: summary,
+      nextAttemptAt: input.now,
+      mentionMode: mention.mode,
+      mentionedCount: 0,
+      mentionSkipped: 0,
+    }
+
+    let deliveries: Array<{
+      id: string
+      notificationId: string
+      appId: string | null
+      transport: 'APP' | 'ROBOT'
+      recipientUserId: string | null
+      targetId: string | null
+      status: 'PENDING' | 'SKIPPED'
+      templateKey: string
+      templateVersion: number
+      renderedContent: string
+      nextAttemptAt: Date
+      mentionMode: string | null
+      mentionedCount: number
+      mentionSkipped: number
+      failureCode?: string | null
+      failureMessage?: string | null
+    }>
+    if (input.channelConfig.sendMethod === 'ROBOT') {
+      const targetKeys = parseTargetConfig(input.channelConfig.targetConfig).targetKeys ?? []
+      const targets = targetKeys.length === 0
+        ? []
+        : await transaction.wecomTarget.findMany({
+            where: { key: { in: targetKeys }, enabled: true, internalOnly: true },
+            select: { id: true },
+          })
+      if (targets.length === 0) {
+        input.warnings.push({ code: 'NO_RECIPIENT', message: '企业微信群目标不存在、已停用或不是内部群' })
+        return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+      }
+      deliveries = targets.map(target => ({
+        id: randomUUID(),
+        ...deliveryBase,
+        appId: null,
+        transport: 'ROBOT' as const,
+        recipientUserId: null,
+        targetId: target.id,
+        status: 'PENDING' as const,
+      }))
+    }
+    else {
+      if (input.channelConfig.targetMode === 'GROUP') {
+        input.warnings.push({ code: 'NO_RECIPIENT', message: '应用消息不能使用群目标' })
+        return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'TARGET_DISABLED' }
+      }
+      const target = input.channelConfig.targetMode === 'COMMAND_TARGET'
+        ? input.command.target
+        : this.targetFromPolicy(input.channelConfig)
+      const resolvedUserIds = target === null ? [] : await this.resolveUsers(transaction, target)
+      if (resolvedUserIds.length === 0) {
+        input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到企业微信收件人' })
+        return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
+      }
+      const { allowed: userIds, muted } = await this.filterMutedUsers(
+        transaction,
+        resolvedUserIds,
+        input.command.eventType,
+        'WECOM',
+      )
+      if (muted > 0) {
+        input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的企业微信提醒` })
+      }
+      if (userIds.length === 0) {
+        return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
+      }
+      const app = await this.resolveWecomApp(transaction, input.command.eventType)
+      if (app.app === null) {
+        input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: app.reason === 'APP_DISABLED' ? '事件绑定的企业微信应用已停用' : '企业微信默认应用未配置' })
+        return {
+          channel: 'WECOM',
+          status: 'SKIPPED',
+          recipientCount: 0,
+          skippedCount: muted,
+          skipReason: app.reason === 'APP_DISABLED' ? 'APP_DISABLED' : 'APP_NOT_CONFIGURED',
+        }
+      }
+      const appId = app.app.id
+      const [bindings, memberships] = await Promise.all([
+        transaction.wecomBinding.findMany({
+          where: { userId: { in: userIds }, status: 'ACTIVE', verifiedAt: { not: null } },
+          select: { userId: true },
+        }),
+        transaction.wecomAppMembership.findMany({
+          where: { appId, userId: { in: userIds }, status: 'ACTIVE', verifiedAt: { not: null } },
+          select: { userId: true },
+        }),
+      ])
+      const bound = new Set(bindings.map(binding => binding.userId))
+      const inScope = new Set(memberships.map(membership => membership.userId))
+      deliveries = userIds.map((userId) => {
+        const failureCode = !bound.has(userId)
+          ? 'NOT_BOUND'
+          : !inScope.has(userId) ? 'NOT_IN_APP_SCOPE' : null
+        return {
+          id: randomUUID(),
+          ...deliveryBase,
+          appId,
+          transport: 'APP' as const,
+          recipientUserId: userId,
+          targetId: null,
+          status: failureCode === null ? 'PENDING' as const : 'SKIPPED' as const,
+          failureCode,
+          failureMessage: failureCode === 'NOT_BOUND'
+            ? '员工未完成企业微信绑定'
+            : failureCode === 'NOT_IN_APP_SCOPE' ? '员工不在该应用可见范围或未验证' : null,
+        }
+      })
+      const skipped = muted + deliveries.filter(delivery => delivery.status === 'SKIPPED').length
+      if (skipped >= userIds.length + muted) {
+        input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都不满足企业微信绑定或应用可见范围' })
+        return {
+          channel: 'WECOM',
+          status: 'SKIPPED',
+          recipientCount: userIds.length,
+          skippedCount: skipped,
+          skipReason: deliveries.every(delivery => delivery.failureCode === 'NOT_IN_APP_SCOPE') ? 'NOT_IN_APP_SCOPE' : 'NOT_BOUND',
+        }
+      }
+    }
+
+    const renderedRows = renderedItems.map((item, index) => ({
+      id: randomUUID(),
+      notificationId: input.notificationId,
+      channel: 'WECOM' as const,
+      sendMethod: input.channelConfig.sendMethod as 'APP' | 'ROBOT',
+      sortOrder: index,
+      kind: item.kind,
+      payloadSnapshot: item.kind === 'TEXT'
+        ? {
+            title: item.title,
+            content: item.content,
+            linkUrl: item.linkUrl,
+          }
+        : item.payload,
+      contentHash: createHash('sha256')
+        .update(JSON.stringify(item.kind === 'TEXT' ? item.content : item.payload))
+        .digest('hex'),
+    }))
+    if (renderedRows.length > 0) {
+      await transaction.notificationRenderedMessage.createMany({ data: renderedRows })
+      const inlineRows = renderedRows.flatMap<{
+        id: string
+        renderedMessageId: string
+        mediaAssetId: string
+        role: 'INLINE' | 'FILE' | 'NEWS_IMAGE'
+        sourceKey: string | null
+        sortOrder: number
+      }>((row, index) => {
+        const message = renderableMessages[index]
+        if (message === undefined) {
+          return []
+        }
+        if (message.kind === 'MPNEWS') {
+          const assignments = mediaPlan.inlineByMessageId.get(message.id) ?? []
+          return assignments.map(assignment => ({
+            id: randomUUID(),
+            renderedMessageId: row.id,
+            mediaAssetId: assignment.mediaAssetId,
+            role: 'INLINE' as const,
+            sourceKey: assignment.sourceKey,
+            sortOrder: assignment.slotIndex,
+          }))
+        }
+        if (message.kind === 'FILE') {
+          const resolved = mediaPlan.fileByMessageId.get(message.id)
+          const fixed = asRecord(message.payload)?.mediaAssetId
+          const mediaAssetId = resolved?.mediaAssetId
+            ?? (typeof fixed === 'string' && fixed.length > 0 ? fixed : null)
+          if (mediaAssetId === null) {
+            return []
+          }
+          return [{
+            id: randomUUID(),
+            renderedMessageId: row.id,
+            mediaAssetId,
+            role: 'FILE' as const,
+            sourceKey: resolved?.sourceKey ?? null,
+            sortOrder: 0,
+          }]
+        }
+        if (message.kind === 'NEWS') {
+          const articles = Array.isArray(asRecord(message.payload)?.articles)
+            ? asRecord(message.payload)!.articles as unknown[]
+            : []
+          return articles.flatMap((rawArticle, articleIndex) => {
+            const imageAssetId = asRecord(rawArticle)?.imageAssetId
+            return typeof imageAssetId === 'string' && imageAssetId.length > 0
+              ? [{
+                  id: randomUUID(),
+                  renderedMessageId: row.id,
+                  mediaAssetId: imageAssetId,
+                  role: 'NEWS_IMAGE' as const,
+                  sourceKey: null,
+                  sortOrder: articleIndex,
+                }]
+              : []
+          })
+        }
+        return []
+      })
+      if (inlineRows.length > 0) {
+        await transaction.notificationRenderedMessageMedia.createMany({ data: inlineRows })
+      }
+    }
+    await transaction.wecomDelivery.createMany({ data: deliveries })
+    const sendable = deliveries.filter(delivery => delivery.status === 'PENDING')
+    if (sendable.length > 0 && mediaPlan.attachments.length > 0) {
+      await transaction.wecomDeliveryMedia.createMany({
+        data: sendable.flatMap(delivery => mediaPlan.attachments.map(item => ({
+          deliveryId: delivery.id,
+          mediaAssetId: item.mediaAssetId,
+          sortOrder: item.sortOrder,
+          messageSortOrder: item.messageSortOrder,
+        }))),
+      })
+    }
+    if (sendable.length > 0 && renderedRows.length > 0) {
+      await transaction.notificationDeliveryMessage.createMany({
+        data: sendable.flatMap(delivery => renderedRows.map((message, index) => ({
+          deliveryId: delivery.id,
+          renderedMessageId: message.id,
+          sortOrder: index,
+          status: 'PENDING' as const,
+          nextAttemptAt: input.now,
+        }))),
+      })
+    }
+    return {
+      channel: 'WECOM',
+      status: 'PENDING',
+      recipientCount: deliveries.length,
+      skippedCount: deliveries.filter(delivery => delivery.status === 'SKIPPED').length,
+    }
+  }
+
+  /**
+   * 按渠道消息 sortOrder 统一裁决 command.media：
+   * - MPNEWS 按正文业务图片占位顺序，每个占位消费一张；
+   * - IMAGE 项按自身 policy 消费剩余图片；
+   * - 被拦下的附件写入 notification_media，正文内联图片由调用方写入 rendered message media。
+   */
+  private async resolveEventNotificationMedia(
+    transaction: Transaction,
+    input: {
+      readonly notificationId: string
+      readonly eventType: string
+      readonly channelConfig: { readonly allowSensitive: boolean }
+      readonly messages: readonly EventChannelMessage[]
+      readonly command: SystemNotificationPublishCommand
+      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
+    },
+  ): Promise<ResolvedEventMediaPlan> {
+    const requested = this.uniqueMediaItems(input.command.media)
+    const inlineSlotsByMessageId = new Map<string, readonly string[]>()
+    for (const message of input.messages) {
+      if (message.kind !== 'MPNEWS') {
+        continue
+      }
+      const content = asRecord(message.payload)?.content
+      if (typeof content !== 'string') {
+        continue
+      }
+      const slots = extractMpnewsMediaSourceSlots(content)
+      if (slots.length > 0) {
+        inlineSlotsByMessageId.set(message.id, slots)
+      }
+    }
+    const totalInlineSlots = [...inlineSlotsByMessageId.values()]
+      .reduce((total, slots) => total + slots.length, 0)
+    const dynamicFileCount = input.messages.filter((message) => {
+      if (message.kind !== 'FILE') return false
+      const payload = asRecord(message.payload)
+      if (typeof payload?.mediaAssetId === 'string' && payload.mediaAssetId.length > 0) return false
+      const policy = asRecord(message.mediaPolicy)
+      return Array.isArray(policy?.sourceKeys) && policy.sourceKeys.length > 0
+    }).length
+    if (requested.length === 0) {
+      if (totalInlineSlots > 0) {
+        input.warnings.push({
+          code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+          message: `${totalInlineSlots} 张正文业务图片未插入：缺少来源图片或资产不可用`,
+        })
+      }
+      if (dynamicFileCount > 0) {
+        input.warnings.push({
+          code: 'FILE_MEDIA_SKIPPED',
+          message: `${dynamicFileCount} 个文件消息未找到可用业务附件`,
+        })
+      }
+      return {
+        attachments: [],
+        inlineByMessageId: new Map(),
+        fileByMessageId: new Map(),
+      }
+    }
+
+    const declaredSources = new Set(
+      (notificationEventMediaCapability(input.eventType)?.sources ?? []).map(source => source.key),
+    )
+    const specs = input.messages.flatMap((message) => {
+      if (message.kind !== 'IMAGE') {
+        return []
+      }
+      const policy = parseNotificationImageMediaPolicy(message.mediaPolicy)
+      return policy === null ? [] : [{ policy, remaining: policy.maxCount }]
+    })
+    const hasInlineConsumers = inlineSlotsByMessageId.size > 0
+    const fileSpecs = input.messages.flatMap((message) => {
+      if (message.kind !== 'FILE') {
+        return []
+      }
+      const payload = asRecord(message.payload)
+      const fixedAssetId = typeof payload?.mediaAssetId === 'string' ? payload.mediaAssetId : ''
+      if (fixedAssetId.length > 0) {
+        return []
+      }
+      const policy = asRecord(message.mediaPolicy)
+      const rawSourceKeys = policy?.sourceKeys
+      const sourceKeys = Array.isArray(rawSourceKeys)
+        ? rawSourceKeys.filter((key): key is string => typeof key === 'string' && key.length > 0)
+        : []
+      return sourceKeys.length > 0 ? [{ message, sourceKeys }] : []
+    })
+    const hasMediaConsumers = hasInlineConsumers || fileSpecs.length > 0
     const queryable = requested
       .map(item => item.assetId)
       .filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
     const assets = queryable.length === 0
       ? []
       : await transaction.mediaAsset.findMany({
-        where: { id: { in: queryable } },
-        select: { id: true, mediaType: true, status: true, deletedAt: true, objectKey: true },
-      })
+          where: { id: { in: queryable } },
+          select: { id: true, mediaType: true, status: true, deletedAt: true, objectKey: true },
+        })
     const assetById = new Map(assets.map(asset => [asset.id, asset]))
 
-    const rows: Array<NotificationMediaAttachment & {
-      readonly sourceKey: string | null
-      readonly blockedReason: string | null
-    }> = []
-    let allowedCount = 0
-    requested.forEach((item, sortOrder) => {
-      const asset = assetById.get(item.assetId)
-      const sourceKey = item.sourceKey
+    const states = requested.map((item, sortOrder) => {
       let blockedReason: string | null = null
-      if (policy === undefined || templateKey === null) {
-        blockedReason = 'CHANNEL_DISABLED'
-      }
-      else if (template === null) {
-        blockedReason = 'TEMPLATE_NOT_FOUND'
-      }
-      else if (!template.enabled) {
-        blockedReason = 'TEMPLATE_DISABLED'
-      }
-      else if (!mediaPolicy.enabled) {
+      const asset = assetById.get(item.assetId)
+      if (specs.length === 0 && !hasMediaConsumers) {
         blockedReason = 'POLICY_DISABLED'
       }
-      else if (!policy.allowSensitive) {
-        // 图片无法像文本变量一样脱敏，敏感内容策略不通过时只能整张不发。
+      else if (!input.channelConfig.allowSensitive) {
+        // 图片不能像文本变量一样脱敏；敏感开关关闭时只能整张不发。
         blockedReason = 'SENSITIVE_BLOCKED'
       }
-      else if (sourceKey !== null && (sourceKey.length > 64 || !declaredSources.has(sourceKey))) {
+      else if (item.sourceKey !== null && !declaredSources.has(item.sourceKey)) {
         blockedReason = 'SOURCE_NOT_DECLARED'
-      }
-      else if (selectedSources.size > 0 && (sourceKey === null || !selectedSources.has(sourceKey))) {
-        blockedReason = 'SOURCE_NOT_SELECTED'
-      }
-      else if (allowedCount >= mediaPolicy.maxCount) {
-        blockedReason = 'LIMIT_EXCEEDED'
       }
       else if (asset === undefined) {
         blockedReason = 'ASSET_NOT_FOUND'
@@ -573,31 +890,640 @@ export class SystemNotificationService {
       else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
         blockedReason = 'ASSET_NOT_READY'
       }
-      else if (!(mediaPolicy.kinds as readonly string[]).includes(asset.mediaType)) {
-        blockedReason = 'KIND_NOT_ALLOWED'
+      return {
+        assetId: item.assetId,
+        sourceKey: item.sourceKey,
+        assetType: asset?.mediaType ?? null,
+        sortOrder,
+        assignedTo: null as 'INLINE' | 'ATTACHMENT' | 'FILE' | null,
+        attachmentMessageSortOrder: null as number | null,
+        blockedReason,
       }
-      if (blockedReason === null) {
-        allowedCount += 1
-      }
-      rows.push({ mediaAssetId: item.assetId, sortOrder, sourceKey, blockedReason })
     })
 
-    await transaction.notificationMedia.createMany({
-      data: rows.map(row => ({
-        notificationId: input.notificationId,
-        mediaAssetId: row.mediaAssetId,
-        sortOrder: row.sortOrder,
-        sourceKey: row.sourceKey,
-        blockedReason: row.blockedReason,
-      })),
-    })
+    const inlineByMessageId = new Map<string, NotificationInlineMediaAssignment[]>()
+    const fileByMessageId = new Map<string, NotificationFileMediaAssignment>()
+    let skippedInlineCount = 0
+    let skippedFileCount = 0
+
+    for (const message of input.messages) {
+      if (message.kind === 'MPNEWS') {
+        const slots = inlineSlotsByMessageId.get(message.id) ?? []
+        if (slots.length === 0) {
+          continue
+        }
+        const assignments: NotificationInlineMediaAssignment[] = []
+        slots.forEach((sourceKey, slotIndex) => {
+          const state = states.find(candidate =>
+            candidate.assignedTo === null
+            && candidate.blockedReason === null
+            && candidate.sourceKey === sourceKey
+            && candidate.assetType === 'IMAGE',
+          )
+          if (state === undefined) {
+            skippedInlineCount += 1
+            return
+          }
+          state.assignedTo = 'INLINE'
+          assignments.push({
+            slotIndex,
+            mediaAssetId: state.assetId,
+            sourceKey,
+          })
+        })
+        if (assignments.length > 0) {
+          inlineByMessageId.set(message.id, assignments)
+        }
+        continue
+      }
+
+      if (message.kind === 'FILE') {
+        const spec = fileSpecs.find(candidate => candidate.message.id === message.id)
+        if (spec === undefined) {
+          continue
+        }
+        const state = states.find(candidate =>
+          candidate.assignedTo === null
+          && candidate.blockedReason === null
+          && candidate.assetType === 'DOCUMENT'
+          && candidate.sourceKey !== null
+          && spec.sourceKeys.includes(candidate.sourceKey),
+        )
+        if (state === undefined) {
+          skippedFileCount += 1
+          continue
+        }
+        state.assignedTo = 'FILE'
+        fileByMessageId.set(message.id, {
+          mediaAssetId: state.assetId,
+          sourceKey: state.sourceKey,
+        })
+        continue
+      }
+
+      if (message.kind !== 'IMAGE') {
+        continue
+      }
+      const policy = parseNotificationImageMediaPolicy(message.mediaPolicy)
+      if (policy === null) {
+        continue
+      }
+      let remaining = policy.maxCount
+      for (const state of states) {
+        if (remaining <= 0) {
+          break
+        }
+        if (state.assignedTo !== null || state.blockedReason !== null) {
+          continue
+        }
+        if (state.assetType !== 'IMAGE') {
+          continue
+        }
+        if (policy.sourceKeys.length > 0
+          && (state.sourceKey === null || !policy.sourceKeys.includes(state.sourceKey))) {
+          continue
+        }
+        state.assignedTo = 'ATTACHMENT'
+        state.attachmentMessageSortOrder = message.sortOrder
+        remaining -= 1
+      }
+    }
+
+    const rows: Array<{
+      readonly mediaAssetId: string
+      readonly sortOrder: number
+      readonly sourceKey: string | null
+      readonly blockedReason: string | null
+    }> = []
+    const attachments: NotificationMediaAttachment[] = []
+    for (const state of states) {
+      if (state.assignedTo === 'INLINE' || state.assignedTo === 'FILE') {
+        continue
+      }
+      if (state.assignedTo === 'ATTACHMENT') {
+        attachments.push({
+          mediaAssetId: state.assetId,
+          sortOrder: state.sortOrder,
+          messageSortOrder: state.attachmentMessageSortOrder ?? state.sortOrder,
+        })
+        rows.push({
+          mediaAssetId: state.assetId,
+          sortOrder: state.sortOrder,
+          sourceKey: state.sourceKey,
+          blockedReason: null,
+        })
+        continue
+      }
+      const matchingSpecs = specs.filter(spec => spec.policy.sourceKeys.length === 0
+        || (state.sourceKey !== null && spec.policy.sourceKeys.includes(state.sourceKey)))
+      const blockedReason = state.blockedReason
+        ?? (matchingSpecs.length > 0 ? 'LIMIT_EXCEEDED' : 'SOURCE_NOT_SELECTED')
+      rows.push({
+        mediaAssetId: state.assetId,
+        sortOrder: state.sortOrder,
+        sourceKey: state.sourceKey,
+        blockedReason,
+      })
+    }
+
+    if (rows.length > 0) {
+      await transaction.notificationMedia.createMany({
+        data: rows.map(row => ({
+          notificationId: input.notificationId,
+          mediaAssetId: row.mediaAssetId,
+          sortOrder: row.sortOrder,
+          sourceKey: row.sourceKey,
+          blockedReason: row.blockedReason,
+        })),
+      })
+    }
     const blocked = rows.filter(row => row.blockedReason !== null).length
     if (blocked > 0) {
       input.warnings.push({ code: 'MEDIA_ATTACHMENT_BLOCKED', message: `${blocked} 个附件未发送` })
     }
-    return rows
-      .filter(row => row.blockedReason === null)
-      .map(row => ({ mediaAssetId: row.mediaAssetId, sortOrder: row.sortOrder }))
+    if (skippedInlineCount > 0) {
+      input.warnings.push({
+        code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+        message: `${skippedInlineCount} 张正文业务图片未插入：缺少来源图片或资产不可用`,
+      })
+    }
+    if (skippedFileCount > 0) {
+      input.warnings.push({
+        code: 'FILE_MEDIA_SKIPPED',
+        message: `${skippedFileCount} 个文件消息未找到可用业务附件`,
+      })
+    }
+    return {
+      attachments,
+      inlineByMessageId,
+      fileByMessageId,
+    }
+  }
+
+  private eventContentAllowedVariables(eventType: string): NotificationTemplateVariable[] {
+    const definitions = notificationEventVariableDefinitions(eventType)
+    if (definitions === null) {
+      return []
+    }
+    return definitions.map(definition => ({
+      name: definition.name,
+      required: definition.required,
+      maxLength: definition.maxLength,
+      sensitive: definition.sensitive,
+    }))
+  }
+
+  private renderEventTextMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'TEXT'
+    readonly title: string
+    readonly content: string
+    readonly linkUrl: string | null
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const rawTitle = typeof payload?.title === 'string' ? payload.title : null
+    const rawContent = typeof payload?.content === 'string' ? payload.content : ''
+    const rawLink = typeof payload?.linkUrl === 'string' ? payload.linkUrl : null
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+    const titleResult = rawTitle !== null && rawTitle.trim().length > 0
+      ? renderNotificationTemplate({
+          body: rawTitle,
+          variables: input.variables,
+          allowed,
+          allowSensitive,
+          maxLength: 200,
+        })
+      : null
+    const bodyResult = renderNotificationTemplate({
+      body: rawContent,
+      linkUrlTemplate: rawLink,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 2_000,
+    })
+    if ((titleResult !== null && !titleResult.ok) || !bodyResult.ok) {
+      return {
+        ok: false,
+        message: !bodyResult.ok
+          ? bodyResult.message
+          : titleResult !== null && !titleResult.ok ? titleResult.message : '文本内容渲染失败',
+      }
+    }
+    const warnings = new Set<NotificationRenderWarning>()
+    if (titleResult?.ok) {
+      for (const warning of titleResult.warnings) warnings.add(warning)
+    }
+    for (const warning of bodyResult.warnings) warnings.add(warning)
+
+    if (input.channelConfig.channel === 'IN_APP') {
+      return {
+        ok: true,
+        kind: 'TEXT',
+        title: titleResult?.ok && titleResult.content.trim().length > 0
+          ? titleResult.content
+          : NOTIFICATION_EVENT_LABELS[input.command.eventType] ?? input.command.eventType,
+        content: bodyResult.content,
+        linkUrl: bodyResult.linkUrl,
+        warnings: [...warnings],
+      }
+    }
+
+    const title = titleResult?.ok && titleResult.content.trim().length > 0 ? titleResult.content : null
+    const content = [
+      title,
+      bodyResult.content,
+      bodyResult.linkUrl,
+    ].filter((part): part is string => part !== null && part.length > 0).join('\n')
+    if (utf8Bytes(content) > WECOM_DEFAULT_MAX_BYTES) {
+      return { ok: false, message: `企业微信文本渲染后 ${utf8Bytes(content)} 字节，超过 ${WECOM_DEFAULT_MAX_BYTES} 字节上限` }
+    }
+    return {
+      ok: true,
+      kind: 'TEXT',
+      title: title ?? '',
+      content,
+      linkUrl: bodyResult.linkUrl,
+      warnings: [...warnings],
+    }
+  }
+
+  private renderEventMarkdownMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'MARKDOWN' | 'MARKDOWN_V2'
+    readonly payload: { readonly content: string }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const rawContent = typeof payload?.content === 'string' ? payload.content : ''
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const maxBytes = input.message.kind === 'MARKDOWN_V2' ? 4_096 : 2_048
+    const rendered = renderNotificationTemplate({
+      body: rawContent,
+      variables: input.variables,
+      allowed,
+      allowSensitive: input.channelConfig.allowSensitive,
+      maxLength: maxBytes,
+      maxLengthLimit: maxBytes,
+      maxBytes,
+    })
+    if (!rendered.ok) {
+      return { ok: false, message: rendered.message }
+    }
+    return {
+      ok: true,
+      kind: input.message.kind === 'MARKDOWN_V2' ? 'MARKDOWN_V2' : 'MARKDOWN',
+      payload: { content: rendered.content },
+      warnings: rendered.warnings,
+    }
+  }
+
+  private renderEventTextcardMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'TEXTCARD'
+    readonly payload: {
+      readonly title: string
+      readonly description: string
+      readonly url: string
+      readonly btntxt: string | null
+    }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+    const title = renderNotificationTemplate({
+      body: typeof payload?.title === 'string' ? payload.title : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 128,
+      maxBytes: 128,
+    })
+    const description = renderNotificationTemplate({
+      body: typeof payload?.description === 'string' ? payload.description : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 512,
+      maxBytes: 512,
+    })
+    const url = renderNotificationTemplate({
+      body: '',
+      linkUrlTemplate: typeof payload?.url === 'string' ? payload.url : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 1,
+    })
+    const btntxt = typeof payload?.btntxt === 'string'
+      ? renderNotificationTemplate({
+          body: payload.btntxt,
+          variables: input.variables,
+          allowed,
+          allowSensitive,
+          maxLength: 16,
+          maxBytes: 16,
+        })
+      : null
+    if (!title.ok) return { ok: false, message: title.message }
+    if (!description.ok) return { ok: false, message: description.message }
+    if (!url.ok) return { ok: false, message: url.message }
+    if (btntxt !== null && !btntxt.ok) return { ok: false, message: btntxt.message }
+    const renderedUrl = url.linkUrl
+    if (renderedUrl === null || !/^https?:\/\//iu.test(renderedUrl)) {
+      return { ok: false, message: '文本卡片链接必须是 http/https URL' }
+    }
+    const warnings = new Set<NotificationRenderWarning>()
+    for (const warning of [...title.warnings, ...description.warnings, ...url.warnings, ...(btntxt?.ok ? btntxt.warnings : [])]) {
+      warnings.add(warning)
+    }
+    return {
+      ok: true,
+      kind: 'TEXTCARD',
+      payload: {
+        title: title.content,
+        description: description.content,
+        url: renderedUrl,
+        btntxt: btntxt?.ok ? btntxt.content : null,
+      },
+      warnings: [...warnings],
+    }
+  }
+
+  private renderEventNewsMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'NEWS'
+    readonly payload: {
+      readonly articles: ReadonlyArray<{
+        readonly title: string
+        readonly description: string | null
+        readonly url: string
+        readonly imageAssetId: string | null
+      }>
+    }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const rawArticles = Array.isArray(payload?.articles) ? payload.articles : []
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+    const warnings = new Set<NotificationRenderWarning>()
+    const articles: Array<{
+      title: string
+      description: string | null
+      url: string
+      imageAssetId: string | null
+    }> = []
+    for (const [index, rawArticle] of rawArticles.entries()) {
+      const article = asRecord(rawArticle)
+      if (article === null) {
+        return { ok: false, message: `图文卡片第 ${index + 1} 篇内容无效` }
+      }
+      const title = renderNotificationTemplate({
+        body: typeof article.title === 'string' ? article.title : '',
+        variables: input.variables,
+        allowed,
+        allowSensitive,
+        maxLength: 128,
+        maxBytes: 128,
+      })
+      const description = typeof article.description === 'string'
+        ? renderNotificationTemplate({
+            body: article.description,
+            variables: input.variables,
+            allowed,
+            allowSensitive,
+            maxLength: 512,
+            maxBytes: 512,
+          })
+        : null
+      const url = renderNotificationTemplate({
+        body: '',
+        linkUrlTemplate: typeof article.url === 'string' ? article.url : '',
+        variables: input.variables,
+        allowed,
+        allowSensitive,
+        maxLength: 1,
+      })
+      if (!title.ok) return { ok: false, message: title.message }
+      if (description !== null && !description.ok) return { ok: false, message: description.message }
+      if (!url.ok) return { ok: false, message: url.message }
+      if (url.linkUrl === null || !/^https?:\/\//iu.test(url.linkUrl)) {
+        return { ok: false, message: `图文卡片第 ${index + 1} 篇链接必须是 http/https URL` }
+      }
+      for (const warning of [...title.warnings, ...(description?.ok ? description.warnings : []), ...url.warnings]) {
+        warnings.add(warning)
+      }
+      articles.push({
+        title: title.content,
+        description: description?.ok ? description.content : null,
+        url: url.linkUrl,
+        imageAssetId: typeof article.imageAssetId === 'string' ? article.imageAssetId : null,
+      })
+    }
+    return { ok: true, kind: 'NEWS', payload: { articles }, warnings: [...warnings] }
+  }
+
+  private renderEventFileMessage(input: {
+    readonly message: EventChannelMessage
+    readonly resolved: NotificationFileMediaAssignment | undefined
+  }): {
+    readonly ok: true
+    readonly kind: 'FILE'
+    readonly payload: { readonly mediaAssetId: string | null, readonly filename?: string | null }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } {
+    const payload = asRecord(input.message.payload)
+    const fixedAssetId = typeof payload?.mediaAssetId === 'string' && payload.mediaAssetId.length > 0
+      ? payload.mediaAssetId
+      : null
+    return {
+      ok: true,
+      kind: 'FILE',
+      payload: {
+        mediaAssetId: fixedAssetId ?? input.resolved?.mediaAssetId ?? null,
+        filename: typeof payload?.filename === 'string' ? payload.filename : null,
+      },
+      warnings: [],
+    }
+  }
+
+  private replaceMpnewsInlineMedia(
+    content: string,
+    assignments: readonly NotificationInlineMediaAssignment[],
+  ): string {
+    let slotIndex = 0
+    return content.replace(
+      /<img\b[^>]*\bdata-media-source\s*=\s*["'][^"']+["'][^>]*>/giu,
+      (tag) => {
+        const assignment = assignments.find(item => item.slotIndex === slotIndex)
+        slotIndex += 1
+        if (assignment === undefined) {
+          return ''
+        }
+        const withoutSource = tag.replace(/\sdata-media-source\s*=\s*["'][^"']*["']/iu, '')
+        return withoutSource.replace(/^<img\b/iu, `<img data-asset-id="${assignment.mediaAssetId}"`)
+      },
+    )
+  }
+
+  private renderEventMpnewsMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+    readonly inlineMedia: readonly NotificationInlineMediaAssignment[]
+  }): {
+    readonly ok: true
+    readonly kind: 'MPNEWS'
+    readonly payload: {
+      readonly coverAssetId: string
+      readonly title: string
+      readonly author: string | null
+      readonly digest: string | null
+      readonly contentSourceUrl: string | null
+      readonly content: string
+      readonly assetIds: readonly string[]
+    }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const cover = asRecord(payload?.cover)
+    const coverAssetId = typeof cover?.mediaAssetId === 'string' ? cover.mediaAssetId : ''
+    const rawTitle = typeof payload?.title === 'string' ? payload.title : ''
+    const rawAuthor = typeof payload?.author === 'string' ? payload.author : null
+    const rawDigest = typeof payload?.digest === 'string' ? payload.digest : null
+    const rawContentSourceUrl = typeof payload?.contentSourceUrl === 'string' ? payload.contentSourceUrl : null
+    const rawContent = typeof payload?.content === 'string' ? payload.content : ''
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+
+    const title = renderNotificationTemplate({
+      body: rawTitle,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 128,
+      maxBytes: 128,
+    })
+    const author = rawAuthor === null ? null : renderNotificationTemplate({
+      body: rawAuthor,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 64,
+      maxBytes: 64,
+    })
+    const digest = rawDigest === null ? null : renderNotificationTemplate({
+      body: rawDigest,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 512,
+      maxBytes: 512,
+    })
+    const sourceUrl = rawContentSourceUrl === null ? null : renderNotificationTemplate({
+      body: '',
+      linkUrlTemplate: rawContentSourceUrl,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 1,
+    })
+    const resolvedContent = this.replaceMpnewsInlineMedia(rawContent, input.inlineMedia)
+    if (extractMpnewsMediaSourceSlots(rawContent).length > 0 && !mpnewsHasStaticTextOutsideImages(resolvedContent)) {
+      return { ok: false, message: 'mpnews 正文业务图片缺失后没有静态文字' }
+    }
+    const content = renderMpnewsHtml({
+      html: resolvedContent,
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+    })
+    if (!title.ok) return { ok: false, message: title.message }
+    if (author !== null && !author.ok) return { ok: false, message: author.message }
+    if (digest !== null && !digest.ok) return { ok: false, message: digest.message }
+    if (sourceUrl !== null && !sourceUrl.ok) return { ok: false, message: sourceUrl.message }
+    if (!content.ok) return { ok: false, message: content.message }
+
+    let renderedSourceUrl: string | null = null
+    if (sourceUrl !== null) {
+      renderedSourceUrl = sourceUrl.linkUrl
+      if (renderedSourceUrl === null || !/^https?:\/\//iu.test(renderedSourceUrl)) {
+        return { ok: false, message: 'mpnews 阅读原文链接必须是 http/https URL' }
+      }
+    }
+    const warnings = new Set<NotificationRenderWarning>()
+    for (const warning of [...title.warnings, ...(author?.ok ? author.warnings : []), ...(digest?.ok ? digest.warnings : []), ...(sourceUrl?.ok ? sourceUrl.warnings : []), ...content.warnings]) {
+      warnings.add(warning)
+    }
+    const metadataTruncated = title.truncated
+      || (author !== null && author.ok && author.truncated)
+      || (digest !== null && digest.ok && digest.truncated)
+    if (metadataTruncated) {
+      warnings.add('MPNEWS_METADATA_TRUNCATED')
+    }
+    const extracted = extractNotificationContentAssetIds({
+      kind: 'MPNEWS',
+      payload: {
+        cover: { mediaAssetId: coverAssetId },
+        content: content.content,
+      },
+    })
+    return {
+      ok: true,
+      kind: 'MPNEWS',
+      payload: {
+        coverAssetId,
+        title: title.content,
+        author: author?.ok ? author.content : null,
+        digest: digest?.ok ? digest.content : null,
+        contentSourceUrl: renderedSourceUrl,
+        content: content.content,
+        assetIds: extracted.coverAssetId === null
+          ? extracted.inlineAssetIds
+          : [extracted.coverAssetId, ...extracted.inlineAssetIds],
+      },
+      warnings: [...warnings],
+    }
   }
 
   private uniqueMediaItems(
@@ -625,160 +1551,39 @@ export class SystemNotificationService {
     return result
   }
 
-  /** 只为真正会发送的投递创建附件项；已跳过或未绑定的投递不产生无意义的重试行。 */
-  private async createDeliveryMedia(
+  private async resolveWecomApp(
     transaction: Transaction,
-    deliveries: readonly { readonly id: string, readonly status: 'PENDING' | 'SKIPPED' }[],
-    media: readonly NotificationMediaAttachment[],
-  ): Promise<void> {
-    if (media.length === 0) {
-      return
-    }
-    const sendable = deliveries.filter(delivery => delivery.status === 'PENDING')
-    if (sendable.length === 0) {
-      return
-    }
-    await transaction.assistantDeliveryMedia.createMany({
-      data: sendable.flatMap(delivery => media.map(item => ({
-        deliveryId: delivery.id,
-        mediaAssetId: item.mediaAssetId,
-        sortOrder: item.sortOrder,
-      }))),
+    eventType: string,
+  ): Promise<{ readonly app: { readonly id: string } | null, readonly reason: 'APP_DISABLED' | 'APP_NOT_CONFIGURED' | null }> {
+    const route = await transaction.wecomAppEventRoute.findUnique({
+      where: { eventType },
+      select: {
+        enabled: true,
+        app: { select: { id: true, enabled: true, status: true } },
+      },
     })
+    if (route !== null && route.enabled) {
+      if (!route.app.enabled || route.app.status === 'DISABLED') {
+        return { app: null, reason: 'APP_DISABLED' }
+      }
+      return { app: { id: route.app.id }, reason: null }
+    }
+
+    const fallback = await transaction.wecomApp.findFirst({
+      where: { isDefault: true, enabled: true, status: { not: 'DISABLED' } },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })
+    return fallback === null
+      ? { app: null, reason: 'APP_NOT_CONFIGURED' }
+      : { app: fallback, reason: null }
   }
 
-  private async createAssistantDeliveries(
-    transaction: Transaction,
-    input: {
-      readonly notificationId: string
-      readonly policy: {
-        readonly targetMode: 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
-        readonly targetConfig: Prisma.JsonValue
-        readonly allowSensitive: boolean
-      }
-      readonly templateKey: string
-      readonly templateVersion: number
-      readonly content: string
-      readonly media: readonly NotificationMediaAttachment[]
-      readonly command: SystemNotificationPublishCommand
-      readonly now: Date
-      readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
-    },
-  ): Promise<ResolvedChannelResult> {
-    const tx = transaction
-
-    if (input.policy.targetMode === 'GROUP') {
-      const targetKeys = parseTargetConfig(input.policy.targetConfig).targetKeys ?? []
-      const targets = targetKeys.length === 0
-        ? []
-        : await tx.assistantTarget.findMany({
-          where: { key: { in: targetKeys }, enabled: true },
-          select: { id: true, internalOnly: true },
-        })
-      if (targets.length === 0) {
-        input.warnings.push({ code: 'NO_RECIPIENT', message: '群目标不存在或已停用' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
-      }
-      const account = await tx.assistantAccount.findFirst({
-        where: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      })
-      if (account === null) {
-        input.warnings.push({ code: 'CHANNEL_NOT_CONFIGURED', message: '没有可用的公司号' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
-      }
-
-      const skipped = targets.filter(target => input.policy.allowSensitive && !target.internalOnly).length
-      const deliveries = targets.map(target => {
-        const sendable = !(input.policy.allowSensitive && !target.internalOnly)
-        return {
-          id: randomUUID(),
-          notificationId: input.notificationId,
-          recipientUserId: null,
-          targetId: target.id,
-          accountId: account.id,
-          status: sendable ? 'PENDING' as const : 'SKIPPED' as const,
-          failureCode: sendable ? null : 'TARGET_DISABLED',
-          failureMessage: sendable ? null : '群未标记为仅内部成员，敏感内容不发送',
-          templateKey: input.templateKey,
-          templateVersion: input.templateVersion,
-          renderedContent: input.content,
-          nextAttemptAt: input.now,
-        }
-      })
-      await tx.assistantDelivery.createMany({ data: deliveries })
-      await this.createDeliveryMedia(tx, deliveries, input.media)
-      if (skipped === targets.length) {
-        input.warnings.push({ code: 'NO_RECIPIENT', message: '所有群目标都不允许接收敏感内容' })
-        return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: targets.length, skippedCount: skipped, skipReason: 'TARGET_DISABLED' }
-      }
-      return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: targets.length, skippedCount: skipped }
-    }
-
-    const target = input.policy.targetMode === 'COMMAND_TARGET'
-      ? input.command.target
-      : this.targetFromPolicy(input.policy)
-    const resolvedUserIds = target === null ? [] : await this.resolveUsers(tx, target)
-    if (resolvedUserIds.length === 0) {
-      input.warnings.push({ code: 'NO_RECIPIENT', message: '没有解析到收件人' })
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'NO_RECIPIENT' }
-    }
-    // 用户关闭优先于绑定检查：关闭者不计入 NOT_BOUND，也不再生成投递行。
-    const { allowed: userIds, muted } = await this.filterMutedUsers(
-      tx,
-      resolvedUserIds,
-      input.command.eventType,
-      'ASSISTANT',
-    )
-    if (muted > 0) {
-      input.warnings.push({ code: 'USER_MUTED', message: `${muted} 名收件人已关闭该事件的小助理提醒` })
-    }
-    if (userIds.length === 0) {
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: 0, skippedCount: muted, skipReason: 'USER_MUTED' }
-    }
-
-    const bindings = await tx.assistantBinding.findMany({
-      where: {
-        userId: { in: userIds },
-        status: 'ACTIVE',
-        verifiedAt: { not: null },
-        account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-      },
-      select: { userId: true, accountId: true },
-      orderBy: { boundAt: 'asc' },
-    })
-    const bindingByUser = new Map<string, string>()
-    for (const binding of bindings) {
-      if (!bindingByUser.has(binding.userId)) {
-        bindingByUser.set(binding.userId, binding.accountId)
-      }
-    }
-    const skipped = userIds.filter(userId => !bindingByUser.has(userId)).length
-    const deliveries = userIds.map(userId => {
-      const accountId = bindingByUser.get(userId) ?? null
-      return {
-        id: randomUUID(),
-        notificationId: input.notificationId,
-        recipientUserId: userId,
-        targetId: null,
-        accountId,
-        status: accountId === null ? 'SKIPPED' as const : 'PENDING' as const,
-        failureCode: accountId === null ? 'NOT_BOUND' : null,
-        failureMessage: accountId === null ? '员工未完成已验证绑定' : null,
-        templateKey: input.templateKey,
-        templateVersion: input.templateVersion,
-        renderedContent: input.content,
-        nextAttemptAt: input.now,
-      }
-    })
-    await tx.assistantDelivery.createMany({ data: deliveries })
-    await this.createDeliveryMedia(tx, deliveries, input.media)
-    if (skipped === userIds.length) {
-      input.warnings.push({ code: 'NO_RECIPIENT', message: '所有收件人都未完成绑定' })
-      return { channel: 'ASSISTANT', status: 'SKIPPED', recipientCount: userIds.length, skippedCount: muted + skipped, skipReason: 'NOT_BOUND' }
-    }
-    return { channel: 'ASSISTANT', status: 'PENDING', recipientCount: userIds.length, skippedCount: muted + skipped }
+  private wecomMentionFromPolicy(targetConfig: Prisma.JsonValue): WecomMentionConfig {
+    const record = typeof targetConfig === 'object' && targetConfig !== null && !Array.isArray(targetConfig)
+      ? targetConfig as Record<string, unknown>
+      : null
+    return parseWecomMentionConfig(record?.mention)
   }
 
   /**

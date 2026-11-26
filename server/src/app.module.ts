@@ -4,12 +4,11 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
 import { validateEnvironment } from './config/env.validation'
 import appConfig from './config/app.config'
-import assistantConfig from './config/assistant.config'
 import authConfig from './config/auth.config'
 import cheetahgoConfig from './config/cheetahgo.config'
 import ipfoxyConfig from './config/ipfoxy.config'
 import mediaConfig from './config/media.config'
-import notificationMediaConfig from './config/notification-media.config'
+import wecomConfig from './config/wecom.config'
 import { HTTP_MODULES } from './http.modules'
 import { PrismaModule } from './infrastructure/database/prisma.module'
 import { PrivateNoStoreInterceptor } from './infrastructure/http/private-no-store.interceptor'
@@ -23,7 +22,7 @@ import { PermissionGuard } from './modules/auth/guards/permission.guard'
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,
-      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, cheetahgoConfig, assistantConfig, notificationMediaConfig],
+      load: [appConfig, authConfig, mediaConfig, ipfoxyConfig, cheetahgoConfig, wecomConfig],
       validate: validateEnvironment,
     }),
     PrismaModule,

@@ -490,7 +490,6 @@ export class AdvertisingRechargeService {
           eventType: 'ADVERTISING_RECHARGE_REJECTED',
           source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
-          templateKey: 'operations.advertising-recharge.rejected',
           variables: {
             adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(reviewedAt),
@@ -617,7 +616,6 @@ export class AdvertisingRechargeService {
           eventType: 'ADVERTISING_RECHARGE_PAID',
           source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
-          templateKey: 'operations.advertising-recharge.paid',
           variables: {
             adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(paidAt),
@@ -725,7 +723,6 @@ export class AdvertisingRechargeService {
           eventType: 'ADVERTISING_RECHARGE_VOIDED',
           source: { type: 'ADVERTISING_RECHARGE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.applicantUserId] },
-          templateKey: 'operations.advertising-recharge.voided',
           variables: {
             adAccountNo: row.adAccountNo,
             occurredAt: notificationTime(voidedAt),
@@ -759,7 +756,6 @@ export class AdvertisingRechargeService {
       eventType: 'ADVERTISING_RECHARGE_PENDING',
       source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: input.id },
       target: { kind: 'PERMISSION', permissionCode: 'advertising-recharges:pay' },
-      templateKey: 'operations.advertising-recharge.pending',
       variables: {
         accountType: accountTypeLabel(input.accountType),
         adAccountName: input.adAccountName,
@@ -786,7 +782,6 @@ export class AdvertisingRechargeService {
       eventType: 'ADVERTISING_RECHARGE_PAYMENT_CODE_REQUIRED',
       source: { type: 'ADVERTISING_RECHARGE_REQUEST', id: input.id },
       target: { kind: 'ROLE', roleCodes: ['system_admin'] },
-      templateKey: 'operations.advertising-recharge.payment-code',
       variables: {
         accountType: accountTypeLabel(input.accountType),
         adAccountName: input.adAccountName,

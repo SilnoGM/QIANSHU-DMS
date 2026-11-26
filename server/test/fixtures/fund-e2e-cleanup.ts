@@ -132,7 +132,7 @@ export async function cleanupFundE2eData(
     // 通知对请求人、投递接收人都是 RESTRICT 外键；通知编号发号记录同样受
     // RESTRICT 保护，因此必须先删通知（收件箱与投递按 CASCADE 一并移除），
     // 再删用户与发号记录。
-    await transaction.assistantDelivery.deleteMany({
+    await transaction.wecomDelivery.deleteMany({
       where: { recipientUserId: { in: userIds } },
     })
     if (notificationIds.length > 0) {

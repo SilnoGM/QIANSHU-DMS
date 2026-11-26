@@ -80,6 +80,34 @@ describe('mapExceptionToApiError', () => {
     })
   })
 
+  it('preserves structured issue locations carried by ApiException', () => {
+    const issues = [{
+      code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+      message: '文本内容不能为空',
+      channel: 'WECOM',
+      itemIndex: 1,
+      field: 'content',
+    }]
+    const exception = new ApiException(
+      422,
+      'NOTIFICATION_EVENT_CONTENT_INVALID',
+      '文本内容不能为空',
+      undefined,
+      issues,
+    )
+
+    expect(mapExceptionToApiError(exception, REQUEST_ID)).toEqual({
+      status: 422,
+      body: {
+        code: 'NOTIFICATION_EVENT_CONTENT_INVALID',
+        message: '文本内容不能为空',
+        issues,
+        requestId: REQUEST_ID,
+      },
+      unexpected: false,
+    })
+  })
+
   it('sanitizes unknown exceptions as unexpected internal errors', () => {
     const result = mapExceptionToApiError(
       new Error(SENSITIVE_CANARY),

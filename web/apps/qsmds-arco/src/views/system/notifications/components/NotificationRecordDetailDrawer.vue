@@ -51,7 +51,7 @@ const canManage = computed(() => auth('notification-record:manage'))
 const canCancel = computed(() => detail.value !== null && canCancelRecord(detail.value, canManage.value))
 const deliveries = computed(() => detail.value === null ? [] : sortRecordDeliveries(detail.value.deliveries))
 const deliveryStatuses = computed(() => detail.value === null ? [] : deliveryStatusEntries(detail.value))
-const assistantTotal = computed(() => detail.value === null ? 0 : deliveryTotal(detail.value.deliveryCounts))
+const wecomTotal = computed(() => detail.value === null ? 0 : deliveryTotal(detail.value.wecomDeliveryCounts ?? {}))
 const inAppRead = computed(() => detail.value === null ? 0 : inAppReadCount(detail.value))
 
 /** 附件大小以字符串下发，避免 BigInt 序列化问题；这里只在展示层换算。 */
@@ -228,10 +228,10 @@ defineExpose({ reload })
           </div>
           <div class="min-w-0">
             <dt class="qs-type-compact-label">
-              逻辑模板
+              内容标识
             </dt>
             <dd class="qs-type-body m-0 mt-1 break-all">
-              {{ detail.templateKey }}
+              {{ detail.contentKey }}
             </dd>
           </div>
           <div class="min-w-0">
@@ -309,15 +309,15 @@ defineExpose({ reload })
             </dl>
           </div>
 
-          <div v-if="detail.channels.includes('ASSISTANT')" class="p-4 border border-border rounded-lg">
+          <div v-if="detail.channels.includes('WECOM')" class="p-4 border border-border rounded-lg">
             <div class="flex gap-2 items-center">
-              <FaIcon name="i-lucide:send" class="text-primary size-4" />
+              <FaIcon name="i-lucide:send" class="text-emerald-600 size-4" />
               <p class="qs-type-body-medium m-0">
-                千树小助理
+                企业微信
               </p>
             </div>
             <p class="qs-type-data-emphasis m-0 mt-3">
-              {{ assistantTotal }} <span class="qs-type-meta text-muted-foreground font-normal">条交付</span>
+              {{ wecomTotal }} <span class="qs-type-meta text-muted-foreground font-normal">条交付</span>
             </p>
             <div v-if="deliveryStatuses.length > 0" class="mt-2 flex flex-wrap gap-1.5">
               <FaTag
@@ -331,13 +331,13 @@ defineExpose({ reload })
               </FaTag>
             </div>
             <p v-else class="qs-type-meta text-muted-foreground m-0 mt-2">
-              未生成小助理交付
+              未生成企业微信交付
             </p>
           </div>
         </div>
       </section>
 
-      <section v-if="detail.channels.includes('ASSISTANT')" class="flex flex-col gap-3">
+      <section v-if="detail.channels.includes('WECOM')" class="flex flex-col gap-3">
         <div class="flex flex-wrap gap-2 items-baseline justify-between">
           <h3 class="qs-type-body-medium m-0">
             逐人交付
@@ -363,13 +363,23 @@ defineExpose({ reload })
                 </span>
                 <span v-else class="text-muted-foreground">—</span>
               </div>
-              <FaTag
-                variant="outline"
-                class="qs-type-status-tag"
-                :class="deliveryStatusClass(delivery.status)"
-              >
-                {{ deliveryStatusLabel(delivery.status) }}
-              </FaTag>
+              <div class="flex flex-wrap gap-2 items-center">
+                <FaTag
+                  v-if="delivery.channel !== undefined"
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="channelClass(delivery.channel)"
+                >
+                  {{ channelLabel(delivery.channel) }}
+                </FaTag>
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="deliveryStatusClass(delivery.status)"
+                >
+                  {{ deliveryStatusLabel(delivery.status) }}
+                </FaTag>
+              </div>
             </div>
             <div class="qs-type-meta text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1">
               <span>尝试 {{ delivery.attemptCount }} 次</span>
@@ -384,8 +394,8 @@ defineExpose({ reload })
             <p class="qs-type-meta m-0 mt-2 p-2 rounded bg-muted/30 whitespace-pre-wrap break-words">
               {{ delivery.renderedContent }}
             </p>
-            <p v-if="delivery.templateKey !== detail.templateKey" class="qs-type-meta text-muted-foreground m-0 mt-1 break-all">
-              实际模板：{{ delivery.templateKey }}
+            <p v-if="delivery.contentKey !== detail.contentKey" class="qs-type-meta text-muted-foreground m-0 mt-1 break-all">
+              实际内容标识：{{ delivery.contentKey }}
             </p>
             <p v-if="delivery.failureMessage !== null" class="qs-type-meta text-destructive m-0 mt-1">
               {{ delivery.failureMessage }}
@@ -395,8 +405,8 @@ defineExpose({ reload })
         <FaEmpty
           v-else
           icon="i-lucide:send"
-          title="没有小助理交付"
-          description="这条通知没有生成小助理交付记录。"
+          title="没有企业微信交付"
+          description="这条通知没有生成企业微信交付记录。"
           class="min-h-28"
         />
       </section>
@@ -431,8 +441,31 @@ defineExpose({ reload })
         </div>
       </section>
 
+      <section v-if="detail.inlineMedia.length > 0" class="flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-baseline justify-between">
+          <h3 class="qs-type-body-medium m-0">
+            正文内联图片
+          </h3>
+          <span class="qs-type-meta text-muted-foreground">{{ detail.inlineMedia.length }} 张</span>
+        </div>
+        <div class="flex flex-col gap-2">
+          <div
+            v-for="media in detail.inlineMedia"
+            :key="media.id"
+            class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+          >
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <span class="qs-type-body-medium break-all">{{ media.originalFilename }}</span>
+              <span class="qs-type-meta text-muted-foreground">
+                {{ media.sourceLabel !== null ? `${media.sourceLabel} · ` : '' }}消息 #{{ media.renderedMessageSortOrder + 1 }} · {{ media.mediaType }} · {{ media.mimeType ?? '未知类型' }} · {{ formatAttachmentSize(media.sizeBytes) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <p class="qs-type-meta text-muted-foreground m-0 pt-3 border-t border-border">
-        “完成”“已接受”表示 GeWe 已接受发送，不代表员工已阅读；站内阅读状态在员工通知中心查看。
+        “完成”“已接受”表示企业微信已接受发送，不代表员工已阅读；站内阅读状态在员工通知中心查看。
       </p>
     </div>
 

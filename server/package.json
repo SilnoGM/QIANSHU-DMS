@@ -37,6 +37,7 @@
     "notifications:scan": "node dist/commands/notification-scan.js",
     "ad-accounts:sync": "node dist/commands/ad-account-sync.js",
     "notifications:machine-viewing-scan": "node dist/commands/machine-viewing-notification-scan.js",
+    "purchase-auto-review:scan": "node dist/commands/purchase-auto-review-scan.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
     "media:accept:cos": "MEDIA_STORAGE_DRIVER=cos node ./scripts/cos-acceptance.cjs",
     "media:cleanup:expired-trash": "node dist/commands/media-operations.js cleanup-expired-trash",

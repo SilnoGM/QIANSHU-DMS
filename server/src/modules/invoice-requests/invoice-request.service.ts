@@ -277,7 +277,6 @@ export class InvoiceRequestService {
           eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
           source: { type: 'INVOICE_REQUEST', id: created.id },
           target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
-          templateKey: 'invoice.review.pending',
           variables: {
             invoiceNo: created.invoiceNo,
             invoiceRequestId: created.id,
@@ -351,7 +350,6 @@ export class InvoiceRequestService {
           eventType: 'INVOICE_REQUEST_REVIEW_PENDING',
           source: { type: 'INVOICE_REQUEST', id },
           target: { kind: 'PERMISSION', permissionCode: 'invoice-requests:review' },
-          templateKey: 'invoice.review.pending',
           variables: {
             invoiceNo: row.invoiceNo,
             invoiceRequestId: id,
@@ -402,7 +400,6 @@ export class InvoiceRequestService {
           eventType: 'INVOICE_REQUEST_RETURNED',
           source: { type: 'INVOICE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.createdById] },
-          templateKey: 'invoice.returned',
           variables: {
             buyerName: row.buyerName,
             invoiceNo: row.invoiceNo,
@@ -446,7 +443,6 @@ export class InvoiceRequestService {
           eventType: 'INVOICE_REQUEST_NOTIFIED',
           source: { type: 'INVOICE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.createdById] },
-          templateKey: 'invoice.notified',
           variables: {
             buyerName: row.buyerName,
             invoiceNo: row.invoiceNo,
@@ -505,7 +501,6 @@ export class InvoiceRequestService {
             eventType: 'INVOICE_REQUEST_CANCELLED',
             source: { type: 'INVOICE_REQUEST', id },
             target: { kind: 'USERS', userIds: [row.createdById] },
-            templateKey: 'invoice.cancelled',
             variables: {
               invoiceNo: row.invoiceNo,
               invoiceRequestId: id,
@@ -563,7 +558,6 @@ export class InvoiceRequestService {
           eventType: 'INVOICE_REQUEST_ISSUED',
           source: { type: 'INVOICE_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.createdById] },
-          templateKey: 'invoice.issued',
           variables: {
             buyerName: row.buyerName,
             invoiceNo: row.invoiceNo,
@@ -754,7 +748,6 @@ export class InvoiceRequestService {
       eventType: 'INVOICE_REQUEST_SETTLED',
       source: { type: 'INVOICE_REQUEST', id: row.id },
       target: { kind: 'USERS', userIds: [row.createdById] },
-      templateKey: 'invoice.settled',
       variables: {
         invoiceNo: row.invoiceNo,
         invoiceRequestId: row.id,

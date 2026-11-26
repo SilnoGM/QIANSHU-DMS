@@ -11,6 +11,7 @@ import { AxiosError, AxiosHeaders } from 'axios'
 
 import {
   getApiClientErrorMessage,
+  getApiClientFailureIssues,
   getApiClientFailureMessage,
   normalizeAxiosError,
 } from '../../src/api/errors'
@@ -68,6 +69,33 @@ test('getApiClientFailureMessage 提取服务端原因，4xx 不附 requestId', 
     kind: 'http',
     status: 422,
   }, '释放失败'), validApiError.message)
+})
+
+test('getApiClientFailureIssues 仅提取结构化 issues，其他错误返回空数组', () => {
+  const issues = [{
+    code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+    message: '文本内容不能为空',
+    channel: 'WECOM',
+    itemIndex: 0,
+    field: 'content',
+  }]
+
+  assert.deepEqual(getApiClientFailureIssues({
+    body: { ...validApiError, issues },
+    kind: 'http',
+    status: 422,
+  }), issues)
+  assert.deepEqual(getApiClientFailureIssues({
+    body: validApiError,
+    kind: 'http',
+    status: 422,
+  }), [])
+  assert.deepEqual(getApiClientFailureIssues({
+    kind: 'network',
+    code: 'NETWORK_ERROR',
+    message: '网络连接失败，请稍后重试',
+  }), [])
+  assert.deepEqual(getApiClientFailureIssues(new Error('raw')), [])
 })
 
 test('getApiClientFailureMessage 在 5xx 与不可解析响应后附 requestId', () => {

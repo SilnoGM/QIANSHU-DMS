@@ -183,6 +183,7 @@ test ! -e /var/run/reboot-required
 - [`docker-compose.yml`](../../deploy/docker/docker-compose.yml)、[`.env.example`](../../deploy/docker/.env.example)、[`server.env.example`](../../deploy/docker/server.env.example)
 - [`qianshu-dms.conf`](../../deploy/docker/nginx/qianshu-dms.conf)、[`server-entrypoint.sh`](../../deploy/docker/entrypoint/server-entrypoint.sh)
 - [`qianshu-dms-media-cleanup.service`](../../deploy/docker/systemd/qianshu-dms-media-cleanup.service)、[`qianshu-dms-media-cleanup.timer`](../../deploy/docker/systemd/qianshu-dms-media-cleanup.timer)
+- [`qianshu-dms-purchase-auto-review-scan.service`](../../deploy/docker/systemd/qianshu-dms-purchase-auto-review-scan.service)、[`qianshu-dms-purchase-auto-review-scan.timer`](../../deploy/docker/systemd/qianshu-dms-purchase-auto-review-scan.timer)（采购审核自动托管的扫描任务；未安装 timer 时开关不会生效，页面以「上次运行」心跳提示）
 - [`腾讯云 Docker 部署手册`](./腾讯云Docker部署手册.md)、[`媒体存储部署与恢复`](../后端文档/媒体存储部署与恢复.md)、[`发布与版本管理`](./发布与版本管理.md)
 
 宿主形态的历史模板保留在 `server/deploy/systemd/` 与 `server/deploy/nginx/`，只作为媒体目录语义与未来切换 `internal_redirect` 的参考，不再作为部署真相源。

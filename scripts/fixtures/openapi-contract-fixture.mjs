@@ -213,9 +213,24 @@ export function createValidContractFixture() {
                 items: { type: 'string' },
               },
             },
+            issues: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ApiErrorIssue' },
+            },
             requestId: { type: 'string' },
           },
           required: ['code', 'message', 'requestId'],
+        },
+        ApiErrorIssue: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            message: { type: 'string' },
+            field: { type: 'string' },
+            itemIndex: { type: 'number' },
+            channel: { type: 'string' },
+          },
+          required: ['code', 'message'],
         },
         ApiErrorAlias: {
           $ref: API_ERROR_REF,

@@ -213,7 +213,7 @@ function openDetail(row: AdvertisingRechargeDto): void {
 }
 
 /**
- * 通知已覆盖提交后的告知，但小助理离线时仍需要手动转发。
+ * 通知已覆盖提交后的告知，但企业微信投递失败时仍需要手动转发。
  * 文案与原先的复制步骤保持一致：账户名 + 编号 + 财务详情链接。
  */
 async function copyRechargeInfo(row: AdvertisingRechargeDto): Promise<void> {

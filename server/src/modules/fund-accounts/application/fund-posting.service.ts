@@ -963,7 +963,6 @@ export class FundPostingApplicationService extends FundPostingService {
         eventType: 'FUND_ACCOUNT_ADJUSTED',
         source: { type: 'FUND_POSTING_BATCH', id: identity.id },
         target: { kind: 'USERS', userIds: [identities.userId] },
-        templateKey: 'fund.account.adjusted',
         variables: {
           amount: plan.businessAmount,
           currencyCode: 'CNY',
@@ -1186,7 +1185,6 @@ export class FundPostingApplicationService extends FundPostingService {
         eventType: 'FUND_ACCOUNT_REVERSED',
         source: { type: 'FUND_POSTING_BATCH', id: batchIdentity.id },
         target: { kind: 'USERS', userIds: [original.userId] },
-        templateKey: 'fund.account.reversed',
         variables: {
           amount: request.input.amount,
           currencyCode: 'CNY',

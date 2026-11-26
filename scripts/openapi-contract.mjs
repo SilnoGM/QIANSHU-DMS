@@ -60,10 +60,19 @@ const CONTRACT_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/u
 const API_ERROR_PROPERTIES = [
   'code',
   'fieldErrors',
+  'issues',
   'message',
   'requestId',
 ]
 const API_ERROR_REQUIRED = ['code', 'message', 'requestId']
+const API_ERROR_ISSUE_PROPERTIES = [
+  'channel',
+  'code',
+  'field',
+  'itemIndex',
+  'message',
+]
+const API_ERROR_ISSUE_REQUIRED = ['code', 'message']
 const API_ERROR_FORBIDDEN_KEYWORDS = [
   '$ref',
   'allOf',
@@ -84,6 +93,35 @@ export const RETIRED_OPERATION_IDS = Object.freeze([
   'suppliers_disable',
   'slh_reconciliation_batch_match_preview',
   'slh_reconciliation_batch_reconcile',
+  'assistant_accounts_check_status',
+  'assistant_accounts_create',
+  'assistant_accounts_list',
+  'assistant_accounts_qrcode',
+  'assistant_accounts_update',
+  'assistant_bindings_check',
+  'assistant_bindings_create',
+  'assistant_bindings_delete',
+  'assistant_bindings_list',
+  'assistant_bindings_reassign',
+  'assistant_bindings_verify',
+  'assistant_channel_get',
+  'assistant_channel_test',
+  'assistant_channel_update',
+  'assistant_contacts_list',
+  'assistant_targets_list',
+  'assistant_targets_members',
+  'assistant_targets_mention_message',
+  'assistant_targets_sync',
+  'assistant_targets_update',
+  'notification_media_public_get',
+  'notification_media_public_head',
+  'notifications_policies_list',
+  'notifications_policies_update',
+  'notifications_templates_create',
+  'notifications_templates_list',
+  'notifications_templates_preview',
+  'notifications_templates_test',
+  'notifications_templates_update',
 ])
 
 export class ContractValidationError extends Error {
@@ -462,6 +500,31 @@ function assertApiErrorShape(document) {
     'string',
     'fieldErrors.additionalProperties.items',
   )
+  assertNonNullableType(schema.properties.issues, 'array', 'issues')
+  if (
+    !isRecord(schema.properties.issues.items)
+    || schema.properties.issues.items.$ref !== '#/components/schemas/ApiErrorIssue'
+  ) {
+    fail('ApiError issues.items must reference ApiErrorIssue')
+  }
+
+  const issueSchema = document.components?.schemas?.ApiErrorIssue
+  assertNonNullableType(issueSchema, 'object', 'ApiErrorIssue')
+  if (
+    !isRecord(issueSchema.properties)
+    || JSON.stringify(Object.keys(issueSchema.properties).sort()) !==
+      JSON.stringify(API_ERROR_ISSUE_PROPERTIES)
+  ) {
+    fail('ApiErrorIssue properties must be exact')
+  }
+  if (!sameStringSet(issueSchema.required, API_ERROR_ISSUE_REQUIRED)) {
+    fail('ApiErrorIssue required fields must be exact')
+  }
+  assertNonNullableType(issueSchema.properties.code, 'string', 'ApiErrorIssue.code')
+  assertNonNullableType(issueSchema.properties.message, 'string', 'ApiErrorIssue.message')
+  assertNonNullableType(issueSchema.properties.field, 'string', 'ApiErrorIssue.field')
+  assertNonNullableType(issueSchema.properties.itemIndex, 'number', 'ApiErrorIssue.itemIndex')
+  assertNonNullableType(issueSchema.properties.channel, 'string', 'ApiErrorIssue.channel')
 }
 
 function assertMetadata(record, metadata) {

@@ -29,15 +29,6 @@ const MANAGEMENT_PERMISSION_CODES = [
   'advertising-recharges:pay',
   'advertising-recharges:read',
   'advertising-recharges:read-self',
-  'assistant-account:operate',
-  'assistant-account:read',
-  'assistant-binding:manage',
-  'assistant-binding:read',
-  'assistant-channel:read',
-  'assistant-channel:update',
-  'assistant-delivery:resend',
-  'assistant-target:manage',
-  'assistant-target:read',
   'audit:read',
   'container-batches:create',
   'container-batches:read',
@@ -84,8 +75,6 @@ const MANAGEMENT_PERMISSION_CODES = [
   'notification-policy:update',
   'notification-record:manage',
   'notification-record:read',
-  'notification-template:read',
-  'notification-template:update',
   'numbering-rules:create',
   'numbering-rules:disable',
   'numbering-rules:enable',
@@ -107,6 +96,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'products:update',
   'proxy-nodes:manage',
   'proxy-nodes:read',
+  'purchase-orders:auto-review',
   'purchase-orders:correction',
   'purchase-orders:create',
   'purchase-orders:create-stock',
@@ -153,6 +143,16 @@ const MANAGEMENT_PERMISSION_CODES = [
   'users:read',
   'users:reset-password',
   'users:update',
+  'wecom-app:manage',
+  'wecom-app:read',
+  'wecom-app-secret:update',
+  'wecom-channel:read',
+  'wecom-channel:update',
+  'wecom-delivery:resend',
+  'wecom-membership:manage',
+  'wecom-membership:read',
+  'wecom-target:manage',
+  'wecom-target:read',
   'workbench:admin',
   'workbench:finance',
   'workbench:operations',
@@ -352,7 +352,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
     })
     expect(loginBody.permissions).toEqual([
       ...MANAGEMENT_PERMISSION_CODES,
-    ])
+    ].sort())
     expect(Object.keys(loginBody).sort()).toEqual([
       'permissions',
       'session',
@@ -400,7 +400,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
         expect(body.user.id).toBe(user.id)
         expect(body.permissions).toEqual([
           ...MANAGEMENT_PERMISSION_CODES,
-        ])
+        ].sort())
       })
 
     await browser

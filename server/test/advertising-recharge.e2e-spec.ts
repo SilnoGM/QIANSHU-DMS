@@ -22,6 +22,7 @@ import {
 } from '../src/modules/advertising-recharges/advertising-recharge.contract'
 import { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { MediaContentValidator } from '../src/modules/media/media-content-validator'
+import { seedNotificationEventChannel } from './fixtures/notification-event-channel'
 
 jest.setTimeout(90_000)
 
@@ -231,21 +232,18 @@ describe('advertising recharge against isolated PostgreSQL', () => {
     await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } })
     await prisma.userRole.create({ data: { userId: financeId, roleId: role.id } })
     try {
-      const template = await prisma.notificationTemplate.create({
-        data: {
-          key: 'operations.advertising-recharge.pending',
-          channel: 'IN_APP',
-          name: '广告户充值（E2E）',
-          domain: 'OPERATIONS',
-          titleTemplate: '广告户充值 {{rechargeNo}} 待付款',
-          bodyTemplate: '单号：{{rechargeNo}}',
-          linkUrlTemplate: '{{rechargeUrl}}',
-          variables: [
-            { name: 'rechargeNo', required: true, maxLength: 64, sensitive: false },
-            { name: 'rechargeUrl', required: true, maxLength: 512, sensitive: false },
-          ],
-        },
-        select: { id: true },
+      const channelId = await seedNotificationEventChannel(prisma, {
+        eventType: 'ADVERTISING_RECHARGE_PENDING',
+        channel: 'IN_APP',
+        sendMethod: 'IN_APP',
+        messages: [{
+          kind: 'TEXT',
+          payload: {
+            title: '广告户充值 {{rechargeNo}} 待付款',
+            content: '单号：{{rechargeNo}}',
+            linkUrl: '{{rechargeUrl}}',
+          },
+        }],
       })
       try {
         const created = await createRecharge({ amount: '10.00' })
@@ -266,7 +264,7 @@ describe('advertising recharge against isolated PostgreSQL', () => {
         expect(inbox[0]?.linkUrlSnapshot).toContain(expectedPath)
       }
       finally {
-        await prisma.notificationTemplate.delete({ where: { id: template.id } })
+        await prisma.notificationEventChannel.update({ where: { id: channelId }, data: { enabled: false } })
       }
     }
     finally {
@@ -527,7 +525,7 @@ describe('advertising recharge against isolated PostgreSQL', () => {
         await transaction.fundPostingBatchSource.deleteMany({ where: { batchId: { in: batchIds } } })
         await transaction.fundPostingBatch.deleteMany({ where: { id: { in: batchIds } } })
       }
-      await transaction.assistantDelivery.deleteMany({ where: { recipientUserId: { in: userIds } } })
+      await transaction.wecomDelivery.deleteMany({ where: { recipientUserId: { in: userIds } } })
       if (notificationIds.length > 0) {
         await transaction.notification.deleteMany({ where: { id: { in: notificationIds } } })
       }

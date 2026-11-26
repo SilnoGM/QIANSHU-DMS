@@ -39,6 +39,10 @@ function apiError(document) {
   return document.components.schemas.ApiError
 }
 
+function apiErrorIssue(document) {
+  return document.components.schemas.ApiErrorIssue
+}
+
 function createSuccess(document) {
   return operation(document, '/api/widgets', 'post').responses['201']
 }
@@ -88,7 +92,7 @@ test('快照基础 API 使用稳定字节、hash 与安全解析行为', () => {
   )
 })
 
-test('已退役 operationId 公开清单冻结且精确为供应商六条加对账两条', () => {
+test('已退役 operationId 公开清单冻结且精确', () => {
   assert.equal(Object.isFrozen(RETIRED_OPERATION_IDS), true)
   assert.deepEqual(RETIRED_OPERATION_IDS, [
     'suppliers_list',
@@ -99,6 +103,35 @@ test('已退役 operationId 公开清单冻结且精确为供应商六条加对�
     'suppliers_disable',
     'slh_reconciliation_batch_match_preview',
     'slh_reconciliation_batch_reconcile',
+    'assistant_accounts_check_status',
+    'assistant_accounts_create',
+    'assistant_accounts_list',
+    'assistant_accounts_qrcode',
+    'assistant_accounts_update',
+    'assistant_bindings_check',
+    'assistant_bindings_create',
+    'assistant_bindings_delete',
+    'assistant_bindings_list',
+    'assistant_bindings_reassign',
+    'assistant_bindings_verify',
+    'assistant_channel_get',
+    'assistant_channel_test',
+    'assistant_channel_update',
+    'assistant_contacts_list',
+    'assistant_targets_list',
+    'assistant_targets_members',
+    'assistant_targets_mention_message',
+    'assistant_targets_sync',
+    'assistant_targets_update',
+    'notification_media_public_get',
+    'notification_media_public_head',
+    'notifications_policies_list',
+    'notifications_policies_update',
+    'notifications_templates_create',
+    'notifications_templates_list',
+    'notifications_templates_preview',
+    'notifications_templates_test',
+    'notifications_templates_update',
   ])
 })
 
@@ -640,6 +673,34 @@ mutationTest(
   },
   /ApiError.*required/,
 )
+mutationTest(
+  'ApiError issues 必须保持 optional',
+  document => {
+    apiError(document).required.push('issues')
+  },
+  /ApiError.*required/,
+)
+mutationTest(
+  'ApiError issues 必须引用 ApiErrorIssue',
+  document => {
+    apiError(document).properties.issues.items = { type: 'string' }
+  },
+  /ApiError.*issues/,
+)
+mutationTest(
+  'ApiErrorIssue properties 不得增加字段',
+  document => {
+    apiErrorIssue(document).properties.extra = { type: 'string' }
+  },
+  /ApiErrorIssue.*properties/,
+)
+mutationTest(
+  'ApiErrorIssue required 不得缺失字段',
+  document => {
+    apiErrorIssue(document).required.pop()
+  },
+  /ApiErrorIssue.*required/,
+)
 
 for (const [label, mutate] of [
   ['code string', document => {
@@ -661,6 +722,15 @@ for (const [label, mutate] of [
   ['fieldErrors items string', document => {
     apiError(document).properties.fieldErrors.additionalProperties.items.type =
       'number'
+  }],
+  ['issues array', document => {
+    apiError(document).properties.issues.type = 'object'
+  }],
+  ['ApiErrorIssue code string', document => {
+    apiErrorIssue(document).properties.code.type = 'number'
+  }],
+  ['ApiErrorIssue itemIndex number', document => {
+    apiErrorIssue(document).properties.itemIndex.type = 'string'
   }],
 ]) {
   mutationTest(
@@ -693,6 +763,12 @@ for (const [label, select] of [
   ['message', document => apiError(document).properties.message],
   ['requestId', document => apiError(document).properties.requestId],
   ['fieldErrors', document => apiError(document).properties.fieldErrors],
+  ['issues', document => apiError(document).properties.issues],
+  ['ApiErrorIssue', document => apiErrorIssue(document)],
+  ['ApiErrorIssue.code', document => apiErrorIssue(document).properties.code],
+  ['ApiErrorIssue.field', document => apiErrorIssue(document).properties.field],
+  ['ApiErrorIssue.itemIndex', document => apiErrorIssue(document).properties.itemIndex],
+  ['ApiErrorIssue.channel', document => apiErrorIssue(document).properties.channel],
   [
     'fieldErrors.additionalProperties',
     document => apiError(document).properties.fieldErrors.additionalProperties,

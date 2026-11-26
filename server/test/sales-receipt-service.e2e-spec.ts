@@ -23,6 +23,7 @@ import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/s
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { insertFixture, insertRequest } from './fixtures/sales-receipt-schema.fixture'
+import { seedNotificationEventChannel } from './fixtures/notification-event-channel'
 import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptRequestCreateDto } from '../src/modules/sales-orders/dto/sales-receipt.dto'
 
 describe('sales receipt atomic posting in isolated PostgreSQL', () => {
@@ -57,21 +58,48 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     if (!await tx.dictionaryItem.findFirst({ where: { dictionaryTypeId: dictionary.id, value: 'RECEIPT_TEST_TRANSFER' } })) await tx.dictionaryItem.create({ data: { dictionaryTypeId: dictionary.id, value: 'RECEIPT_TEST_TRANSFER', label: '测试转账', enabled: true } })
       await tx.dictionaryType.update({ where: { id: dictionary.id }, data: { enabled: true } })
     })
-    // 表外水单发送要求真实群通知链路：渠道、公司号、群目标、模板与策略缺一不可，
+    // 表外水单发送要求真实企业微信群通知链路：渠道、应用、群目标、模板与策略缺一不可，
     // 缺少任一项都会被严格闸门拒绝并保持「待发群」。
-    await prisma.notificationChannelSettings.upsert({ where: { channel: 'ASSISTANT' }, create: { channel: 'ASSISTANT', enabled: true }, update: { enabled: true } })
-    await prisma.assistantAccount.create({ data: { name: '收款 E2E 公司号', appId: `receipt-e2e-${randomUUID()}`, wxid: 'wxid-receipt-e2e', status: 'ONLINE' } })
-    await prisma.assistantTarget.create({ data: { key: 'receipt-e2e-finance', chatroomId: `receipt-e2e-group-${randomUUID()}`, name: '收款 E2E 财务群', internalOnly: true, enabled: true } })
-    await prisma.notificationTemplate.create({ data: {
-      key: 'sales.receipt.voucher-sent', channel: 'ASSISTANT', name: '表外水单发送（E2E）', domain: 'SALES',
-      bodyTemplate: '表外收款：{{amount}}', variables: [{ name: 'amount', required: true, sensitive: true }],
-      mediaPolicy: { enabled: true, maxCount: 1, kinds: ['IMAGE'], sources: ['salesReceipt.voucher'] },
-    } })
-    await prisma.notificationChannelPolicy.create({ data: {
-      eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'ASSISTANT', targetMode: 'GROUP',
-      targetConfig: { targetKeys: ['receipt-e2e-finance'] }, templateKey: 'sales.receipt.voucher-sent',
-      allowSensitive: true, enabled: true,
-    } })
+    await prisma.notificationChannelSettings.upsert({
+      where: { channel: 'WECOM' },
+      create: { channel: 'WECOM', enabled: true },
+      update: { enabled: true },
+    })
+    const wecomApp = await prisma.wecomApp.findUniqueOrThrow({ where: { key: 'default' } })
+    await prisma.wecomApp.update({
+      where: { id: wecomApp.id },
+      data: { enabled: true, status: 'ACTIVE' },
+    })
+    await prisma.wecomTarget.upsert({
+      where: { key: 'receipt-e2e-finance' },
+      create: {
+        key: 'receipt-e2e-finance',
+        name: '收款 E2E 财务群',
+        webhookKeyEncrypted: 'e2e-webhook-key',
+        internalOnly: true,
+        enabled: true,
+      },
+      update: { enabled: true, internalOnly: true },
+    })
+    await seedNotificationEventChannel(prisma, {
+      eventType: 'SALES_RECEIPT_VOUCHER_SENT',
+      channel: 'WECOM',
+      sendMethod: 'ROBOT',
+      targetMode: 'GROUP',
+      targetConfig: { targetKeys: ['receipt-e2e-finance'] },
+      allowSensitive: true,
+      messages: [
+        {
+          kind: 'TEXT',
+          payload: { title: null, content: '表外收款：{{amount}}', linkUrl: null },
+        },
+        {
+          kind: 'IMAGE',
+          payload: {},
+          mediaPolicy: { sourceKeys: ['salesReceipt.voucher'], maxCount: 1 },
+        },
+      ],
+    })
   })
   afterAll(async () => { await client?.end(); await app?.close(); await database?.close(); if (mediaRoot) await rm(mediaRoot, { recursive: true, force: true }) })
   function context(userId: string) { return { actorUserId: userId, requestId: randomUUID() } }
@@ -388,9 +416,12 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(notification.variables).toMatchObject({ amount: '1000.00', currencyCode: 'TWD' })
     const media = await prisma.notificationMedia.findMany({ where: { notificationId: notification.id } })
     expect(media).toEqual([expect.objectContaining({ mediaAssetId: submitted.voucher.mediaAssetId, blockedReason: null })])
-    const delivery = await prisma.assistantDelivery.findFirstOrThrow({ where: { notificationId: notification.id } })
-    expect(delivery).toMatchObject({ status: 'PENDING', recipientUserId: null })
+    const delivery = await prisma.wecomDelivery.findFirstOrThrow({ where: { notificationId: notification.id } })
+    expect(delivery).toMatchObject({ status: 'PENDING', recipientUserId: null, transport: 'ROBOT' })
     expect(delivery.targetId).toBeTruthy()
+    expect(await prisma.wecomDeliveryMedia.findMany({ where: { deliveryId: delivery.id } })).toEqual([
+      expect.objectContaining({ mediaAssetId: submitted.voucher.mediaAssetId, status: 'PENDING' }),
+    ])
 
     // 同一操作者重放不会重复播报或再占用一条通知编号。
     const replay = await service.sendVoucher(context(reviewer), submitted.id, { expectedVersion: 1 })
@@ -416,8 +447,8 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it('fails closed when the group notification is not configured and leaves the request in pending-send', async () => {
     const f = await fixture()
     const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())
-    const policy = await prisma.notificationChannelPolicy.findUniqueOrThrow({ where: { eventType_channel: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'ASSISTANT' } } })
-    await prisma.notificationChannelPolicy.update({ where: { id: policy.id }, data: { enabled: false } })
+    const channel = await prisma.notificationEventChannel.findUniqueOrThrow({ where: { eventType_channel: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', channel: 'WECOM' } } })
+    await prisma.notificationEventChannel.update({ where: { id: channel.id }, data: { enabled: false } })
     try {
       await expect(service.sendVoucher(context(f.userId), submitted.id, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'SALES_RECEIPT_VOUCHER_SEND_UNAVAILABLE' })
       const current = await query.getById(submitted.id)
@@ -427,7 +458,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       // 通知行与通知编号随事务一起回滚，不留下半条记录。
       expect(await prisma.notification.count({ where: { eventType: 'SALES_RECEIPT_VOUCHER_SENT', sourceId: submitted.id } })).toBe(0)
     } finally {
-      await prisma.notificationChannelPolicy.update({ where: { id: policy.id }, data: { enabled: true } })
+      await prisma.notificationEventChannel.update({ where: { id: channel.id }, data: { enabled: true } })
     }
   })
   it('refuses to send a legacy document voucher and keeps the request in pending-send', async () => {

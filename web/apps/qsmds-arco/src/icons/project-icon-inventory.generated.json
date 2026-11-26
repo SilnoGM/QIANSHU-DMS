@@ -656,15 +656,6 @@
     "source": "brand"
   },
   {
-    "name": "qs-gewe-assistant",
-    "label": "GeWe助理",
-    "category": "系统",
-    "usages": [
-      "系统管理 / 通知中心 / GeWe助理"
-    ],
-    "source": "brand"
-  },
-  {
     "name": "qs-notification-policy",
     "label": "通知策略",
     "category": "系统",
@@ -1221,6 +1212,8 @@
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-conclusion.vue",
       "packages/components/src/basic/table/index.vue"
     ]
@@ -1240,6 +1233,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
@@ -1299,6 +1293,8 @@
       "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "packages/components/src/basic/table/index.vue"
     ]
   },
@@ -1385,8 +1381,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/components/EventChannelCard.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue"
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue"
     ]
   },
   {
@@ -1425,6 +1420,15 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:bold",
+    "label": "i-lucide:bold",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -1566,7 +1570,7 @@
       "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
       "apps/qsmds-arco/src/views/notifications/components/NotificationPreferenceDrawer.vue",
       "apps/qsmds-arco/src/views/operations/ocean-containers/change-modal.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/TargetValuePicker.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/leopard-ad-accounts/index.vue",
@@ -1595,8 +1599,9 @@
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-payment-recipients.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/TargetValuePicker.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-remark.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-source-summary.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-orders.vue",
@@ -1631,7 +1636,7 @@
       "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "packages/components/src/basic/image-preview/preview.vue",
       "packages/components/src/basic/table/index.vue"
     ]
@@ -1738,6 +1743,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-form-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "apps/qsmds-arco/src/views/system/permissions/index.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
@@ -1778,6 +1784,7 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-terminate-modal.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-form.vue",
@@ -2060,7 +2067,6 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-payment-statement-action.vue",
       "packages/components/src/pro/code/index.vue"
     ]
@@ -2157,8 +2163,6 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/EventTemplateBlock.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-order-flip-card.vue"
@@ -2284,6 +2288,8 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/FileMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-info.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/records-modal.logic.ts"
@@ -2392,7 +2398,8 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/ReconciliationLineSwitcherShowcase.vue",
-      "apps/qsmds-arco/src/views/component_library/business/reconciliation-line-switcher.vue"
+      "apps/qsmds-arco/src/views/component_library/business/reconciliation-line-switcher.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -2504,6 +2511,8 @@
       "apps/qsmds-arco/src/components/business/QsPartConfigurator/PartProductSummary.vue",
       "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/AssetImageView.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/invoice-request-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/purchase-batch-review-card.vue"
     ]
@@ -2536,6 +2545,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-warehouse-receipt-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/AssetImageView.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-products.vue"
@@ -2552,11 +2562,23 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/network-ads/advertising-recharges/recharge-image-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/packaging-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/purchase-batch-payment-voucher.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:image-up",
+    "label": "i-lucide:image-up",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/MpnewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue"
     ]
   },
   {
@@ -2579,6 +2601,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/components/NotificationRecordDetailDrawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/purchase-batch-review-modal.vue"
     ]
   },
@@ -2616,6 +2639,15 @@
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-conclusion.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/slh-bill-import-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/slh-transfer-record.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:italic",
+    "label": "i-lucide:italic",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -2661,13 +2693,23 @@
     ]
   },
   {
+    "name": "i-lucide:layout-grid",
+    "label": "i-lucide:layout-grid",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
+    ]
+  },
+  {
     "name": "i-lucide:layout-template",
     "label": "i-lucide:layout-template",
     "category": "通用图标",
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
-      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -2708,7 +2750,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue"
+      "apps/qsmds-arco/src/views/operations/ocean-containers/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -2755,7 +2798,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -2829,9 +2873,10 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/rules-panel.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
@@ -2878,15 +2923,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-item-form-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-form-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue"
-    ]
-  },
-  {
-    "name": "i-lucide:mail-search",
-    "label": "i-lucide:mail-search",
-    "category": "通用图标",
-    "source": "iconify",
-    "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue"
     ]
   },
   {
@@ -2950,6 +2986,15 @@
     ]
   },
   {
+    "name": "i-lucide:message-circle",
+    "label": "i-lucide:message-circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue"
+    ]
+  },
+  {
     "name": "i-lucide:message-circle-more",
     "label": "i-lucide:message-circle-more",
     "category": "通用图标",
@@ -2961,6 +3006,15 @@
     ]
   },
   {
+    "name": "i-lucide:message-square-plus",
+    "label": "i-lucide:message-square-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue"
+    ]
+  },
+  {
     "name": "i-lucide:message-square-text",
     "label": "i-lucide:message-square-text",
     "category": "通用图标",
@@ -2969,6 +3023,7 @@
       "apps/qsmds-arco/src/views/component_library/basic/image-group.vue",
       "apps/qsmds-arco/src/views/operations/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/operations/machine-viewings/machine-viewing-feedback-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/machine-viewing-feedback-modal.vue"
     ]
@@ -2983,13 +3038,12 @@
     ]
   },
   {
-    "name": "i-lucide:messages-square",
-    "label": "i-lucide:messages-square",
+    "name": "i-lucide:mic",
+    "label": "i-lucide:mic",
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/components/EventChannelCard.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateChannelCard.vue"
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -3023,6 +3077,7 @@
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-purpose-select-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts",
       "apps/qsmds-arco/src/views/workbenches/slh-reconciliation/settle-modal.vue"
     ]
   },
@@ -3051,6 +3106,15 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:newspaper",
+    "label": "i-lucide:newspaper",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -3199,6 +3263,7 @@
       "apps/qsmds-arco/src/views/operations/product-library/product-library-card.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-history-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/machine-viewings/index.vue"
     ]
@@ -3277,8 +3342,9 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateKeyDetail.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplatePickerDrawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/index.vue",
@@ -3308,12 +3374,12 @@
     ]
   },
   {
-    "name": "i-lucide:qr-code",
-    "label": "i-lucide:qr-code",
+    "name": "i-lucide:quote",
+    "label": "i-lucide:quote",
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue"
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -3354,7 +3420,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue"
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
     ]
   },
   {
@@ -3393,7 +3460,6 @@
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/operations/warehouse-arrivals/shipping-info-modal.vue",
       "apps/qsmds-arco/src/views/release-notes/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
@@ -3541,10 +3607,7 @@
       "apps/qsmds-arco/src/views/operations/product-library/index.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
-      "apps/qsmds-arco/src/views/system/notifications/assistant-panel.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/EventFilterBar.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplateDomainRail.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplatePickerDrawer.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/shipment-match-drawer.vue",
@@ -3563,8 +3626,6 @@
       "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
       "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/EventConfigCards.vue",
-      "apps/qsmds-arco/src/views/system/notifications/components/TemplatePickerDrawer.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue"
     ]
@@ -3647,7 +3708,6 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/index.vue",
-      "apps/qsmds-arco/src/views/system/notifications/rules-panel.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/workbenches/advertising-recharges/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/import/index.vue",
@@ -3775,7 +3835,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -3868,6 +3929,15 @@
     ]
   },
   {
+    "name": "i-lucide:strikethrough",
+    "label": "i-lucide:strikethrough",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue"
+    ]
+  },
+  {
     "name": "i-lucide:table",
     "label": "i-lucide:table",
     "category": "通用图标",
@@ -3882,7 +3952,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/component_library/business/index.vue"
+      "apps/qsmds-arco/src/views/component_library/business/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -3938,7 +4009,8 @@
       "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
-      "apps/qsmds-arco/src/views/system/notifications/rules-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/records/create.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-payments/payment-voucher-upload.vue"
@@ -3995,6 +4067,7 @@
       "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
       "apps/qsmds-arco/src/views/system/notifications/overview-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/wecom.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/status/index.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
@@ -4027,6 +4100,15 @@
     ]
   },
   {
+    "name": "i-lucide:type",
+    "label": "i-lucide:type",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
+    ]
+  },
+  {
     "name": "i-lucide:undo",
     "label": "i-lucide:undo",
     "category": "通用图标",
@@ -4043,6 +4125,7 @@
     "usages": [
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/purchase-correction-modal.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/RichTextEditor.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
     ]
   },
@@ -4074,6 +4157,7 @@
     "usages": [
       "apps/qsmds-arco/src/views/admin/fund-account-management/withdrawal-approvals/approval-page.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/FileMessageEditor.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-form-modal.vue",
       "apps/qsmds-arco/src/views/workbenches/containers/container-source-file.vue",
       "apps/qsmds-arco/src/views/workbenches/slh-bills/import.vue",
@@ -4150,7 +4234,8 @@
       "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
-      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue"
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/message-type-menu.ts"
     ]
   },
   {
@@ -4207,7 +4292,8 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
-      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue"
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/detail.vue"
     ]
   },
   {
@@ -4231,7 +4317,8 @@
       "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue",
       "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
-      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/purchase-reviews/purchase-auto-review-setting-modal.vue"
     ]
   },
   {
@@ -4259,6 +4346,9 @@
       "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
       "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
       "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/MpnewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/components/editor/NewsMessageEditor.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
       "apps/qsmds-arco/src/views/system/users/index.vue",
       "apps/qsmds-arco/src/views/workbenches/invoices/approval/index.vue",
@@ -4450,6 +4540,7 @@
     "source": "iconify",
     "usages": [
       "apps/qsmds-arco/src/views/system/audit/index.vue",
+      "apps/qsmds-arco/src/views/system/notifications/events/index.vue",
       "apps/qsmds-arco/src/views/system/notifications/records.vue",
       "apps/qsmds-arco/src/views/system/permissions/index.vue"
     ]

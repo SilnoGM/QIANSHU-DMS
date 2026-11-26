@@ -109,7 +109,6 @@ async function scanProxyNodes(
       eventType: 'PROXY_NODE_EXPIRING',
       source: { type: 'PROXY_NODE', id: node.id },
       target,
-      templateKey: 'operations.proxy-node.expiring',
       variables: {
         assignedUserName: node.assignedUser?.displayName ?? '未绑定',
         daysRemaining: daysRemaining(now, node.expiresAt),
@@ -159,7 +158,6 @@ async function scanExpiredProxyNodes(
       eventType: 'PROXY_NODE_EXPIRED',
       source: { type: 'PROXY_NODE', id: node.id },
       target,
-      templateKey: 'operations.proxy-node.expired',
       variables: {
         assignedUserName: node.assignedUser?.displayName ?? '未绑定',
         expiresAt: shanghaiDateTime(node.expiresAt),
@@ -203,7 +201,6 @@ async function scanPurchasePayableDigest(
     eventType: 'PURCHASE_PAYABLE_PENDING',
     source: { type: 'PURCHASE_PAYABLE_DIGEST', id: dateKey },
     target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:payment' },
-    templateKey: 'purchase.payable.pending',
     variables: {
       orderCount: orders.length,
       totalDueAmountCny: totalDue.toFixed(2),
@@ -236,7 +233,6 @@ async function scanPackagingPendingDigest(
     eventType: 'PACKAGING_COST_PAYMENT_PENDING',
     source: { type: 'PACKAGING_PAYMENT_DIGEST', id: dateKey },
     target: { kind: 'PERMISSION', permissionCode: 'packaging-costs:pay' },
-    templateKey: 'packaging.payment.pending',
     variables: {
       requestCount: rows.length,
       totalAmountCny: total.toFixed(2),

@@ -1,0 +1,13 @@
+[Unit]
+Description=Qianshu DMS Purchase Auto Review Scan (Docker)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# 每分钟领取自动托管任务；单轮最多 5 单，开关关闭时只刷新心跳。
+# 任务失败按 1/5/15 分钟退避，重试耗尽后补发待审核通知并转人工。
+WorkingDirectory=/srv/qianshu-dms
+ExecStart=/usr/bin/docker compose -f /srv/qianshu-dms/docker-compose.yml run --rm server node dist/commands/purchase-auto-review-scan.js
+TimeoutStartSec=300s

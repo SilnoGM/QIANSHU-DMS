@@ -7,8 +7,8 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
-  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
-    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia']
+  it.each(['paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia', 'notificationEventChannelMessageMedia', 'notificationRenderedMessageMedia'])('retains a managed media asset through %s even after the referencing workflow changes', async target => {
+    const reader = Object.fromEntries(['productMedia', 'salesOrderDocument', 'purchaseOrderDocument', 'salesReceiptRequest', 'purchaseOrderImageDraft', 'packagingCostRequest', 'paymentRecipientAccount', 'purchaseOrderPayment', 'containerBatch', 'slhBill', 'invoiceRequest', 'fundWithdrawalRequest', 'userProfile', 'advertisingRechargeRequest', 'notificationMedia', 'notificationEventChannelMessageMedia', 'notificationRenderedMessageMedia']
       .map(name => [name, { findFirst: jest.fn().mockResolvedValue(name === target ? { id: 'reference' } : null) }])) as unknown as Prisma.TransactionClient
     await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
   })
@@ -106,6 +106,8 @@ describe('MediaAssetReferenceRepository', () => {
       'user_profiles',
       'advertising_recharge_requests',
       'notification_media',
+      'notification_event_channel_message_media',
+      'notification_rendered_message_media',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -157,6 +159,8 @@ describe('MediaAssetReferenceRepository', () => {
       userProfile: { findFirst: jest.fn().mockResolvedValue(null) },
       advertisingRechargeRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       notificationMedia: { findFirst: jest.fn().mockResolvedValue(null) },
+      notificationEventChannelMessageMedia: { findFirst: jest.fn().mockResolvedValue(null) },
+      notificationRenderedMessageMedia: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

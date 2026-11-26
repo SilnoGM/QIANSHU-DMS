@@ -23,7 +23,7 @@ const pendingCount = computed(() => props.record === null ? 0 : pendingDeliveryC
   <QsGenericModal
     :model-value="modelValue"
     title="取消未发送交付"
-    description="站内通知不受影响，仅取消小助理渠道尚未发送的交付。"
+    description="站内通知不受影响，仅取消企业微信渠道尚未发送的交付。"
     size="sm"
     :z-index="2200"
     :submitting="submitting"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ReviewView } from './logic'
-import type { PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
+import type { PurchaseAutoReviewSettingDto, PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
@@ -19,11 +19,12 @@ import QsPurchaseOrderAmountRevisionModal from '@/components/business/QsPurchase
 import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { getPurchaseOrderApiFailure, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
+import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError, orderStatusLabel, orderStatusTagClass, purchaseTypeLabel } from '../../operations/purchase-orders/purchase-order-list.logic'
 import PurchaseOrderReviewModal from '../../operations/purchase-orders/purchase-order-review-modal.vue'
 import { isPurchaseBatchSelectionDisabled, PURCHASE_BATCH_REVIEW_LIMIT, reconcilePurchaseBatchSelection, resolvePurchaseBatchPageSelection, resolvePurchaseBatchSelectedPageIds } from './batch-review.logic'
 import PurchaseCancellationModal from './cancellation-modal.vue'
 import { buildReviewQuery, countReviewViews } from './logic'
+import PurchaseAutoReviewSettingModal from './purchase-auto-review-setting-modal.vue'
 import PurchaseBatchReviewModal from './purchase-batch-review-modal.vue'
 
 defineOptions({ name: 'QsPurchaseTransportReviews' })
@@ -34,6 +35,19 @@ const currencyCatalog = useCurrencyCatalog()
 const toast = useQsToast()
 const canRead = computed(() => auth('purchase-orders:read'))
 const canReview = computed(() => auth('purchase-orders:review'))
+const canManageAutoReview = computed(() => auth('purchase-orders:auto-review'))
+const autoReviewSetting = shallowRef<PurchaseAutoReviewSettingDto | null>(null)
+const autoReviewError = ref('')
+const autoReviewSettingVisible = ref(false)
+let autoReviewController: AbortController | null = null
+const autoReviewStale = computed(() => {
+  const setting = autoReviewSetting.value
+  if (setting?.enabled !== true) {
+    return false
+  }
+  return setting.lastScanAt === null
+    || Date.now() - new Date(setting.lastScanAt).getTime() > 5 * 60_000
+})
 const status = ref<ReviewView>('PENDING_REVIEW')
 const keyword = ref('')
 const page = ref(1)
@@ -166,9 +180,48 @@ async function loadCounts(): Promise<void> {
     }
   }
 }
+async function loadAutoReviewSetting(): Promise<void> {
+  autoReviewController?.abort()
+  if (!canReview.value) {
+    autoReviewSetting.value = null
+    return
+  }
+  const current = new AbortController()
+  autoReviewController = current
+  const epoch = account.authEpoch
+  try {
+    const response = await purchaseOrdersApi.autoReviewSetting(current.signal)
+    if (!current.signal.aborted && epoch === account.authEpoch && canReview.value) {
+      autoReviewSetting.value = response.data
+      autoReviewError.value = ''
+    }
+  }
+  catch (failure) {
+    if (!current.signal.aborted && epoch === account.authEpoch && !isPurchaseOrderAbortError(failure)) {
+      autoReviewError.value = t('purchaseReview.autoReview.loadFailed')
+    }
+  }
+  finally {
+    if (autoReviewController === current) {
+      autoReviewController = null
+    }
+  }
+}
+function openAutoReviewSetting(): void {
+  if (!canManageAutoReview.value) {
+    return
+  }
+  autoReviewSettingVisible.value = true
+  void loadAutoReviewSetting()
+}
+function handleAutoReviewUpdated(setting: PurchaseAutoReviewSettingDto): void {
+  autoReviewSetting.value = setting
+  autoReviewError.value = ''
+}
 function refresh(): void {
   void load()
   void loadCounts()
+  void loadAutoReviewSetting()
 }
 function clearBatchSelection(): void {
   selectedOrders.value = new Map()
@@ -306,6 +359,10 @@ watch(() => [canRead.value, canReview.value, account.authEpoch], () => {
   listController?.abort()
   countController?.abort()
   detailController?.abort()
+  autoReviewController?.abort()
+  autoReviewSetting.value = null
+  autoReviewError.value = ''
+  autoReviewSettingVisible.value = false
   reviewVisible.value = false
   reviewId.value = null
   batchReviewVisible.value = false
@@ -326,6 +383,7 @@ onBeforeUnmount(() => {
   listController?.abort()
   countController?.abort()
   detailController?.abort()
+  autoReviewController?.abort()
   batchReviewVisible.value = false
 })
 </script>
@@ -363,6 +421,67 @@ onBeforeUnmount(() => {
       <FaEmpty icon="i-lucide:shield-alert" :title="t('purchaseReview.noPermission')" class="py-12" />
     </FaPageMain>
     <FaPageMain v-else class="min-w-0">
+      <div
+        v-if="canReview && (autoReviewSetting || autoReviewError)"
+        data-testid="purchase-auto-review-banner"
+        class="mb-4 px-3 py-2 border border-border/70 rounded-xl flex flex-wrap gap-x-4 gap-y-2 items-center"
+      >
+        <div class="flex gap-2 items-center">
+          <span
+            class="rounded-full size-2"
+            :class="autoReviewSetting?.enabled ? 'bg-emerald-500' : 'bg-muted-foreground/50'"
+            aria-hidden="true"
+          />
+          <span class="font-medium">{{ t('purchaseReview.autoReview.title') }}</span>
+          <FaTag
+            v-if="autoReviewSetting"
+            variant="outline"
+            class="qs-type-status-tag shrink-0"
+            :class="autoReviewSetting.enabled
+              ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
+              : 'text-muted-foreground'"
+          >
+            {{ autoReviewSetting.enabled ? t('purchaseReview.autoReview.badgeOn') : t('purchaseReview.autoReview.badgeOff') }}
+          </FaTag>
+        </div>
+        <p v-if="autoReviewError" class="text-sm text-destructive">
+          {{ autoReviewError }}
+        </p>
+        <template v-else-if="autoReviewSetting">
+          <p class="text-sm text-muted-foreground">
+            {{ autoReviewSetting.enabled ? t('purchaseReview.autoReview.bannerOn') : t('purchaseReview.autoReview.bannerOff') }}
+          </p>
+          <p v-if="autoReviewSetting.enabled" class="text-xs text-muted-foreground">
+            <template v-if="autoReviewSetting.lastScanAt">
+              {{ t('purchaseReview.autoReview.lastScan') }}<DateTimeDisplay :value="autoReviewSetting.lastScanAt" />
+            </template>
+            <template v-else>
+              {{ t('purchaseReview.autoReview.neverScanned') }}
+            </template>
+            <span v-if="autoReviewStale" class="text-amber-700 dark:text-amber-300">
+              · {{ t('purchaseReview.autoReview.stale') }}
+            </span>
+          </p>
+          <p
+            v-if="autoReviewSetting.pendingJobCount + autoReviewSetting.failedJobCount > 0"
+            class="text-xs text-muted-foreground"
+          >
+            {{ t('purchaseReview.autoReview.jobs', { pending: autoReviewSetting.pendingJobCount, failed: autoReviewSetting.failedJobCount }) }}
+          </p>
+        </template>
+        <span class="grow" />
+        <FaButton
+          v-if="canManageAutoReview"
+          type="button"
+          variant="outline"
+          size="sm"
+          class="min-h-11 sm:min-h-9"
+          data-testid="purchase-auto-review-setting-open"
+          @click="openAutoReviewSetting"
+        >
+          {{ t('purchaseReview.autoReview.settingAction') }}
+        </FaButton>
+      </div>
       <QsStatusSwitchToolbar :model-value="status" :items="tabs" :aria-label="t('workbench.purchaseReviews')" class="mb-4" @update:model-value="selectTab" />
       <p v-if="countsError" role="status" class="text-sm text-muted-foreground flex gap-2 items-center">
         {{ t('purchaseReview.countsFailed') }} <FaButton variant="link" size="sm" @click="loadCounts">
@@ -520,6 +639,11 @@ onBeforeUnmount(() => {
       @closed="handleBatchClosed"
     />
     <PurchaseCancellationModal v-model="cancellationVisible" :order-id="cancellationId" @cancelled="refresh" />
+    <PurchaseAutoReviewSettingModal
+      v-model="autoReviewSettingVisible"
+      :setting="autoReviewSetting"
+      @updated="handleAutoReviewUpdated"
+    />
     <QsPurchaseOrderAmountRevisionModal
       v-model="amountRevisionVisible"
       :detail="detail"

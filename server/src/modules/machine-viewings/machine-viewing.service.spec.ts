@@ -55,7 +55,7 @@ function createHarness(options: {
   readonly existing?: Record<string, unknown> | null
   readonly dto?: MachineViewingDto
   readonly canViewAll?: boolean
-  readonly templates?: readonly Record<string, unknown>[]
+  readonly channels?: readonly Record<string, unknown>[]
   readonly notificationStatus?: string
 } = {}) {
   const appointment = {
@@ -74,8 +74,8 @@ function createHarness(options: {
     notification: {
       findUnique: jest.fn().mockResolvedValue({ status: options.notificationStatus ?? 'COMPLETED' }),
     },
-    notificationTemplate: {
-      findMany: jest.fn().mockResolvedValue(options.templates ?? []),
+    notificationEventChannel: {
+      findMany: jest.fn().mockResolvedValue(options.channels ?? []),
     },
     machineViewingAppointment: appointment,
   }
@@ -564,13 +564,15 @@ describe('MachineViewingService manual notification', () => {
   it('renders the same appointment text without publishing a notification', async () => {
     const { service, notifications } = createHarness({
       existing: todayRow(),
-      templates: [{
-        bodyTemplate: '看机预约 {{appointmentNo}}',
-        channel: 'ASSISTANT',
-        linkUrlTemplate: null,
-        maxLength: 2000,
-        titleTemplate: null,
-        variables: [{ name: 'appointmentNo', required: false, maxLength: 200, sensitive: false }],
+      channels: [{
+        channel: 'WECOM',
+        messages: [{
+          payload: {
+            content: '看机预约 {{appointmentNo}}',
+            linkUrl: null,
+            title: null,
+          },
+        }],
       }],
     })
 
@@ -579,6 +581,27 @@ describe('MachineViewingService manual notification', () => {
       title: null,
     })
     expect(notifications.publish).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the in-app template when no WECOM template is configured', async () => {
+    const { service } = createHarness({
+      existing: todayRow(),
+      channels: [{
+        channel: 'IN_APP',
+        messages: [{
+          payload: {
+            content: '站内看机预约 {{appointmentNo}}',
+            linkUrl: null,
+            title: null,
+          },
+        }],
+      }],
+    })
+
+    await expect(service.manualNotificationText(ACTOR, CREATED_ID, NOW)).resolves.toEqual({
+      body: '站内看机预约 MV/20261106-0001',
+      title: null,
+    })
   })
 
   it('rejects manual text for a future or non-pending appointment', async () => {

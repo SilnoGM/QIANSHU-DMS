@@ -103,6 +103,41 @@ describe('renderNotificationTemplate', () => {
       expect(result.truncated).toBe(true)
     }
   })
+
+  it('truncates the rendered body by utf8 bytes for wecom metadata', () => {
+    const result = renderNotificationTemplate({
+      body: '{{orderNo}}',
+      variables: { orderNo: '中'.repeat(50) },
+      allowed,
+      allowSensitive: true,
+      maxLength: 128,
+      maxBytes: 30,
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(new TextEncoder().encode(result.content).length).toBeLessThanOrEqual(30)
+      expect(result.content.endsWith('…')).toBe(true)
+      expect(result.truncated).toBe(true)
+    }
+  })
+
+  it('keeps the rendered body when it fits the byte budget', () => {
+    const result = renderNotificationTemplate({
+      body: '采购单 {{orderNo}}',
+      variables: { orderNo: 'CG-1' },
+      allowed,
+      allowSensitive: true,
+      maxLength: 128,
+      maxBytes: 128,
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.content).toBe('采购单 CG-1')
+      expect(result.truncated).toBe(false)
+    }
+  })
 })
 
 describe('inspectNotificationTemplate', () => {

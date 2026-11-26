@@ -1,6 +1,6 @@
 /**
  * 通知变量只允许放用户可读文案。业务发布点必须先经过这里把枚举转成显示值，
- * 未知值统一落到占位符，避免数据库枚举原值泄漏到站内消息或千树小助理。
+ * 未知值统一落到占位符，避免数据库枚举原值泄漏到站内消息或企业微信。
  */
 const NOTIFICATION_DATE_TIME_FORMAT = new Intl.DateTimeFormat('en-CA-u-ca-gregory-nu-latn', {
   day: '2-digit',

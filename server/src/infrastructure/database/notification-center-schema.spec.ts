@@ -23,10 +23,6 @@ const businessLinks = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261108110000_notification_inbox_business_links/migration.sql'),
   'utf8',
 )
-const bindingAvatar = readFileSync(
-  resolve(serverRoot, 'prisma/migrations/20261109100000_assistant_binding_wechat_avatar/migration.sql'),
-  'utf8',
-)
 const recordIndexes = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261111140000_notification_record_query_indexes/migration.sql'),
   'utf8',
@@ -39,8 +35,12 @@ const notificationPriority = readFileSync(
   resolve(serverRoot, 'prisma/migrations/20261111160000_notification_priority_fairness/migration.sql'),
   'utf8',
 )
-const assistantSendGate = readFileSync(
-  resolve(serverRoot, 'prisma/migrations/20261111170000_assistant_send_gate/migration.sql'),
+const retirement = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261125110000_retire_assistant_channel/migration.sql'),
+  'utf8',
+)
+const auditPurge = readFileSync(
+  resolve(serverRoot, 'prisma/migrations/20261125120000_purge_assistant_audit_events/migration.sql'),
   'utf8',
 )
 const constants = readFileSync(
@@ -49,27 +49,20 @@ const constants = readFileSync(
 )
 
 const PERMISSION_CODES = [
-  'notification-template:read',
-  'notification-template:update',
   'notification-policy:read',
   'notification-policy:update',
   'notification-record:read',
   'notification-record:manage',
-  'assistant-channel:read',
-  'assistant-channel:update',
-  'assistant-account:read',
-  'assistant-account:operate',
-  'assistant-binding:read',
-  'assistant-binding:manage',
-  'assistant-target:read',
-  'assistant-target:manage',
-  'assistant-delivery:resend',
 ] as const
 
-const AUDIT_EVENTS = [
+const NOTIFICATION_AUDIT_EVENTS = [
   'NOTIFICATION_TEMPLATE_UPDATED',
   'NOTIFICATION_POLICY_UPDATED',
   'NOTIFICATION_CANCELLED',
+] as const
+
+/// 助理渠道已退役，但历史审计行仍引用这些枚举值；标签保留用于回看旧日志。
+const RETIRED_AUDIT_EVENTS = [
   'ASSISTANT_CHANNEL_UPDATED',
   'ASSISTANT_CHANNEL_ENABLED',
   'ASSISTANT_CHANNEL_DISABLED',
@@ -82,6 +75,7 @@ const AUDIT_EVENTS = [
   'ASSISTANT_BINDING_REVOKED',
   'ASSISTANT_BINDING_INVALIDATED',
   'ASSISTANT_DELIVERY_RESENT',
+  'ASSISTANT_TARGET_MESSAGE_SENT',
 ] as const
 
 function block(kind: 'model' | 'enum', name: string): string {
@@ -91,37 +85,50 @@ function block(kind: 'model' | 'enum', name: string): string {
 }
 
 describe('notification center database contract', () => {
-  it('declares the seven enums with snake_case storage names', () => {
+  it('declares the active notification enums with snake_case storage names', () => {
     for (const [name, map] of [
       ['NotificationChannel', 'notification_channel'],
       ['NotificationPriority', 'notification_priority'],
       ['NotificationStatus', 'notification_status'],
       ['NotificationTargetMode', 'notification_target_mode'],
-      ['AssistantAccountStatus', 'assistant_account_status'],
-      ['AssistantBindingStatus', 'assistant_binding_status'],
-      ['AssistantDeliveryStatus', 'assistant_delivery_status'],
+      ['NotificationSendMethod', 'notification_send_method'],
+      ['NotificationMessageKind', 'notification_message_kind'],
+      ['NotificationMessageMediaRole', 'notification_message_media_role'],
     ] as const) {
       expect(block('enum', name)).toContain(`@@map("${map}")`)
     }
+    expect(block('enum', 'NotificationChannel')).not.toContain('ASSISTANT')
     expect(schema).not.toContain('NotificationTemplateKind')
   })
 
-  it('declares the phase-1 tables plus the in-app inbox', () => {
+  it('declares the active notification tables and removes assistant models', () => {
     for (const name of [
       'Notification',
       'NotificationTemplate',
       'NotificationChannelPolicy',
       'NotificationSettings',
       'NotificationChannelSettings',
+      'NotificationUserMute',
+      'NotificationInboxItem',
+      'NotificationEventChannel',
+      'NotificationEventChannelMessage',
+      'NotificationEventChannelMessageMedia',
+      'NotificationRenderedMessage',
+      'NotificationDeliveryMessage',
+      'WecomMediaCache',
+    ]) {
+      expect(() => block('model', name)).not.toThrow()
+    }
+    for (const name of [
       'AssistantAccount',
       'AssistantBinding',
       'AssistantTarget',
       'AssistantDelivery',
+      'AssistantDeliveryMedia',
       'AssistantDispatchLease',
       'AssistantSendGate',
-      'NotificationInboxItem',
     ]) {
-      expect(() => block('model', name)).not.toThrow()
+      expect(() => block('model', name)).toThrow()
     }
     expect(schema).not.toContain('model AssistantCallbackEvent')
   })
@@ -136,17 +143,32 @@ describe('notification center database contract', () => {
     expect(inbox).toContain("'shipment.arrived'")
   })
 
-  it('adds the binding WeChat avatar snapshot column', () => {
-    expect(schema).toContain('wechatAvatarUrl')
-    expect(bindingAvatar).toContain('ADD COLUMN "wechat_avatar_url" TEXT')
+  it('retires assistant tables, policies, templates, settings and permissions', () => {
+    for (const table of [
+      'assistant_delivery_media',
+      'assistant_deliveries',
+      'assistant_bindings',
+      'assistant_targets',
+      'assistant_accounts',
+      'assistant_dispatch_leases',
+      'assistant_send_gates',
+    ]) {
+      expect(retirement).toContain(`DROP TABLE IF EXISTS "${table}"`)
+    }
+    expect(retirement).toContain('DELETE FROM "notification_channel_policies" WHERE "channel"::text = \'ASSISTANT\'')
+    expect(retirement).toContain('DELETE FROM "notification_templates" WHERE "channel"::text = \'ASSISTANT\'')
+    expect(retirement).toContain('DELETE FROM "notification_channel_settings" WHERE "channel"::text = \'ASSISTANT\'')
+    expect(retirement).toContain('DELETE FROM "notification_user_mutes" WHERE "channel"::text = \'ASSISTANT\'')
+    expect(retirement).toContain('DELETE FROM "permissions" WHERE "code" LIKE \'assistant-%\'')
+    expect(retirement).toContain('CREATE TYPE "notification_channel" AS ENUM (\'IN_APP\', \'WECOM\')')
+    expect(retirement).toContain('"requested_channels" - \'ASSISTANT\'')
   })
 
-  it('creates and seeds the global assistant send gate', () => {
-    expect(assistantSendGate).toContain('CREATE TABLE "assistant_send_gates"')
-    expect(assistantSendGate).toContain('"next_allowed_at" TIMESTAMPTZ(6)')
-    expect(assistantSendGate).toContain('"lock_owner" UUID')
-    expect(assistantSendGate).toContain('"lock_expires_at" TIMESTAMPTZ(6)')
-    expect(assistantSendGate).toContain("VALUES ('assistant-send')")
+  it('purges assistant audit rows while keeping enum labels for compatibility', () => {
+    expect(auditPurge).toContain('DELETE FROM "audit_events"')
+    expect(auditPurge).toContain(`WHERE "event_type"::text LIKE 'ASSISTANT%'`)
+    expect(auditPurge).toContain('assistant audit events still exist after purge migration')
+    expect(schema).toContain('  ASSISTANT_CHANNEL_UPDATED')
   })
 
   it('adds business detail links and their ID variables to the in-app templates', () => {
@@ -161,7 +183,6 @@ describe('notification center database contract', () => {
     expect(recordIndexes).toContain('notifications_published_idx')
     expect(recordIndexes).toContain('notifications_status_published_idx')
     expect(recordIndexes).toContain('notification_inbox_items_notification_idx')
-    expect(recordIndexes).toContain('assistant_deliveries_notification_idx')
   })
 
   it('binds new notifications to the NOTIFICATION_NO numbering rule', () => {
@@ -190,7 +211,6 @@ describe('notification center database contract', () => {
 
   it('normalizes notification priority defaults to urgent events only', () => {
     expect(notificationPriority).toContain("\"priority\" = 'NORMAL'")
-    expect(notificationPriority).toContain("'ASSISTANT_ACCOUNT_OFFLINE'")
     expect(notificationPriority).toContain("'FUND_ACCOUNT_REVERSED'")
     expect(notificationPriority).toContain("'PROXY_NODE_EXPIRED'")
     expect(notificationPriority).toContain("'ADVERTISING_RECHARGE_VOIDED'")
@@ -199,31 +219,32 @@ describe('notification center database contract', () => {
     expect(notificationPriority).not.toContain("'PURCHASE_REVIEW_PENDING'")
   })
 
-  it('adds exclusive delivery targets, partial unique indexes and seeds', () => {
-    expect(foundation).toContain('assistant_deliveries_target_exclusive_check')
-    expect(foundation).toContain('assistant_deliveries_notification_recipient_key')
-    expect(foundation).toContain('WHERE "recipient_user_id" IS NOT NULL')
-    expect(foundation).toContain('assistant_deliveries_notification_target_key')
-    expect(foundation).toContain('WHERE "target_id" IS NOT NULL')
+  it('keeps channel shape checks and seeds for the active channels', () => {
     expect(foundation).toContain('notification_channel_policies_channel_shape_check')
     expect(foundation).toContain('notification_settings_retention_check')
     expect(foundation).toContain('INSERT INTO "notification_channel_settings"')
     expect(foundation).toContain("'ASSISTANT'")
-    expect(foundation).toContain('INSERT INTO "assistant_dispatch_leases"')
+    expect(retirement).toContain('ADD CONSTRAINT "notification_channel_policies_channel_shape_check"')
+    expect(retirement).toContain('ADD CONSTRAINT "notification_channel_policies_group_channel_check"')
+    expect(retirement).toContain('\'WECOM\'')
   })
 
-  it('seeds the fifteen permissions and grants system_admin', () => {
+  it('seeds the six active notification permissions and grants system_admin', () => {
     for (const code of PERMISSION_CODES) {
       expect(constants).toContain(`'${code}'`)
       expect(permissions).toContain(`'${code}'`)
     }
     expect(permissions).toContain('WHERE role."code" = \'system_admin\'')
+    expect(constants).not.toContain("'assistant-")
   })
 
-  it('adds the fifteen audit events', () => {
-    for (const event of AUDIT_EVENTS) {
+  it('keeps notification audit events and retired assistant labels for history', () => {
+    for (const event of NOTIFICATION_AUDIT_EVENTS) {
       expect(schema).toContain(`  ${event}`)
       expect(audit).toContain(`ALTER TYPE "audit_event_type" ADD VALUE IF NOT EXISTS '${event}'`)
+    }
+    for (const event of RETIRED_AUDIT_EVENTS) {
+      expect(schema).toContain(`  ${event}`)
     }
   })
 })

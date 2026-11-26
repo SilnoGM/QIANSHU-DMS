@@ -34,10 +34,10 @@ function record(overrides: Partial<NotificationRecordDto> = {}): NotificationRec
     publishedAt: '2026-11-09T02:00:00.000Z',
     completedAt: null,
     requestedByName: '张三',
-    channels: ['IN_APP', 'ASSISTANT'],
+    channels: ['IN_APP', 'WECOM'],
     inAppItemCount: 3,
     inAppUnreadCount: 2,
-    deliveryCounts: { ACCEPTED: 4, FAILED: 1, PENDING: 2 },
+    wecomDeliveryCounts: { ACCEPTED: 4, FAILED: 1, PENDING: 2 },
     ...overrides,
   }
 }
@@ -65,7 +65,7 @@ test('记录筛选从 URL 读取合法值并丢弃非法枚举', () => {
     pageSize: '50',
     status: 'FAILED',
     domain: 'FINANCE',
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     priority: 'HIGH',
     eventType: 'FUND_ACCOUNT_REVERSED',
     keyword: '  张三  ',
@@ -78,7 +78,7 @@ test('记录筛选从 URL 读取合法值并丢弃非法枚举', () => {
     pageSize: 50,
     status: 'FAILED',
     domain: 'FINANCE',
-    channel: 'ASSISTANT',
+    channel: 'WECOM',
     priority: 'HIGH',
     eventType: 'FUND_ACCOUNT_REVERSED',
     keyword: '张三',
@@ -172,17 +172,17 @@ test('URL 构建只保留非默认筛选', () => {
   })
 })
 
-test('投递摘要同时表达站内未读和小助理失败', () => {
+test('投递摘要同时表达站内未读和企业微信失败', () => {
   assert.deepEqual(recordDeliverySummary(record()), [
     { channel: 'IN_APP', label: '站内 3 人', tone: 'warning', detail: '未读 2' },
-    { channel: 'ASSISTANT', label: '小助理 7 人', tone: 'danger', detail: '失败 1' },
+    { channel: 'WECOM', label: '企业微信 7 人', tone: 'danger', detail: '失败 1' },
   ])
 })
 
 test('只有待发且仍有待发送交付时才允许取消', () => {
   assert.equal(canCancelRecord(record(), true), true)
   assert.equal(canCancelRecord(record({ status: 'COMPLETED' }), true), false)
-  assert.equal(canCancelRecord(record({ deliveryCounts: { ACCEPTED: 1 } }), true), false)
+  assert.equal(canCancelRecord(record({ wecomDeliveryCounts: { ACCEPTED: 1 } }), true), false)
   assert.equal(canCancelRecord(record(), false), false)
 })
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qianshu DMS Purchase Auto Review Scan (Docker)
+
+[Timer]
+OnCalendar=*-*-* *:0/1:00 Asia/Shanghai
+AccuracySec=10s
+Persistent=true
+Unit=qianshu-dms-purchase-auto-review-scan.service
+
+[Install]
+WantedBy=timers.target

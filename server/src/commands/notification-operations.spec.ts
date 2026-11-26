@@ -23,7 +23,7 @@ describe('cleanupNotificationData', () => {
         findMany: inboxFindMany,
         deleteMany: inboxDeleteMany,
       },
-      assistantDelivery: {
+      wecomDelivery: {
         findMany: deliveryFindMany,
         deleteMany: deliveryDeleteMany,
       },
@@ -65,7 +65,7 @@ describe('cleanupNotificationData', () => {
       where: expect.objectContaining({
         createdAt: { lte: new Date('2026-05-12T00:00:00.000Z') },
         inboxItems: { none: {} },
-        deliveries: { none: {} },
+        wecomDeliveries: { none: {} },
       }),
       take: 500,
     }))

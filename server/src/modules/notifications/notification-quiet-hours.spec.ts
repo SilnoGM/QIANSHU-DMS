@@ -1,7 +1,9 @@
 import {
+  DEFAULT_NOTIFICATION_QUIET_HOURS,
   isWithinQuietHours,
   nextQuietHoursEnd,
   parseNotificationQuietHours,
+  parseNotificationQuietHoursSetting,
 } from './notification-quiet-hours'
 
 const overnight = { end: '09:00', start: '22:00', timezone: 'Asia/Shanghai' }
@@ -17,6 +19,40 @@ describe('notification quiet hours', () => {
     expect(parseNotificationQuietHours({ start: '25:00', end: '09:00' })).toBeNull()
     expect(parseNotificationQuietHours({ start: '22:00' })).toBeNull()
     expect(parseNotificationQuietHours(null)).toBeNull()
+  })
+
+  it('exposes the event-channel default and preserves closed time values', () => {
+    expect(DEFAULT_NOTIFICATION_QUIET_HOURS).toMatchObject({
+      enabled: true,
+      start: '23:00',
+      end: '08:45',
+      timezone: 'Asia/Shanghai',
+    })
+    expect(parseNotificationQuietHoursSetting({ enabled: false })).toEqual({
+      enabled: false,
+      start: '23:00',
+      end: '08:45',
+      timezone: 'Asia/Shanghai',
+    })
+    expect(parseNotificationQuietHoursSetting({
+      enabled: false,
+      start: '21:30',
+      end: '07:15',
+      timezone: 'Asia/Shanghai',
+    })).toEqual({
+      enabled: false,
+      start: '21:30',
+      end: '07:15',
+      timezone: 'Asia/Shanghai',
+    })
+    expect(parseNotificationQuietHours({
+      enabled: false,
+      start: '23:00',
+      end: '08:45',
+      timezone: 'Asia/Shanghai',
+    })).toBeNull()
+    expect(parseNotificationQuietHoursSetting({ enabled: 'no', start: '23:00', end: '08:45' })).toBeNull()
+    expect(parseNotificationQuietHoursSetting({ enabled: true, start: '23:00' })).toBeNull()
   })
 
   it('recognizes the overnight window boundaries', () => {

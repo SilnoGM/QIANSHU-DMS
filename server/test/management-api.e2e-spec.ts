@@ -860,7 +860,7 @@ describe('Management API with PostgreSQL', () => {
       permissionsResponse,
     )
     expect(permissionCatalog).toHaveLength(SEEDED_PERMISSION_CODES.length)
-    expect(permissionCatalog.map(({ code }) => code)).toEqual(
+    expect(permissionCatalog.map(({ code }) => code).sort()).toEqual(
       [...SEEDED_PERMISSION_CODES].sort(),
     )
     const systemOnlyPermission = permissionCatalog.find(

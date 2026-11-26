@@ -52,6 +52,10 @@ import {
 import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
 import { ShipmentOwnershipService } from '../shipment-ownership/shipment-ownership.service'
 import { requirePurchaseShippingMark } from './purchase-order-shipping-mark'
+import {
+  noopPurchaseAutoReview,
+  PurchaseAutoReviewService,
+} from './auto-review/purchase-auto-review.service'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
 const PURCHASE_ORDER_STATE_CHANGE_CODES = [
@@ -225,6 +229,7 @@ export class PurchaseOrderCommandService {
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
     private readonly shipmentOwnership: ShipmentOwnershipService = new ShipmentOwnershipService(),
     private readonly notifications: SystemNotificationService = noopSystemNotifications,
+    private readonly autoReview: PurchaseAutoReviewService = noopPurchaseAutoReview,
   ) {
     this.dependencies = Object.freeze({
       ...DEFAULT_DEPENDENCIES,
@@ -293,6 +298,10 @@ export class PurchaseOrderCommandService {
         return mapNumberingError(error)
       }
 
+      // 开关快照在 Serializable 事务外读取：切换设置不与建单产生序列化冲突，
+      // 且本次请求内的「是否入队」与「是否抑制待审核通知」保持同一取值。
+      const autoReviewEnabled = await this.autoReview.isEnabled()
+
       return await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
         // 先恢复已提交结果，避免改绑、停用或来源剩余量变化破坏同键恢复。
@@ -341,6 +350,10 @@ export class PurchaseOrderCommandService {
           },
           select: { id: true },
         })
+        // 自动托管只对新单生效：任务与订单同事务写入，建单失败不会残留任务。
+        if (autoReviewEnabled) {
+          await this.autoReview.enqueueForOrder(transaction, created.id)
+        }
         if (command.productMode === 'CUSTOM') {
           await this.recipients.createForOrder(transaction, trusted.actorUserId, created.id, [...command.paymentAccounts])
         }
@@ -403,40 +416,43 @@ export class PurchaseOrderCommandService {
             partCount: persistedParts.length,
             shipmentNumberingRule: 'SHIPMENT_NO',
             numberedPartCount: partNumbers.length,
+            autoReview: autoReviewEnabled,
           },
         })
-        let customerName = '—'
-        if (command.salesOrderId !== null) {
-          try {
-            const salesOrder = await transaction.salesOrder.findUnique({
-              where: { id: command.salesOrderId },
-              select: { customerName: true },
-            })
-            customerName = salesOrder?.customerName ?? '—'
+        // 自动托管开启时由扫描任务在失败转人工后补发待审核通知；建单当下不打扰审核人。
+        if (!autoReviewEnabled) {
+          let customerName = '—'
+          if (command.salesOrderId !== null) {
+            try {
+              const salesOrder = await transaction.salesOrder.findUnique({
+                where: { id: command.salesOrderId },
+                select: { customerName: true },
+              })
+              customerName = salesOrder?.customerName ?? '—'
+            }
+            catch {
+              // 客户名称只服务通知文案；查询失败不能阻断采购单创建。
+              customerName = '—'
+            }
           }
-          catch {
-            // 客户名称只服务通知文案；查询失败不能阻断采购单创建。
-            customerName = '—'
-          }
+          await this.notifications.publish({
+            eventType: 'PURCHASE_REVIEW_PENDING',
+            source: { type: 'PURCHASE_ORDER', id: created.id },
+            target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:review' },
+            variables: {
+              orderNo: issuance.number,
+              orderId: created.id,
+              vendorName: command.customSupplierName ?? command.supplierValue ?? '—',
+              totalAmount: command.purchaseTotalAmount.toString(),
+              currencyCode: command.currencyCode,
+              lineCount: effective.lines.length,
+              partCount: persistedParts.length,
+              customerName,
+            },
+            dedupeKey: `purchase-review:${created.id}`,
+            requestedByUserId: trusted.actorUserId,
+          }, { transaction })
         }
-        await this.notifications.publish({
-          eventType: 'PURCHASE_REVIEW_PENDING',
-          source: { type: 'PURCHASE_ORDER', id: created.id },
-          target: { kind: 'PERMISSION', permissionCode: 'purchase-orders:review' },
-          templateKey: 'purchase.review.pending',
-          variables: {
-            orderNo: issuance.number,
-            orderId: created.id,
-            vendorName: command.customSupplierName ?? command.supplierValue ?? '—',
-            totalAmount: command.purchaseTotalAmount.toString(),
-            currencyCode: command.currencyCode,
-            lineCount: effective.lines.length,
-            partCount: persistedParts.length,
-            customerName,
-          },
-          dedupeKey: `purchase-review:${created.id}`,
-          requestedByUserId: trusted.actorUserId,
-        }, { transaction })
         return created.id
       // 最大货件/分配项仍共用固定采购事务预算，不放宽全局查询或锁等待上限。
       }, { isolationLevel: 'Serializable', timeout: 30_000 })

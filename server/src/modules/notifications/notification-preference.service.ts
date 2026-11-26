@@ -9,25 +9,23 @@ import type {
   NotificationPreferenceUpdateResultDto,
 } from './notification-preference.dto'
 import {
-  NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY,
   NOTIFICATION_EVENT_DOMAIN,
   NOTIFICATION_EVENT_LABELS,
   NOTIFICATION_EVENT_TYPES,
-  type NotificationEventType,
 } from './notification.types'
 
-const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'ASSISTANT']
+const CHANNELS: readonly NotificationPreferenceChannel[] = ['IN_APP', 'WECOM']
 
 function key(value: string, channel: string): string {
   return `${value}:${channel}`
 }
 
-interface PolicyRow {
+interface EventChannelRow {
   readonly eventType: string
   readonly channel: NotificationPreferenceChannel
   readonly enabled: boolean
-  readonly templateKey: string | null
   readonly targetMode: string
+  readonly messages: readonly { readonly id: string }[]
 }
 
 /**
@@ -52,7 +50,7 @@ export class NotificationPreferenceService {
       throw new ApiException(404, 'NOTIFICATION_EVENT_NOT_FOUND', '通知事件不存在')
     }
 
-    // 只允许关闭当前确实可投递的组合：管理员停用策略、关闭渠道或模板缺失时
+    // 只允许关闭当前确实可投递的组合：管理员停用渠道配置、关闭渠道或内容缺失时
     // 写入关闭记录没有意义，也容易在重新启用后产生意外的静默。
     const view = await this.buildView(userId)
     const target = view.events
@@ -79,47 +77,36 @@ export class NotificationPreferenceService {
   }
 
   private async buildView(userId: string): Promise<NotificationPreferenceListDto> {
-    const [policies, settings, templates, mutes, binding] = await Promise.all([
-      this.prisma.notificationChannelPolicy.findMany({
+    const [eventChannels, settings, mutes] = await Promise.all([
+      this.prisma.notificationEventChannel.findMany({
+        where: { channel: { in: [...CHANNELS] } },
         select: {
           eventType: true,
           channel: true,
           enabled: true,
-          templateKey: true,
           targetMode: true,
+          messages: {
+            where: { enabled: true },
+            select: { id: true },
+            take: 1,
+          },
         },
       }),
       this.prisma.notificationChannelSettings.findMany({
+        where: { channel: { in: [...CHANNELS] } },
         select: { channel: true, enabled: true },
       }),
-      this.prisma.notificationTemplate.findMany({
-        where: { enabled: true },
-        select: { key: true, channel: true },
-      }),
       this.prisma.notificationUserMute.findMany({
-        where: { userId },
+        where: { userId, channel: { in: [...CHANNELS] } },
         select: { eventType: true, channel: true },
-      }),
-      // 与发布/派发时的绑定判定保持一致：已验证、公司号启用且不是待绑定占位号。
-      this.prisma.assistantBinding.findFirst({
-        where: {
-          userId,
-          status: 'ACTIVE',
-          verifiedAt: { not: null },
-          account: { enabled: true, appId: { not: { startsWith: 'pending-' } } },
-        },
-        select: { id: true },
       }),
     ])
 
-    const policyByKey = new Map<string, PolicyRow>(
-      policies.map(policy => [key(policy.eventType, policy.channel), policy]),
+    const eventChannelByKey = new Map<string, EventChannelRow>(
+      (eventChannels as unknown as EventChannelRow[]).map(channel => [key(channel.eventType, channel.channel), channel]),
     )
     const channelEnabled = new Map<string, boolean>(
       settings.map(setting => [setting.channel, setting.enabled]),
-    )
-    const templateKeys = new Set<string>(
-      templates.map(template => key(template.key, template.channel)),
     )
     const mutedKeys = new Set<string>(
       mutes.map(mute => key(mute.eventType, mute.channel)),
@@ -131,18 +118,15 @@ export class NotificationPreferenceService {
         channel,
         enabled: channelEnabled.get(channel) === true,
       })),
-      assistantBound: binding !== null,
       events: NOTIFICATION_EVENT_TYPES.map(eventType => ({
         eventType,
         label: NOTIFICATION_EVENT_LABELS[eventType],
         domain: NOTIFICATION_EVENT_DOMAIN[eventType],
         channels: CHANNELS.map((channel) => {
           const unavailableReason = this.unavailableReason(
-            eventType,
             channel,
-            policyByKey.get(key(eventType, channel)),
+            eventChannelByKey.get(key(eventType, channel)),
             channelEnabled,
-            templateKeys,
           )
           return {
             channel,
@@ -156,30 +140,24 @@ export class NotificationPreferenceService {
   }
 
   private unavailableReason(
-    eventType: string,
     channel: NotificationPreferenceChannel,
-    policy: PolicyRow | undefined,
+    eventChannel: EventChannelRow | undefined,
     channelEnabled: ReadonlyMap<string, boolean>,
-    templateKeys: ReadonlySet<string>,
   ): NotificationPreferenceUnavailableReason | null {
-    if (policy === undefined) {
+    if (eventChannel === undefined) {
       return 'NOT_CONFIGURED'
     }
-    if (!policy.enabled) {
-      return 'POLICY_DISABLED'
+    if (!eventChannel.enabled) {
+      return 'CONFIG_DISABLED'
     }
     if (channelEnabled.get(channel) !== true) {
       return 'CHANNEL_DISABLED'
     }
-    if (policy.targetMode === 'GROUP') {
+    if (eventChannel.targetMode === 'GROUP') {
       return 'GROUP_TARGET'
     }
-    // 发布时模板键可能由业务命令覆盖，这里按策略键与事件默认键判断可用性；
-    // 这是管理端配置口径下最接近真实投递状态的近似。
-    const templateKey = policy.templateKey?.trim()
-      || NOTIFICATION_EVENT_DEFAULT_TEMPLATE_KEY[eventType as NotificationEventType]
-    if (templateKey === undefined || !templateKeys.has(key(templateKey, channel))) {
-      return 'TEMPLATE_MISSING'
+    if (eventChannel.messages.length === 0) {
+      return 'CONTENT_MISSING'
     }
     return null
   }

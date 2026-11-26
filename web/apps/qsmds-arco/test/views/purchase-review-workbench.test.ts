@@ -105,6 +105,29 @@ test('审核工作台提供已驳回页签、标签和独立计数', async () =>
   assert.match(source, /counts\.value\[value\]/u)
 })
 
+test('审核工作台展示自动托管状态与心跳，只有系统级权限能打开设置', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.match(source, /auth\('purchase-orders:auto-review'\)/u)
+  assert.match(source, /data-testid="purchase-auto-review-banner"/u)
+  assert.match(source, /data-testid="purchase-auto-review-setting-open"/u)
+  assert.match(source, /void loadAutoReviewSetting\(\)/u)
+  assert.match(source, /setting\.lastScanAt === null/u)
+  assert.match(source, /<PurchaseAutoReviewSettingModal[\s\S]{0,120}:setting="autoReviewSetting"/u)
+  assert.match(source, /@updated="handleAutoReviewUpdated"/u)
+})
+
+test('自动托管设置弹窗携带版本号，并在关闭前释放提交态', async () => {
+  const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/purchase-auto-review-setting-modal.vue', import.meta.url), 'utf8')
+  assert.match(source, /enabled: !setting\.enabled/u)
+  assert.match(source, /expectedVersion: setting\.version/u)
+  const closeIndex = source.indexOf('emit(\'update:modelValue\', false)')
+  const submittingIndex = source.lastIndexOf('submitting.value = false', closeIndex)
+  assert.ok(closeIndex > 0)
+  assert.ok(submittingIndex > 0)
+  assert.ok(submittingIndex < closeIndex)
+  assert.match(source, /if \(!submitting\.value\)/u)
+})
+
 test('审核工作台提供单次最多 20 单的批量入口、跨页选择与清空选择', async () => {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
 

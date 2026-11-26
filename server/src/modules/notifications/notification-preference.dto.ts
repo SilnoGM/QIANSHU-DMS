@@ -3,16 +3,16 @@ import { IsBoolean, IsIn, IsString, MaxLength } from 'class-validator'
 
 import type { NotificationDomain } from './notification.types'
 
-export const NOTIFICATION_PREFERENCE_CHANNELS = ['IN_APP', 'ASSISTANT'] as const
+export const NOTIFICATION_PREFERENCE_CHANNELS = ['IN_APP', 'WECOM'] as const
 
 export type NotificationPreferenceChannel = (typeof NOTIFICATION_PREFERENCE_CHANNELS)[number]
 
 export type NotificationPreferenceUnavailableReason =
   | 'NOT_CONFIGURED'
-  | 'POLICY_DISABLED'
+  | 'CONFIG_DISABLED'
   | 'CHANNEL_DISABLED'
   | 'GROUP_TARGET'
-  | 'TEMPLATE_MISSING'
+  | 'CONTENT_MISSING'
 
 export class NotificationPreferenceParamDto {
   @ApiProperty({ maxLength: 64 })
@@ -56,8 +56,6 @@ export class NotificationPreferenceChannelSettingDto {
 export class NotificationPreferenceListDto {
   @ApiProperty({ type: () => [NotificationPreferenceChannelSettingDto] })
   channels!: NotificationPreferenceChannelSettingDto[]
-  /** 当前登录人是否已有可用的小助理绑定；未绑定时微信提醒不会送达。 */
-  @ApiProperty() assistantBound!: boolean
   @ApiProperty({ type: () => [NotificationPreferenceEventDto] })
   events!: NotificationPreferenceEventDto[]
 }

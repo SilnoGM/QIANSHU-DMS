@@ -184,7 +184,6 @@ export class FundWithdrawalService {
           source: { type: 'FUND_WITHDRAWAL_REQUEST', id: created.id },
           // 提交人自己收通知并转给付款人；审批人不再按权限自动收到，审计仍记录审批动作。
           target: { kind: 'USERS', userIds: [context.actorUserId] },
-          templateKey: 'fund.withdrawal.pending',
           variables: {
             amount,
             applicantName: applicant?.displayName ?? '—',
@@ -259,7 +258,6 @@ export class FundWithdrawalService {
           eventType: 'FUND_WITHDRAWAL_REJECTED',
           source: { type: 'FUND_WITHDRAWAL_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.userId] },
-          templateKey: 'fund.withdrawal.rejected',
           variables: {
             amount: row.amount.toFixed(2),
             applicantName: applicant?.displayName ?? '—',
@@ -367,7 +365,6 @@ export class FundWithdrawalService {
           eventType: 'FUND_WITHDRAWAL_APPROVED',
           source: { type: 'FUND_WITHDRAWAL_REQUEST', id },
           target: { kind: 'USERS', userIds: [row.userId] },
-          templateKey: 'fund.withdrawal.approved',
           variables: {
             amount: row.amount.toFixed(2),
             applicantName: applicant?.displayName ?? '—',

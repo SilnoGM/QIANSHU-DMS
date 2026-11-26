@@ -23,6 +23,7 @@ import { buildFundWithdrawalProofFilename } from '../src/modules/fund-withdrawal
 import { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { MediaContentValidator } from '../src/modules/media/media-content-validator'
 import { cleanupFundE2eData } from './fixtures/fund-e2e-cleanup'
+import { seedNotificationEventChannel } from './fixtures/notification-event-channel'
 
 jest.setTimeout(90_000)
 
@@ -205,21 +206,19 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
   })
 
   it('notifies the applicant with the review link instead of the reviewer permission', async () => {
-    // 模板默认由迁移清空，本用例临时建一份站内模板，验证收件人与链接变量。
-    const template = await prisma.notificationTemplate.create({
-      data: {
-        key: 'fund.withdrawal.pending',
-        channel: 'IN_APP',
-        name: '提现审核（E2E）',
-        domain: 'FINANCE',
-        titleTemplate: '提款申请已提交',
-        bodyTemplate: '单号：{{withdrawalNo}}',
-        linkUrlTemplate: '{{reviewUrl}}',
-        variables: [
-          { name: 'withdrawalNo', required: true, maxLength: 64, sensitive: false },
-          { name: 'reviewUrl', required: true, maxLength: 512, sensitive: false },
-        ],
-      },
+    // 生产默认模板由管理员配置；E2E 临时启用事件渠道，验证收件人与链接变量。
+    const channelId = await seedNotificationEventChannel(prisma, {
+      eventType: 'FUND_WITHDRAWAL_REVIEW_PENDING',
+      channel: 'IN_APP',
+      sendMethod: 'IN_APP',
+      messages: [{
+        kind: 'TEXT',
+        payload: {
+          title: '提款申请已提交',
+          content: '单号：{{withdrawalNo}}',
+          linkUrl: '{{reviewUrl}}',
+        },
+      }],
     })
     try {
       const created = await createWithdrawal('20.00')
@@ -242,7 +241,7 @@ describe('fund withdrawals against isolated PostgreSQL', () => {
       expect(inbox.some(item => item.userId === financeId)).toBe(false)
     }
     finally {
-      await prisma.notificationTemplate.delete({ where: { id: template.id } })
+      await prisma.notificationEventChannel.update({ where: { id: channelId }, data: { enabled: false } })
     }
   })
 

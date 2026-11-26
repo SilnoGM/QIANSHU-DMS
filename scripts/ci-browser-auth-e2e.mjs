@@ -131,16 +131,12 @@ export function createBrowserAuthPlan(input) {
   const tlsKeyPath = path.join(sessionDirectory, 'tls-key.pem')
   const tlsCertificatePath = path.join(sessionDirectory, 'tls-cert.pem')
   const [usernameHmacKey, userIdHmacKey, ipHmacKey] = secrets.hmacKeys
-  // 生产 Server 现在要求通知媒体签名密钥；测试夹具必须显式提供，不能继承调用方。
-  const notificationMediaUrlSecret = secrets.notificationMediaSecret
-    ?? randomBytes(32).toString('base64url')
   const commonAuthEnvironment = {
     AUTH_ARGON2_CONCURRENCY: '2',
     AUTH_ARGON2_QUEUE_LIMIT: '32',
     AUTH_USERNAME_HMAC_KEY: usernameHmacKey,
     AUTH_USER_ID_HMAC_KEY: userIdHmacKey,
     AUTH_IP_HMAC_KEY: ipHmacKey,
-    NOTIFICATION_MEDIA_URL_SECRET: notificationMediaUrlSecret,
     DATABASE_URL: databaseUrl,
     MEDIA_FFPROBE_PATH: ffprobePath,
     MEDIA_STORAGE_DRIVER: 'local',
@@ -601,7 +597,6 @@ async function runProductionBrowserAuthE2e() {
       secrets: {
         adminPassword: `Br-${randomBytes(9).toString('base64url')}!7`,
         hmacKeys: [0, 1, 2].map(() => randomBytes(32).toString('base64url')),
-        notificationMediaSecret: randomBytes(32).toString('base64url'),
       },
       sessionDirectory,
     })

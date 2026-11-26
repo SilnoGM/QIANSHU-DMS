@@ -400,7 +400,6 @@ export class SalesOrderCommandService {
           source: { type: 'SALES_ORDER', id: created.id },
           // 兜底目标：策略配置为 GROUP 时由渠道策略决定实际群目标。
           target: { kind: 'USERS', userIds: [trusted.actorUserId] },
-          templateKey: 'sales.order.submitted',
           variables: {
             orderNo: issuance.number,
             orderId: created.id,

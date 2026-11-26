@@ -196,7 +196,6 @@ describe('SalesOrderCommandService', () => {
     expect(fixture.notifications.publish).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'SALES_ORDER_SUBMITTED',
-        templateKey: 'sales.order.submitted',
         dedupeKey: `sales-order-submitted:${ORDER_ID}`,
         media: [{
           assetId: '55555555-5555-4555-8555-555555555555',

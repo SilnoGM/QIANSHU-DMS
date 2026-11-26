@@ -238,8 +238,6 @@ function normalizeAuthHmacKey(
   return normalizeUrlSigningKey(key, value, nodeEnvironment)
 }
 
-const NOTIFICATION_MEDIA_URL_SECRET_NAME = 'NOTIFICATION_MEDIA_URL_SECRET'
-
 function normalizeAuthHmacKeys(
   input: Record<string, unknown>,
   nodeEnvironment: NodeEnvironment,
@@ -331,6 +329,31 @@ function normalizeIpfoxyEnvironment(
 }
 
 /**
+ * 企业微信应用 Secret 的静态加密密钥；只有配置 WECOM 应用时才需要。
+ * 只校验格式，不在这里要求必填，避免未启用 WECOM 的环境启动失败。
+ */
+function normalizeWecomEnvironment(
+  input: Record<string, unknown>,
+): { WECOM_APP_SECRET_KEY: string | null } {
+  const raw = input.WECOM_APP_SECRET_KEY
+  if (raw === undefined || raw === '') {
+    return { WECOM_APP_SECRET_KEY: null }
+  }
+  if (typeof raw !== 'string') {
+    throw validationError('WECOM_APP_SECRET_KEY', 'has an invalid format')
+  }
+  const candidate = raw.trim()
+  const decoded = Buffer.from(candidate, 'base64url')
+  if (decoded.length !== 32 || decoded.toString('base64url') !== candidate) {
+    throw validationError(
+      'WECOM_APP_SECRET_KEY',
+      'must be a 32-byte canonical base64url key',
+    )
+  }
+  return { WECOM_APP_SECRET_KEY: candidate }
+}
+
+/**
  * 校验并规范化 Nest 配置输入。
  *
  * 保留未知键是为了让 Nest ConfigModule 仍可向后续、独立的配置命名空间传递环境变量；
@@ -359,27 +382,16 @@ export function validateEnvironment(
   IPFOXY_API_ID: string | null
   IPFOXY_API_TOKEN: string | null
   PROXY_NODE_SECRET_KEY: string | null
+  WECOM_APP_SECRET_KEY: string | null
   AUTH_USERNAME_HMAC_KEY?: string
   AUTH_USER_ID_HMAC_KEY?: string
   AUTH_IP_HMAC_KEY?: string
-  NOTIFICATION_MEDIA_URL_SECRET?: string
 } {
   const nodeEnvironment = normalizeNodeEnvironment(input.NODE_ENV)
   const hmacKeys = normalizeAuthHmacKeys(input, nodeEnvironment)
-  const notificationMediaUrlSecret = normalizeUrlSigningKey(
-    NOTIFICATION_MEDIA_URL_SECRET_NAME,
-    input.NOTIFICATION_MEDIA_URL_SECRET,
-    nodeEnvironment,
-  )
-  if (
-    notificationMediaUrlSecret !== undefined
-    && Object.values(hmacKeys).includes(notificationMediaUrlSecret)
-  ) {
-    // 用途分离：媒体链接签名密钥泄露不能等价于认证身份密钥泄露。
-    throw validationError(NOTIFICATION_MEDIA_URL_SECRET_NAME, 'must differ from auth hmac keys')
-  }
   const mediaEnvironment = normalizeMediaEnvironment(input)
   const ipfoxyEnvironment = normalizeIpfoxyEnvironment(input)
+  const wecomEnvironment = normalizeWecomEnvironment(input)
   const normalized: Record<string, unknown> & {
     NODE_ENV: NodeEnvironment
     PORT: number
@@ -401,6 +413,7 @@ export function validateEnvironment(
     IPFOXY_API_ID: string | null
     IPFOXY_API_TOKEN: string | null
     PROXY_NODE_SECRET_KEY: string | null
+  WECOM_APP_SECRET_KEY: string | null
   } = {
     ...input,
     NODE_ENV: nodeEnvironment,
@@ -430,10 +443,8 @@ export function validateEnvironment(
     ),
     ...mediaEnvironment,
     ...ipfoxyEnvironment,
+    ...wecomEnvironment,
     ...hmacKeys,
-    ...(notificationMediaUrlSecret === undefined
-      ? {}
-      : { NOTIFICATION_MEDIA_URL_SECRET: notificationMediaUrlSecret }),
   }
 
   // 非 production 的空占位符代表启动时生成随机进程级 key，不能把空字符串留给 ConfigService。

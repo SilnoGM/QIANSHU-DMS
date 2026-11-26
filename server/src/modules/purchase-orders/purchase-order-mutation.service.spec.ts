@@ -15,6 +15,7 @@ import type { SalesOrderPurchaseCoverageService } from './sales-order-purchase-c
 import { Prisma } from '../../generated/prisma/client'
 import type { PurchaseOrderPaymentType } from '../../generated/prisma/enums'
 import type { PreparedPayablePayment, PurchasePayableService } from './payables/purchase-payable.service'
+import { PURCHASE_AUTO_REVIEW_ACTOR_ID } from './auto-review/purchase-auto-review.constants'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -455,8 +456,8 @@ describe('PurchaseOrderMutationService', () => {
     ])
     expect(fixture.audit.record).toHaveBeenCalledTimes(2)
     expect(fixture.audit.record.mock.calls).toEqual(expect.arrayContaining([
-      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', imageDraftId: MEDIA_ID } })],
-      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'ORDERED', toStatus: 'PREPARING', imageDraftId: MEDIA_ID } })],
+      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', imageDraftId: MEDIA_ID, automatic: false } })],
+      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'ORDERED', toStatus: 'PREPARING', imageDraftId: MEDIA_ID, automatic: false } })],
     ]))
     expect(fixture.coverage.advanceWhenFullyCovered).toHaveBeenCalledWith(fixture.transaction, {
       actorUserId: ACTOR_ID, purchaseOrderId: ORDER_ID, purchaseOrderNo: fixture.order.orderNo,
@@ -470,6 +471,25 @@ describe('PurchaseOrderMutationService', () => {
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledTimes(1)
     expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledTimes(2)
     expect(fixture.coverage.advanceWhenFullyCovered).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks review audits as automatic when the automation actor performs the review', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    fixture.transaction.purchaseOrder.findUnique
+      .mockResolvedValueOnce({ ...fixture.order })
+      .mockResolvedValueOnce({ ...fixture.order })
+      .mockResolvedValue({ ...fixture.order, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
+
+    await expect(fixture.service.review(
+      { actorUserId: PURCHASE_AUTO_REVIEW_ACTOR_ID, requestId: 'request-auto' },
+      ORDER_ID,
+      { imageDraftId: MEDIA_ID, expectedVersion: 1 },
+    )).resolves.toEqual(fixture.detail)
+
+    expect(fixture.audit.record.mock.calls.map(call => (
+      call[1] as { metadata: { automatic: boolean } }
+    ).metadata.automatic)).toEqual([true, true])
   })
 
   it('publishes the approved notification with order blocks and the dictionary display name', async () => {

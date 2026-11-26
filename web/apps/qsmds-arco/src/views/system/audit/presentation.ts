@@ -133,6 +133,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   PURCHASE_ORDER_CREATED: '采购订单已创建',
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED: '采购审核唛头已派发',
   PURCHASE_ORDER_IMAGE_GENERATED: '采购单图片已生成',
+  PURCHASE_AUTO_REVIEW_SETTING_UPDATED: '采购审核自动托管设置已变更',
+  PURCHASE_ORDER_AUTO_REVIEW_FAILED: '采购自动审核失败',
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED: '采购货件编号已派发',
   PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED: '采购货件已入仓',
   PURCHASE_SHIPMENT_CONTAINER_LOADED: '采购货件已装柜',
@@ -189,6 +191,17 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   AD_ACCOUNT_ASSIGNED: '猎豹广告户已绑定',
   AD_ACCOUNT_RELEASED: '猎豹广告户已解绑',
   ADVERTISING_RECHARGE_PAYMENT_CODE_SUPPLEMENTED: '广告充值付款码已补充',
+  WECOM_CHANNEL_UPDATED: '企业微信渠道已更新',
+  WECOM_APP_CREATED: '企业微信应用已创建',
+  WECOM_APP_UPDATED: '企业微信应用已更新',
+  WECOM_APP_DISABLED: '企业微信应用已停用',
+  WECOM_APP_SECRET_UPDATED: '企业微信应用 Secret 已更新',
+  WECOM_EVENT_ROUTE_UPDATED: '企业微信事件路由已更新',
+  WECOM_MEMBERSHIP_UPDATED: '企业微信应用成员已更新',
+  WECOM_MEMBERSHIP_VERIFIED: '企业微信应用成员已验证',
+  WECOM_TARGET_CREATED: '企业微信群目标已创建',
+  WECOM_TARGET_UPDATED: '企业微信群目标已更新',
+  WECOM_TARGET_TESTED: '企业微信群目标已测试',
 }
 
 export function auditMetadataEntries(

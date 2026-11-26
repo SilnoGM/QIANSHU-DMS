@@ -303,7 +303,7 @@ test('无 body 的 DELETE 补空 JSON，已有 body 的 DELETE 保持不变', as
     hooks: createHookRecorder().hooks,
   })
 
-  await client.delete('/assistant/bindings/binding-1')
+  await client.delete('/notifications/wecom/bindings/binding-1')
   await client.delete('/products/product-1/media/media-1', {
     data: { reason: 'REMOVED' },
   })

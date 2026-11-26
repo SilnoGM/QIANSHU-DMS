@@ -22,12 +22,12 @@ const DOMAIN_LABELS: Record<string, string> = {
   system: '系统',
 }
 
-export const PREFERENCE_CHANNEL_LABELS: Record<'IN_APP' | 'ASSISTANT', string> = {
+export const PREFERENCE_CHANNEL_LABELS: Record<'IN_APP' | 'WECOM', string> = {
   IN_APP: '站内通知',
-  ASSISTANT: '千树小助理',
+  WECOM: '企业微信',
 }
 
-export const PREFERENCE_CHANNEL_ORDER = ['IN_APP', 'ASSISTANT'] as const
+export const PREFERENCE_CHANNEL_ORDER = ['IN_APP', 'WECOM'] as const
 
 export type PreferenceChannel = (typeof PREFERENCE_CHANNEL_ORDER)[number]
 
@@ -36,7 +36,7 @@ export interface PreferenceCell {
   readonly dto: NotificationPreferenceChannelDto | null
 }
 
-/** 固定按站内 → 小助理的顺序取单元格，缺失渠道返回 null 以保留列对齐。 */
+/** 固定按站内 → 企业微信的顺序取单元格，缺失渠道返回 null 以保留列对齐。 */
 export function preferenceCells(event: NotificationPreferenceEventDto): PreferenceCell[] {
   return PREFERENCE_CHANNEL_ORDER.map(channel => ({
     channel,
@@ -62,10 +62,10 @@ export function countMutedChannels(
 
 const UNAVAILABLE_LABELS: Record<string, string> = {
   NOT_CONFIGURED: '管理员未配置',
-  POLICY_DISABLED: '已停用',
+  CONFIG_DISABLED: '已停用',
   CHANNEL_DISABLED: '渠道未启用',
   GROUP_TARGET: '仅发送到群',
-  TEMPLATE_MISSING: '模板未配置',
+  CONTENT_MISSING: '内容未配置',
 }
 
 export interface PreferenceGroup {

@@ -5,7 +5,7 @@ function Layout() {
 }
 
 /**
- * 通知中心从单页签改为分组菜单：GeWe 助理、通知策略、通知记录各自独立。
+ * 通知中心分组菜单：事件配置、通知记录与企业微信配置各自独立。
  * 父级只承担分组与权限并集，具体页面权限由叶子声明；没有通知权限的角色看不到整组。
  */
 const route: RouteRecordRaw = {
@@ -17,10 +17,9 @@ const route: RouteRecordRaw = {
     icon: 'qs-notification',
     auth: [
       'notification-record:read',
-      'notification-template:read',
       'notification-policy:read',
-      'assistant-channel:read',
-      'assistant-account:read',
+      'wecom-channel:read',
+      'wecom-app:read',
     ],
   },
   children: [
@@ -34,23 +33,33 @@ const route: RouteRecordRaw = {
       },
     },
     {
-      path: 'assistant',
-      name: 'systemNotificationAssistant',
-      component: () => import('@/views/system/notifications/assistant.vue'),
+      path: 'wecom',
+      name: 'systemNotificationWecom',
+      component: () => import('@/views/system/notifications/wecom.vue'),
       meta: {
-        title: 'GeWe助理',
-        icon: 'qs-gewe-assistant',
-        auth: ['assistant-channel:read', 'assistant-account:read'],
+        title: '企业微信',
+        icon: 'qs-notification',
+        auth: ['wecom-channel:read', 'wecom-app:read'],
       },
     },
     {
-      path: 'policies',
-      name: 'systemNotificationPolicies',
-      component: () => import('@/views/system/notifications/policies.vue'),
+      path: 'events',
+      name: 'systemNotificationEvents',
+      component: () => import('@/views/system/notifications/events/index.vue'),
       meta: {
-        title: '通知策略',
+        title: '事件配置',
         icon: 'qs-notification-policy',
-        auth: ['notification-template:read', 'notification-policy:read'],
+        auth: 'notification-policy:read',
+      },
+    },
+    {
+      path: 'events/:eventType',
+      name: 'systemNotificationEventDetail',
+      component: () => import('@/views/system/notifications/events/detail.vue'),
+      meta: {
+        title: '事件配置详情',
+        menu: false,
+        auth: 'notification-policy:read',
       },
     },
     {

@@ -378,7 +378,6 @@ export function createBrowserDictionariesPlan(input) {
     'AUTH_USERNAME_HMAC_KEY',
     'QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD',
     'QIANSHU_BROWSER_DICTIONARIES_LIMITED_PASSWORD',
-    'NOTIFICATION_MEDIA_URL_SECRET',
   ]) {
     delete sourceEnv[key]
   }
@@ -420,9 +419,6 @@ export function createBrowserDictionariesSensitiveValues(
     databaseUrl,
     new URL(databaseUrl).password,
     secrets.adminPassword,
-      ...(secrets.notificationMediaSecret === undefined
-        ? []
-        : [secrets.notificationMediaSecret]),
     secrets.limitedPassword,
     ...secrets.hmacKeys,
   ])
@@ -783,7 +779,6 @@ export async function runProductionBrowserDictionariesE2e() {
         'Bd-' + randomBytes(9).toString('base64url') + '!8',
       hmacKeys: [0, 1, 2]
         .map(() => randomBytes(32).toString('base64url')),
-      notificationMediaSecret: randomBytes(32).toString('base64url'),
       limitedPassword:
         'Dl-' + randomBytes(8).toString('base64url') + '!7',
     }

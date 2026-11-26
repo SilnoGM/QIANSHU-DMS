@@ -11,6 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import { MachineViewingQueryService } from '../src/modules/machine-viewings/machine-viewing-query.service'
 import { MachineViewingService } from '../src/modules/machine-viewings/machine-viewing.service'
 import { SystemNotificationService } from '../src/modules/notifications/system-notification.service'
+import { seedNotificationEventChannel } from './fixtures/notification-event-channel'
 
 jest.setTimeout(60_000)
 
@@ -101,73 +102,34 @@ describe('machine viewing appointments against PostgreSQL', () => {
     purchasingId = await createUser('purchasing', purchasingRole.id)
     notificationRecipientId = await createUser('notification', notificationRole.id)
 
-    // 生产默认模板会被 purge，通知模板由管理员配置；E2E 需要自己补一份可渲染的站内模板。
-    const variables = [
-      'appointmentNo',
-      'appointmentDate',
-      'period',
-      'hour',
-      'site',
-      'machineType',
-      'customerName',
-      'customerPhone',
-      'contactPerson',
-      'status',
-    ].map(name => ({
-      name,
-      required: false,
-      maxLength: 200,
-      sensitive: name === 'customerName',
-    }))
-    await prisma.notificationTemplate.createMany({
-      data: [
-        {
-          key: 'operations.machine-viewing.created',
-          channel: 'IN_APP',
-          name: '看机预约',
-          domain: 'OPERATIONS',
-          titleTemplate: '看机预约 {{appointmentNo}}',
-          bodyTemplate: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
-          variables,
-          maxLength: 2000,
-          enabled: true,
+    // 生产默认模板由管理员配置；E2E 临时启用事件渠道，保证创建/改期通知可发布。
+    await seedNotificationEventChannel(prisma, {
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_CREATED',
+      channel: 'IN_APP',
+      sendMethod: 'IN_APP',
+      allowSensitive: true,
+      messages: [{
+        kind: 'TEXT',
+        payload: {
+          title: '看机预约 {{appointmentNo}}',
+          content: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
+          linkUrl: null,
         },
-        {
-          key: 'operations.machine-viewing.created',
-          channel: 'ASSISTANT',
-          name: '看机预约',
-          domain: 'OPERATIONS',
-          titleTemplate: null,
-          bodyTemplate: '时间：{{appointmentDate}} {{period}} {{hour}}\n客户：{{customerName}}',
-          variables,
-          maxLength: 2000,
-          enabled: true,
+      }],
+    })
+    await seedNotificationEventChannel(prisma, {
+      eventType: 'MACHINE_VIEWING_APPOINTMENT_RESCHEDULED',
+      channel: 'IN_APP',
+      sendMethod: 'IN_APP',
+      allowSensitive: true,
+      messages: [{
+        kind: 'TEXT',
+        payload: {
+          title: '看机预约改期 {{appointmentNo}}',
+          content: '原时间：{{previousAppointmentTime}}\n新时间：{{appointmentTime}}\n客户：{{customerName}}',
+          linkUrl: null,
         },
-        {
-          key: 'operations.machine-viewing.rescheduled',
-          channel: 'IN_APP',
-          name: '看机预约改期',
-          domain: 'OPERATIONS',
-          titleTemplate: '看机预约改期 {{appointmentNo}}',
-          bodyTemplate: '原时间：{{previousAppointmentTime}}\n新时间：{{appointmentTime}}\n客户：{{customerName}}',
-          variables: [
-            'appointmentNo',
-            'previousAppointmentTime',
-            'appointmentTime',
-            'site',
-            'machineType',
-            'customerName',
-            'contactPerson',
-          ].map(name => ({
-            name,
-            required: false,
-            maxLength: 200,
-            sensitive: name === 'customerName',
-          })),
-          maxLength: 2000,
-          enabled: true,
-        },
-      ],
+      }],
     })
   })
 

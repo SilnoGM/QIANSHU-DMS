@@ -196,7 +196,6 @@ export class SalesOrderAutomaticStateService {
       eventType: 'SALES_ORDER_COMPLETED',
       source: { type: 'SALES_ORDER', id: salesOrderId },
       target: { kind: 'USERS', userIds: [order.issuerUserId] },
-      templateKey: 'sales.order.completed',
       variables: {
         agreedTotalAmount: order.agreedTotalAmount.toFixed(2),
         currencyCode: order.currencyCode,

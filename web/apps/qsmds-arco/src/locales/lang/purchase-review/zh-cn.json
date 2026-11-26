@@ -198,6 +198,38 @@
         "reviewFailed": "审核失败",
         "blocked": "已失效"
       }
+    },
+    "autoReview": {
+      "title": "采购审核自动托管",
+      "settingAction": "设置",
+      "badgeOn": "已开启",
+      "badgeOff": "未开启",
+      "bannerOn": "开启后新创建的采购单将自动派发唛头、生成图片并通过审核。",
+      "bannerOff": "开启后新创建的采购单将自动完成审核，失败时转人工。",
+      "lastScan": "上次运行：",
+      "neverScanned": "尚未运行过扫描任务",
+      "stale": "扫描任务似乎未运行",
+      "jobs": "待处理 {pending} · 失败 {failed}",
+      "loadFailed": "自动托管设置加载失败",
+      "settingTitle": "采购审核自动托管设置",
+      "settingDescription": "开启或关闭新采购单的自动审核流程。",
+      "statusEnabled": "当前状态：已开启",
+      "statusDisabled": "当前状态：未开启",
+      "updatedBy": "最后修改：{name}",
+      "neverUpdated": "尚未修改过设置",
+      "impactTitle": "开启后系统会自动执行：",
+      "impactMarks": "派发采购单与货件唛头编号",
+      "impactImage": "生成采购单图片并归档为采购单凭证",
+      "impactReview": "审核通过并进入备货",
+      "impactPayable": "生成定金与尾款应付",
+      "impactFallback": "失败时停止重试并通知采购审核人",
+      "enableHint": "该开关会跳过人工复核，开启后仅对此后新建的采购单生效；存量待审核单不受影响。",
+      "disableHint": "关闭后，尚未开始的自动任务会被取消，订单留在待审核列表，由人工审核。",
+      "enable": "开启自动托管",
+      "disable": "关闭自动托管",
+      "cancel": "取消",
+      "enabledToast": "已开启采购审核自动托管",
+      "disabledToast": "已关闭采购审核自动托管"
     }
   }
 }

@@ -1,29 +1,14 @@
 import type { AxiosInstance } from 'axios'
 
 import type {
-  AssistantAccountCreateDto,
-  AssistantAccountDto,
-  AssistantAccountQrDto,
-  AssistantAccountUpdateDto,
-  AssistantBindingCheckDto,
-  AssistantBindingCreateDto,
-  AssistantBindingDto,
-  AssistantBindingPageDto,
-  AssistantBindingReassignDto,
-  AssistantBindingsListData,
-  AssistantBindingVerifyDto,
-  AssistantChannelDto,
-  AssistantChannelUpdateDto,
-  AssistantContactDto,
-  AssistantTargetDto,
-  AssistantTargetMemberDto,
-  AssistantTargetMentionMessageDto,
-  AssistantTargetMentionMessageResultDto,
-  AssistantTargetUpdateDto,
-  AssistantTestSendDto,
   NotificationCancelResultDto,
-  NotificationChannelPolicyDto,
-  NotificationChannelPolicyUpdateDto,
+  NotificationContentFileUploadDto,
+  NotificationContentMediaUploadDto,
+  NotificationEventConfigDto,
+  NotificationEventConfigPreviewDto,
+  NotificationEventConfigPreviewResultDto,
+  NotificationEventConfigSummaryDto,
+  NotificationEventConfigUpdateDto,
   NotificationEventDto,
   NotificationInboxDetailDto,
   NotificationInboxListData,
@@ -38,15 +23,27 @@ import type {
   NotificationRecordOptionsDto,
   NotificationRecordPageDto,
   NotificationsRecordsListData,
-  NotificationTemplateCreateDto,
-  NotificationTemplateDto,
-  NotificationTemplatePreviewDto,
-  NotificationTemplatePreviewResultDto,
-  NotificationTemplateUpdateDto,
+  WecomAppCreateDto,
+  WecomAppDto,
+  WecomAppSecretUpdateDto,
+  WecomAppTestResultDto,
+  WecomAppUpdateDto,
+  WecomBindingCreateDto,
+  WecomBindingDto,
+  WecomBindingVerifyDto,
+  WecomChannelDto,
+  WecomChannelUpdateDto,
+  WecomEventRoutesDto,
+  WecomEventRoutesUpdateDto,
+  WecomMembershipCreateDto,
+  WecomMembershipDto,
+  WecomTargetCreateDto,
+  WecomTargetDto,
+  WecomTargetUpdateDto,
+  WecomTestResultDto,
 } from '../generated/types.gen'
 import api from '../index'
 
-export type AssistantBindingListQuery = NonNullable<AssistantBindingsListData['query']>
 export type NotificationRecordListQuery = NonNullable<NotificationsRecordsListData['query']>
 export type NotificationInboxDomain = NonNullable<NonNullable<NotificationInboxListData['query']>['domain']>
 export type NotificationInboxStatus = 'all' | 'unread' | 'archived'
@@ -69,23 +66,42 @@ export function createNotificationsApi(client: AxiosInstance) {
       list: (signal: AbortSignal) =>
         client.get<NotificationEventDto[]>('notifications/events', { errorPresentation: 'local', signal }),
     },
-    templates: {
-      list: (channel: string, signal: AbortSignal) =>
-        client.get<NotificationTemplateDto[]>('notifications/templates', { errorPresentation: 'local', params: { channel }, signal }),
-      create: (input: NotificationTemplateCreateDto) =>
-        client.post<NotificationTemplateDto>('notifications/templates', input, { errorPresentation: 'local', retry: false }),
-      update: (id: string, input: NotificationTemplateUpdateDto) =>
-        client.patch<NotificationTemplateDto>(path('notifications', 'templates', id), input, { errorPresentation: 'local', retry: false }),
-      preview: (id: string, input: NotificationTemplatePreviewDto) =>
-        client.post<NotificationTemplatePreviewResultDto>(path('notifications', 'templates', id, 'preview'), input, { errorPresentation: 'local', retry: false }),
-      test: (id: string, input: NotificationTemplatePreviewDto) =>
-        client.post<AssistantTestSendDto>(path('notifications', 'templates', id, 'test'), input, { errorPresentation: 'local', retry: false }),
+    eventConfigs: {
+      list: (signal: AbortSignal) =>
+        client.get<NotificationEventConfigSummaryDto[]>('notifications/event-configs', { errorPresentation: 'local', signal }),
+      get: (eventType: string, signal: AbortSignal) =>
+        client.get<NotificationEventConfigDto>(path('notifications', 'event-configs', eventType), { errorPresentation: 'local', signal }),
+      update: (eventType: string, input: NotificationEventConfigUpdateDto) =>
+        client.put<NotificationEventConfigDto>(path('notifications', 'event-configs', eventType), input, { errorPresentation: 'local', retry: false }),
+      preview: (eventType: string, input: NotificationEventConfigPreviewDto) =>
+        client.post<NotificationEventConfigPreviewResultDto>(
+          path('notifications', 'event-configs', eventType, 'preview'),
+          input,
+          { errorPresentation: 'local', retry: false },
+        ),
     },
-    policies: {
-      list: (query: { eventType?: string, channel?: 'IN_APP' | 'ASSISTANT' }, signal: AbortSignal) =>
-        client.get<NotificationChannelPolicyDto[]>('notifications/channel-policies', { errorPresentation: 'local', params: query, signal }),
-      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT', input: NotificationChannelPolicyUpdateDto) =>
-        client.put<NotificationChannelPolicyDto>(path('notifications', 'channel-policies', eventType, channel), input, { errorPresentation: 'local', retry: false }),
+    contentMedia: {
+      /** 草稿图片上传；资产在事件配置保存事务内才激活为 READY。 */
+      upload: (file: File, signal: AbortSignal) => {
+        const body = new FormData()
+        body.append('file', file)
+        return client.post<NotificationContentMediaUploadDto>('notifications/content-media', body, {
+          errorPresentation: 'local',
+          retry: false,
+          signal,
+        })
+      },
+      uploadFile: (file: File, signal: AbortSignal) => {
+        const body = new FormData()
+        body.append('file', file)
+        return client.post<NotificationContentFileUploadDto>('notifications/content-media/files', body, {
+          errorPresentation: 'local',
+          retry: false,
+          signal,
+        })
+      },
+      contentUrl: (assetId: string) =>
+        `/api/notifications/content-media/${encodeURIComponent(assetId)}/content`,
     },
     records: {
       list: (query: NotificationRecordListQuery, signal: AbortSignal) =>
@@ -120,63 +136,67 @@ export function createNotificationsApi(client: AxiosInstance) {
     preferences: {
       list: (signal: AbortSignal) =>
         client.get<NotificationPreferenceListDto>('notifications/me/preferences', { errorPresentation: 'local', signal }),
-      update: (eventType: string, channel: 'IN_APP' | 'ASSISTANT', muted: boolean) =>
+      update: (eventType: string, channel: 'IN_APP' | 'WECOM', muted: boolean) =>
         client.put<NotificationPreferenceUpdateResultDto>(
           path('notifications', 'me', 'preferences', eventType, channel),
           { muted },
           { errorPresentation: 'local', retry: false },
         ),
     },
-    assistant: {
+    wecom: {
       channel: {
         get: (signal: AbortSignal) =>
-          client.get<AssistantChannelDto>('assistant/channel', { errorPresentation: 'local', signal }),
-        update: (input: AssistantChannelUpdateDto) =>
-          client.put<AssistantChannelDto>('assistant/channel', input, { errorPresentation: 'local', retry: false }),
-        test: () =>
-          client.post<AssistantTestSendDto>('assistant/channel/test', {}, { errorPresentation: 'local', retry: false }),
+          client.get<WecomChannelDto>('notifications/wecom/channel', { errorPresentation: 'local', signal }),
+        update: (input: WecomChannelUpdateDto) =>
+          client.put<WecomChannelDto>('notifications/wecom/channel', input, { errorPresentation: 'local', retry: false }),
       },
-      accounts: {
+      apps: {
         list: (signal: AbortSignal) =>
-          client.get<AssistantAccountDto[]>('assistant/accounts', { errorPresentation: 'local', signal }),
-        create: (input: AssistantAccountCreateDto) =>
-          client.post<AssistantAccountDto>('assistant/accounts', input, { errorPresentation: 'local', retry: false }),
-        update: (id: string, input: AssistantAccountUpdateDto) =>
-          client.patch<AssistantAccountDto>(path('assistant', 'accounts', id), input, { errorPresentation: 'local', retry: false }),
-        checkStatus: (id: string) =>
-          client.post<AssistantAccountDto>(path('assistant', 'accounts', id, 'check'), {}, { errorPresentation: 'local', retry: false }),
-        qrcode: (id: string, signal: AbortSignal) =>
-          client.get<AssistantAccountQrDto>(path('assistant', 'accounts', id, 'qrcode'), { errorPresentation: 'local', signal }),
-      },
-      contacts: {
-        list: (query: string | undefined, signal: AbortSignal) =>
-          client.get<AssistantContactDto[]>('assistant/contacts', { errorPresentation: 'local', params: query ? { query } : undefined, signal }),
+          client.get<WecomAppDto[]>('notifications/wecom/apps', { errorPresentation: 'local', signal }),
+        create: (input: WecomAppCreateDto) =>
+          client.post<WecomAppDto>('notifications/wecom/apps', input, { errorPresentation: 'local', retry: false }),
+        update: (id: string, input: WecomAppUpdateDto) =>
+          client.patch<WecomAppDto>(path('notifications', 'wecom', 'apps', id), input, { errorPresentation: 'local', retry: false }),
+        updateSecret: (id: string, input: WecomAppSecretUpdateDto) =>
+          client.put<WecomAppDto>(path('notifications', 'wecom', 'apps', id, 'secret'), input, { errorPresentation: 'local', retry: false }),
+        test: (id: string) =>
+          client.post<WecomAppTestResultDto>(path('notifications', 'wecom', 'apps', id, 'test'), {}, { errorPresentation: 'local', retry: false }),
+        events: {
+          get: (id: string, signal: AbortSignal) =>
+            client.get<WecomEventRoutesDto>(path('notifications', 'wecom', 'apps', id, 'events'), { errorPresentation: 'local', signal }),
+          update: (id: string, input: WecomEventRoutesUpdateDto) =>
+            client.put<WecomEventRoutesDto>(path('notifications', 'wecom', 'apps', id, 'events'), input, { errorPresentation: 'local', retry: false }),
+        },
+        members: {
+          list: (id: string, signal: AbortSignal) =>
+            client.get<WecomMembershipDto[]>(path('notifications', 'wecom', 'apps', id, 'members'), { errorPresentation: 'local', signal }),
+          add: (id: string, input: WecomMembershipCreateDto) =>
+            client.post<WecomMembershipDto>(path('notifications', 'wecom', 'apps', id, 'members'), input, { errorPresentation: 'local', retry: false }),
+          remove: (id: string, userId: string) =>
+            client.delete<void>(path('notifications', 'wecom', 'apps', id, 'members', userId), { errorPresentation: 'local', retry: false }),
+        },
       },
       bindings: {
-        list: (query: AssistantBindingListQuery, signal: AbortSignal) =>
-          client.get<AssistantBindingPageDto>('assistant/bindings', { errorPresentation: 'local', params: query, signal }),
-        create: (input: AssistantBindingCreateDto) =>
-          client.post<AssistantBindingDto>('assistant/bindings', input, { errorPresentation: 'local', retry: false }),
-        reassign: (id: string, input: AssistantBindingReassignDto) =>
-          client.patch<AssistantBindingDto>(path('assistant', 'bindings', id, 'reassign'), input, { errorPresentation: 'local', retry: false }),
-        verify: (id: string, input: AssistantBindingVerifyDto) =>
-          client.post<AssistantBindingDto>(path('assistant', 'bindings', id, 'verify'), input, { errorPresentation: 'local', retry: false }),
+        list: (signal: AbortSignal) =>
+          client.get<WecomBindingDto[]>('notifications/wecom/bindings', { errorPresentation: 'local', signal }),
+        create: (input: WecomBindingCreateDto) =>
+          client.post<WecomBindingDto>('notifications/wecom/bindings', input, { errorPresentation: 'local', retry: false }),
+        verify: (id: string, input: WecomBindingVerifyDto) =>
+          client.post<WecomTestResultDto>(path('notifications', 'wecom', 'bindings', id, 'verify'), input, { errorPresentation: 'local', retry: false }),
         remove: (id: string) =>
-          client.delete<void>(path('assistant', 'bindings', id), { errorPresentation: 'local', retry: false }),
-        check: () =>
-          client.post<AssistantBindingCheckDto>('assistant/bindings/check', {}, { errorPresentation: 'local', retry: false }),
+          client.delete<void>(path('notifications', 'wecom', 'bindings', id), { errorPresentation: 'local', retry: false }),
       },
       targets: {
         list: (signal: AbortSignal) =>
-          client.get<AssistantTargetDto[]>('assistant/targets', { errorPresentation: 'local', signal }),
-        members: (id: string, signal: AbortSignal) =>
-          client.get<AssistantTargetMemberDto[]>(path('assistant', 'targets', id, 'members'), { errorPresentation: 'local', signal }),
-        mentionMessage: (id: string, input: AssistantTargetMentionMessageDto) =>
-          client.post<AssistantTargetMentionMessageResultDto>(path('assistant', 'targets', id, 'mention-message'), input, { errorPresentation: 'local', retry: false }),
-        sync: () =>
-          client.post<AssistantTargetDto[]>('assistant/targets/sync', {}, { errorPresentation: 'local', retry: false }),
-        update: (id: string, input: AssistantTargetUpdateDto) =>
-          client.patch<AssistantTargetDto>(path('assistant', 'targets', id), input, { errorPresentation: 'local', retry: false }),
+          client.get<WecomTargetDto[]>('notifications/wecom/targets', { errorPresentation: 'local', signal }),
+        create: (input: WecomTargetCreateDto) =>
+          client.post<WecomTargetDto>('notifications/wecom/targets', input, { errorPresentation: 'local', retry: false }),
+        update: (id: string, input: WecomTargetUpdateDto) =>
+          client.patch<WecomTargetDto>(path('notifications', 'wecom', 'targets', id), input, { errorPresentation: 'local', retry: false }),
+        remove: (id: string) =>
+          client.delete<void>(path('notifications', 'wecom', 'targets', id), { errorPresentation: 'local', retry: false }),
+        test: (id: string) =>
+          client.post<WecomTestResultDto>(path('notifications', 'wecom', 'targets', id, 'test'), {}, { errorPresentation: 'local', retry: false }),
       },
     },
   }
