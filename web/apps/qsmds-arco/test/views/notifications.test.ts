@@ -135,11 +135,6 @@ test('站内通知页面、铃铛和轮询使用真实收件箱接口', () => {
   assert.match(inboxStoreSource, /shouldYieldLeadership/u)
 })
 
-test('新建企业微信渠道默认静默 23:00–08:45', () => {
-  assert.match(eventDetailSource, /channel === 'WECOM' \? '23:00' : ''/u)
-  assert.match(eventDetailSource, /channel === 'WECOM' \? '08:45' : ''/u)
-})
-
 test('发送记录使用通用表格、大抽屉与取消确认，不引入 Arco 表格', () => {
   assert.match(recordsSource, /<QsGenericTable/u)
   assert.match(recordsSource, /notificationNo/u)

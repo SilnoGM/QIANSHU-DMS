@@ -7,9 +7,10 @@ import type { WecomConfiguration } from '../../config/wecom.config'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import {
+  DEFAULT_NOTIFICATION_QUIET_HOURS,
   isWithinQuietHours,
   nextQuietHoursEnd,
-  parseNotificationQuietHours,
+  parseNotificationQuietHoursSetting,
 } from './notification-quiet-hours'
 import { MPNEWS_MAX_CONTENT_BYTES } from './notification-content'
 import {
@@ -159,7 +160,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     }
     const setting = await this.prisma.notificationChannelSettings.findUnique({
       where: { channel: 'WECOM' },
-      select: { defaultQuietHours: true, enabled: true },
+      select: { enabled: true },
     })
     if (setting === null || !setting.enabled) {
       return
@@ -173,7 +174,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         this.logger.warn('wecom dispatch lease lost during batch')
         break
       }
-      await this.dispatchDelivery(delivery, setting.defaultQuietHours)
+      await this.dispatchDelivery(delivery)
     }
   }
 
@@ -218,10 +219,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     `)
   }
 
-  private async dispatchDelivery(
-    delivery: ClaimedDelivery,
-    defaultQuietHours: Prisma.JsonValue | null,
-  ): Promise<void> {
+  private async dispatchDelivery(delivery: ClaimedDelivery): Promise<void> {
     const notification = await this.prisma.notification.findUnique({
       where: { id: delivery.notification_id },
       select: { id: true, eventType: true, expiresAt: true, priority: true },
@@ -252,7 +250,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       }
     }
 
-    if (await this.deferForQuietHours(delivery, notification, defaultQuietHours)) {
+    if (await this.deferForQuietHours(delivery, notification)) {
       return
     }
 
@@ -268,7 +266,6 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
   private async deferForQuietHours(
     delivery: ClaimedDelivery,
     notification: { readonly id: string, readonly eventType: string, readonly expiresAt: Date | null, readonly priority: string },
-    defaultQuietHours: Prisma.JsonValue | null,
   ): Promise<boolean> {
     if (notification.priority === 'HIGH') {
       return false
@@ -277,12 +274,13 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       where: { eventType_channel: { eventType: notification.eventType, channel: 'WECOM' } },
       select: { quietHours: true },
     })
-    const quietHours = parseNotificationQuietHours(eventChannel?.quietHours)
-      ?? parseNotificationQuietHours(defaultQuietHours)
-    if (quietHours === null || !isWithinQuietHours(new Date(), quietHours)) {
+    // 只读事件渠道的静默配置；关闭开关（enabled=false）时绝不回退到全局默认。
+    const setting = parseNotificationQuietHoursSetting(eventChannel?.quietHours)
+      ?? DEFAULT_NOTIFICATION_QUIET_HOURS
+    if (!setting.enabled || !isWithinQuietHours(new Date(), setting)) {
       return false
     }
-    const nextAttemptAt = nextQuietHoursEnd(new Date(), quietHours)
+    const nextAttemptAt = nextQuietHoursEnd(new Date(), setting)
     if (nextAttemptAt === null) {
       return false
     }

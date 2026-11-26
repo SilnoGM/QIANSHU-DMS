@@ -18,7 +18,10 @@ import {
   type NotificationMessageKindValue,
   type NotificationSendMethodValue,
 } from './notification-content'
-import { parseNotificationQuietHours } from './notification-quiet-hours'
+import {
+  DEFAULT_NOTIFICATION_QUIET_HOURS,
+  parseNotificationQuietHoursSetting,
+} from './notification-quiet-hours'
 import { renderNotificationTemplate } from './notification-template.renderer'
 import type {
   NotificationEventChannelConfigDto,
@@ -579,10 +582,14 @@ export class NotificationEventConfigService {
           throw new ApiException(409, 'NOTIFICATION_EVENT_CONFIG_STATE_CHANGED', '渠道配置已变化，请刷新后重试')
         }
 
-        const quietHours = channel.input.quietHours === null || channel.input.quietHours === undefined
+        // 企业微信渠道始终落完整静默设置：未传时使用 23:00–08:45 默认值；
+        // 显式 enabled=false 时保留时间，只关闭静默。
+        const quietHours = channel.input.channel === 'IN_APP'
           ? null
-          : parseNotificationQuietHours(channel.input.quietHours)
-        if (channel.input.quietHours !== null && channel.input.quietHours !== undefined && quietHours === null) {
+          : channel.input.quietHours === null || channel.input.quietHours === undefined
+            ? DEFAULT_NOTIFICATION_QUIET_HOURS
+            : parseNotificationQuietHoursSetting(channel.input.quietHours)
+        if (channel.input.channel === 'WECOM' && quietHours === null) {
           throw new ApiException(422, 'NOTIFICATION_EVENT_QUIET_HOURS_INVALID', '静默时段格式不正确')
         }
 

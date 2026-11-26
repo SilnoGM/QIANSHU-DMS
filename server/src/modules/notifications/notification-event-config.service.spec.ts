@@ -4,6 +4,7 @@ import type { PrismaService } from '../../infrastructure/database/prisma.service
 import type { MediaAssetService } from '../media/media-asset.service'
 import type { MediaAssetRetentionService } from '../media/media-retention.service'
 import type { NotificationEventConfigUpdateDto } from './notification-admin.dto'
+import { DEFAULT_NOTIFICATION_QUIET_HOURS } from './notification-quiet-hours'
 import { NotificationEventConfigService } from './notification-event-config.service'
 
 const EVENT_TYPE = 'SALES_ORDER_SUBMITTED'
@@ -159,6 +160,108 @@ describe('NotificationEventConfigService', () => {
         targetType: 'NOTIFICATION_EVENT_CHANNEL',
       }),
     )
+  })
+
+  it('defaults WECOM quiet hours and preserves explicit off values', async () => {
+    const prisma = createPrismaMock()
+    prisma.notificationEventChannel.findUnique.mockResolvedValue(null)
+    prisma.notificationEventChannel.upsert.mockResolvedValue(channelRow({
+      channel: 'WECOM',
+      sendMethod: 'APP',
+      quietHours: DEFAULT_NOTIFICATION_QUIET_HOURS,
+    }))
+    prisma.notificationEventChannel.findMany.mockResolvedValue([channelRow({
+      channel: 'WECOM',
+      sendMethod: 'APP',
+      quietHours: DEFAULT_NOTIFICATION_QUIET_HOURS,
+    })])
+    const service = createService(prisma)
+
+    const baseInput: NotificationEventConfigUpdateDto = {
+      channels: [{
+        channel: 'WECOM',
+        sendMethod: 'APP',
+        targetMode: 'USERS',
+        targetConfig: { userIds: [] },
+        ttlSeconds: 86_400,
+        expectedVersion: 0,
+        messages: [{ kind: 'TEXT', payload: { content: '销售单已提交' } }],
+      }],
+    }
+    await service.update(
+      { actorUserId: '00000000-0000-4000-8000-000000000001', requestId: 'request-1' },
+      EVENT_TYPE,
+      baseInput,
+    )
+    expect(prisma.notificationEventChannel.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        quietHours: {
+          enabled: true,
+          start: '23:00',
+          end: '08:45',
+          timezone: 'Asia/Shanghai',
+        },
+      }),
+      update: expect.objectContaining({
+        quietHours: {
+          enabled: true,
+          start: '23:00',
+          end: '08:45',
+          timezone: 'Asia/Shanghai',
+        },
+      }),
+    }))
+
+    const closed: NotificationEventConfigUpdateDto = {
+      channels: [{
+        ...baseInput.channels[0],
+        quietHours: {
+          enabled: false,
+          start: '21:30',
+          end: '07:15',
+          timezone: 'Asia/Shanghai',
+        },
+      }],
+    }
+    await service.update(
+      { actorUserId: '00000000-0000-4000-8000-000000000001', requestId: 'request-1' },
+      EVENT_TYPE,
+      closed,
+    )
+    expect(prisma.notificationEventChannel.upsert).toHaveBeenLastCalledWith(expect.objectContaining({
+      update: expect.objectContaining({
+        quietHours: {
+          enabled: false,
+          start: '21:30',
+          end: '07:15',
+          timezone: 'Asia/Shanghai',
+        },
+      }),
+    }))
+  })
+
+  it('rejects enabled quiet hours without both times', async () => {
+    const prisma = createPrismaMock()
+    prisma.notificationEventChannel.findUnique.mockResolvedValue(null)
+    const service = createService(prisma)
+
+    await expect(service.update(
+      { actorUserId: '00000000-0000-4000-8000-000000000001', requestId: 'request-1' },
+      EVENT_TYPE,
+      {
+        channels: [{
+          channel: 'WECOM',
+          sendMethod: 'APP',
+          targetMode: 'USERS',
+          targetConfig: { userIds: [] },
+          ttlSeconds: 86_400,
+          quietHours: { enabled: true, start: '23:00', timezone: 'Asia/Shanghai' },
+          expectedVersion: 0,
+          messages: [{ kind: 'TEXT', payload: { content: '销售单已提交' } }],
+        }],
+      },
+    )).rejects.toMatchObject({ code: 'NOTIFICATION_EVENT_QUIET_HOURS_INVALID' })
+    expect(prisma.notificationEventChannel.upsert).not.toHaveBeenCalled()
   })
 
   it('rejects stale expectedVersion', async () => {

@@ -4,8 +4,20 @@ export interface NotificationQuietHours {
   readonly timezone: string
 }
 
+export interface NotificationQuietHoursSetting extends NotificationQuietHours {
+  readonly enabled: boolean
+}
+
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/u
 const DEFAULT_TIMEZONE = 'Asia/Shanghai'
+
+/** 事件渠道未配置静默时段的默认值；关闭开关必须显式写 enabled=false。 */
+export const DEFAULT_NOTIFICATION_QUIET_HOURS: NotificationQuietHoursSetting = Object.freeze({
+  enabled: true,
+  start: '23:00',
+  end: '08:45',
+  timezone: DEFAULT_TIMEZONE,
+})
 
 function parseTime(value: string): number | null {
   const match = value.match(TIME_PATTERN)
@@ -74,22 +86,50 @@ function zonedDateTimeToUtc(
   return secondOffset === null ? null : new Date(guess - secondOffset)
 }
 
-/** 解析数据库中的 quiet_hours JSON；形状非法时返回 null，调用方应回退到渠道默认值。 */
-export function parseNotificationQuietHours(value: unknown): NotificationQuietHours | null {
+/**
+ * 解析事件渠道的静默配置。
+ * - enabled 缺省按开启处理，兼容旧格式。
+ * - enabled=false 且未带时间时回填默认时间，方便重新开启。
+ * - 开启时 start/end 必须合法。
+ */
+export function parseNotificationQuietHoursSetting(value: unknown): NotificationQuietHoursSetting | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
   const record = value as Record<string, unknown>
-  if (typeof record.start !== 'string' || typeof record.end !== 'string') {
+  if (record.enabled !== undefined && typeof record.enabled !== 'boolean') {
     return null
   }
-  if (parseTime(record.start) === null || parseTime(record.end) === null) {
+  const enabled = record.enabled !== false
+  const start = record.start
+  const end = record.end
+  if (!enabled && start === undefined && end === undefined) {
+    return { ...DEFAULT_NOTIFICATION_QUIET_HOURS, enabled: false }
+  }
+  if (typeof start !== 'string' || typeof end !== 'string') {
+    return null
+  }
+  if (parseTime(start) === null || parseTime(end) === null) {
     return null
   }
   const timezone = typeof record.timezone === 'string' && record.timezone.length > 0
     ? record.timezone
     : DEFAULT_TIMEZONE
-  return { end: record.end, start: record.start, timezone }
+  return {
+    enabled,
+    end,
+    start,
+    timezone,
+  }
+}
+
+/** 调度只关心“当前是否静默”；显式关闭或格式非法都返回 null。 */
+export function parseNotificationQuietHours(value: unknown): NotificationQuietHours | null {
+  const setting = parseNotificationQuietHoursSetting(value)
+  if (setting === null || !setting.enabled) {
+    return null
+  }
+  return { end: setting.end, start: setting.start, timezone: setting.timezone }
 }
 
 export function isWithinQuietHours(now: Date, quiet: NotificationQuietHours): boolean {

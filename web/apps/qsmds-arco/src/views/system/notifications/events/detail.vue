@@ -20,6 +20,12 @@ import { notificationDomainLabel } from '../notification-domain.logic'
 import MessageEditorModal from './components/editor/MessageEditorModal.vue'
 import TargetValuePicker from './components/TargetValuePicker.vue'
 import {
+  DEFAULT_EVENT_QUIET_HOURS,
+  quietHoursDraftFromDto,
+  quietHoursPayload,
+  quietHoursValidationError,
+} from './event-quiet-hours'
+import {
   imageMaxCount,
   imageSourceKeys,
   messageKindLabel,
@@ -41,6 +47,7 @@ interface ChannelDraft {
   targetMode: TargetMode
   targetConfig: Record<string, unknown>
   ttlSeconds: number | null
+  quietEnabled: boolean
   quietStart: string
   quietEnd: string
   allowSensitive: boolean
@@ -98,6 +105,7 @@ const SEND_METHOD_OPTIONS: Array<{ label: string, value: SendMethod }> = [
 ]
 
 function channelFromDto(channel: NotificationEventChannelConfigDto): ChannelDraft {
+  const quiet = quietHoursDraftFromDto(channel.quietHours)
   return {
     channel: channel.channel,
     sendMethod: channel.sendMethod,
@@ -105,8 +113,9 @@ function channelFromDto(channel: NotificationEventChannelConfigDto): ChannelDraf
     targetMode: channel.targetMode,
     targetConfig: { ...channel.targetConfig },
     ttlSeconds: channel.ttlSeconds,
-    quietStart: typeof channel.quietHours?.start === 'string' ? channel.quietHours.start : '',
-    quietEnd: typeof channel.quietHours?.end === 'string' ? channel.quietHours.end : '',
+    quietEnabled: quiet.enabled,
+    quietStart: quiet.start,
+    quietEnd: quiet.end,
     allowSensitive: channel.allowSensitive,
     expectedVersion: channel.version,
     updatedAt: channel.updatedAt,
@@ -128,8 +137,9 @@ function defaultChannel(channel: Channel): ChannelDraft {
     targetMode: channel === 'IN_APP' ? 'COMMAND_TARGET' : 'USERS',
     targetConfig: {},
     ttlSeconds: channel === 'WECOM' ? 86_400 : null,
-    quietStart: channel === 'WECOM' ? '23:00' : '',
-    quietEnd: channel === 'WECOM' ? '08:45' : '',
+    quietEnabled: channel === 'WECOM',
+    quietStart: channel === 'WECOM' ? DEFAULT_EVENT_QUIET_HOURS.start : '',
+    quietEnd: channel === 'WECOM' ? DEFAULT_EVENT_QUIET_HOURS.end : '',
     allowSensitive: false,
     expectedVersion: 0,
     updatedAt: '',
@@ -535,6 +545,14 @@ function validateDraft(draft: ChannelDraft): string | null {
     return '站内通知必须配置且只配置一条文本消息'
   }
   if (draft.channel === 'WECOM') {
+    const quietError = quietHoursValidationError({
+      enabled: draft.quietEnabled,
+      start: draft.quietStart,
+      end: draft.quietEnd,
+    })
+    if (quietError !== null) {
+      return quietError
+    }
     if (draft.messages.filter(message => message.kind === 'MPNEWS').length > 1) {
       return '同一渠道只允许一条企微图文'
     }
@@ -594,8 +612,12 @@ async function save(): Promise<void> {
         targetMode: draft.targetMode,
         targetConfig: draft.targetConfig,
         ttlSeconds: draft.channel === 'WECOM' ? draft.ttlSeconds : null,
-        quietHours: draft.channel === 'WECOM' && draft.quietStart.length > 0 && draft.quietEnd.length > 0
-          ? { start: draft.quietStart, end: draft.quietEnd, timezone: 'Asia/Shanghai' }
+        quietHours: draft.channel === 'WECOM'
+          ? quietHoursPayload({
+              enabled: draft.quietEnabled,
+              start: draft.quietStart,
+              end: draft.quietEnd,
+            })
           : null,
         allowSensitive: draft.channel === 'WECOM' ? draft.allowSensitive : false,
         expectedVersion: draft.expectedVersion,
@@ -856,6 +878,17 @@ onBeforeUnmount(() => {
                 <div class="text-xs text-muted-foreground font-medium">
                   投递策略
                 </div>
+                <label class="text-sm mt-3 flex flex-wrap gap-2 items-center">
+                  <FaSwitch
+                    :model-value="activeDraft.quietEnabled"
+                    :disabled="!canUpdate"
+                    @update:model-value="value => { activeDraft!.quietEnabled = value === true; markDirty() }"
+                  />
+                  静默时段
+                  <span class="text-xs text-muted-foreground">
+                    关闭后不静默；开启后必须设置开始和结束时间。
+                  </span>
+                </label>
                 <div class="mt-3 gap-3 grid md:grid-cols-3">
                   <label class="text-sm flex flex-col gap-1">
                     <span class="font-medium">TTL（秒）</span>
@@ -871,7 +904,7 @@ onBeforeUnmount(() => {
                     <FaInput
                       :model-value="activeDraft.quietStart"
                       type="time"
-                      :disabled="!canUpdate"
+                      :disabled="!canUpdate || !activeDraft.quietEnabled"
                       @update:model-value="value => { activeDraft!.quietStart = value ?? ''; markDirty() }"
                     />
                   </label>
@@ -880,7 +913,7 @@ onBeforeUnmount(() => {
                     <FaInput
                       :model-value="activeDraft.quietEnd"
                       type="time"
-                      :disabled="!canUpdate"
+                      :disabled="!canUpdate || !activeDraft.quietEnabled"
                       @update:model-value="value => { activeDraft!.quietEnd = value ?? ''; markDirty() }"
                     />
                   </label>

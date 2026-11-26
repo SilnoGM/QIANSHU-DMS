@@ -143,12 +143,11 @@ function service(
 async function runDelivery(
   instance: WecomDispatchService,
   delivery: Record<string, unknown>,
-  defaultQuietHours: null = null,
 ): Promise<void> {
   const dispatch = (instance as unknown as {
-    dispatchDelivery: (row: Record<string, unknown>, quiet: null) => Promise<void>
+    dispatchDelivery: (row: Record<string, unknown>) => Promise<void>
   }).dispatchDelivery
-  await dispatch.call(instance, delivery, defaultQuietHours)
+  await dispatch.call(instance, delivery)
 }
 
 describe('WecomDispatchService', () => {
@@ -372,6 +371,96 @@ describe('WecomDispatchService', () => {
       expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
         where: { id: 'delivery-1' },
         data: expect.objectContaining({ status: 'PENDING' }),
+      })
+    }
+    finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('sends immediately when the event quiet-hours switch is off', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-24T14:30:00.000Z'))
+    try {
+      const prisma = basePrisma({
+        notification: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'notification-1',
+            eventType: 'PURCHASE_REVIEW_PENDING',
+            expiresAt: new Date('2026-11-25T12:00:00.000Z'),
+            priority: 'NORMAL',
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        notificationEventChannel: {
+          findUnique: jest.fn().mockResolvedValue({
+            quietHours: {
+              enabled: false,
+              start: '23:00',
+              end: '08:45',
+              timezone: 'Asia/Shanghai',
+            },
+          }),
+        },
+        wecomTarget: {
+          findUnique: jest.fn().mockResolvedValue({
+            webhookKeyEncrypted: 'encrypted-key',
+            enabled: true,
+            internalOnly: true,
+          }),
+        },
+      })
+      const robot = {
+        sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
+        sendImage: jest.fn(),
+        sendMarkdown: jest.fn(),
+        uploadFile: jest.fn(),
+        sendFile: jest.fn(),
+        sendNews: jest.fn(),
+      }
+      const instance = service(prisma, robot)
+
+      await runDelivery(instance, robotDelivery())
+
+      expect(robot.sendText).toHaveBeenCalledTimes(1)
+      expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
+        where: { id: 'delivery-1' },
+        data: expect.objectContaining({ status: 'ACCEPTED' }),
+      })
+    }
+    finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('uses the default 23:00–08:45 window when an event has no quiet-hours value', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-24T15:30:00.000Z'))
+    try {
+      const prisma = basePrisma({
+        notification: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'notification-1',
+            eventType: 'PURCHASE_REVIEW_PENDING',
+            expiresAt: new Date('2026-11-26T12:00:00.000Z'),
+            priority: 'NORMAL',
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        notificationEventChannel: {
+          findUnique: jest.fn().mockResolvedValue({ quietHours: null }),
+        },
+      })
+      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }
+      const instance = service(prisma, robot)
+
+      await runDelivery(instance, robotDelivery())
+
+      expect(robot.sendText).not.toHaveBeenCalled()
+      expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
+        where: { id: 'delivery-1' },
+        data: expect.objectContaining({
+          status: 'PENDING',
+          nextAttemptAt: new Date('2026-11-25T00:45:00.000Z'),
+        }),
       })
     }
     finally {
