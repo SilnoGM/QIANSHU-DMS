@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 弹窗编辑器纯函数与源码契约使用 Node.js 内置 runner。
 import test from 'node:test'
+import { reactive } from 'vue'
 
 import {
   cloneMessageDraft,
@@ -367,6 +368,14 @@ test('消息草稿快照可区分未修改与已修改', () => {
   assert.equal(messageDraftSnapshot(clone), messageDraftSnapshot(draft))
   clone.payload.content = '你好，世界'
   assert.notEqual(messageDraftSnapshot(clone), messageDraftSnapshot(draft))
+})
+
+test('克隆响应式消息草稿时不会因 Proxy 触发 DataCloneError', () => {
+  const draft = reactive(textDraft('你好')) as MessageDraft
+  const clone = cloneMessageDraft(draft)
+
+  assert.deepEqual(clone, textDraft('你好'))
+  assert.notEqual(clone.payload, draft.payload)
 })
 
 test('服务端 issues 收敛为可定位的渠道、消息序号与字段', () => {

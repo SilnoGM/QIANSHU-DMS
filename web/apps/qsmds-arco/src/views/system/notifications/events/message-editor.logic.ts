@@ -8,6 +8,7 @@ import type {
   MessageValidationIssue,
 } from './message-editor.types'
 import type { NotificationEventVariableDto } from '@/api/generated/types.gen'
+import { toRaw } from 'vue'
 
 const MESSAGE_FIELD_LABELS: Readonly<Record<string, string>> = {
   author: '作者',
@@ -145,8 +146,9 @@ export function messageKindLabel(kind: MessageKind): string {
 export function cloneMessageDraft(message: MessageDraft): MessageDraft {
   return {
     kind: message.kind,
-    payload: structuredClone(message.payload),
-    mediaPolicy: structuredClone(message.mediaPolicy),
+    // 弹窗打开时传入的是 Vue 响应式草稿，Proxy 不能被 structuredClone 直接复制。
+    payload: structuredClone(toRaw(message.payload)),
+    mediaPolicy: structuredClone(toRaw(message.mediaPolicy)),
     enabled: message.enabled,
   }
 }
