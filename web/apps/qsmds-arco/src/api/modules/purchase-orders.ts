@@ -3,6 +3,8 @@ import type {
   CreatePurchaseOrderRequestDto,
   FactoryShipmentResultDto,
   PriceQuotationSheetRequestDto,
+  PurchaseAutoReviewSettingDto,
+  PurchaseAutoReviewSettingUpdateRequestDto,
   PurchaseOrderAmountRevisionRequestDto,
   PurchaseOrderDetailDto,
   PurchaseOrderDocumentAttachRequestDto,
@@ -70,6 +72,17 @@ function documentContentPath(
  */
 export function createPurchaseOrdersApi(client: AxiosInstance) {
   return {
+    autoReviewSetting: (signal: AbortSignal) =>
+      client.get<PurchaseAutoReviewSettingDto>('purchase-orders/auto-review-setting', {
+        errorPresentation: 'local',
+        signal,
+      }),
+    updateAutoReviewSetting: (data: PurchaseAutoReviewSettingUpdateRequestDto, signal: AbortSignal) =>
+      client.put<PurchaseAutoReviewSettingDto>('purchase-orders/auto-review-setting', data, {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      }),
     orderImageDraft: (purchaseOrderId: string, signal: AbortSignal) =>
       client.get<PurchaseOrderImageDraftResponseDto>(`${orderPath(purchaseOrderId)}/order-image-draft`, {
         errorPresentation: 'local',

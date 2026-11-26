@@ -4317,7 +4317,8 @@
       "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue",
       "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
       "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
-      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/purchase-reviews/purchase-auto-review-setting-modal.vue"
     ]
   },
   {

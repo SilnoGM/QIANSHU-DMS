@@ -14,7 +14,7 @@ import { createPurchaseOrdersApi } from '../../src/api/modules/purchase-orders'
 interface Call {
   readonly config?: unknown
   readonly data?: unknown
-  readonly method: 'delete' | 'get' | 'head' | 'patch' | 'post'
+  readonly method: 'delete' | 'get' | 'head' | 'patch' | 'post' | 'put'
   readonly url: string
 }
 
@@ -39,6 +39,10 @@ function createRecorder(calls: Call[], responseData: unknown = {}): AxiosInstanc
     },
     post(url: string, data?: unknown, config?: unknown) {
       calls.push({ config, data, method: 'post', url })
+      return response
+    },
+    put(url: string, data?: unknown, config?: unknown) {
+      calls.push({ config, data, method: 'put', url })
       return response
     },
   } as unknown as AxiosInstance
@@ -337,4 +341,22 @@ test('采购单图片接口保留权限Blob、编码ID与显式重生成，派�
   assert.equal(calls[2]?.config?.retry, false)
   assert.deepEqual(calls[3]?.config, { errorPresentation: 'local', responseType: 'blob', signal })
   assert.ok(calls.every(call => call.config?.signal === signal && call.config.errorPresentation === 'local'))
+})
+
+test('自动托管设置读取用 GET，更新用 PUT 并禁止自动重试', async () => {
+  const calls: Call[] = []
+  const api = createPurchaseOrdersApi(createRecorder(calls))
+  const signal = new AbortController().signal
+  await api.autoReviewSetting(signal)
+  await api.updateAutoReviewSetting({ enabled: true, expectedVersion: 2 }, signal)
+  assert.deepEqual(calls, [{
+    method: 'get',
+    url: 'purchase-orders/auto-review-setting',
+    config: { errorPresentation: 'local', signal },
+  }, {
+    method: 'put',
+    url: 'purchase-orders/auto-review-setting',
+    data: { enabled: true, expectedVersion: 2 },
+    config: { errorPresentation: 'local', retry: false, signal },
+  }])
 })
