@@ -105,6 +105,64 @@ describe('notification content group validation', () => {
     }
   })
 
+  it('accepts markdown and textcard on supported methods', () => {
+    const markdownApp = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'MARKDOWN', payload: { content: '## 标题\n\n正文' } }],
+      allowedVariables: null,
+    })
+    expect(markdownApp.ok).toBe(true)
+
+    const markdownV2Robot = validateNotificationContentGroup({
+      method: 'ROBOT',
+      items: [{ kind: 'MARKDOWN_V2', payload: { content: '| A | B |\n|---|---|\n| 1 | 2 |' } }],
+      allowedVariables: null,
+    })
+    expect(markdownV2Robot.ok).toBe(true)
+
+    const textcard = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{
+        kind: 'TEXTCARD',
+        payload: {
+          title: '采购通知',
+          description: '采购单已审核通过',
+          url: 'https://dms.example.com/purchase/1',
+          btntxt: '详情',
+        },
+      }],
+      allowedVariables: null,
+    })
+    expect(textcard.ok).toBe(true)
+  })
+
+  it('rejects textcard with unsafe link and markdown on unsupported method', () => {
+    const unsafe = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{
+        kind: 'TEXTCARD',
+        payload: {
+          title: '采购通知',
+          description: '描述',
+          url: 'javascript:alert(1)',
+        },
+      }],
+      allowedVariables: null,
+    })
+    expect(unsafe.ok).toBe(false)
+    if (!unsafe.ok) {
+      expect(unsafe.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_TEXTCARD_URL_INVALID')
+    }
+
+    const v2App = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'MARKDOWN_V2', payload: { content: '正文' } }],
+      allowedVariables: null,
+    })
+    expect(v2App.ok).toBe(false)
+  })
+
+
   it('accepts mpnews business image placeholders with declared sources and static text', () => {
     const content = '<p>附件如下：</p><img data-media-source="salesOrder.issuanceVoucher" alt="出单凭证">'
     const result = validateNotificationContentGroup({
@@ -412,7 +470,7 @@ describe('notification content group validation', () => {
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.items.map(item => item.payload.content)).toEqual(['第一', '第二'])
+      expect(result.items.map(item => 'content' in item.payload ? item.payload.content : '')).toEqual(['第一', '第二'])
       expect(result.items.map(item => item.sortOrder)).toEqual([0, 1])
       expect(result.items[0]?.contentHash).toBe(hashNotificationContent({
         kind: 'TEXT',

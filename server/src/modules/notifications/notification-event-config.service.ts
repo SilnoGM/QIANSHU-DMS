@@ -319,6 +319,73 @@ export class NotificationEventConfigService {
       }
     }
 
+    if (input.message.kind === 'MARKDOWN' || input.message.kind === 'MARKDOWN_V2') {
+      const rawContent = typeof payload.content === 'string' ? payload.content : ''
+      const maxBytes = input.message.kind === 'MARKDOWN_V2' ? 4_096 : 2_048
+      const rendered = renderNotificationTemplate({
+        body: rawContent,
+        variables: input.variables,
+        allowed: input.allowed,
+        allowSensitive: input.channel.allowSensitive,
+        maxLength: maxBytes,
+        maxLengthLimit: maxBytes,
+        maxBytes,
+      })
+      return {
+        kind: input.message.kind,
+        payload: { content: rendered.ok ? rendered.content : rawContent },
+        warnings: rendered.ok ? [...rendered.warnings] : [rendered.message],
+      }
+    }
+
+    if (input.message.kind === 'TEXTCARD') {
+      const renderField = (key: string, maxLength: number) => {
+        const raw = typeof payload[key] === 'string' ? payload[key] : ''
+        return { raw, result: renderNotificationTemplate({
+          body: raw,
+          variables: input.variables,
+          allowed: input.allowed,
+          allowSensitive: input.channel.allowSensitive,
+          maxLength,
+          maxBytes: maxLength,
+        }) }
+      }
+      const title = renderField('title', 128)
+      const description = renderField('description', 512)
+      const url = typeof payload.url === 'string' ? payload.url : ''
+      const urlResult = renderNotificationTemplate({
+        body: '',
+        linkUrlTemplate: url,
+        variables: input.variables,
+        allowed: input.allowed,
+        allowSensitive: input.channel.allowSensitive,
+        maxLength: 1,
+      })
+      const btntxt = typeof payload.btntxt === 'string' ? payload.btntxt : null
+      const btntxtResult = btntxt === null ? null : renderNotificationTemplate({
+        body: btntxt,
+        variables: input.variables,
+        allowed: input.allowed,
+        allowSensitive: input.channel.allowSensitive,
+        maxLength: 16,
+        maxBytes: 16,
+      })
+      const warnings: string[] = []
+      for (const result of [title.result, description.result, urlResult, btntxtResult]) {
+        if (result !== null && !result.ok) warnings.push(result.message)
+      }
+      return {
+        kind: input.message.kind,
+        payload: {
+          title: title.result.ok ? title.result.content : title.raw,
+          description: description.result.ok ? description.result.content : description.raw,
+          url: urlResult.ok ? urlResult.linkUrl : url,
+          btntxt: btntxtResult === null ? null : btntxtResult.ok ? btntxtResult.content : btntxt,
+        },
+        warnings: [...new Set(warnings)],
+      }
+    }
+
     if (input.message.kind === 'MPNEWS') {
       const cover = asRecord(payload.cover)
       const mediaAssetId = typeof cover.mediaAssetId === 'string' ? cover.mediaAssetId : null

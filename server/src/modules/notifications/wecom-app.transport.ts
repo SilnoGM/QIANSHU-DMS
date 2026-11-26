@@ -111,6 +111,101 @@ export class WecomAppHttpTransport implements WecomAppTransport {
     return classifyAppFailure(errcode, errmsg, response.status, payload)
   }
 
+  async sendMarkdown(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly content: string
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    if (utf8Bytes(input.content) > config.maxTextBytes) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_MARKDOWN_TOO_LONG', message: '企业微信 Markdown 超过 2048 字节' }
+    }
+    return this.sendJsonMessage(config.baseUrl, input.accessToken, {
+      touser: input.toUser,
+      agentid: input.agentId,
+      msgtype: 'markdown',
+      markdown: { content: input.content },
+    }, 'MARKDOWN')
+  }
+
+  async sendTextcard(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly title: string
+    readonly description: string
+    readonly url: string
+    readonly btntxt?: string | null
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    return this.sendJsonMessage(config.baseUrl, input.accessToken, {
+      touser: input.toUser,
+      agentid: input.agentId,
+      msgtype: 'textcard',
+      textcard: {
+        title: input.title,
+        description: input.description,
+        url: input.url,
+        ...(input.btntxt === undefined || input.btntxt === null ? {} : { btntxt: input.btntxt }),
+      },
+    }, 'TEXTCARD')
+  }
+
+  private async sendJsonMessage(
+    baseUrl: string,
+    accessToken: string,
+    body: Record<string, unknown>,
+    label: string,
+  ): Promise<WecomTransportResult> {
+    const url = new URL('/cgi-bin/message/send', baseUrl)
+    url.searchParams.set('access_token', accessToken)
+
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        redirect: 'error',
+      })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: `WECOM_${label}_TIMEOUT`, message: '企业微信消息请求超时' }
+        : { ok: false, kind: 'NETWORK', code: `WECOM_${label}_NETWORK`, message: '企业微信消息网络请求失败' }
+    }
+
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: `WECOM_${label}_RESPONSE_TOO_LARGE`, message: '企业微信消息响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: `WECOM_${label}_INVALID_JSON`, message: '企业微信消息返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      return {
+        ok: true,
+        msgId: typeof payload?.msgid === 'string' && payload.msgid.length > 0 ? payload.msgid : null,
+      }
+    }
+    return classifyAppFailure(errcode, errmsg, response.status, payload)
+  }
+
   async uploadImage(input: {
     readonly accessToken: string
     readonly buffer: Buffer

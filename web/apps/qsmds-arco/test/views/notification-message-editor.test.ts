@@ -253,6 +253,28 @@ test('mpnews 业务图片占位校验来源、数量与静态文字', () => {
   }), withSource)[0]?.message ?? '', /静态文字/u)
 })
 
+test('Markdown 与文本卡片校验', () => {
+  const markdown = createDefaultMessageDraft('MARKDOWN', context())
+  markdown.payload.content = '## 标题'
+  assert.deepEqual(validateMessageDraft(markdown, context({ sendMethod: 'APP' })), [])
+
+  markdown.payload.content = 'x'.repeat(2_049)
+  assert.match(validateMessageDraft(markdown, context({ sendMethod: 'APP' }))[0]?.message ?? '', /2048/u)
+  assert.deepEqual(validateMessageDraft(markdown, context({ sendMethod: 'ROBOT' })), [])
+
+  const textcard = createDefaultMessageDraft('TEXTCARD', context())
+  assert.match(validateMessageDraft(textcard, context())[0]?.message ?? '', /标题不能为空/u)
+  textcard.payload = {
+    title: '采购通知',
+    description: '采购单已审核通过',
+    url: 'https://dms.example.com/purchase/1',
+    btntxt: '详情',
+  }
+  assert.deepEqual(validateMessageDraft(textcard, context()), [])
+  textcard.payload.url = 'javascript:alert(1)'
+  assert.match(validateMessageDraft(textcard, context())[0]?.message ?? '', /http\/https/u)
+})
+
 test('消息草稿快照可区分未修改与已修改', () => {
   const draft = textDraft('你好')
   const clone = cloneMessageDraft(draft)
@@ -320,6 +342,8 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(detailSource, /<FaDropdown/u)
   assert.match(detailSource, /文本消息/u)
   assert.match(detailSource, /企微图文/u)
+  assert.match(detailSource, /Markdown/u)
+  assert.match(detailSource, /文本卡片/u)
   assert.match(detailSource, /插入消息/u)
   assert.match(detailSource, /getApiClientFailureIssues/u)
   assert.match(detailSource, /revealFirstServerIssue/u)

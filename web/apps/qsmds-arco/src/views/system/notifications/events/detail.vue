@@ -398,6 +398,14 @@ function messageSummary(message: MessageDraft): string {
   if (message.kind === 'TEXT') {
     return textContent(message).trim().slice(0, 80) || '空内容'
   }
+  if (message.kind === 'MARKDOWN' || message.kind === 'MARKDOWN_V2') {
+    return textContent(message).trim().slice(0, 80) || '空内容'
+  }
+  if (message.kind === 'TEXTCARD') {
+    return typeof message.payload.title === 'string' && message.payload.title.trim().length > 0
+      ? message.payload.title
+      : '未填写标题'
+  }
   if (message.kind === 'MPNEWS') {
     return typeof message.payload.title === 'string' && message.payload.title.trim().length > 0
       ? message.payload.title
@@ -408,6 +416,25 @@ function messageSummary(message: MessageDraft): string {
     return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message.mediaPolicy)} 张`
   }
   return message.kind
+}
+
+function messageTypeDescription(message: MessageDraft): string {
+  switch (message.kind) {
+    case 'TEXT':
+      return '文本消息'
+    case 'MARKDOWN':
+      return 'Markdown'
+    case 'MARKDOWN_V2':
+      return 'Markdown V2'
+    case 'TEXTCARD':
+      return '文本卡片'
+    case 'MPNEWS':
+      return '企微图文（封面 + 正文）'
+    case 'IMAGE':
+      return '业务附件图片'
+    default:
+      return messageKindLabel(message.kind)
+  }
 }
 
 function messageIssueText(index: number): string {
@@ -468,6 +495,27 @@ const addMessageMenu = computed(() => {
       handle: () => openCreateMessage('TEXT'),
     })
   }
+  if (draft.channel === 'WECOM') {
+    items.push({
+      label: messageKindLabel('MARKDOWN'),
+      icon: 'i-lucide:file-text',
+      handle: () => openCreateMessage('MARKDOWN'),
+    })
+    if (draft.sendMethod === 'APP') {
+      items.push({
+        label: messageKindLabel('TEXTCARD'),
+        icon: 'i-lucide:layout-template',
+        handle: () => openCreateMessage('TEXTCARD'),
+      })
+    }
+    if (draft.sendMethod === 'ROBOT') {
+      items.push({
+        label: messageKindLabel('MARKDOWN_V2'),
+        icon: 'i-lucide:table-2',
+        handle: () => openCreateMessage('MARKDOWN_V2'),
+      })
+    }
+  }
   if (
     draft.channel === 'WECOM'
     && draft.sendMethod === 'APP'
@@ -506,14 +554,14 @@ function validateDraft(draft: ChannelDraft): string | null {
     }
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
     const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
-      ? ['TEXT', 'IMAGE']
-      : ['TEXT', 'MPNEWS', 'IMAGE']
+      ? ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'IMAGE']
+      : ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'IMAGE']
     const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
     if (unsupported !== undefined) {
       return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${messageKindLabel(unsupported.kind)} 消息，请删除或切换发送方式`
     }
-    if (!draft.messages.some(message => message.kind === 'TEXT' || message.kind === 'MPNEWS')) {
-      return '企业微信渠道至少需要一条文本消息'
+    if (!draft.messages.some(message => message.kind !== 'IMAGE')) {
+      return '企业微信渠道至少需要一条正文消息'
     }
     const maximum = event.value?.media?.maxCount ?? 0
     for (const message of draft.messages) {
@@ -959,7 +1007,7 @@ onBeforeUnmount(() => {
                       {{ messageIssueText(index) }}
                     </div>
                     <div v-else class="text-[11px] text-muted-foreground mt-0.5">
-                      {{ message.kind === 'TEXT' ? '文本消息' : message.kind === 'MPNEWS' ? '企微图文（封面 + 正文）' : '业务附件图片' }}
+                      {{ messageTypeDescription(message) }}
                     </div>
                   </div>
                   <div class="flex shrink-0 gap-0.5 items-center">

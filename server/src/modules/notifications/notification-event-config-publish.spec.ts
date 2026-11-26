@@ -308,6 +308,57 @@ describe('SystemNotificationService event config branch', () => {
     })
   })
 
+  it('renders markdown and textcard message items in group order', async () => {
+    const config = wecomConfig({
+      messages: [
+        {
+          ...textMessage('', 0),
+          id: 'message-markdown',
+          kind: 'MARKDOWN',
+          payload: { content: '## 标题' },
+        },
+        {
+          ...textMessage('', 1),
+          id: 'message-textcard',
+          kind: 'TEXTCARD',
+          payload: {
+            title: '采购通知',
+            description: '采购单已审核通过',
+            url: 'https://dms.example.com/purchase/1',
+            btntxt: '详情',
+          },
+        },
+      ],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    await service.publish({
+      eventType: EVENT_TYPE,
+      source: { type: 'sales_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: {},
+    })
+
+    expect(prisma.notificationRenderedMessage.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ kind: 'MARKDOWN', payloadSnapshot: { content: '## 标题' } }),
+        expect.objectContaining({
+          kind: 'TEXTCARD',
+          payloadSnapshot: expect.objectContaining({
+            title: '采购通知',
+            description: '采购单已审核通过',
+            url: 'https://dms.example.com/purchase/1',
+          }),
+        }),
+      ],
+    })
+  })
+
   it('skips WECOM when content contains an unimplemented kind', async () => {
     const config = wecomConfig({
       messages: [{

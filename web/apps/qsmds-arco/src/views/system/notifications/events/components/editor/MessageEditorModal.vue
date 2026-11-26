@@ -23,7 +23,9 @@ import {
   validateMessageDraft,
 } from '../../message-editor.logic'
 import ImageMessageEditor from './ImageMessageEditor.vue'
+import MarkdownMessageEditor from './MarkdownMessageEditor.vue'
 import MpnewsMessageEditor from './MpnewsMessageEditor.vue'
+import TextcardMessageEditor from './TextcardMessageEditor.vue'
 import TextMessageEditor from './TextMessageEditor.vue'
 import VariablePalette from './VariablePalette.vue'
 
@@ -198,6 +200,22 @@ function insertVariable(name: string): void {
           :channel="channel"
           :disabled="!canUpdate"
           :error="errors.content"
+        />
+        <MarkdownMessageEditor
+          v-else-if="kind === 'MARKDOWN' || kind === 'MARKDOWN_V2'"
+          ref="editorRef"
+          v-model="draft.payload"
+          class="flex-1"
+          :send-method="sendMethod"
+          :disabled="!canUpdate"
+          :error="errors.content"
+        />
+        <TextcardMessageEditor
+          v-else-if="kind === 'TEXTCARD'"
+          ref="editorRef"
+          v-model="draft.payload"
+          :disabled="!canUpdate"
+          :errors="errors"
         />
         <ImageMessageEditor
           v-else-if="kind === 'IMAGE'"

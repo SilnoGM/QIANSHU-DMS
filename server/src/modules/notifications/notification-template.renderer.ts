@@ -96,12 +96,18 @@ export function renderNotificationTemplate(input: {
   readonly allowed: readonly NotificationTemplateVariable[]
   readonly allowSensitive: boolean
   readonly maxLength?: number
-  /** 渲染结果的 UTF-8 字节上限；用于企业微信标题/作者/摘要。 */
+  /** 允许调用方把字符上限提高到模板默认上限以上（Markdown V2 等）。 */
+  readonly maxLengthLimit?: number
+  /** 渲染结果的 UTF-8 字节上限；用于企业微信标题/作者/摘要等。 */
   readonly maxBytes?: number
 }): NotificationTemplateRenderResult {
+  const maxLengthLimit = Math.min(
+    Math.max(1, input.maxLengthLimit ?? MAX_NOTIFICATION_TEMPLATE_LENGTH),
+    4_096,
+  )
   const maxLength = Math.min(
-    Math.max(1, input.maxLength ?? MAX_NOTIFICATION_TEMPLATE_LENGTH),
-    MAX_NOTIFICATION_TEMPLATE_LENGTH,
+    Math.max(1, input.maxLength ?? maxLengthLimit),
+    maxLengthLimit,
   )
   const definitions = new Map(input.allowed.map(variable => [variable.name, variable]))
   const warnings: 'SENSITIVE_VARIABLE_MASKED'[] = []

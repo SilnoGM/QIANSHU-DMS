@@ -82,6 +82,21 @@ export interface WecomAppTransport {
     readonly toUser: string
     readonly articles: readonly WecomMpnewsArticle[]
   }): Promise<WecomTransportResult>
+  sendMarkdown(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly content: string
+  }): Promise<WecomTransportResult>
+  sendTextcard(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly title: string
+    readonly description: string
+    readonly url: string
+    readonly btntxt?: string | null
+  }): Promise<WecomTransportResult>
 }
 
 export interface WecomRobotTransport {
@@ -89,6 +104,11 @@ export interface WecomRobotTransport {
     readonly webhookKey: string
     readonly content: string
     readonly mentionedUserIds?: readonly string[]
+  }): Promise<WecomTransportResult>
+  sendMarkdown(input: {
+    readonly webhookKey: string
+    readonly content: string
+    readonly version?: 'markdown' | 'markdown_v2'
   }): Promise<WecomTransportResult>
   sendImage(input: {
     readonly webhookKey: string

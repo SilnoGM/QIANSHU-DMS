@@ -26,16 +26,32 @@ export type NotificationMessageKindValue = (typeof NOTIFICATION_MESSAGE_KINDS)[n
  */
 export const IMPLEMENTED_MESSAGE_KINDS_BY_METHOD: Readonly<Record<NotificationSendMethodValue, readonly NotificationMessageKindValue[]>> = Object.freeze({
   IN_APP: ['TEXT'],
-  APP: ['TEXT', 'MPNEWS', 'IMAGE'],
-  ROBOT: ['TEXT', 'IMAGE'],
+  APP: ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'IMAGE'],
+  ROBOT: ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'IMAGE'],
 })
 
 export const MPNEWS_MAX_CONTENT_BYTES = 666 * 1024
 export const TEXT_MAX_BYTES = 2_048
 export const IN_APP_TEXT_MAX_LENGTH = 2_000
+const MARKDOWN_APP_MAX_BYTES = 2_048
+const MARKDOWN_ROBOT_MAX_BYTES = 4_096
 const MAX_TITLE_BYTES = 128
 const MAX_AUTHOR_BYTES = 64
 const MAX_DIGEST_BYTES = 512
+const TEXTCARD_DESCRIPTION_MAX_BYTES = 512
+const TEXTCARD_URL_MAX_LENGTH = 2_048
+const TEXTCARD_BUTTON_MAX_BYTES = 16
+
+export interface NotificationMarkdownPayload {
+  readonly content: string
+}
+
+export interface NotificationTextcardPayload {
+  readonly title: string
+  readonly description: string
+  readonly url: string
+  readonly btntxt?: string | null
+}
 
 export interface NotificationTextPayload {
   readonly title?: string | null
@@ -71,7 +87,7 @@ export interface NotificationContentItemInput {
 
 export interface NormalizedNotificationContentItem {
   readonly kind: NotificationMessageKindValue
-  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | Record<string, never>
+  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | NotificationMarkdownPayload | NotificationTextcardPayload | Record<string, never>
   readonly mediaPolicy: unknown
   readonly enabled: boolean
   readonly sortOrder: number
@@ -326,6 +342,87 @@ function validateText(input: {
   }))
   return {
     ...(issues.length === 0 ? { payload: { title, content, linkUrl } } : {}),
+    issues,
+  }
+}
+
+function validateMarkdown(input: {
+  readonly payload: unknown
+  readonly method: NotificationSendMethodValue
+  readonly allowedVariables: readonly string[] | null
+  readonly itemIndex: number
+}): { readonly payload?: NotificationMarkdownPayload, readonly issues: readonly NotificationContentIssue[] } {
+  const record = asRecord(input.payload)
+  const content = typeof record?.content === 'string' ? record.content : ''
+  const maxBytes = input.method === 'ROBOT' ? MARKDOWN_ROBOT_MAX_BYTES : MARKDOWN_APP_MAX_BYTES
+  const issues: NotificationContentIssue[] = []
+  if (content.trim().length === 0) {
+    issues.push(issue('NOTIFICATION_CONTENT_MARKDOWN_EMPTY', 'Markdown 内容不能为空', input.itemIndex, 'content'))
+  }
+  else if (bytesOf(content) > maxBytes) {
+    issues.push(issue('NOTIFICATION_CONTENT_MARKDOWN_TOO_LONG', `Markdown 内容不能超过 ${maxBytes} 字节`, input.itemIndex, 'content'))
+  }
+  if (/<(?:script|iframe|object|embed|form)\b|\son[a-z]+\s*=|\b(?:javascript|data):/iu.test(content)) {
+    issues.push(issue('NOTIFICATION_CONTENT_MARKDOWN_UNSAFE', 'Markdown 内容包含不安全内容', input.itemIndex, 'content'))
+  }
+  issues.push(...inspectContentPlaceholders({
+    texts: [content],
+    allowedVariables: input.allowedVariables,
+    itemIndex: input.itemIndex,
+    field: 'content',
+  }))
+  return {
+    ...(issues.length === 0 ? { payload: { content } } : {}),
+    issues,
+  }
+}
+
+function validateTextcard(input: {
+  readonly payload: unknown
+  readonly allowedVariables: readonly string[] | null
+  readonly itemIndex: number
+}): { readonly payload?: NotificationTextcardPayload, readonly issues: readonly NotificationContentIssue[] } {
+  const record = asRecord(input.payload)
+  const title = asTrimmedString(record?.title)
+  const description = asTrimmedString(record?.description)
+  const url = asTrimmedString(record?.url)
+  const btntxt = record?.btntxt === null || record?.btntxt === undefined ? null : asTrimmedString(record.btntxt)
+  const issues: NotificationContentIssue[] = []
+  if (title === null || title.length === 0) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_TITLE_EMPTY', '文本卡片标题不能为空', input.itemIndex, 'title'))
+  }
+  else if (bytesOf(title) > MAX_TITLE_BYTES) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_TITLE_TOO_LONG', '文本卡片标题不能超过 128 字节', input.itemIndex, 'title'))
+  }
+  if (description === null || description.length === 0) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_DESCRIPTION_EMPTY', '文本卡片描述不能为空', input.itemIndex, 'description'))
+  }
+  else if (bytesOf(description) > TEXTCARD_DESCRIPTION_MAX_BYTES) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_DESCRIPTION_TOO_LONG', '文本卡片描述不能超过 512 字节', input.itemIndex, 'description'))
+  }
+  if (url === null || url.length === 0 || url.length > TEXTCARD_URL_MAX_LENGTH || !isHttpUrl(url)) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_URL_INVALID', '文本卡片链接必须是有效的 http/https URL', input.itemIndex, 'url'))
+  }
+  if (btntxt !== null && bytesOf(btntxt) > TEXTCARD_BUTTON_MAX_BYTES) {
+    issues.push(issue('NOTIFICATION_CONTENT_TEXTCARD_BUTTON_TOO_LONG', '文本卡片按钮文字不能超过 16 字节', input.itemIndex, 'btntxt'))
+  }
+  issues.push(...inspectContentPlaceholders({
+    texts: [title ?? '', description ?? '', url ?? '', btntxt ?? ''],
+    allowedVariables: input.allowedVariables,
+    itemIndex: input.itemIndex,
+    field: 'content',
+  }))
+  return {
+    ...(issues.length === 0
+      ? {
+          payload: {
+            title: title!,
+            description: description!,
+            url: url!,
+            btntxt,
+          },
+        }
+      : {}),
     issues,
   }
 }
@@ -696,10 +793,10 @@ export function validateNotificationContentGroup(input: {
   }
   if (
     input.method !== 'IN_APP'
-    && !enabledItems.some(item => item.kind === 'TEXT' || item.kind === 'MPNEWS')
+    && !enabledItems.some(item => item.kind !== 'IMAGE')
   ) {
-    // 企业微信派发以正文消息为投递主体，图片附件只跟在正文之后；纯图片配置没有可重试的正文。
-    issues.push(issue('NOTIFICATION_CONTENT_TEXT_REQUIRED', '企业微信渠道至少需要一条文本消息'))
+    // 企业微信派发以正文消息为投递主体；纯图片配置没有可重试的正文。
+    issues.push(issue('NOTIFICATION_CONTENT_TEXT_REQUIRED', '企业微信渠道至少需要一条正文消息'))
   }
 
   const normalized: NormalizedNotificationContentItem[] = []
@@ -718,6 +815,45 @@ export function validateNotificationContentGroup(input: {
       const result = validateText({
         payload: item.payload,
         method: input.method,
+        allowedVariables: input.allowedVariables,
+        itemIndex: index,
+      })
+      issues.push(...result.issues)
+      if (result.payload !== undefined) {
+        normalized.push({
+          kind: item.kind,
+          payload: result.payload,
+          mediaPolicy: item.mediaPolicy ?? {},
+          enabled: item.enabled !== false,
+          sortOrder: item.sortOrder ?? index,
+          contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: item.mediaPolicy ?? {} }),
+        })
+      }
+      return
+    }
+    if (item.kind === 'MARKDOWN' || item.kind === 'MARKDOWN_V2') {
+      const result = validateMarkdown({
+        payload: item.payload,
+        method: input.method,
+        allowedVariables: input.allowedVariables,
+        itemIndex: index,
+      })
+      issues.push(...result.issues)
+      if (result.payload !== undefined) {
+        normalized.push({
+          kind: item.kind,
+          payload: result.payload,
+          mediaPolicy: item.mediaPolicy ?? {},
+          enabled: item.enabled !== false,
+          sortOrder: item.sortOrder ?? index,
+          contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: item.mediaPolicy ?? {} }),
+        })
+      }
+      return
+    }
+    if (item.kind === 'TEXTCARD') {
+      const result = validateTextcard({
+        payload: item.payload,
         allowedVariables: input.allowedVariables,
         itemIndex: index,
       })

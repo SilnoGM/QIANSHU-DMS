@@ -120,6 +120,88 @@ export class WecomRobotHttpTransport implements WecomRobotTransport {
     }
   }
 
+  async sendMarkdown(input: {
+    readonly webhookKey: string
+    readonly content: string
+    readonly version?: 'markdown' | 'markdown_v2'
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    if (input.webhookKey.trim().length === 0) {
+      return { ok: false, kind: 'WEBHOOK_INVALID', code: 'WECOM_ROBOT_KEY_MISSING', message: '群机器人 webhook key 为空' }
+    }
+    const msgtype = input.version === 'markdown_v2' ? 'markdown_v2' : 'markdown'
+    if (utf8Bytes(input.content) > 4_096) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_ROBOT_MARKDOWN_TOO_LONG', message: '企业微信群机器人 Markdown 超过 4096 字节' }
+    }
+    return this.sendJsonPayload(input.webhookKey, {
+      msgtype,
+      [msgtype]: { content: input.content },
+    }, 'MARKDOWN')
+  }
+
+  private async sendJsonPayload(
+    webhookKey: string,
+    body: Record<string, unknown>,
+    label: string,
+  ): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    const url = new URL('/cgi-bin/webhook/send', config.baseUrl)
+    url.searchParams.set('key', webhookKey)
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        redirect: 'error',
+      })
+    }
+    catch (error) {
+      const name = error instanceof Error ? error.name : ''
+      return name === 'TimeoutError' || name === 'AbortError'
+        ? { ok: false, kind: 'TIMEOUT', code: `WECOM_ROBOT_${label}_TIMEOUT`, message: '企业微信群机器人请求超时' }
+        : { ok: false, kind: 'NETWORK', code: `WECOM_ROBOT_${label}_NETWORK`, message: '企业微信群机器人网络请求失败' }
+    }
+    const text = await response.text().catch(() => '')
+    if (utf8Bytes(text) > MAX_RESPONSE_BYTES) {
+      return { ok: false, kind: 'REJECTED', code: `WECOM_ROBOT_${label}_RESPONSE_TOO_LARGE`, message: '企业微信群机器人响应过大' }
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    }
+    catch {
+      return { ok: false, kind: 'UNKNOWN', code: `WECOM_ROBOT_${label}_INVALID_JSON`, message: '企业微信群机器人返回非 JSON' }
+    }
+    const payload = asRecord(parsed)
+    const errcode = Number(payload?.errcode)
+    const errmsg = typeof payload?.errmsg === 'string' ? payload.errmsg.slice(0, 200) : ''
+    if (errcode === 0) {
+      return { ok: true, msgId: null }
+    }
+    if (errcode === 45009 || response.status === 429) {
+      return { ok: false, kind: 'RATE_LIMITED', code: 'WECOM_ROBOT_RATE_LIMITED', message: '企业微信群机器人被限流' }
+    }
+    if (errcode === 93000) {
+      return { ok: false, kind: 'WEBHOOK_INVALID', code: 'WECOM_ROBOT_WEBHOOK_INVALID', message: errmsg || '群机器人 webhook 无效' }
+    }
+    if (response.status >= 500) {
+      return { ok: false, kind: 'NETWORK', code: 'WECOM_ROBOT_UPSTREAM', message: `企业微信群机器人上游返回 ${response.status}` }
+    }
+    return {
+      ok: false,
+      kind: 'REJECTED',
+      code: `WECOM_ROBOT_REJECTED_${Number.isFinite(errcode) ? errcode : 'unknown'}`,
+      message: errmsg || '企业微信群机器人请求被拒绝',
+    }
+  }
+
   async sendImage(input: {
     readonly webhookKey: string
     readonly base64: string

@@ -432,8 +432,8 @@ export class SystemNotificationService {
       input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '企业微信渠道未配置消息内容' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
     }
-    if (messages.some(message => !['TEXT', 'MPNEWS', 'IMAGE'].includes(message.kind))) {
-      input.warnings.push({ code: 'MESSAGE_KIND_NOT_IMPLEMENTED', message: '当前发布链路暂只支持 TEXT、MPNEWS 与 IMAGE 内容项' })
+    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'MPNEWS', 'IMAGE'].includes(message.kind))) {
+      input.warnings.push({ code: 'MESSAGE_KIND_NOT_IMPLEMENTED', message: '当前发布链路暂不支持该消息类型' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED' }
     }
 
@@ -447,20 +447,39 @@ export class SystemNotificationService {
       warnings: input.warnings,
     })
     const renderableMessages = messages.filter(message => message.kind !== 'IMAGE')
-    const rendered = renderableMessages.map(message => message.kind === 'MPNEWS'
-      ? this.renderEventMpnewsMessage({
+    const rendered = renderableMessages.map((message) => {
+      if (message.kind === 'MPNEWS') {
+        return this.renderEventMpnewsMessage({
           command: input.command,
           channelConfig: input.channelConfig,
           message,
           variables: input.variables,
           inlineMedia: mediaPlan.inlineByMessageId.get(message.id) ?? [],
         })
-      : this.renderEventTextMessage({
+      }
+      if (message.kind === 'MARKDOWN' || message.kind === 'MARKDOWN_V2') {
+        return this.renderEventMarkdownMessage({
           command: input.command,
           channelConfig: input.channelConfig,
           message,
           variables: input.variables,
-        }))
+        })
+      }
+      if (message.kind === 'TEXTCARD') {
+        return this.renderEventTextcardMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+        })
+      }
+      return this.renderEventTextMessage({
+        command: input.command,
+        channelConfig: input.channelConfig,
+        message,
+        variables: input.variables,
+      })
+    })
     const failed = rendered.find(item => !item.ok)
     if (failed !== undefined && !failed.ok) {
       input.warnings.push({ code: 'CONTENT_RENDER_FAILED', message: failed.message })
@@ -473,7 +492,13 @@ export class SystemNotificationService {
     if (renderedItems.some(item => item.warnings.includes('MPNEWS_METADATA_TRUNCATED'))) {
       input.warnings.push({ code: 'MPNEWS_METADATA_TRUNCATED', message: 'mpnews 标题、作者或摘要超过企业微信字节限制，已截断' })
     }
-    const summary = renderedItems.map(item => item.kind === 'TEXT' ? item.content : item.payload.title).join('\n\n')
+    const summary = renderedItems.map((item) => {
+      if (item.kind === 'TEXT') return item.content
+      if (item.kind === 'MARKDOWN' || item.kind === 'MARKDOWN_V2') return item.payload.content
+      if (item.kind === 'TEXTCARD') return item.payload.title
+      if (item.kind === 'MPNEWS') return item.payload.title
+      return ''
+    }).filter(part => part.length > 0).join('\n\n')
 
     const targetConfig = asRecord(input.channelConfig.targetConfig)
     const mention = parseWecomMentionConfig(targetConfig?.mention)
@@ -990,6 +1015,125 @@ export class SystemNotificationService {
       title: title ?? '',
       content,
       linkUrl: bodyResult.linkUrl,
+      warnings: [...warnings],
+    }
+  }
+
+  private renderEventMarkdownMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'MARKDOWN' | 'MARKDOWN_V2'
+    readonly payload: { readonly content: string }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const rawContent = typeof payload?.content === 'string' ? payload.content : ''
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const maxBytes = input.message.kind === 'MARKDOWN_V2' ? 4_096 : 2_048
+    const rendered = renderNotificationTemplate({
+      body: rawContent,
+      variables: input.variables,
+      allowed,
+      allowSensitive: input.channelConfig.allowSensitive,
+      maxLength: maxBytes,
+      maxLengthLimit: maxBytes,
+      maxBytes,
+    })
+    if (!rendered.ok) {
+      return { ok: false, message: rendered.message }
+    }
+    return {
+      ok: true,
+      kind: input.message.kind === 'MARKDOWN_V2' ? 'MARKDOWN_V2' : 'MARKDOWN',
+      payload: { content: rendered.content },
+      warnings: rendered.warnings,
+    }
+  }
+
+  private renderEventTextcardMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'TEXTCARD'
+    readonly payload: {
+      readonly title: string
+      readonly description: string
+      readonly url: string
+      readonly btntxt: string | null
+    }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+    const title = renderNotificationTemplate({
+      body: typeof payload?.title === 'string' ? payload.title : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 128,
+      maxBytes: 128,
+    })
+    const description = renderNotificationTemplate({
+      body: typeof payload?.description === 'string' ? payload.description : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 512,
+      maxBytes: 512,
+    })
+    const url = renderNotificationTemplate({
+      body: '',
+      linkUrlTemplate: typeof payload?.url === 'string' ? payload.url : '',
+      variables: input.variables,
+      allowed,
+      allowSensitive,
+      maxLength: 1,
+    })
+    const btntxt = typeof payload?.btntxt === 'string'
+      ? renderNotificationTemplate({
+          body: payload.btntxt,
+          variables: input.variables,
+          allowed,
+          allowSensitive,
+          maxLength: 16,
+          maxBytes: 16,
+        })
+      : null
+    if (!title.ok) return { ok: false, message: title.message }
+    if (!description.ok) return { ok: false, message: description.message }
+    if (!url.ok) return { ok: false, message: url.message }
+    if (btntxt !== null && !btntxt.ok) return { ok: false, message: btntxt.message }
+    const renderedUrl = url.linkUrl
+    if (renderedUrl === null || !/^https?:\/\//iu.test(renderedUrl)) {
+      return { ok: false, message: '文本卡片链接必须是 http/https URL' }
+    }
+    const warnings = new Set<NotificationRenderWarning>()
+    for (const warning of [...title.warnings, ...description.warnings, ...url.warnings, ...(btntxt?.ok ? btntxt.warnings : [])]) {
+      warnings.add(warning)
+    }
+    return {
+      ok: true,
+      kind: 'TEXTCARD',
+      payload: {
+        title: title.content,
+        description: description.content,
+        url: renderedUrl,
+        btntxt: btntxt?.ok ? btntxt.content : null,
+      },
       warnings: [...warnings],
     }
   }

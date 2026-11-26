@@ -11,9 +11,11 @@ import type { NotificationEventVariableDto } from '@/api/generated/types.gen'
 
 const MESSAGE_FIELD_LABELS: Readonly<Record<string, string>> = {
   author: '作者',
+  btntxt: '按钮文字',
   content: '正文',
   contentSourceUrl: '阅读原文',
   cover: '封面',
+  description: '描述',
   digest: '摘要',
   enabled: '启用状态',
   kind: '消息类型',
@@ -22,6 +24,7 @@ const MESSAGE_FIELD_LABELS: Readonly<Record<string, string>> = {
   mediaPolicy: '附件来源',
   message: '消息',
   title: '标题',
+  url: '链接',
 }
 
 const PLACEHOLDER_PATTERN = /\{\{\s*(\w+)\s*\}\}/gu
@@ -121,9 +124,18 @@ function textIsVisuallyEmpty(value: string): boolean {
 export function messageKindLabel(kind: MessageKind): string {
   const labels: Partial<Record<MessageKind, string>> = {
     TEXT: '文本消息',
+    MARKDOWN: 'Markdown',
+    MARKDOWN_V2: 'Markdown V2',
+    TEXTCARD: '文本卡片',
     MPNEWS: '企微图文',
     NEWS: '图文卡片',
     IMAGE: '图片附件',
+    VOICE: '语音',
+    VIDEO: '视频',
+    FILE: '文件',
+    MINIPROGRAM_NOTICE: '小程序通知',
+    TEMPLATE_CARD: '模板卡片',
+    INTERACTIVE_TASKCARD: '交互任务卡片',
   }
   return labels[kind] ?? kind
 }
@@ -163,6 +175,27 @@ export function createDefaultMessageDraft(
         digest: null,
         contentSourceUrl: null,
         content: '',
+      },
+      mediaPolicy: {},
+      enabled: true,
+    }
+  }
+  if (kind === 'MARKDOWN' || kind === 'MARKDOWN_V2') {
+    return {
+      kind,
+      payload: { content: '' },
+      mediaPolicy: {},
+      enabled: true,
+    }
+  }
+  if (kind === 'TEXTCARD') {
+    return {
+      kind,
+      payload: {
+        title: '',
+        description: '',
+        url: '',
+        btntxt: null,
       },
       mediaPolicy: {},
       enabled: true,
@@ -327,6 +360,54 @@ export function validateMessageDraft(
       ['title', title],
       ['content', content],
       ['linkUrl', linkUrl],
+    ], context, add)
+    return issues
+  }
+
+  if (message.kind === 'MARKDOWN' || message.kind === 'MARKDOWN_V2') {
+    const content = stringValue(payload, 'content')
+    const maxBytes = context.sendMethod === 'ROBOT' ? 4_096 : 2_048
+    if (content.trim().length === 0) {
+      add('content', '内容不能为空')
+    }
+    else if (bytesOf(content) > maxBytes) {
+      add('content', `Markdown 内容不能超过 ${maxBytes} 字节`)
+    }
+    if (containsUnsafeHtml(content)) {
+      add('content', '内容包含不支持的 HTML 或不安全内容')
+    }
+    validateVariables([['content', content]], context, add)
+    return issues
+  }
+
+  if (message.kind === 'TEXTCARD') {
+    const title = stringValue(payload, 'title')
+    const description = stringValue(payload, 'description')
+    const url = stringValue(payload, 'url')
+    const btntxt = optionalString(payload, 'btntxt')
+    if (title.trim().length === 0) {
+      add('title', '标题不能为空')
+    }
+    else if (bytesOf(title) > 128) {
+      add('title', '标题不能超过 128 字节')
+    }
+    if (description.trim().length === 0) {
+      add('description', '描述不能为空')
+    }
+    else if (bytesOf(description) > 512) {
+      add('description', '描述不能超过 512 字节')
+    }
+    if (url.length > 2_048 || !isHttpUrl(url)) {
+      add('url', '链接必须是有效的 http/https URL')
+    }
+    if (btntxt !== null && bytesOf(btntxt) > 16) {
+      add('btntxt', '按钮文字不能超过 16 字节')
+    }
+    validateVariables([
+      ['title', title],
+      ['description', description],
+      ['url', url],
+      ['btntxt', btntxt],
     ], context, add)
     return issues
   }

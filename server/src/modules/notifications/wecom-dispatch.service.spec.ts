@@ -111,6 +111,8 @@ function service(
     uploadImageUrl: jest.fn(),
     sendImage: jest.fn(),
     sendMpnews: jest.fn(),
+    sendMarkdown: jest.fn(),
+    sendTextcard: jest.fn(),
   },
   mediaOverrides: Record<string, unknown> = {},
 ): WecomDispatchService {
@@ -163,6 +165,7 @@ describe('WecomDispatchService', () => {
     const robot = {
       sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendImage: jest.fn(),
+      sendMarkdown: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -208,6 +211,7 @@ describe('WecomDispatchService', () => {
     const robot = {
       sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
       sendImage: jest.fn(),
+      sendMarkdown: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -256,8 +260,10 @@ describe('WecomDispatchService', () => {
       uploadImageUrl: jest.fn(),
       sendImage: jest.fn(),
       sendMpnews: jest.fn(),
+      sendMarkdown: jest.fn(),
+      sendTextcard: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -308,8 +314,8 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn() }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app)
+    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn(), sendMarkdown: jest.fn(), sendTextcard: jest.fn() }
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -342,7 +348,7 @@ describe('WecomDispatchService', () => {
           }),
         },
       })
-      const robot = { sendText: jest.fn(), sendImage: jest.fn() }
+      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }
       const instance = service(prisma, robot)
 
       await runDelivery(instance, robotDelivery())
@@ -411,8 +417,10 @@ describe('WecomDispatchService', () => {
       uploadImageUrl: jest.fn(),
       sendImage: jest.fn(),
       sendMpnews: jest.fn(),
+      sendMarkdown: jest.fn(),
+      sendTextcard: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -435,7 +443,7 @@ describe('WecomDispatchService', () => {
     })
   })
 
-  it('stops robot delivery message items when a later item fails', async () => {
+  it('continues robot delivery message items after a middle item fails', async () => {
     const prisma = basePrisma({
       wecomTarget: {
         findUnique: jest.fn().mockResolvedValue({
@@ -474,6 +482,20 @@ describe('WecomDispatchService', () => {
             acceptedAt: null,
             renderedMessage: { kind: 'TEXT', payloadSnapshot: { content: '第二' } },
           },
+          {
+            id: 'delivery-message-3',
+            deliveryId: 'delivery-1',
+            renderedMessageId: 'rendered-3',
+            sortOrder: 2,
+            status: 'PENDING',
+            attemptCount: 0,
+            nextAttemptAt: new Date('2026-11-25T10:00:00.000Z'),
+            providerMsgId: null,
+            failureCode: null,
+            failureMessage: null,
+            acceptedAt: null,
+            renderedMessage: { kind: 'TEXT', payloadSnapshot: { content: '第三' } },
+          },
         ]),
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -482,8 +504,10 @@ describe('WecomDispatchService', () => {
     const robot = {
       sendText: jest.fn()
         .mockResolvedValueOnce({ ok: true, msgId: null })
-        .mockResolvedValueOnce({ ok: false, kind: 'REJECTED', code: 'WECOM_REJECTED', message: '拒绝' }),
+        .mockResolvedValueOnce({ ok: false, kind: 'REJECTED', code: 'WECOM_REJECTED', message: '拒绝' })
+        .mockResolvedValueOnce({ ok: true, msgId: null }),
       sendImage: jest.fn(),
+      sendMarkdown: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -497,6 +521,10 @@ describe('WecomDispatchService', () => {
       webhookKey: 'plain-secret',
       content: '第二',
     })
+    expect(robot.sendText).toHaveBeenNthCalledWith(3, {
+      webhookKey: 'plain-secret',
+      content: '第三',
+    })
     expect(prisma.notificationDeliveryMessage.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'delivery-message-1' },
       data: expect.objectContaining({ status: 'ACCEPTED' }),
@@ -504,6 +532,10 @@ describe('WecomDispatchService', () => {
     expect(prisma.notificationDeliveryMessage.update).toHaveBeenNthCalledWith(2, {
       where: { id: 'delivery-message-2' },
       data: expect.objectContaining({ status: 'FAILED' }),
+    })
+    expect(prisma.notificationDeliveryMessage.update).toHaveBeenNthCalledWith(3, {
+      where: { id: 'delivery-message-3' },
+      data: expect.objectContaining({ status: 'ACCEPTED' }),
     })
     expect(prisma.wecomDelivery.update).toHaveBeenCalledWith({
       where: { id: 'delivery-1' },
@@ -585,6 +617,8 @@ describe('WecomDispatchService', () => {
       uploadImageUrl: jest.fn().mockResolvedValue({ ok: true, url: 'https://wecom.example/image' }),
       sendImage: jest.fn(),
       sendMpnews: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-2' }),
+      sendMarkdown: jest.fn(),
+      sendTextcard: jest.fn(),
     }
     const prepared = {
       ok: true,
@@ -592,7 +626,7 @@ describe('WecomDispatchService', () => {
       mimeType: 'image/png',
       filename: 'image.png',
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn() }, app, {
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn() }, app, {
       read: jest.fn().mockResolvedValue(Buffer.from('source')),
       prepareAppImage: jest.fn().mockResolvedValue(prepared),
       prepareMpnewsInlineImage: jest.fn().mockResolvedValue(prepared),

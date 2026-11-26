@@ -362,6 +362,44 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
             }
             return result
           }
+          const payload = asRecord(item.renderedMessage.payloadSnapshot)
+          if (item.renderedMessage.kind === 'MARKDOWN') {
+            const content = typeof payload?.content === 'string' ? payload.content : ''
+            if (content.trim().length === 0) {
+              return { ok: false, kind: 'REJECTED', code: 'WECOM_MESSAGE_CONTENT_MISSING', message: '消息内容为空' }
+            }
+            const result = await this.appTransport.sendMarkdown({
+              accessToken: token.accessToken,
+              agentId: app.agentId!,
+              toUser: binding.wecomUserId,
+              content,
+            })
+            if (!result.ok && result.kind === 'TOKEN_INVALID') {
+              this.tokenService.invalidate(app.key)
+            }
+            return result
+          }
+          if (item.renderedMessage.kind === 'TEXTCARD') {
+            const title = typeof payload?.title === 'string' ? payload.title : ''
+            const description = typeof payload?.description === 'string' ? payload.description : ''
+            const url = typeof payload?.url === 'string' ? payload.url : ''
+            if (title.length === 0 || description.length === 0 || url.length === 0) {
+              return { ok: false, kind: 'REJECTED', code: 'WECOM_MESSAGE_CONTENT_MISSING', message: '文本卡片内容不完整' }
+            }
+            const result = await this.appTransport.sendTextcard({
+              accessToken: token.accessToken,
+              agentId: app.agentId!,
+              toUser: binding.wecomUserId,
+              title,
+              description,
+              url,
+              btntxt: typeof payload?.btntxt === 'string' ? payload.btntxt : null,
+            })
+            if (!result.ok && result.kind === 'TOKEN_INVALID') {
+              this.tokenService.invalidate(app.key)
+            }
+            return result
+          }
           if (item.renderedMessage.kind !== 'TEXT') {
             return {
               ok: false,
@@ -461,6 +499,18 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         items,
         notificationId: notification.id,
         send: async (item, isFirstText) => {
+          const payload = asRecord(item.renderedMessage.payloadSnapshot)
+          if (item.renderedMessage.kind === 'MARKDOWN' || item.renderedMessage.kind === 'MARKDOWN_V2') {
+            const content = typeof payload?.content === 'string' ? payload.content : ''
+            if (content.trim().length === 0) {
+              return { ok: false, kind: 'REJECTED', code: 'WECOM_MESSAGE_CONTENT_MISSING', message: '消息内容为空' }
+            }
+            return this.robotTransport.sendMarkdown({
+              webhookKey,
+              content,
+              version: item.renderedMessage.kind === 'MARKDOWN_V2' ? 'markdown_v2' : 'markdown',
+            })
+          }
           if (item.renderedMessage.kind !== 'TEXT') {
             return {
               ok: false,
@@ -784,6 +834,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     readonly onFirstAccepted?: () => Promise<void>
   }): Promise<'ACCEPTED' | 'PARTIAL' | 'FAILED' | 'RETRYING'> {
     let sentAny = false
+    let failedAny = false
     let sentText = false
     for (const item of input.items) {
       if (item.status === 'ACCEPTED') {
@@ -792,10 +843,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         continue
       }
       if (item.status !== 'PENDING' && item.status !== 'SENDING') {
-        await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-        const status = sentAny ? 'PARTIAL' : 'FAILED'
-        await this.finalizeMessageDelivery(input.delivery.id, status)
-        return status
+        failedAny = true
+        continue
       }
 
       const isFirstText = item.renderedMessage.kind === 'TEXT' && !sentText
@@ -840,10 +889,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
               failureMessage: result.message.slice(0, 255),
             },
           })
-          await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-          const status = sentAny ? 'PARTIAL' : 'FAILED'
-          await this.finalizeMessageDelivery(input.delivery.id, status)
-          return status
+          failedAny = true
+          continue
         }
         const delay = result.code.includes('RATE_LIMITED')
           ? RATE_LIMIT_RETRY_MS
@@ -869,14 +916,12 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           failureMessage: result.message.slice(0, 255),
         },
       })
-      await this.skipRemainingMessages(input.delivery.id, item.sortOrder)
-      const status = sentAny ? 'PARTIAL' : 'FAILED'
-      await this.finalizeMessageDelivery(input.delivery.id, status)
-      return status
+      failedAny = true
     }
 
-    await this.finalizeMessageDelivery(input.delivery.id, 'ACCEPTED')
-    return 'ACCEPTED'
+    const status = failedAny ? (sentAny ? 'PARTIAL' : 'FAILED') : 'ACCEPTED'
+    await this.finalizeMessageDelivery(input.delivery.id, status)
+    return status
   }
 
   private async skipDeliveryMedia(deliveryId: string, reason: string): Promise<void> {
@@ -886,21 +931,6 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         status: 'SKIPPED',
         failureCode: 'PREVIOUS_MESSAGE_FAILED',
         failureMessage: reason.slice(0, 255),
-      },
-    })
-  }
-
-  private async skipRemainingMessages(deliveryId: string, afterSortOrder: number): Promise<void> {
-    await this.prisma.notificationDeliveryMessage.updateMany({
-      where: {
-        deliveryId,
-        sortOrder: { gt: afterSortOrder },
-        status: 'PENDING',
-      },
-      data: {
-        status: 'SKIPPED',
-        failureCode: 'PREVIOUS_MESSAGE_FAILED',
-        failureMessage: '前序消息失败，后续消息未发送',
       },
     })
   }
