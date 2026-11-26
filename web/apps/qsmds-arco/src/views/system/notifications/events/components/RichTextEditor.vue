@@ -306,13 +306,13 @@ onBeforeUnmount(() => {
         <FaIcon name="i-lucide:redo-2" />
       </FaButton>
     </div>
-    <div class="p-2 border-b border-border flex flex-wrap gap-2 items-center">
-      <FaInput v-model="linkHref" class="w-44" placeholder="链接 https://" :disabled="disabled" />
-      <FaButton variant="outline" size="sm" :disabled="disabled" @click="applyLink">
-        应用链接
+    <div class="p-2 border-b border-border flex gap-2 items-center">
+      <FaInput v-model="linkHref" class="flex-1 min-w-0" placeholder="链接 https://" :disabled="disabled" />
+      <FaButton variant="outline" size="sm" class="shrink-0" :disabled="disabled" @click="applyLink">
+        设置链接
       </FaButton>
     </div>
-    <EditorContent :editor="editor" class="p-3 max-w-none prose prose-sm" />
+    <EditorContent :editor="editor" class="mpnews-editor-content p-3 max-w-none prose prose-sm" />
     <p v-if="uploadError !== null" class="text-xs text-destructive m-0 px-3 py-2 border-t border-border">
       {{ uploadError }}
     </p>
@@ -325,3 +325,9 @@ onBeforeUnmount(() => {
     >
   </div>
 </template>
+
+<style scoped>
+.mpnews-editor-content :deep(.ProseMirror) {
+  min-height: 360px;
+}
+</style>
