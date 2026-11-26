@@ -4095,6 +4095,8 @@ model WecomDeliveryMedia {
   deliveryId       String              @map("delivery_id") @db.Uuid
   mediaAssetId     String              @map("media_asset_id") @db.Uuid
   sortOrder        Int                 @map("sort_order")
+  /// 原消息组中的消息项顺序；旧数据为空，表示正文之后发送。
+  messageSortOrder Int?                @map("message_sort_order")
   status           WecomDeliveryStatus @default(PENDING)
   attemptCount     Int                 @default(0) @map("attempt_count")
   nextAttemptAt    DateTime            @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
@@ -4110,6 +4112,7 @@ model WecomDeliveryMedia {
   mediaAsset MediaAsset    @relation("WecomDeliveryMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([deliveryId, sortOrder], map: "wecom_delivery_media_delivery_sort_key")
+  @@index([deliveryId, messageSortOrder, sortOrder], map: "wecom_delivery_media_delivery_message_sort_idx")
   @@index([status, nextAttemptAt], map: "wecom_delivery_media_status_next_idx")
   @@index([mediaAssetId], map: "wecom_delivery_media_asset_idx")
   @@map("wecom_delivery_media")

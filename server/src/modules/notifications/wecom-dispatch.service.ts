@@ -64,6 +64,26 @@ interface DeliveryMessageRow {
   }
 }
 
+interface DeliveryMediaRow {
+  readonly id: string
+  readonly deliveryId: string
+  readonly mediaAssetId: string
+  readonly sortOrder: number
+  readonly messageSortOrder: number | null
+  readonly status: string
+  readonly attemptCount: number
+  readonly mediaId: string | null
+  readonly mediaIdExpiresAt: Date | null
+  readonly mediaAsset: {
+    readonly mediaType: string
+    readonly status: string
+    readonly deletedAt: Date | null
+    readonly objectKey: string | null
+    readonly mimeType: string | null
+    readonly originalFilename: string | null
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms)
@@ -342,13 +362,17 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       return
     }
 
-    const items = await this.findDeliveryMessages(delivery.id)
+    const [items, mediaItems] = await Promise.all([
+      this.findDeliveryMessages(delivery.id),
+      this.findDeliveryMedia(delivery.id),
+    ])
     if (items.length > 0) {
-      const outcome = await this.deliverMessageItems({
+      await this.deliverOrderedItems({
         delivery,
         items,
+        mediaItems,
         notificationId: notification.id,
-        send: async (item) => {
+        sendMessage: async (item) => {
           if (item.renderedMessage.kind === 'MPNEWS') {
             const result = await this.sendAppMpnewsItem({
               item,
@@ -428,14 +452,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
           }
           return result
         },
+        sendMedia: item => this.sendAppMediaItem(item, token.accessToken, app.agentId!, binding.wecomUserId),
       })
-      if (outcome === 'ACCEPTED') {
-        const mediaFailed = await this.sendAppMedia(delivery, token.accessToken, app.agentId, binding.wecomUserId)
-        await this.finalizeDelivery(delivery.id, mediaFailed)
-      }
-      else if (outcome !== 'RETRYING') {
-        await this.skipDeliveryMedia(delivery.id, '正文消息未全部发送')
-      }
       return
     }
 
@@ -492,13 +510,17 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     }
 
     const mention = await this.resolveMention(delivery, notification.eventType)
-    const items = await this.findDeliveryMessages(delivery.id)
+    const [items, mediaItems] = await Promise.all([
+      this.findDeliveryMessages(delivery.id),
+      this.findDeliveryMedia(delivery.id),
+    ])
     if (items.length > 0) {
-      const outcome = await this.deliverMessageItems({
+      await this.deliverOrderedItems({
         delivery,
         items,
+        mediaItems,
         notificationId: notification.id,
-        send: async (item, isFirstText) => {
+        sendMessage: async (item, isFirstText) => {
           const payload = asRecord(item.renderedMessage.payloadSnapshot)
           if (item.renderedMessage.kind === 'MARKDOWN' || item.renderedMessage.kind === 'MARKDOWN_V2') {
             const content = typeof payload?.content === 'string' ? payload.content : ''
@@ -544,14 +566,8 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
             },
           })
         },
+        sendMedia: item => this.sendRobotMediaItem(item, webhookKey),
       })
-      if (outcome === 'ACCEPTED') {
-        const mediaFailed = await this.sendRobotMedia(delivery, webhookKey)
-        await this.finalizeDelivery(delivery.id, mediaFailed)
-      }
-      else if (outcome !== 'RETRYING') {
-        await this.skipDeliveryMedia(delivery.id, '正文消息未全部发送')
-      }
       return
     }
 
@@ -817,26 +833,89 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     })
   }
 
+  private async findDeliveryMedia(deliveryId: string): Promise<DeliveryMediaRow[]> {
+    return this.prisma.wecomDeliveryMedia.findMany({
+      where: { deliveryId },
+      orderBy: [{ messageSortOrder: 'asc' }, { sortOrder: 'asc' }],
+      select: {
+        id: true,
+        deliveryId: true,
+        mediaAssetId: true,
+        sortOrder: true,
+        messageSortOrder: true,
+        status: true,
+        attemptCount: true,
+        mediaId: true,
+        mediaIdExpiresAt: true,
+        mediaAsset: {
+          select: {
+            mediaType: true,
+            status: true,
+            deletedAt: true,
+            objectKey: true,
+            mimeType: true,
+            originalFilename: true,
+          },
+        },
+      },
+    })
+  }
+
   private messageContent(value: Prisma.JsonValue): string | null {
     const record = asRecord(value)
     return typeof record?.content === 'string' && record.content.length > 0 ? record.content : null
   }
 
   /**
-   * 新内容模型的逐消息项发送。TEXT 阶段只处理文本；已 ACCEPTED 的项不重发，
-   * 失败项沿用投递级退避，后续项在前项最终失败时标记 SKIPPED。
+   * 按消息组顺序发送消息项与图片附件；单项终态失败后继续后续项。
+   * 旧附件没有 messageSortOrder，排在所有消息项之后。
    */
-  private async deliverMessageItems(input: {
+  private async deliverOrderedItems(input: {
     readonly delivery: ClaimedDelivery
     readonly items: readonly DeliveryMessageRow[]
+    readonly mediaItems: readonly DeliveryMediaRow[]
     readonly notificationId: string
-    readonly send: (item: DeliveryMessageRow, isFirstText: boolean) => Promise<WecomTransportResult>
+    readonly sendMessage: (item: DeliveryMessageRow, isFirstText: boolean) => Promise<WecomTransportResult>
+    readonly sendMedia: (item: DeliveryMediaRow) => Promise<boolean>
     readonly onFirstAccepted?: () => Promise<void>
   }): Promise<'ACCEPTED' | 'PARTIAL' | 'FAILED' | 'RETRYING'> {
+    type Operation =
+      | { readonly kind: 'message', readonly order: number, readonly suborder: number, readonly item: DeliveryMessageRow }
+      | { readonly kind: 'media', readonly order: number, readonly suborder: number, readonly item: DeliveryMediaRow }
+    const operations: Operation[] = [
+      ...input.items.map(item => ({ kind: 'message' as const, order: item.sortOrder, suborder: 0, item })),
+      ...input.mediaItems.map(item => ({
+        kind: 'media' as const,
+        order: item.messageSortOrder ?? Number.MAX_SAFE_INTEGER,
+        suborder: item.sortOrder,
+        item,
+      })),
+    ].sort((left, right) => left.order - right.order || left.suborder - right.suborder)
+
     let sentAny = false
     let failedAny = false
     let sentText = false
-    for (const item of input.items) {
+
+    for (const operation of operations) {
+      if (operation.kind === 'media') {
+        if (operation.item.status === 'ACCEPTED') {
+          sentAny = true
+          continue
+        }
+        if (operation.item.status !== 'PENDING' && operation.item.status !== 'SENDING') {
+          failedAny = true
+          continue
+        }
+        if (await input.sendMedia(operation.item)) {
+          sentAny = true
+        }
+        else {
+          failedAny = true
+        }
+        continue
+      }
+
+      const item = operation.item
       if (item.status === 'ACCEPTED') {
         sentAny = true
         if (item.renderedMessage.kind === 'TEXT') sentText = true
@@ -848,7 +927,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       }
 
       const isFirstText = item.renderedMessage.kind === 'TEXT' && !sentText
-      const result = await input.send(item, isFirstText)
+      const result = await input.sendMessage(item, isFirstText)
       if (result.ok) {
         await this.prisma.notificationDeliveryMessage.update({
           where: { id: item.id },
@@ -924,17 +1003,6 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     return status
   }
 
-  private async skipDeliveryMedia(deliveryId: string, reason: string): Promise<void> {
-    await this.prisma.wecomDeliveryMedia.updateMany({
-      where: { deliveryId, status: 'PENDING' },
-      data: {
-        status: 'SKIPPED',
-        failureCode: 'PREVIOUS_MESSAGE_FAILED',
-        failureMessage: reason.slice(0, 255),
-      },
-    })
-  }
-
   private async finalizeMessageDelivery(
     deliveryId: string,
     status: 'ACCEPTED' | 'PARTIAL' | 'FAILED',
@@ -950,171 +1018,162 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     })
   }
 
+  private async sendAppMediaItem(
+    item: DeliveryMediaRow,
+    accessToken: string,
+    agentId: number,
+    toUser: string,
+  ): Promise<boolean> {
+    const asset = item.mediaAsset
+    if (
+      asset.status !== 'READY'
+      || asset.deletedAt !== null
+      || asset.objectKey === null
+      || asset.mediaType !== 'IMAGE'
+    ) {
+      await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
+      return false
+    }
+    let buffer: Buffer
+    try {
+      buffer = await this.mediaService.read(asset.objectKey)
+    }
+    catch {
+      await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+      return false
+    }
+    const prepared = await this.mediaService.prepareAppImage({
+      buffer,
+      mimeType: asset.mimeType,
+      filename: asset.originalFilename ?? 'image.png',
+    })
+    if (!prepared.ok) {
+      await this.markMediaFailure(item.id, prepared.code, prepared.message)
+      return false
+    }
+    const now = new Date()
+    let mediaId = item.mediaId
+    if (mediaId === null || item.mediaIdExpiresAt === null || item.mediaIdExpiresAt.getTime() <= now.getTime()) {
+      const upload = await this.appTransport.uploadImage({
+        accessToken,
+        buffer: prepared.buffer,
+        mimeType: prepared.mimeType,
+        filename: prepared.filename,
+      })
+      if (!upload.ok) {
+        await this.markMediaFailure(item.id, upload.code, upload.message)
+        return false
+      }
+      mediaId = upload.mediaId
+      await this.prisma.wecomDeliveryMedia.update({
+        where: { id: item.id },
+        data: {
+          mediaId,
+          mediaIdExpiresAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1_000),
+        },
+      })
+    }
+    const sent = await this.appTransport.sendImage({
+      accessToken,
+      agentId,
+      toUser,
+      mediaId,
+    })
+    if (!sent.ok) {
+      await this.markMediaFailure(item.id, sent.code, sent.message)
+      return false
+    }
+    await this.prisma.wecomDeliveryMedia.update({
+      where: { id: item.id },
+      data: {
+        status: 'ACCEPTED',
+        attemptCount: { increment: 1 },
+        acceptedAt: new Date(),
+        failureCode: null,
+        failureMessage: null,
+      },
+    })
+    return true
+  }
+
+  /** 兼容没有 delivery message 的旧投递：图片附件仍由旧路径单独发送。 */
   private async sendAppMedia(
     delivery: ClaimedDelivery,
     accessToken: string,
     agentId: number,
     toUser: string,
   ): Promise<boolean> {
-    const items = await this.prisma.wecomDeliveryMedia.findMany({
-      where: { deliveryId: delivery.id, status: 'PENDING' },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        mediaAsset: {
-          select: {
-            mediaType: true,
-            status: true,
-            deletedAt: true,
-            objectKey: true,
-            mimeType: true,
-            originalFilename: true,
-          },
-        },
-      },
-    })
+    const items = await this.findDeliveryMedia(delivery.id)
     let failed = false
-    const now = new Date()
     for (const item of items) {
-      const asset = item.mediaAsset
-      if (
-        asset.status !== 'READY'
-        || asset.deletedAt !== null
-        || asset.objectKey === null
-        || asset.mediaType !== 'IMAGE'
-      ) {
-        await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
-        failed = true
+      if (item.status !== 'PENDING' && item.status !== 'SENDING') {
+        if (item.status === 'FAILED') failed = true
         continue
       }
-      let buffer: Buffer
-      try {
-        buffer = await this.mediaService.read(asset.objectKey)
-      }
-      catch {
-        await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+      if (!await this.sendAppMediaItem(item, accessToken, agentId, toUser)) {
         failed = true
-        continue
       }
-      const prepared = await this.mediaService.prepareAppImage({
-        buffer,
-        mimeType: asset.mimeType,
-        filename: asset.originalFilename ?? 'image.png',
-      })
-      if (!prepared.ok) {
-        await this.markMediaFailure(item.id, prepared.code, prepared.message)
-        failed = true
-        continue
-      }
-      let mediaId = item.mediaId
-      if (mediaId === null || item.mediaIdExpiresAt === null || item.mediaIdExpiresAt.getTime() <= now.getTime()) {
-        const upload = await this.appTransport.uploadImage({
-          accessToken,
-          buffer: prepared.buffer,
-          mimeType: prepared.mimeType,
-          filename: prepared.filename,
-        })
-        if (!upload.ok) {
-          await this.markMediaFailure(item.id, upload.code, upload.message)
-          failed = true
-          continue
-        }
-        mediaId = upload.mediaId
-        await this.prisma.wecomDeliveryMedia.update({
-          where: { id: item.id },
-          data: {
-            mediaId,
-            mediaIdExpiresAt: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1_000),
-          },
-        })
-      }
-      const sent = await this.appTransport.sendImage({
-        accessToken,
-        agentId,
-        toUser,
-        mediaId,
-      })
-      if (!sent.ok) {
-        await this.markMediaFailure(item.id, sent.code, sent.message)
-        failed = true
-        continue
-      }
-      await this.prisma.wecomDeliveryMedia.update({
-        where: { id: item.id },
-        data: {
-          status: 'ACCEPTED',
-          attemptCount: { increment: 1 },
-          acceptedAt: new Date(),
-          failureCode: null,
-          failureMessage: null,
-        },
-      })
     }
     return failed
   }
 
-  private async sendRobotMedia(delivery: ClaimedDelivery, webhookKey: string): Promise<boolean> {
-    const items = await this.prisma.wecomDeliveryMedia.findMany({
-      where: { deliveryId: delivery.id, status: 'PENDING' },
-      orderBy: { sortOrder: 'asc' },
-      include: {
-        mediaAsset: {
-          select: {
-            mediaType: true,
-            status: true,
-            deletedAt: true,
-            objectKey: true,
-          },
-        },
+  private async sendRobotMediaItem(item: DeliveryMediaRow, webhookKey: string): Promise<boolean> {
+    const asset = item.mediaAsset
+    if (
+      asset.status !== 'READY'
+      || asset.deletedAt !== null
+      || asset.objectKey === null
+      || asset.mediaType !== 'IMAGE'
+    ) {
+      await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
+      return false
+    }
+    let buffer: Buffer
+    try {
+      buffer = await this.mediaService.read(asset.objectKey)
+    }
+    catch {
+      await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+      return false
+    }
+    const prepared = await this.mediaService.prepareRobotImage(buffer)
+    if (!prepared.ok) {
+      await this.markMediaFailure(item.id, prepared.code, prepared.message)
+      return false
+    }
+    const sent = await this.robotTransport.sendImage({
+      webhookKey,
+      base64: prepared.base64,
+      md5: prepared.md5,
+    })
+    if (!sent.ok) {
+      await this.markMediaFailure(item.id, sent.code, sent.message)
+      return false
+    }
+    await this.prisma.wecomDeliveryMedia.update({
+      where: { id: item.id },
+      data: {
+        status: 'ACCEPTED',
+        attemptCount: { increment: 1 },
+        acceptedAt: new Date(),
+        failureCode: null,
+        failureMessage: null,
       },
     })
+    return true
+  }
+
+  private async sendRobotMedia(delivery: ClaimedDelivery, webhookKey: string): Promise<boolean> {
+    const items = await this.findDeliveryMedia(delivery.id)
     let failed = false
     for (const item of items) {
-      const asset = item.mediaAsset
-      if (
-        asset.status !== 'READY'
-        || asset.deletedAt !== null
-        || asset.objectKey === null
-        || asset.mediaType !== 'IMAGE'
-      ) {
-        await this.markMediaFailure(item.id, 'MEDIA_NOT_READY', '媒体资产不可用')
-        failed = true
+      if (item.status !== 'PENDING' && item.status !== 'SENDING') {
+        if (item.status === 'FAILED') failed = true
         continue
       }
-      let buffer: Buffer
-      try {
-        buffer = await this.mediaService.read(asset.objectKey)
-      }
-      catch {
-        await this.markMediaFailure(item.id, 'MEDIA_READ_FAILED', '读取媒体资产失败')
+      if (!await this.sendRobotMediaItem(item, webhookKey)) {
         failed = true
-        continue
       }
-      const prepared = await this.mediaService.prepareRobotImage(buffer)
-      if (!prepared.ok) {
-        await this.markMediaFailure(item.id, prepared.code, prepared.message)
-        failed = true
-        continue
-      }
-      const sent = await this.robotTransport.sendImage({
-        webhookKey,
-        base64: prepared.base64,
-        md5: prepared.md5,
-      })
-      if (!sent.ok) {
-        await this.markMediaFailure(item.id, sent.code, sent.message)
-        failed = true
-        continue
-      }
-      await this.prisma.wecomDeliveryMedia.update({
-        where: { id: item.id },
-        data: {
-          status: 'ACCEPTED',
-          attemptCount: { increment: 1 },
-          acceptedAt: new Date(),
-          failureCode: null,
-          failureMessage: null,
-        },
-      })
     }
     return failed
   }

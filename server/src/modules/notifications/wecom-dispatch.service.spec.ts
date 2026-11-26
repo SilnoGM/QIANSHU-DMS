@@ -543,6 +543,93 @@ describe('WecomDispatchService', () => {
     })
   })
 
+  it('sends messages and image attachments strictly in message group order', async () => {
+    const prisma = basePrisma({
+      wecomTarget: {
+        findUnique: jest.fn().mockResolvedValue({
+          webhookKeyEncrypted: 'encrypted-key',
+          enabled: true,
+          internalOnly: true,
+        }),
+      },
+      notificationDeliveryMessage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'delivery-message-1',
+            deliveryId: 'delivery-1',
+            renderedMessageId: 'rendered-1',
+            sortOrder: 0,
+            status: 'PENDING',
+            attemptCount: 0,
+            nextAttemptAt: new Date('2026-11-25T10:00:00.000Z'),
+            providerMsgId: null,
+            failureCode: null,
+            failureMessage: null,
+            acceptedAt: null,
+            renderedMessage: { kind: 'TEXT', payloadSnapshot: { content: '第一' } },
+          },
+          {
+            id: 'delivery-message-3',
+            deliveryId: 'delivery-1',
+            renderedMessageId: 'rendered-3',
+            sortOrder: 2,
+            status: 'PENDING',
+            attemptCount: 0,
+            nextAttemptAt: new Date('2026-11-25T10:00:00.000Z'),
+            providerMsgId: null,
+            failureCode: null,
+            failureMessage: null,
+            acceptedAt: null,
+            renderedMessage: { kind: 'TEXT', payloadSnapshot: { content: '第三' } },
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      wecomDeliveryMedia: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'delivery-media-1',
+          deliveryId: 'delivery-1',
+          mediaAssetId: 'asset-1',
+          sortOrder: 0,
+          messageSortOrder: 1,
+          status: 'PENDING',
+          attemptCount: 0,
+          mediaId: null,
+          mediaIdExpiresAt: null,
+          mediaAsset: {
+            mediaType: 'IMAGE',
+            status: 'READY',
+            deletedAt: null,
+            objectKey: 'assets/image.png',
+            mimeType: 'image/png',
+            originalFilename: 'image.png',
+          },
+        }]),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    })
+    const robot = {
+      sendText: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
+      sendImage: jest.fn().mockResolvedValue({ ok: true, msgId: null }),
+      sendMarkdown: jest.fn(),
+    }
+    const instance = service(prisma, robot, undefined, {
+      read: jest.fn().mockResolvedValue(Buffer.from('image')),
+      prepareRobotImage: jest.fn().mockResolvedValue({ ok: true, base64: 'base64', md5: 'md5' }),
+    })
+
+    await runDelivery(instance, robotDelivery())
+
+    expect(robot.sendText).toHaveBeenNthCalledWith(1, { webhookKey: 'plain-secret', content: '第一' })
+    expect(robot.sendImage).toHaveBeenCalledTimes(1)
+    expect(robot.sendText).toHaveBeenNthCalledWith(2, { webhookKey: 'plain-secret', content: '第三' })
+    expect(prisma.wecomDeliveryMedia.update).toHaveBeenCalledWith({
+      where: { id: 'delivery-media-1' },
+      data: expect.objectContaining({ status: 'ACCEPTED' }),
+    })
+  })
+
   it('sends an mpnews item with cover media and inline image URL', async () => {
     const coverId = '00000000-0000-4000-8000-000000000099'
     const inlineId = '00000000-0000-4000-8000-000000000097'

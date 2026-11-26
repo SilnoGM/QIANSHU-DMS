@@ -63,6 +63,7 @@ interface ResolvedChannelResult {
 interface NotificationMediaAttachment {
   readonly mediaAssetId: string
   readonly sortOrder: number
+  readonly messageSortOrder: number
 }
 
 interface NotificationInlineMediaAssignment {
@@ -680,6 +681,7 @@ export class SystemNotificationService {
           deliveryId: delivery.id,
           mediaAssetId: item.mediaAssetId,
           sortOrder: item.sortOrder,
+          messageSortOrder: item.messageSortOrder,
         }))),
       })
     }
@@ -800,6 +802,7 @@ export class SystemNotificationService {
         sourceKey: item.sourceKey,
         sortOrder,
         assignedTo: null as 'INLINE' | 'ATTACHMENT' | null,
+        attachmentMessageSortOrder: null as number | null,
         blockedReason,
       }
     })
@@ -857,6 +860,7 @@ export class SystemNotificationService {
           continue
         }
         state.assignedTo = 'ATTACHMENT'
+        state.attachmentMessageSortOrder = message.sortOrder
         remaining -= 1
       }
     }
@@ -873,7 +877,11 @@ export class SystemNotificationService {
         continue
       }
       if (state.assignedTo === 'ATTACHMENT') {
-        attachments.push({ mediaAssetId: state.assetId, sortOrder: state.sortOrder })
+        attachments.push({
+          mediaAssetId: state.assetId,
+          sortOrder: state.sortOrder,
+          messageSortOrder: state.attachmentMessageSortOrder ?? state.sortOrder,
+        })
         rows.push({
           mediaAssetId: state.assetId,
           sortOrder: state.sortOrder,
