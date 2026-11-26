@@ -191,6 +191,7 @@ describe('purchase order schema with isolated PostgreSQL', () => {
     )
 
     expect(result.rows).toEqual([
+      { code: 'purchase-orders:auto-review', system_only: true },
       { code: 'purchase-orders:correction', system_only: true },
       { code: 'purchase-orders:create', system_only: false },
       { code: 'purchase-orders:create-stock', system_only: true },

@@ -9,6 +9,7 @@ import { AppModule } from '../src/app.module'
 import { configureApplication } from '../src/app.setup'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { AuthSessionService } from '../src/modules/auth/auth-session.service'
+import { seedNotificationEventChannel } from './fixtures/notification-event-channel'
 
 const APP_ORIGIN = 'http://127.0.0.1:9000'
 const CSRF_HEADERS = {
@@ -18,7 +19,6 @@ const CSRF_HEADERS = {
 } as const
 
 const EVENT_TYPE = 'SALES_RECEIPT_REVIEW_PENDING'
-const TEMPLATE_KEY = 'sales.receipt.pending'
 
 function createSessionCookie(tokenValue: string): string {
   return `qianshu_session_dev=${tokenValue}`
@@ -29,7 +29,6 @@ describe('Notification preference API with PostgreSQL', () => {
   let prisma: PrismaService
   let sessionService: AuthSessionService
   const createdUserIds: string[] = []
-  let createdTemplateId: string | null = null
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
@@ -39,29 +38,35 @@ describe('Notification preference API with PostgreSQL', () => {
     prisma = application.get(PrismaService)
     sessionService = application.get(AuthSessionService)
 
-    // 迁移已清空全部内置模板；这里补一份站内模板，让事件进入「可设置」状态。
-    const existing = await prisma.notificationTemplate.findUnique({
-      where: { key_channel: { key: TEMPLATE_KEY, channel: 'IN_APP' } },
-      select: { id: true },
+    await prisma.notificationChannelSettings.upsert({
+      where: { channel: 'IN_APP' },
+      create: { channel: 'IN_APP', enabled: true },
+      update: { enabled: true },
     })
-    if (existing === null) {
-      // 同一模板键的渠道域必须一致；WECOM 基线可能已建好同键模板，沿用其域。
-      const sibling = await prisma.notificationTemplate.findFirst({
-        where: { key: TEMPLATE_KEY },
-        select: { domain: true },
-      })
-      const template = await prisma.notificationTemplate.create({
-        data: {
-          key: TEMPLATE_KEY,
-          channel: 'IN_APP',
-          name: 'E2E 收款待审核',
-          domain: sibling?.domain ?? 'SYSTEM',
-          bodyTemplate: '收款 {{collectionNo}} 待审核',
-          variables: [{ name: 'collectionNo', required: true }],
-        },
-      })
-      createdTemplateId = template.id
-    }
+    await prisma.notificationChannelSettings.upsert({
+      where: { channel: 'WECOM' },
+      create: { channel: 'WECOM', enabled: false },
+      update: { enabled: false },
+    })
+    await seedNotificationEventChannel(prisma, {
+      eventType: EVENT_TYPE,
+      channel: 'IN_APP',
+      sendMethod: 'IN_APP',
+      messages: [{
+        kind: 'TEXT',
+        payload: { title: null, content: '收款 {{collectionNo}} 待审核', linkUrl: null },
+      }],
+    })
+    await seedNotificationEventChannel(prisma, {
+      eventType: EVENT_TYPE,
+      channel: 'WECOM',
+      sendMethod: 'APP',
+      enabled: false,
+      messages: [{
+        kind: 'TEXT',
+        payload: { title: null, content: '收款 {{collectionNo}} 待审核', linkUrl: null },
+      }],
+    })
   })
 
   afterAll(async () => {
@@ -69,9 +74,6 @@ describe('Notification preference API with PostgreSQL', () => {
       await prisma.notificationUserMute.deleteMany({ where: { userId: { in: createdUserIds } } })
       await prisma.authSession.deleteMany({ where: { userId: { in: createdUserIds } } })
       await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } })
-    }
-    if (createdTemplateId !== null) {
-      await prisma.notificationTemplate.deleteMany({ where: { id: createdTemplateId } })
     }
     await application.close()
   })
@@ -119,7 +121,7 @@ describe('Notification preference API with PostgreSQL', () => {
     ]))
     expect(initialEvent?.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ channel: 'IN_APP', available: true, muted: false, unavailableReason: null }),
-      expect.objectContaining({ channel: 'WECOM', available: false, unavailableReason: 'POLICY_DISABLED' }),
+      expect.objectContaining({ channel: 'WECOM', available: false, unavailableReason: 'CONFIG_DISABLED' }),
     ]))
 
     await request(application.getHttpServer())
