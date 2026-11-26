@@ -66,7 +66,7 @@ const context = computed<MessageEditorContext>(() => ({
 const dirty = computed(() => messageDraftSnapshot(draft.value) !== snapshot.value)
 const title = computed(() => {
   const action = props.seed === null ? '添加' : '编辑'
-  return props.kind === 'MPNEWS' ? `${action} mpnews 消息` : `${action}${messageKindLabel(props.kind)}消息`
+  return `${action}${messageKindLabel(props.kind)}`
 })
 const hasErrors = computed(() => Object.keys(errors.value).length > 0)
 const errorEntries = computed(() => Object.entries(errors.value).map(([field, message]) => ({

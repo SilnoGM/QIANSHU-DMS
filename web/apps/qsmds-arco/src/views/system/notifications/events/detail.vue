@@ -396,7 +396,7 @@ function textContent(message: MessageDraft): string {
 
 function messageSummary(message: MessageDraft): string {
   if (message.kind === 'TEXT') {
-    return textContent(message).trim().slice(0, 80) || '空文本'
+    return textContent(message).trim().slice(0, 80) || '空内容'
   }
   if (message.kind === 'MPNEWS') {
     return typeof message.payload.title === 'string' && message.payload.title.trim().length > 0
@@ -455,6 +455,40 @@ function messageKindCounts(draft: ChannelDraft): Array<{ kind: MessageKind, coun
   return [...counts.entries()].map(([kind, count]) => ({ kind, count }))
 }
 
+const addMessageMenu = computed(() => {
+  const draft = activeDraft.value
+  if (draft === null) {
+    return []
+  }
+  const items: Array<{ label: string, icon: string, handle: () => void }> = []
+  if (draft.channel === 'WECOM' || draft.messages.length === 0) {
+    items.push({
+      label: '普通图文',
+      icon: 'i-lucide:type',
+      handle: () => openCreateMessage('TEXT'),
+    })
+  }
+  if (
+    draft.channel === 'WECOM'
+    && draft.sendMethod === 'APP'
+    && !draft.messages.some(message => message.kind === 'MPNEWS')
+  ) {
+    items.push({
+      label: '企微图文',
+      icon: 'i-lucide:newspaper',
+      handle: () => openCreateMessage('MPNEWS'),
+    })
+  }
+  if (draft.channel === 'WECOM' && event.value?.media != null) {
+    items.push({
+      label: '图片附件',
+      icon: 'i-lucide:image-plus',
+      handle: () => openCreateMessage('IMAGE'),
+    })
+  }
+  return items.length === 0 ? [] : [items]
+})
+
 function validateDraft(draft: ChannelDraft): string | null {
   if (!draft.enabled && draft.messages.length === 0) {
     return null
@@ -464,11 +498,11 @@ function validateDraft(draft: ChannelDraft): string | null {
   }
   if (draft.channel === 'IN_APP'
     && (draft.messages.length !== 1 || draft.messages[0]?.kind !== 'TEXT')) {
-    return '站内通知必须配置且只配置一条文本消息'
+    return '站内通知必须配置且只配置一条普通图文'
   }
   if (draft.channel === 'WECOM') {
     if (draft.messages.filter(message => message.kind === 'MPNEWS').length > 1) {
-      return '同一渠道只允许一条 mpnews 消息'
+      return '同一渠道只允许一条企微图文'
     }
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
     const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
@@ -476,10 +510,10 @@ function validateDraft(draft: ChannelDraft): string | null {
       : ['TEXT', 'MPNEWS', 'IMAGE']
     const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
     if (unsupported !== undefined) {
-      return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${unsupported.kind} 消息，请删除或切换发送方式`
+      return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${messageKindLabel(unsupported.kind)} 消息，请删除或切换发送方式`
     }
     if (!draft.messages.some(message => message.kind === 'TEXT' || message.kind === 'MPNEWS')) {
-      return '企业微信渠道至少需要一条文本消息'
+      return '企业微信渠道至少需要一条普通图文'
     }
     const maximum = event.value?.media?.maxCount ?? 0
     for (const message of draft.messages) {
@@ -842,35 +876,20 @@ onBeforeUnmount(() => {
                   按顺序发送；图片附件在全部正文之后发送。
                 </div>
               </div>
-              <div class="flex flex-wrap gap-2">
+              <FaDropdown
+                v-if="canUpdate && addMessageMenu.length > 0"
+                :items="addMessageMenu"
+                align="end"
+              >
                 <FaButton
-                  v-if="canUpdate && (activeDraft.channel === 'WECOM' || activeDraft.messages.length === 0)"
                   :variant="activeDraft.messages.length === 0 ? 'default' : 'outline'"
                   size="sm"
-                  @click="openCreateMessage('TEXT')"
                 >
-                  <FaIcon name="i-lucide:type" />
-                  文本消息
+                  <FaIcon name="i-lucide:plus" />
+                  插入消息
+                  <FaIcon name="i-lucide:chevron-down" />
                 </FaButton>
-                <FaButton
-                  v-if="canUpdate && activeDraft.channel === 'WECOM' && activeDraft.sendMethod === 'APP' && !activeDraft.messages.some(message => message.kind === 'MPNEWS')"
-                  variant="outline"
-                  size="sm"
-                  @click="openCreateMessage('MPNEWS')"
-                >
-                  <FaIcon name="i-lucide:newspaper" />
-                  mpnews
-                </FaButton>
-                <FaButton
-                  v-if="canUpdate && activeDraft.channel === 'WECOM' && event?.media != null"
-                  variant="outline"
-                  size="sm"
-                  @click="openCreateMessage('IMAGE')"
-                >
-                  <FaIcon name="i-lucide:image-plus" />
-                  图片附件
-                </FaButton>
-              </div>
+              </FaDropdown>
             </div>
 
             <div class="p-4 flex flex-col gap-3">
@@ -903,9 +922,9 @@ onBeforeUnmount(() => {
                   <FaIcon name="i-lucide:message-square-plus" class="size-5" />
                 </span>
                 <span class="text-sm font-medium">尚未配置消息内容</span>
-                <span class="text-xs text-muted-foreground">从右上角添加文本、mpnews 或图片附件。</span>
+                <span class="text-xs text-muted-foreground">从右上角添加普通图文、企微图文或图片附件。</span>
                 <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="openCreateMessage('TEXT')">
-                  添加文本消息
+                  添加普通图文
                 </FaButton>
               </div>
 
@@ -940,7 +959,7 @@ onBeforeUnmount(() => {
                       {{ messageIssueText(index) }}
                     </div>
                     <div v-else class="text-[11px] text-muted-foreground mt-0.5">
-                      {{ message.kind === 'TEXT' ? '文本正文' : message.kind === 'MPNEWS' ? '图文消息（封面 + 正文）' : '业务附件图片' }}
+                      {{ message.kind === 'TEXT' ? '普通图文' : message.kind === 'MPNEWS' ? '企微图文（封面 + 正文）' : '业务附件图片' }}
                     </div>
                   </div>
                   <div class="flex shrink-0 gap-0.5 items-center">
