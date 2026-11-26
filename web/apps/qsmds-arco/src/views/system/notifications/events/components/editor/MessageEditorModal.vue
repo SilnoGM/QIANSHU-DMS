@@ -1,0 +1,244 @@
+<script setup lang="ts">
+import type {
+  MessageChannel,
+  MessageDraft,
+  MessageEditorContext,
+  MessageKind,
+  MessageSendMethod,
+  MessageValidationIssue,
+} from '../../message-editor.types'
+import type {
+  NotificationEventMediaDto,
+  NotificationEventVariableDto,
+} from '@/api/generated/types.gen'
+
+import { computed, ref, watch } from 'vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import {
+  cloneMessageDraft,
+  createDefaultMessageDraft,
+  messageDraftSnapshot,
+  messageKindLabel,
+  validateMessageDraft,
+} from '../../message-editor.logic'
+import ImageMessageEditor from './ImageMessageEditor.vue'
+import MpnewsMessageEditor from './MpnewsMessageEditor.vue'
+import TextMessageEditor from './TextMessageEditor.vue'
+import VariablePalette from './VariablePalette.vue'
+
+const props = defineProps<{
+  modelValue: boolean
+  kind: MessageKind
+  seed: MessageDraft | null
+  channel: MessageChannel
+  sendMethod: MessageSendMethod
+  media: NotificationEventMediaDto | null
+  variables: NotificationEventVariableDto[]
+  variablesKnown: boolean
+  eventLabel: string
+  eventType: string
+  canUpdate: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'apply': [message: MessageDraft]
+}>()
+
+const draft = ref<MessageDraft>(createDefaultMessageDraft('TEXT', { mediaMaxCount: 0, mediaSources: [] }))
+const snapshot = ref('')
+const errors = ref<Record<string, string>>({})
+const discardPending = ref(false)
+const closingForced = ref(false)
+const editorRef = ref<{ insertVariable?: (name: string) => void } | null>(null)
+
+const context = computed<MessageEditorContext>(() => ({
+  channel: props.channel,
+  sendMethod: props.sendMethod,
+  mediaMaxCount: props.media?.maxCount ?? 0,
+  mediaSources: props.media?.sources.map(source => source.key) ?? [],
+  variables: props.variables,
+  variablesKnown: props.variablesKnown,
+}))
+
+const dirty = computed(() => messageDraftSnapshot(draft.value) !== snapshot.value)
+const title = computed(() => {
+  const action = props.seed === null ? '添加' : '编辑'
+  return props.kind === 'MPNEWS' ? `${action} mpnews 消息` : `${action}${messageKindLabel(props.kind)}消息`
+})
+const hasErrors = computed(() => Object.keys(errors.value).length > 0)
+
+function resetDraft(): void {
+  const initial = props.seed === null
+    ? createDefaultMessageDraft(props.kind, context.value)
+    : cloneMessageDraft(props.seed)
+  draft.value = initial
+  snapshot.value = messageDraftSnapshot(initial)
+  errors.value = {}
+  discardPending.value = false
+  closingForced.value = false
+}
+
+watch(() => props.modelValue, (open) => {
+  if (open) {
+    resetDraft()
+  }
+})
+
+// 用户继续修改后先撤掉上一轮错误提示，点击「完成」时再按最新内容校验。
+watch(draft, () => {
+  if (Object.keys(errors.value).length > 0) {
+    errors.value = {}
+  }
+}, { deep: true })
+
+function groupIssues(issues: readonly MessageValidationIssue[]): Record<string, string> {
+  const grouped = new Map<string, string[]>()
+  for (const issue of issues) {
+    const messages = grouped.get(issue.field) ?? []
+    messages.push(issue.message)
+    grouped.set(issue.field, messages)
+  }
+  return Object.fromEntries([...grouped.entries()].map(([field, messages]) => [field, messages.join('；')]))
+}
+
+function complete(): void {
+  if (!props.canUpdate) {
+    return
+  }
+  const issues = validateMessageDraft(draft.value, context.value)
+  if (issues.length > 0) {
+    errors.value = groupIssues(issues)
+    return
+  }
+  errors.value = {}
+  // 未改动时只关闭，避免把「打开后点完成」误标成页面有未保存修改。
+  if (!dirty.value) {
+    closingForced.value = true
+    emit('update:modelValue', false)
+    return
+  }
+  emit('apply', cloneMessageDraft(draft.value))
+  closingForced.value = true
+  emit('update:modelValue', false)
+}
+
+function requestClose(): void {
+  emit('update:modelValue', false)
+}
+
+function beforeClose(): boolean {
+  if (closingForced.value || !dirty.value) {
+    return true
+  }
+  discardPending.value = true
+  return false
+}
+
+function continueEditing(): void {
+  discardPending.value = false
+}
+
+function discardAndClose(): void {
+  closingForced.value = true
+  discardPending.value = false
+  emit('update:modelValue', false)
+}
+
+function insertVariable(name: string): void {
+  if (props.kind === 'IMAGE') {
+    return
+  }
+  editorRef.value?.insertVariable?.(name)
+}
+</script>
+
+<template>
+  <QsGenericModal
+    :model-value="modelValue"
+    :title="title"
+    :description="`${eventLabel} · ${eventType}`"
+    size="2xl"
+    :before-close="beforeClose"
+    @update:model-value="value => emit('update:modelValue', value)"
+  >
+    <div class="gap-4 grid lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="flex flex-col gap-3 min-w-0">
+        <FaAlert
+          v-if="hasErrors"
+          variant="destructive"
+          title="请先修正编辑区中的错误"
+        />
+
+        <TextMessageEditor
+          v-if="kind === 'TEXT'"
+          ref="editorRef"
+          v-model="draft.payload"
+          :channel="channel"
+          :disabled="!canUpdate"
+          :error="errors.content"
+        />
+        <ImageMessageEditor
+          v-else-if="kind === 'IMAGE'"
+          v-model="draft.mediaPolicy"
+          :sources="media?.sources ?? []"
+          :max-count="media?.maxCount ?? 0"
+          :disabled="!canUpdate"
+          :source-error="errors.mediaPolicy"
+          :max-count-error="errors.maxCount"
+        />
+        <MpnewsMessageEditor
+          v-else-if="kind === 'MPNEWS'"
+          ref="editorRef"
+          v-model="draft.payload"
+          :disabled="!canUpdate"
+          :errors="errors"
+        />
+        <div v-else class="text-sm text-muted-foreground p-6 text-center border border-border rounded-lg border-dashed">
+          该类型暂未开放编辑。
+        </div>
+      </div>
+
+      <aside class="min-w-0 lg:pl-4 lg:border-l lg:border-border">
+        <VariablePalette
+          v-if="kind !== 'IMAGE'"
+          :variables="variables"
+          :variables-known="variablesKnown"
+          :disabled="!canUpdate"
+          @insert="insertVariable"
+        />
+        <div v-else class="text-xs text-muted-foreground">
+          图片附件使用业务附件来源，不使用变量。
+        </div>
+      </aside>
+    </div>
+
+    <template #footer>
+      <div
+        v-if="discardPending"
+        class="px-4 py-3 flex flex-wrap gap-3 items-center justify-between"
+      >
+        <span class="text-sm">有未保存的修改，确定放弃？</span>
+        <div class="flex gap-2">
+          <FaButton variant="outline" size="sm" @click="continueEditing">
+            继续编辑
+          </FaButton>
+          <FaButton variant="destructive" size="sm" @click="discardAndClose">
+            放弃修改
+          </FaButton>
+        </div>
+      </div>
+      <div v-else class="px-4 py-3 flex flex-wrap gap-3 items-center justify-between">
+        <span class="text-xs text-muted-foreground">完成后仍需点击页面右上角「保存修改」。</span>
+        <div class="flex gap-2">
+          <FaButton variant="outline" size="sm" @click="requestClose">
+            取消
+          </FaButton>
+          <FaButton size="sm" :disabled="!canUpdate" @click="complete">
+            完成
+          </FaButton>
+        </div>
+      </div>
+    </template>
+  </QsGenericModal>
+</template>

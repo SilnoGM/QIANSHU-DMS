@@ -18,7 +18,6 @@ const emit = defineEmits<{
 }>()
 
 const linkHref = ref('')
-const variableName = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const uploadError = ref<string | null>(null)
@@ -135,13 +134,11 @@ function applyLink(): void {
   linkHref.value = ''
 }
 
-function insertVariable(): void {
-  const name = variableName.value.trim()
+function insertVariableByName(name: string): void {
   if (name.length === 0) {
     return
   }
   editor.value?.chain().focus().insertContent(`{{${name}}}`).run()
-  variableName.value = ''
 }
 
 function undo(): void {
@@ -197,6 +194,8 @@ async function onImageSelected(event: Event): Promise<void> {
   }
 }
 
+defineExpose({ insertVariable: insertVariableByName })
+
 onBeforeUnmount(() => {
   for (const url of previewUrls.values()) {
     URL.revokeObjectURL(url)
@@ -246,10 +245,6 @@ onBeforeUnmount(() => {
       <FaInput v-model="linkHref" class="w-44" placeholder="链接 https://" :disabled="disabled" />
       <FaButton variant="outline" size="sm" :disabled="disabled" @click="applyLink">
         应用链接
-      </FaButton>
-      <FaInput v-model="variableName" class="w-32" placeholder="变量名" :disabled="disabled" />
-      <FaButton variant="outline" size="sm" :disabled="disabled" @click="insertVariable">
-        插入变量
       </FaButton>
     </div>
     <EditorContent :editor="editor" class="p-3 max-w-none prose prose-sm" />

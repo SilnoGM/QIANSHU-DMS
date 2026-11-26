@@ -344,6 +344,15 @@ function validateMpnews(input: {
   if (author !== null && bytesOf(author) > MAX_AUTHOR_BYTES) {
     issues.push(issue('NOTIFICATION_CONTENT_MPSNEWS_AUTHOR_TOO_LONG', 'mpnews 作者不能超过 64 字节', input.itemIndex, 'author'))
   }
+  // 作者会参与变量渲染，保存阶段必须与标题/正文使用同一套占位符校验。
+  if (author !== null) {
+    issues.push(...inspectContentPlaceholders({
+      texts: [author],
+      allowedVariables: input.allowedVariables,
+      itemIndex: input.itemIndex,
+      field: 'author',
+    }))
+  }
 
   const digest = record?.digest === null || record?.digest === undefined ? null : asTrimmedString(record.digest)
   if (digest !== null && bytesOf(digest) > MAX_DIGEST_BYTES) {

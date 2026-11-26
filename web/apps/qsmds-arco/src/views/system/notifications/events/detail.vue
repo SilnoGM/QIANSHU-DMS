@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { TargetValueOption } from './target-options'
+import type { MessageDraft, MessageKind } from './message-editor.types'
 
+import type { TargetValueOption } from './target-options'
 import type {
   NotificationEventChannelConfigDto,
-  NotificationEventChannelMessageDto,
   NotificationEventConfigDto,
   NotificationEventConfigUpdateDto,
 } from '@/api/generated/types.gen'
@@ -16,24 +16,16 @@ import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { useAppAuth } from '@/composables/app/auth'
-import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import { notificationDomainLabel } from '../notification-domain.logic'
-import RichTextEditor from './components/RichTextEditor.vue'
+import MessageEditorModal from './components/editor/MessageEditorModal.vue'
 import TargetValuePicker from './components/TargetValuePicker.vue'
+import { imageMaxCount, imageSourceKeys, messageKindLabel } from './message-editor.logic'
 
 defineOptions({ name: 'SystemNotificationEventDetail' })
 
 type Channel = 'IN_APP' | 'WECOM'
 type SendMethod = 'IN_APP' | 'APP' | 'ROBOT'
 type TargetMode = 'COMMAND_TARGET' | 'USERS' | 'ROLE' | 'PERMISSION' | 'GROUP'
-type MessageKind = NotificationEventChannelMessageDto['kind']
-
-interface MessageDraft {
-  kind: MessageKind
-  payload: Record<string, unknown>
-  mediaPolicy: Record<string, unknown>
-  enabled: boolean
-}
 
 interface ChannelDraft {
   channel: Channel
@@ -64,24 +56,22 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const dirty = ref(false)
-const coverFileInput = ref<HTMLInputElement | null>(null)
-const coverTargetIndex = ref<number | null>(null)
-const coverUploadingIndex = ref<number | null>(null)
-const coverUploadErrors = ref<Record<number, string>>({})
-const coverPreviewUrls = ref<Record<string, string>>({})
 const userOptions = ref<TargetValueOption[]>([])
 const roleOptions = ref<TargetValueOption[]>([])
 const permissionOptions = ref<TargetValueOption[]>([])
 const groupOptions = ref<TargetValueOption[]>([])
 const targetOptionsLoading = ref(false)
 const targetOptionsError = ref<string | null>(null)
+const editorOpen = ref(false)
+const editingIndex = ref<number | null>(null)
+const editingKind = ref<MessageKind>('TEXT')
+const editingSeed = ref<MessageDraft | null>(null)
 let targetOptionsController: AbortController | null = null
-
-const MAXIMUM_COVER_BYTES = 10 * 1024 * 1024
 
 const eventType = computed(() => String(route.params.eventType ?? ''))
 const activeDraft = computed(() => drafts.value.find(channel => channel.channel === activeChannel.value) ?? null)
 const activeValidationError = computed(() => activeDraft.value === null ? null : validateDraft(activeDraft.value))
+const mediaSourceKeys = computed(() => event.value?.media?.sources.map(source => source.key) ?? [])
 
 const TARGET_MODE_OPTIONS: Array<{ label: string, value: TargetMode }> = [
   { label: '动态目标', value: 'COMMAND_TARGET' },
@@ -311,92 +301,45 @@ function targetSummary(draft: ChannelDraft): string {
   }
 }
 
-function addTextMessage(): void {
+function openCreateMessage(kind: MessageKind): void {
   const draft = activeDraft.value
   if (draft === null) {
     return
   }
-  if (draft.channel === 'IN_APP' && draft.messages.length >= 1) {
+  if (kind === 'TEXT' && draft.channel === 'IN_APP' && draft.messages.length >= 1) {
     return
   }
-  draft.messages.push({
-    kind: 'TEXT',
-    payload: { title: null, content: '', linkUrl: null },
-    mediaPolicy: {},
-    enabled: true,
-  })
-  markDirty()
+  if (kind === 'MPNEWS' && draft.messages.some(message => message.kind === 'MPNEWS')) {
+    return
+  }
+  editingIndex.value = null
+  editingKind.value = kind
+  editingSeed.value = null
+  editorOpen.value = true
 }
 
-function addMpnewsMessage(): void {
+function openEditMessage(index: number): void {
+  const message = activeDraft.value?.messages[index]
+  if (message === undefined) {
+    return
+  }
+  editingIndex.value = index
+  editingKind.value = message.kind
+  editingSeed.value = message
+  editorOpen.value = true
+}
+
+function applyMessage(message: MessageDraft): void {
   const draft = activeDraft.value
-  if (draft === null || draft.channel !== 'WECOM' || draft.sendMethod !== 'APP') {
+  if (draft === null) {
     return
   }
-  draft.messages.push({
-    kind: 'MPNEWS',
-    payload: {
-      cover: null,
-      title: '',
-      author: null,
-      digest: null,
-      contentSourceUrl: null,
-      content: '',
-    },
-    mediaPolicy: {},
-    enabled: true,
-  })
-  markDirty()
-}
-
-function addImageMessage(): void {
-  const draft = activeDraft.value
-  const media = event.value?.media
-  if (draft === null || draft.channel !== 'WECOM' || media === null || media === undefined) {
-    return
-  }
-  draft.messages.push({
-    kind: 'IMAGE',
-    payload: {},
-    mediaPolicy: {
-      sourceKeys: media.sources.map(source => source.key),
-      maxCount: media.maxCount,
-    },
-    enabled: true,
-  })
-  markDirty()
-}
-
-function imageSourceKeys(message: MessageDraft): string[] {
-  const value = message.mediaPolicy.sourceKeys
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-}
-
-function imageMaxCount(message: MessageDraft): number {
-  const value = message.mediaPolicy.maxCount
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
-}
-
-function toggleImageSource(message: MessageDraft, sourceKey: string, checked: boolean): void {
-  const selected = new Set(imageSourceKeys(message))
-  if (checked) {
-    selected.add(sourceKey)
+  if (editingIndex.value === null) {
+    draft.messages.push(message)
   }
   else {
-    selected.delete(sourceKey)
+    draft.messages.splice(editingIndex.value, 1, message)
   }
-  const ordered = (event.value?.media?.sources ?? [])
-    .map(source => source.key)
-    .filter(key => selected.has(key))
-  message.mediaPolicy = { ...message.mediaPolicy, sourceKeys: ordered }
-  markDirty()
-}
-
-function setImageMaxCount(message: MessageDraft, value: string): void {
-  const maximum = event.value?.media?.maxCount ?? 1
-  const parsed = Number(value)
-  const maxCount = Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, maximum) : 1
-  message.mediaPolicy = { ...message.mediaPolicy, maxCount }
   markDirty()
 }
 
@@ -425,116 +368,20 @@ function textContent(message: MessageDraft): string {
   return typeof message.payload.content === 'string' ? message.payload.content : ''
 }
 
-function setTextContent(message: MessageDraft, value: string): void {
-  message.payload = { ...message.payload, content: value }
-  markDirty()
-}
-
-function payloadString(message: MessageDraft, key: string): string {
-  const value = message.payload[key]
-  return typeof value === 'string' ? value : ''
-}
-
-function setPayloadString(message: MessageDraft, key: string, value: string): void {
-  message.payload = { ...message.payload, [key]: value }
-  markDirty()
-}
-
-function coverAssetId(message: MessageDraft): string {
-  const cover = message.payload.cover
-  if (typeof cover !== 'object' || cover === null || Array.isArray(cover)) {
-    return ''
-  }
-  const assetId = (cover as Record<string, unknown>).mediaAssetId
-  return typeof assetId === 'string' ? assetId : ''
-}
-
-function coverPreviewUrl(message: MessageDraft): string {
-  const assetId = coverAssetId(message)
-  if (assetId === '') {
-    return ''
-  }
-  return coverPreviewUrls.value[assetId] ?? notificationsApi.contentMedia.contentUrl(assetId)
-}
-
-function setCover(message: MessageDraft, assetId: string): void {
-  message.payload = { ...message.payload, cover: { mediaAssetId: assetId } }
-  markDirty()
-}
-
-function clearCover(message: MessageDraft): void {
-  message.payload = { ...message.payload, cover: null }
-  markDirty()
-}
-
-function chooseCover(index: number): void {
-  coverTargetIndex.value = index
-  coverFileInput.value?.click()
-}
-
-async function onCoverSelected(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  const index = coverTargetIndex.value
-  coverTargetIndex.value = null
-  const message = index === null ? undefined : activeDraft.value?.messages[index]
-  if (index === null || message === undefined || file === undefined || coverUploadingIndex.value !== null) {
-    return
-  }
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    coverUploadErrors.value = { ...coverUploadErrors.value, [index]: '仅支持 JPEG、PNG、WebP 图片' }
-    return
-  }
-  if (file.size > MAXIMUM_COVER_BYTES) {
-    coverUploadErrors.value = { ...coverUploadErrors.value, [index]: '封面图片不得超过 10 MiB' }
-    return
-  }
-  coverUploadingIndex.value = index
-  coverUploadErrors.value = { ...coverUploadErrors.value, [index]: '' }
-  try {
-    const response = await notificationsApi.contentMedia.upload(file, new AbortController().signal)
-    if (!activeDraft.value?.messages.includes(message)) {
-      return
-    }
-    coverPreviewUrls.value = {
-      ...coverPreviewUrls.value,
-      [response.data.assetId]: URL.createObjectURL(file),
-    }
-    setCover(message, response.data.assetId)
-  }
-  catch (failure) {
-    coverUploadErrors.value = {
-      ...coverUploadErrors.value,
-      [index]: getApiClientFailureMessage(failure, '封面上传失败'),
-    }
-  }
-  finally {
-    coverUploadingIndex.value = null
-  }
-}
-
 function messageSummary(message: MessageDraft): string {
   if (message.kind === 'TEXT') {
     return textContent(message).trim().slice(0, 80) || '空文本'
   }
   if (message.kind === 'MPNEWS') {
-    return typeof message.payload.title === 'string' ? message.payload.title : 'mpnews'
+    return typeof message.payload.title === 'string' && message.payload.title.trim().length > 0
+      ? message.payload.title
+      : '未填写标题'
   }
   if (message.kind === 'IMAGE') {
-    const count = imageSourceKeys(message).length
-    return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message)} 张`
+    const count = imageSourceKeys(message.mediaPolicy, mediaSourceKeys.value).length
+    return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message.mediaPolicy)} 张`
   }
   return message.kind
-}
-
-function messageKindLabel(kind: MessageKind): string {
-  const labels: Partial<Record<MessageKind, string>> = {
-    TEXT: '文本',
-    MPNEWS: 'mpnews',
-    IMAGE: '图片附件',
-  }
-  return labels[kind] ?? kind
 }
 
 function channelDescription(channel: Channel): string {
@@ -558,7 +405,7 @@ function messageKindCounts(draft: ChannelDraft): Array<{ kind: MessageKind, coun
 }
 
 function validateDraft(draft: ChannelDraft): string | null {
-  if (!draft.enabled) {
+  if (!draft.enabled && draft.messages.length === 0) {
     return null
   }
   if (draft.messages.length === 0) {
@@ -569,6 +416,9 @@ function validateDraft(draft: ChannelDraft): string | null {
     return '站内通知必须配置且只配置一条文本消息'
   }
   if (draft.channel === 'WECOM') {
+    if (draft.messages.filter(message => message.kind === 'MPNEWS').length > 1) {
+      return '同一渠道只允许一条 mpnews 消息'
+    }
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
     const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
       ? ['TEXT', 'IMAGE']
@@ -585,10 +435,10 @@ function validateDraft(draft: ChannelDraft): string | null {
       if (message.kind !== 'IMAGE') {
         continue
       }
-      if (imageSourceKeys(message).length === 0) {
+      if (imageSourceKeys(message.mediaPolicy, mediaSourceKeys.value).length === 0) {
         return '图片附件至少选择一个来源'
       }
-      if (imageMaxCount(message) > maximum) {
+      if (imageMaxCount(message.mediaPolicy) > maximum) {
         return `图片附件数量上限不能超过 ${maximum}`
       }
     }
@@ -608,7 +458,8 @@ async function save(): Promise<void> {
       return
     }
   }
-  const toSave = drafts.value.filter(draft => draft.enabled || draft.expectedVersion > 0)
+  // 未启用的新渠道也要保存已配置的消息，否则弹窗里点「完成」后再保存会被静默丢弃。
+  const toSave = drafts.value.filter(draft => draft.enabled || draft.expectedVersion > 0 || draft.messages.length > 0)
   if (toSave.length === 0) {
     toast.error('至少配置一个通知渠道')
     return
@@ -662,9 +513,6 @@ watch(eventType, load)
 
 onBeforeUnmount(() => {
   targetOptionsController?.abort()
-  for (const url of Object.values(coverPreviewUrls.value)) {
-    URL.revokeObjectURL(url)
-  }
 })
 </script>
 
@@ -729,23 +577,6 @@ onBeforeUnmount(() => {
           <span v-if="!canUpdate" class="text-xs text-muted-foreground px-2 py-0.5 border border-border rounded-full">
             只读
           </span>
-        </div>
-        <div class="mt-4">
-          <div class="text-xs text-muted-foreground font-medium">
-            可用变量
-          </div>
-          <div v-if="event.variables.length > 0" class="mt-2 pr-1 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-            <span
-              v-for="variable in event.variables"
-              :key="variable"
-              class="text-[11px] font-mono px-1.5 py-0.5 border border-border rounded bg-muted/50"
-            >
-              {{ variable }}
-            </span>
-          </div>
-          <div v-else class="text-xs text-muted-foreground mt-1">
-            未声明变量；内容中不要使用占位符。
-          </div>
         </div>
       </div>
 
@@ -960,16 +791,16 @@ onBeforeUnmount(() => {
                   v-if="canUpdate && (activeDraft.channel === 'WECOM' || activeDraft.messages.length === 0)"
                   :variant="activeDraft.messages.length === 0 ? 'default' : 'outline'"
                   size="sm"
-                  @click="addTextMessage"
+                  @click="openCreateMessage('TEXT')"
                 >
                   <FaIcon name="i-lucide:type" />
                   文本消息
                 </FaButton>
                 <FaButton
-                  v-if="canUpdate && activeDraft.channel === 'WECOM' && activeDraft.sendMethod === 'APP'"
+                  v-if="canUpdate && activeDraft.channel === 'WECOM' && activeDraft.sendMethod === 'APP' && !activeDraft.messages.some(message => message.kind === 'MPNEWS')"
                   variant="outline"
                   size="sm"
-                  @click="addMpnewsMessage"
+                  @click="openCreateMessage('MPNEWS')"
                 >
                   <FaIcon name="i-lucide:newspaper" />
                   mpnews
@@ -978,7 +809,7 @@ onBeforeUnmount(() => {
                   v-if="canUpdate && activeDraft.channel === 'WECOM' && event?.media != null"
                   variant="outline"
                   size="sm"
-                  @click="addImageMessage"
+                  @click="openCreateMessage('IMAGE')"
                 >
                   <FaIcon name="i-lucide:image-plus" />
                   图片附件
@@ -1002,217 +833,76 @@ onBeforeUnmount(() => {
                 </span>
                 <span class="text-sm font-medium">尚未配置消息内容</span>
                 <span class="text-xs text-muted-foreground">从右上角添加文本、mpnews 或图片附件。</span>
-                <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="addTextMessage">
+                <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="openCreateMessage('TEXT')">
                   添加文本消息
                 </FaButton>
               </div>
 
-              <div v-else class="flex flex-col gap-3">
+              <div v-else class="flex flex-col gap-2">
                 <div
                   v-for="(message, index) in activeDraft.messages"
                   :key="`${message.kind}-${index}`"
-                  class="border border-border rounded-xl overflow-hidden"
+                  class="p-3 border border-border rounded-xl bg-card flex flex-wrap gap-3 transition-colors items-center hover:border-primary/30"
                 >
-                  <div class="px-3 py-2 border-b border-border bg-muted/30 flex flex-wrap gap-2 items-center">
-                    <span class="text-[10px] font-medium border border-border rounded-full bg-background flex shrink-0 size-5 items-center justify-center">
-                      {{ index + 1 }}
-                    </span>
-                    <span class="text-xs font-mono px-1.5 py-0.5 border border-border rounded bg-background">
-                      {{ messageKindLabel(message.kind) }}
-                    </span>
-                    <span class="text-xs text-muted-foreground flex-1 min-w-0 truncate">
+                  <span class="text-[10px] font-medium border border-border rounded-full bg-muted/50 flex shrink-0 size-6 items-center justify-center tabular-nums">
+                    {{ index + 1 }}
+                  </span>
+                  <span
+                    class="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0"
+                    :class="message.kind === 'TEXT'
+                      ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400'
+                      : message.kind === 'MPNEWS'
+                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'"
+                  >
+                    {{ messageKindLabel(message.kind) }}
+                  </span>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm truncate">
                       {{ messageSummary(message) }}
-                    </span>
-                    <div class="ml-auto flex gap-0.5">
-                      <FaButton
-                        variant="ghost"
-                        size="icon-sm"
-                        title="上移"
-                        :disabled="!canUpdate || index === 0"
-                        @click="moveMessage(index, -1)"
-                      >
-                        <FaIcon name="i-lucide:arrow-up" />
-                      </FaButton>
-                      <FaButton
-                        variant="ghost"
-                        size="icon-sm"
-                        title="下移"
-                        :disabled="!canUpdate || index === activeDraft.messages.length - 1"
-                        @click="moveMessage(index, 1)"
-                      >
-                        <FaIcon name="i-lucide:arrow-down" />
-                      </FaButton>
-                      <FaButton
-                        variant="ghost"
-                        size="icon-sm"
-                        title="删除"
-                        :disabled="!canUpdate"
-                        @click="removeMessage(index)"
-                      >
-                        <FaIcon name="i-lucide:trash-2" />
-                      </FaButton>
+                    </div>
+                    <div class="text-[11px] text-muted-foreground mt-0.5">
+                      {{ message.kind === 'TEXT' ? '文本正文' : message.kind === 'MPNEWS' ? '图文消息（封面 + 正文）' : '业务附件图片' }}
                     </div>
                   </div>
-
-                  <div class="p-3">
-                    <FaTextarea
-                      v-if="message.kind === 'TEXT'"
-                      :model-value="textContent(message)"
+                  <div class="flex shrink-0 gap-0.5 items-center">
+                    <FaButton
+                      variant="ghost"
+                      size="icon-sm"
+                      title="编辑内容"
                       :disabled="!canUpdate"
-                      :maxlength="2048"
-                      input-class="min-h-28"
-                      placeholder="输入文本内容，支持 {{变量}} 占位符"
-                      @update:model-value="value => setTextContent(message, value ?? '')"
-                    />
-                    <div v-else-if="message.kind === 'IMAGE'" class="flex flex-col gap-3">
-                      <p class="text-xs text-muted-foreground m-0">
-                        从业务附件中按来源选取，最多 {{ event?.media?.maxCount ?? 0 }} 张；图片在全部文本消息之后发送。
-                      </p>
-                      <div class="p-3 border border-border/70 rounded-lg bg-muted/20 flex flex-col gap-3">
-                        <div class="text-xs text-muted-foreground font-medium">
-                          附件来源
-                        </div>
-                        <div class="gap-2 grid sm:grid-cols-2">
-                          <label
-                            v-for="source in event?.media?.sources ?? []"
-                            :key="source.key"
-                            class="text-sm px-3 py-2 border border-border rounded-lg bg-background flex gap-2 items-center hover:bg-muted/30"
-                          >
-                            <FaCheckbox
-                              :model-value="imageSourceKeys(message).includes(source.key)"
-                              :disabled="!canUpdate"
-                              @update:model-value="value => toggleImageSource(message, source.key, value === true)"
-                            />
-                            <span>{{ source.label }}</span>
-                            <span class="text-[10px] text-muted-foreground font-mono ml-auto truncate">{{ source.key }}</span>
-                          </label>
-                        </div>
-                        <label class="text-sm flex flex-col gap-1 max-w-40">
-                          <span class="font-medium">最多发送张数</span>
-                          <FaInput
-                            type="number"
-                            min="1"
-                            :max="event?.media?.maxCount ?? 1"
-                            :model-value="String(imageMaxCount(message))"
-                            :disabled="!canUpdate"
-                            @update:model-value="value => setImageMaxCount(message, value ?? '1')"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <template v-else-if="message.kind === 'MPNEWS'">
-                      <div class="flex flex-col gap-4">
-                        <div class="p-3 border border-border/70 rounded-lg bg-muted/20 flex flex-col gap-2">
-                          <div class="flex flex-wrap gap-3 items-start">
-                            <img
-                              v-if="coverPreviewUrl(message) !== ''"
-                              :src="coverPreviewUrl(message)"
-                              alt="mpnews 封面预览"
-                              class="border border-border rounded-lg bg-background shrink-0 h-20 w-[188px] object-contain"
-                            >
-                            <div v-else class="text-xs text-muted-foreground border border-border rounded-lg border-dashed bg-background flex shrink-0 h-20 w-[188px] items-center justify-center">
-                              未选择封面
-                            </div>
-                            <div class="flex-1 min-w-0">
-                              <div class="text-sm font-medium">
-                                固定封面
-                              </div>
-                              <p class="text-xs text-muted-foreground mt-1">
-                                建议 1068×455 或等比例倍数，不超过 10 MiB。
-                              </p>
-                              <div class="mt-2 flex flex-wrap gap-2">
-                                <FaButton
-                                  v-if="canUpdate"
-                                  variant="outline"
-                                  size="sm"
-                                  :loading="coverUploadingIndex === index"
-                                  :disabled="coverUploadingIndex !== null"
-                                  @click="chooseCover(index)"
-                                >
-                                  <FaIcon name="i-lucide:image-up" />
-                                  选择封面
-                                </FaButton>
-                                <FaButton
-                                  v-if="canUpdate && coverAssetId(message) !== ''"
-                                  variant="ghost"
-                                  size="sm"
-                                  :disabled="coverUploadingIndex !== null"
-                                  @click="clearCover(message)"
-                                >
-                                  <FaIcon name="i-lucide:x" />
-                                  清除
-                                </FaButton>
-                              </div>
-                              <div class="text-[10px] text-muted-foreground font-mono mt-1 break-all">
-                                {{ coverAssetId(message) || '未配置资产' }}
-                              </div>
-                            </div>
-                          </div>
-                          <p v-if="(coverUploadErrors[index] ?? '') !== ''" class="text-xs text-destructive m-0">
-                            {{ coverUploadErrors[index] }}
-                          </p>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                          <div class="text-xs text-muted-foreground font-medium">
-                            文章信息
-                          </div>
-                          <div class="gap-3 grid md:grid-cols-2">
-                            <label class="text-sm flex flex-col gap-1">
-                              <span class="font-medium">标题</span>
-                              <FaInput
-                                :model-value="payloadString(message, 'title')"
-                                :disabled="!canUpdate"
-                                maxlength="128"
-                                @update:model-value="value => setPayloadString(message, 'title', value ?? '')"
-                              />
-                            </label>
-                            <label class="text-sm flex flex-col gap-1">
-                              <span class="font-medium">作者</span>
-                              <FaInput
-                                :model-value="payloadString(message, 'author')"
-                                :disabled="!canUpdate"
-                                maxlength="64"
-                                @update:model-value="value => setPayloadString(message, 'author', value ?? '')"
-                              />
-                            </label>
-                            <label class="text-sm flex flex-col gap-1">
-                              <span class="font-medium">摘要</span>
-                              <FaInput
-                                :model-value="payloadString(message, 'digest')"
-                                :disabled="!canUpdate"
-                                maxlength="512"
-                                @update:model-value="value => setPayloadString(message, 'digest', value ?? '')"
-                              />
-                            </label>
-                            <label class="text-sm flex flex-col gap-1">
-                              <span class="font-medium">阅读原文</span>
-                              <FaInput
-                                :model-value="payloadString(message, 'contentSourceUrl')"
-                                :disabled="!canUpdate"
-                                placeholder="https://"
-                                @update:model-value="value => setPayloadString(message, 'contentSourceUrl', value ?? '')"
-                              />
-                            </label>
-                          </div>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                          <div class="text-xs text-muted-foreground font-medium">
-                            正文
-                          </div>
-                          <RichTextEditor
-                            :model-value="payloadString(message, 'content')"
-                            :disabled="!canUpdate"
-                            @update:model-value="value => setPayloadString(message, 'content', value)"
-                          />
-                          <p class="text-xs text-muted-foreground m-0">
-                            正文图片仅允许 DMS 资产，单张不超过 2 MiB；保存前图片使用本地预览。
-                          </p>
-                        </div>
-                      </div>
-                    </template>
-                    <div v-else class="text-sm text-muted-foreground">
-                      该类型暂未开放前端编辑。
-                    </div>
+                      @click="openEditMessage(index)"
+                    >
+                      <FaIcon name="i-lucide:pencil" />
+                    </FaButton>
+                    <span class="mx-0.5 bg-border h-4 w-px" />
+                    <FaButton
+                      variant="ghost"
+                      size="icon-sm"
+                      title="上移"
+                      :disabled="!canUpdate || index === 0"
+                      @click="moveMessage(index, -1)"
+                    >
+                      <FaIcon name="i-lucide:arrow-up" />
+                    </FaButton>
+                    <FaButton
+                      variant="ghost"
+                      size="icon-sm"
+                      title="下移"
+                      :disabled="!canUpdate || index === activeDraft.messages.length - 1"
+                      @click="moveMessage(index, 1)"
+                    >
+                      <FaIcon name="i-lucide:arrow-down" />
+                    </FaButton>
+                    <FaButton
+                      variant="ghost"
+                      size="icon-sm"
+                      title="删除"
+                      :disabled="!canUpdate"
+                      @click="removeMessage(index)"
+                    >
+                      <FaIcon name="i-lucide:trash-2" />
+                    </FaButton>
                   </div>
                 </div>
               </div>
@@ -1313,11 +1003,19 @@ onBeforeUnmount(() => {
     </div>
   </FaPageMain>
 
-  <input
-    ref="coverFileInput"
-    class="hidden"
-    type="file"
-    :accept="IMAGE_ONLY_ACCEPT"
-    @change="onCoverSelected"
-  >
+  <MessageEditorModal
+    v-if="event !== null && activeDraft !== null"
+    v-model="editorOpen"
+    :kind="editingKind"
+    :seed="editingSeed"
+    :channel="activeDraft.channel"
+    :send-method="activeDraft.sendMethod"
+    :media="event.media"
+    :variables="event.variableDefinitions"
+    :variables-known="event.variablesKnown"
+    :event-label="event.label"
+    :event-type="event.eventType"
+    :can-update="canUpdate"
+    @apply="applyMessage"
+  />
 </template>

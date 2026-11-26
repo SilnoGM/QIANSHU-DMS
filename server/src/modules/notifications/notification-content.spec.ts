@@ -71,6 +71,21 @@ describe('notification content group validation', () => {
     }
   })
 
+  it('rejects undeclared variables in mpnews author', () => {
+    const result = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({ author: '{{unknown}} 发布' })],
+      allowedVariables: ['orderNo'],
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.issues).toContainEqual(expect.objectContaining({
+        code: 'NOTIFICATION_CONTENT_UNDECLARED_VARIABLE',
+        field: 'author',
+      }))
+    }
+  })
+
   it('rejects single braces and unsafe links', () => {
     const singleBrace = validateNotificationContentGroup({
       method: 'APP',
