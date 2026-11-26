@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MessageDraft, MessageKind } from './message-editor.types'
+import type { MessageDraft, MessageKind, MessageServerIssue } from './message-editor.types'
 
 import type { TargetValueOption } from './target-options'
 import type {
@@ -11,7 +11,7 @@ import { FaCombobox } from '@fantastic-admin/components'
 import dayjs from 'dayjs'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getApiClientFailureMessage } from '@/api/errors'
+import { getApiClientFailureIssues, getApiClientFailureMessage } from '@/api/errors'
 import managementApi from '@/api/modules/management'
 import notificationsApi from '@/api/modules/notifications'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
@@ -19,7 +19,13 @@ import { useAppAuth } from '@/composables/app/auth'
 import { notificationDomainLabel } from '../notification-domain.logic'
 import MessageEditorModal from './components/editor/MessageEditorModal.vue'
 import TargetValuePicker from './components/TargetValuePicker.vue'
-import { imageMaxCount, imageSourceKeys, messageKindLabel } from './message-editor.logic'
+import {
+  imageMaxCount,
+  imageSourceKeys,
+  messageKindLabel,
+  normalizeServerIssues,
+  serverErrorsForMessage,
+} from './message-editor.logic'
 
 defineOptions({ name: 'SystemNotificationEventDetail' })
 
@@ -66,12 +72,16 @@ const editorOpen = ref(false)
 const editingIndex = ref<number | null>(null)
 const editingKind = ref<MessageKind>('TEXT')
 const editingSeed = ref<MessageDraft | null>(null)
+const editingServerErrors = ref<Record<string, string>>({})
+const saveIssues = ref<MessageServerIssue[]>([])
 let targetOptionsController: AbortController | null = null
 
 const eventType = computed(() => String(route.params.eventType ?? ''))
 const activeDraft = computed(() => drafts.value.find(channel => channel.channel === activeChannel.value) ?? null)
 const activeValidationError = computed(() => activeDraft.value === null ? null : validateDraft(activeDraft.value))
 const mediaSourceKeys = computed(() => event.value?.media?.sources.map(source => source.key) ?? [])
+const activeSaveIssues = computed(() => saveIssues.value.filter(issue => issue.channel === activeChannel.value))
+const activeChannelSaveIssues = computed(() => activeSaveIssues.value.filter(issue => issue.itemIndex === null))
 
 const TARGET_MODE_OPTIONS: Array<{ label: string, value: TargetMode }> = [
   { label: '动态目标', value: 'COMMAND_TARGET' },
@@ -135,6 +145,7 @@ function applyConfig(config: NotificationEventConfigDto): void {
     return existing === undefined ? defaultChannel(channel) : channelFromDto(existing)
   })
   dirty.value = false
+  saveIssues.value = []
 }
 
 async function load(): Promise<void> {
@@ -275,6 +286,8 @@ function changeSendMethod(draft: ChannelDraft, method: SendMethod): void {
   draft.sendMethod = method
   draft.targetMode = method === 'ROBOT' ? 'GROUP' : 'USERS'
   draft.targetConfig = {}
+  // 发送方式变化会让上一轮服务端内容问题失效，避免继续指向不兼容的消息类型。
+  saveIssues.value = []
   markDirty()
 }
 
@@ -315,18 +328,27 @@ function openCreateMessage(kind: MessageKind): void {
   editingIndex.value = null
   editingKind.value = kind
   editingSeed.value = null
+  editingServerErrors.value = {}
   editorOpen.value = true
 }
 
-function openEditMessage(index: number): void {
-  const message = activeDraft.value?.messages[index]
-  if (message === undefined) {
+function openEditMessage(index: number, serverErrors?: Record<string, string>): void {
+  const draft = activeDraft.value
+  const message = draft?.messages[index]
+  if (draft === null || draft === undefined || message === undefined) {
     return
   }
   editingIndex.value = index
   editingKind.value = message.kind
   editingSeed.value = message
+  editingServerErrors.value = serverErrors === undefined
+    ? serverErrorsForMessage(saveIssues.value, draft.channel, index)
+    : { ...serverErrors }
   editorOpen.value = true
+}
+
+function clearMessageIssues(channel: Channel, index: number): void {
+  saveIssues.value = saveIssues.value.filter(issue => !(issue.channel === channel && issue.itemIndex === index))
 }
 
 function applyMessage(message: MessageDraft): void {
@@ -334,17 +356,20 @@ function applyMessage(message: MessageDraft): void {
   if (draft === null) {
     return
   }
-  if (editingIndex.value === null) {
+  const index = editingIndex.value
+  if (index === null) {
     draft.messages.push(message)
   }
   else {
-    draft.messages.splice(editingIndex.value, 1, message)
+    draft.messages.splice(index, 1, message)
+    clearMessageIssues(draft.channel, index)
   }
   markDirty()
 }
 
 function removeMessage(index: number): void {
   activeDraft.value?.messages.splice(index, 1)
+  saveIssues.value = []
   markDirty()
 }
 
@@ -361,6 +386,7 @@ function moveMessage(index: number, delta: number): void {
   if (item !== undefined) {
     messages.splice(target, 0, item)
   }
+  saveIssues.value = []
   markDirty()
 }
 
@@ -382,6 +408,31 @@ function messageSummary(message: MessageDraft): string {
     return `图片附件 · ${count} 个来源 · 最多 ${imageMaxCount(message.mediaPolicy)} 张`
   }
   return message.kind
+}
+
+function messageIssueText(index: number): string {
+  return activeSaveIssues.value
+    .filter(issue => issue.itemIndex === index)
+    .map(issue => issue.message)
+    .join('；')
+}
+
+/**
+ * 422 携带结构化 issues 时，切到首个可定位问题的渠道并直接打开对应消息弹窗；
+ * 渠道级问题（例如缺少正文）没有 itemIndex，留在页面上方提示。
+ */
+function revealFirstServerIssue(issues: readonly MessageServerIssue[]): void {
+  const first = issues.find(issue => issue.channel !== null && issue.itemIndex !== null)
+  if (first === undefined || first.channel === null || first.itemIndex === null) {
+    return
+  }
+  const channel = first.channel
+  const itemIndex = first.itemIndex
+  activeChannel.value = channel
+  if (activeDraft.value?.messages[itemIndex] === undefined) {
+    return
+  }
+  openEditMessage(itemIndex, serverErrorsForMessage(issues, channel, itemIndex))
 }
 
 function channelDescription(channel: Channel): string {
@@ -493,6 +544,11 @@ async function save(): Promise<void> {
     toast.success('事件配置已保存')
   }
   catch (failure) {
+    const issues = normalizeServerIssues(getApiClientFailureIssues(failure))
+    saveIssues.value = issues
+    if (issues.length > 0) {
+      revealFirstServerIssue(issues)
+    }
     error.value = getApiClientFailureMessage(failure, '事件配置保存失败')
     toast.error(error.value)
   }
@@ -825,6 +881,21 @@ onBeforeUnmount(() => {
               />
 
               <div
+                v-if="activeChannelSaveIssues.length > 0"
+                class="px-3 py-2.5 border border-destructive/30 rounded-lg bg-destructive/5"
+                role="alert"
+              >
+                <div class="text-xs text-destructive font-medium">
+                  服务端校验未通过
+                </div>
+                <ul class="text-xs text-destructive/90 mt-1 pl-4 list-disc">
+                  <li v-for="(issue, issueIndex) in activeChannelSaveIssues" :key="`${issue.code}-${issueIndex}`">
+                    {{ issue.message }}
+                  </li>
+                </ul>
+              </div>
+
+              <div
                 v-if="activeDraft.messages.length === 0"
                 class="px-4 py-8 border border-border rounded-xl border-dashed flex flex-col gap-2 min-h-40 items-center justify-center"
               >
@@ -861,7 +932,14 @@ onBeforeUnmount(() => {
                     <div class="text-sm truncate">
                       {{ messageSummary(message) }}
                     </div>
-                    <div class="text-[11px] text-muted-foreground mt-0.5">
+                    <div
+                      v-if="messageIssueText(index) !== ''"
+                      class="text-[11px] text-destructive mt-0.5 truncate"
+                      :title="messageIssueText(index)"
+                    >
+                      {{ messageIssueText(index) }}
+                    </div>
+                    <div v-else class="text-[11px] text-muted-foreground mt-0.5">
                       {{ message.kind === 'TEXT' ? '文本正文' : message.kind === 'MPNEWS' ? '图文消息（封面 + 正文）' : '业务附件图片' }}
                     </div>
                   </div>
@@ -1016,6 +1094,7 @@ onBeforeUnmount(() => {
     :event-label="event.label"
     :event-type="event.eventType"
     :can-update="canUpdate"
+    :server-errors="editingServerErrors"
     @apply="applyMessage"
   />
 </template>

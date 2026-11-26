@@ -80,6 +80,45 @@ test('isApiError 的 fieldErrors 仅接受普通或 null prototype record', () =
   }
 })
 
+test('isApiError 接受可选的结构化 issues', () => {
+  const issues = [
+    {
+      code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+      message: '文本内容不能为空',
+      channel: 'WECOM',
+      itemIndex: 0,
+      field: 'content',
+    },
+    { code: 'NOTIFICATION_CONTENT_EMPTY', message: '消息内容不能为空' },
+  ]
+  assert.equal(isApiError({ ...validApiError, issues }), true)
+  assert.equal(isApiError({ ...validApiError, issues: [] }), true)
+})
+
+test('isApiError 拒绝结构不合法的 issues', () => {
+  const validIssue = {
+    code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+    message: '文本内容不能为空',
+  }
+  const invalidIssues: unknown[] = [
+    null,
+    'invalid',
+    {},
+    [null],
+    [{ code: 'X' }],
+    [{ message: '缺少 code' }],
+    [{ ...validIssue, field: 1 }],
+    [{ ...validIssue, channel: 1 }],
+    [{ ...validIssue, itemIndex: '0' }],
+    [{ ...validIssue, itemIndex: -1 }],
+    [{ ...validIssue, itemIndex: 1.5 }],
+  ]
+
+  for (const issues of invalidIssues) {
+    assert.equal(isApiError({ ...validApiError, issues }), false, JSON.stringify(issues))
+  }
+})
+
 test('isApiError 在不可信属性、prototype 或 values 访问抛错时返回 false', () => {
   const throwingCandidate = Object.defineProperty({}, 'code', {
     enumerable: true,

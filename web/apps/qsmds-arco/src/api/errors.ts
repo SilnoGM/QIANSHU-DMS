@@ -1,5 +1,5 @@
 import type { AxiosError } from 'axios'
-import type { ApiError } from './api-error'
+import type { ApiError, ApiErrorIssue } from './api-error'
 
 import { isApiError } from './api-error'
 import { parseBlobApiError } from './blob-error'
@@ -125,6 +125,20 @@ export async function normalizeAxiosError(
 /** 统一提取可展示文案，http 分支的 message 位于 body 而非错误顶层。 */
 export function getApiClientErrorMessage(error: ApiClientError): string {
   return error.kind === 'http' ? error.body.message : error.message
+}
+
+/**
+ * 提取服务端已校验过的结构化问题列表。
+ * 非 HTTP 错误或旧版 Server 没有 issues 时返回空数组，调用方必须回退到整段文案。
+ */
+export function getApiClientFailureIssues(failure: unknown): ApiErrorIssue[] {
+  if (typeof failure === 'object' && failure !== null && 'kind' in failure) {
+    const error = failure as ApiClientError
+    if (error.kind === 'http') {
+      return error.body.issues ?? []
+    }
+  }
+  return []
 }
 
 /**

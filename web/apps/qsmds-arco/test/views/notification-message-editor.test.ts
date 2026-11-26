@@ -14,7 +14,10 @@ import {
   imageSourceKeys,
   insertAtSelection,
   messageDraftSnapshot,
+  messageFieldLabel,
   messageKindLabel,
+  normalizeServerIssues,
+  serverErrorsForMessage,
   validateMessageDraft,
 } from '../../src/views/system/notifications/events/message-editor.logic'
 
@@ -212,10 +215,64 @@ test('消息草稿快照可区分未修改与已修改', () => {
   assert.notEqual(messageDraftSnapshot(clone), messageDraftSnapshot(draft))
 })
 
+test('服务端 issues 收敛为可定位的渠道、消息序号与字段', () => {
+  const issues = normalizeServerIssues([
+    {
+      code: 'NOTIFICATION_CONTENT_MPSNEWS_TITLE_EMPTY',
+      message: 'mpnews 标题不能为空',
+      channel: 'WECOM',
+      itemIndex: 1,
+      field: 'title',
+    },
+    {
+      code: 'NOTIFICATION_CONTENT_COVER_INVALID',
+      message: 'mpnews 必须配置有效的封面资产',
+      channel: 'WECOM',
+      itemIndex: 1,
+      field: 'cover.mediaAssetId',
+    },
+    {
+      code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+      message: '文本内容不能为空',
+      channel: 'IN_APP',
+      itemIndex: 0,
+      field: 'content',
+    },
+    {
+      code: 'NOTIFICATION_CONTENT_EMPTY',
+      message: '消息内容不能为空',
+      channel: 'UNKNOWN',
+      itemIndex: -2,
+    },
+  ])
+
+  assert.deepEqual(issues.map(issue => [issue.channel, issue.itemIndex, issue.field]), [
+    ['WECOM', 1, 'title'],
+    ['WECOM', 1, 'cover.mediaAssetId'],
+    ['IN_APP', 0, 'content'],
+    [null, null, null],
+  ])
+
+  assert.deepEqual(serverErrorsForMessage(issues, 'WECOM', 1), {
+    cover: 'mpnews 必须配置有效的封面资产',
+    title: 'mpnews 标题不能为空',
+  })
+  assert.deepEqual(serverErrorsForMessage(issues, 'IN_APP', 0), {
+    content: '文本内容不能为空',
+  })
+  assert.deepEqual(serverErrorsForMessage(issues, 'WECOM', 0), {})
+  assert.equal(messageFieldLabel('cover.mediaAssetId'), '封面')
+  assert.equal(messageFieldLabel('mediaPolicy'), '附件来源')
+  assert.equal(messageFieldLabel('unknownField'), 'unknownField')
+})
+
 test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(detailSource, /<MessageEditorModal/u)
   assert.match(detailSource, /openEditMessage/u)
   assert.match(detailSource, /编辑内容/u)
+  assert.match(detailSource, /getApiClientFailureIssues/u)
+  assert.match(detailSource, /revealFirstServerIssue/u)
+  assert.match(detailSource, /server-errors/u)
   assert.doesNotMatch(detailSource, /<FaTextarea/u)
   assert.doesNotMatch(detailSource, /<RichTextEditor/u)
   assert.doesNotMatch(detailSource, /可用变量/u)
@@ -227,6 +284,8 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(modalSource, /<MpnewsMessageEditor/u)
   assert.match(modalSource, /<VariablePalette/u)
   assert.match(modalSource, /validateMessageDraft/u)
+  assert.match(modalSource, /serverErrors/u)
+  assert.match(modalSource, /messageFieldLabel/u)
   assert.match(modalSource, /before-close/u)
 
   assert.match(paletteSource, /filterVariables/u)

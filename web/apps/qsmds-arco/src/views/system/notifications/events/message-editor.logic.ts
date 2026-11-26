@@ -1,10 +1,28 @@
 import type {
+  MessageChannel,
   MessageDraft,
   MessageEditorContext,
   MessageKind,
+  MessageServerIssue,
+  MessageServerIssueInput,
   MessageValidationIssue,
 } from './message-editor.types'
 import type { NotificationEventVariableDto } from '@/api/generated/types.gen'
+
+const MESSAGE_FIELD_LABELS: Readonly<Record<string, string>> = {
+  author: '作者',
+  content: '正文',
+  contentSourceUrl: '阅读原文',
+  cover: '封面',
+  digest: '摘要',
+  enabled: '启用状态',
+  kind: '消息类型',
+  linkUrl: '链接',
+  maxCount: '最多发送张数',
+  mediaPolicy: '附件来源',
+  message: '消息',
+  title: '标题',
+}
 
 const PLACEHOLDER_PATTERN = /\{\{\s*(\w+)\s*\}\}/gu
 const SINGLE_BRACE_PATTERN = /(?<!\{)\{(\w+)\}(?!\})/gu
@@ -173,6 +191,53 @@ export function imageSourceKeys(mediaPolicy: unknown, allSources: readonly strin
 export function imageMaxCount(mediaPolicy: unknown): number {
   const value = asRecord(mediaPolicy)?.maxCount
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
+/** 服务端字段可能是 cover.mediaAssetId 这类嵌套路径，编辑器按顶层控件归并。 */
+export function normalizeMessageField(field: string | null | undefined): string {
+  if (field === null || field === undefined || field.trim().length === 0) {
+    return 'message'
+  }
+  return field.startsWith('cover.') ? 'cover' : field
+}
+
+export function messageFieldLabel(field: string): string {
+  const normalized = normalizeMessageField(field)
+  return MESSAGE_FIELD_LABELS[normalized] ?? normalized
+}
+
+export function normalizeServerIssues(
+  issues: readonly MessageServerIssueInput[],
+): MessageServerIssue[] {
+  return issues.map(issue => ({
+    code: issue.code,
+    message: issue.message,
+    channel: issue.channel === 'IN_APP' || issue.channel === 'WECOM' ? issue.channel : null,
+    itemIndex: typeof issue.itemIndex === 'number'
+      && Number.isInteger(issue.itemIndex)
+      && issue.itemIndex >= 0
+      ? issue.itemIndex
+      : null,
+    field: typeof issue.field === 'string' && issue.field.trim().length > 0 ? issue.field : null,
+  }))
+}
+
+export function serverErrorsForMessage(
+  issues: readonly MessageServerIssue[],
+  channel: MessageChannel,
+  itemIndex: number,
+): Record<string, string> {
+  const grouped = new Map<string, string[]>()
+  for (const issue of issues) {
+    if (issue.channel !== channel || issue.itemIndex !== itemIndex) {
+      continue
+    }
+    const field = normalizeMessageField(issue.field)
+    const messages = grouped.get(field) ?? []
+    messages.push(issue.message)
+    grouped.set(field, messages)
+  }
+  return Object.fromEntries([...grouped.entries()].map(([field, messages]) => [field, messages.join('；')]))
 }
 
 export function insertAtSelection(

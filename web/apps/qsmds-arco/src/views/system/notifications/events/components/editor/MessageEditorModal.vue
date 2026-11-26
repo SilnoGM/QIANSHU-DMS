@@ -18,6 +18,7 @@ import {
   cloneMessageDraft,
   createDefaultMessageDraft,
   messageDraftSnapshot,
+  messageFieldLabel,
   messageKindLabel,
   validateMessageDraft,
 } from '../../message-editor.logic'
@@ -38,6 +39,7 @@ const props = defineProps<{
   eventLabel: string
   eventType: string
   canUpdate: boolean
+  serverErrors?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -67,6 +69,11 @@ const title = computed(() => {
   return props.kind === 'MPNEWS' ? `${action} mpnews 消息` : `${action}${messageKindLabel(props.kind)}消息`
 })
 const hasErrors = computed(() => Object.keys(errors.value).length > 0)
+const errorEntries = computed(() => Object.entries(errors.value).map(([field, message]) => ({
+  field,
+  label: messageFieldLabel(field),
+  message,
+})))
 
 function resetDraft(): void {
   const initial = props.seed === null
@@ -74,7 +81,7 @@ function resetDraft(): void {
     : cloneMessageDraft(props.seed)
   draft.value = initial
   snapshot.value = messageDraftSnapshot(initial)
-  errors.value = {}
+  errors.value = { ...(props.serverErrors ?? {}) }
   discardPending.value = false
   closingForced.value = false
 }
@@ -86,7 +93,11 @@ watch(() => props.modelValue, (open) => {
 })
 
 // 用户继续修改后先撤掉上一轮错误提示，点击「完成」时再按最新内容校验。
+// 打开弹窗时的初始草稿与快照相同，不能把服务端回填的错误立即清掉。
 watch(draft, () => {
+  if (messageDraftSnapshot(draft.value) === snapshot.value) {
+    return
+  }
   if (Object.keys(errors.value).length > 0) {
     errors.value = {}
   }
@@ -164,11 +175,20 @@ function insertVariable(name: string): void {
   >
     <div class="gap-4 grid lg:grid-cols-[minmax(0,1fr)_18rem]">
       <div class="flex flex-col gap-3 min-w-0">
-        <FaAlert
+        <div
           v-if="hasErrors"
-          variant="destructive"
-          title="请先修正编辑区中的错误"
-        />
+          class="px-3 py-2.5 border border-destructive/30 rounded-lg bg-destructive/5"
+          role="alert"
+        >
+          <div class="text-sm text-destructive font-medium">
+            请先修正以下问题
+          </div>
+          <ul class="text-xs text-destructive/90 mt-1 pl-4 list-disc flex flex-col gap-0.5">
+            <li v-for="entry in errorEntries" :key="entry.field">
+              {{ entry.label }}：{{ entry.message }}
+            </li>
+          </ul>
+        </div>
 
         <TextMessageEditor
           v-if="kind === 'TEXT'"

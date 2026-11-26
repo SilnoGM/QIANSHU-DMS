@@ -39,6 +39,10 @@ function apiError(document) {
   return document.components.schemas.ApiError
 }
 
+function apiErrorIssue(document) {
+  return document.components.schemas.ApiErrorIssue
+}
+
 function createSuccess(document) {
   return operation(document, '/api/widgets', 'post').responses['201']
 }
@@ -640,6 +644,34 @@ mutationTest(
   },
   /ApiError.*required/,
 )
+mutationTest(
+  'ApiError issues 必须保持 optional',
+  document => {
+    apiError(document).required.push('issues')
+  },
+  /ApiError.*required/,
+)
+mutationTest(
+  'ApiError issues 必须引用 ApiErrorIssue',
+  document => {
+    apiError(document).properties.issues.items = { type: 'string' }
+  },
+  /ApiError.*issues/,
+)
+mutationTest(
+  'ApiErrorIssue properties 不得增加字段',
+  document => {
+    apiErrorIssue(document).properties.extra = { type: 'string' }
+  },
+  /ApiErrorIssue.*properties/,
+)
+mutationTest(
+  'ApiErrorIssue required 不得缺失字段',
+  document => {
+    apiErrorIssue(document).required.pop()
+  },
+  /ApiErrorIssue.*required/,
+)
 
 for (const [label, mutate] of [
   ['code string', document => {
@@ -661,6 +693,15 @@ for (const [label, mutate] of [
   ['fieldErrors items string', document => {
     apiError(document).properties.fieldErrors.additionalProperties.items.type =
       'number'
+  }],
+  ['issues array', document => {
+    apiError(document).properties.issues.type = 'object'
+  }],
+  ['ApiErrorIssue code string', document => {
+    apiErrorIssue(document).properties.code.type = 'number'
+  }],
+  ['ApiErrorIssue itemIndex number', document => {
+    apiErrorIssue(document).properties.itemIndex.type = 'string'
   }],
 ]) {
   mutationTest(
@@ -693,6 +734,12 @@ for (const [label, select] of [
   ['message', document => apiError(document).properties.message],
   ['requestId', document => apiError(document).properties.requestId],
   ['fieldErrors', document => apiError(document).properties.fieldErrors],
+  ['issues', document => apiError(document).properties.issues],
+  ['ApiErrorIssue', document => apiErrorIssue(document)],
+  ['ApiErrorIssue.code', document => apiErrorIssue(document).properties.code],
+  ['ApiErrorIssue.field', document => apiErrorIssue(document).properties.field],
+  ['ApiErrorIssue.itemIndex', document => apiErrorIssue(document).properties.itemIndex],
+  ['ApiErrorIssue.channel', document => apiErrorIssue(document).properties.channel],
   [
     'fieldErrors.additionalProperties',
     document => apiError(document).properties.fieldErrors.additionalProperties,

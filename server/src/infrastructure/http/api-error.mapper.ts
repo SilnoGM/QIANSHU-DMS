@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common'
 
-import { ApiError, type ApiFieldErrors } from './api-error.dto'
+import { ApiError, type ApiErrorIssue, type ApiFieldErrors } from './api-error.dto'
 import { ApiException } from './api.exception'
 
 interface ErrorContract {
@@ -53,6 +53,7 @@ function createBody(
   contract: ErrorContract,
   requestId: string,
   fieldErrors?: ApiFieldErrors,
+  issues?: ApiErrorIssue[],
 ): ApiError {
   const body = new ApiError()
   body.code = contract.code
@@ -60,6 +61,10 @@ function createBody(
 
   if (fieldErrors !== undefined) {
     body.fieldErrors = fieldErrors
+  }
+
+  if (issues !== undefined) {
+    body.issues = issues
   }
 
   body.requestId = requestId
@@ -91,6 +96,7 @@ export function mapExceptionToApiError(
         { code: exception.code, message: exception.publicMessage },
         requestId,
         exception.fieldErrors,
+        exception.issues,
       ),
       unexpected: false,
     }

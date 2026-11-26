@@ -27,3 +27,20 @@ export interface MessageValidationIssue {
   readonly field: string
   readonly message: string
 }
+
+/** 服务端 issues 已收敛为可直接驱动 UI 定位的结构。 */
+export interface MessageServerIssue {
+  readonly code: string
+  readonly message: string
+  readonly channel: MessageChannel | null
+  readonly itemIndex: number | null
+  readonly field: string | null
+}
+
+export interface MessageServerIssueInput {
+  readonly code: string
+  readonly message: string
+  readonly channel?: string
+  readonly itemIndex?: number
+  readonly field?: string
+}

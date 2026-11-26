@@ -678,6 +678,14 @@ export class NotificationEventConfigService {
         422,
         'NOTIFICATION_EVENT_CONTENT_INVALID',
         result.issues.map(issue => issue.message).join('；'),
+        undefined,
+        result.issues.map(issue => ({
+          code: issue.code,
+          message: issue.message,
+          channel: channel.channel,
+          ...(issue.itemIndex === undefined ? {} : { itemIndex: issue.itemIndex }),
+          ...(issue.field === undefined ? {} : { field: issue.field }),
+        })),
       )
     }
     return result.items

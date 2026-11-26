@@ -228,7 +228,16 @@ describe('NotificationEventConfigService', () => {
       { actorUserId: '00000000-0000-4000-8000-000000000001', requestId: 'request-1' },
       EVENT_TYPE,
       input,
-    )).rejects.toMatchObject({ code: 'NOTIFICATION_EVENT_CONTENT_INVALID' })
+    )).rejects.toMatchObject({
+      code: 'NOTIFICATION_EVENT_CONTENT_INVALID',
+      issues: [{
+        code: 'NOTIFICATION_CONTENT_TEXT_EMPTY',
+        message: '文本内容不能为空',
+        channel: 'IN_APP',
+        itemIndex: 0,
+        field: 'content',
+      }],
+    })
     expect(prisma.$transaction).not.toHaveBeenCalled()
   })
 
