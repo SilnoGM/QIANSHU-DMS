@@ -26,6 +26,7 @@ import {
   normalizeServerIssues,
   serverErrorsForMessage,
 } from './message-editor.logic'
+import { addMessageKindGroups, MESSAGE_KIND_ICONS } from './message-type-menu'
 
 defineOptions({ name: 'SystemNotificationEventDetail' })
 
@@ -505,64 +506,21 @@ const addMessageMenu = computed(() => {
   if (draft === null) {
     return []
   }
-  const items: Array<{ label: string, icon: string, handle: () => void }> = []
-  if (draft.channel === 'WECOM' || draft.messages.length === 0) {
-    items.push({
-      label: '文本消息',
-      icon: 'i-lucide:type',
-      handle: () => openCreateMessage('TEXT'),
-    })
-  }
-  if (draft.channel === 'WECOM') {
-    items.push({
-      label: messageKindLabel('MARKDOWN'),
-      icon: 'i-lucide:file-text',
-      handle: () => openCreateMessage('MARKDOWN'),
-    })
-    if (draft.sendMethod === 'APP') {
-      items.push({
-        label: messageKindLabel('TEXTCARD'),
-        icon: 'i-lucide:layout-template',
-        handle: () => openCreateMessage('TEXTCARD'),
-      })
-    }
-    if (draft.sendMethod === 'ROBOT') {
-      items.push({
-        label: messageKindLabel('MARKDOWN_V2'),
-        icon: 'i-lucide:table-2',
-        handle: () => openCreateMessage('MARKDOWN_V2'),
-      })
-    }
-    items.push({
-      label: messageKindLabel('FILE'),
-      icon: 'i-lucide:file-text',
-      handle: () => openCreateMessage('FILE'),
-    })
-    items.push({
-      label: messageKindLabel('NEWS'),
-      icon: 'i-lucide:gallery-horizontal-end',
-      handle: () => openCreateMessage('NEWS'),
-    })
-  }
-  if (
-    draft.channel === 'WECOM'
-    && draft.sendMethod === 'APP'
-    && !draft.messages.some(message => message.kind === 'MPNEWS')
-  ) {
-    items.push({
-      label: '企微图文',
-      icon: 'i-lucide:newspaper',
-      handle: () => openCreateMessage('MPNEWS'),
-    })
-  }
-  if (draft.channel === 'WECOM' && event.value?.media != null) {
-    items.push({
-      label: '图片附件',
-      icon: 'i-lucide:image-plus',
-      handle: () => openCreateMessage('IMAGE'),
-    })
-  }
-  return items.length === 0 ? [] : [items]
+  return addMessageKindGroups({
+    channel: draft.channel,
+    sendMethod: draft.sendMethod,
+    messageCount: draft.messages.length,
+    hasMpnews: draft.messages.some(message => message.kind === 'MPNEWS'),
+    hasMedia: event.value?.media != null,
+  }).map(group => group.map(option => ({
+    label: option.enabled
+      ? messageKindLabel(option.kind)
+      : `${messageKindLabel(option.kind)}（后续开放）`,
+    icon: MESSAGE_KIND_ICONS[option.kind],
+    // 未实现类型只展示，不允许加入消息组；后续开放时只需翻 enabled。
+    disabled: !option.enabled,
+    handle: () => openCreateMessage(option.kind),
+  }))).filter(group => group.length > 0)
 })
 
 function validateDraft(draft: ChannelDraft): string | null {
