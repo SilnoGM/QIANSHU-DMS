@@ -463,7 +463,7 @@ const addMessageMenu = computed(() => {
   const items: Array<{ label: string, icon: string, handle: () => void }> = []
   if (draft.channel === 'WECOM' || draft.messages.length === 0) {
     items.push({
-      label: '普通图文',
+      label: '文本消息',
       icon: 'i-lucide:type',
       handle: () => openCreateMessage('TEXT'),
     })
@@ -498,7 +498,7 @@ function validateDraft(draft: ChannelDraft): string | null {
   }
   if (draft.channel === 'IN_APP'
     && (draft.messages.length !== 1 || draft.messages[0]?.kind !== 'TEXT')) {
-    return '站内通知必须配置且只配置一条普通图文'
+    return '站内通知必须配置且只配置一条文本消息'
   }
   if (draft.channel === 'WECOM') {
     if (draft.messages.filter(message => message.kind === 'MPNEWS').length > 1) {
@@ -513,7 +513,7 @@ function validateDraft(draft: ChannelDraft): string | null {
       return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${messageKindLabel(unsupported.kind)} 消息，请删除或切换发送方式`
     }
     if (!draft.messages.some(message => message.kind === 'TEXT' || message.kind === 'MPNEWS')) {
-      return '企业微信渠道至少需要一条普通图文'
+      return '企业微信渠道至少需要一条文本消息'
     }
     const maximum = event.value?.media?.maxCount ?? 0
     for (const message of draft.messages) {
@@ -922,9 +922,9 @@ onBeforeUnmount(() => {
                   <FaIcon name="i-lucide:message-square-plus" class="size-5" />
                 </span>
                 <span class="text-sm font-medium">尚未配置消息内容</span>
-                <span class="text-xs text-muted-foreground">从右上角添加普通图文、企微图文或图片附件。</span>
+                <span class="text-xs text-muted-foreground">从右上角添加文本消息、企微图文或图片附件。</span>
                 <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="openCreateMessage('TEXT')">
-                  添加普通图文
+                  添加文本消息
                 </FaButton>
               </div>
 
@@ -959,7 +959,7 @@ onBeforeUnmount(() => {
                       {{ messageIssueText(index) }}
                     </div>
                     <div v-else class="text-[11px] text-muted-foreground mt-0.5">
-                      {{ message.kind === 'TEXT' ? '普通图文' : message.kind === 'MPNEWS' ? '企微图文（封面 + 正文）' : '业务附件图片' }}
+                      {{ message.kind === 'TEXT' ? '文本消息' : message.kind === 'MPNEWS' ? '企微图文（封面 + 正文）' : '业务附件图片' }}
                     </div>
                   </div>
                   <div class="flex shrink-0 gap-0.5 items-center">

@@ -120,8 +120,9 @@ function textIsVisuallyEmpty(value: string): boolean {
 
 export function messageKindLabel(kind: MessageKind): string {
   const labels: Partial<Record<MessageKind, string>> = {
-    TEXT: '普通图文',
+    TEXT: '文本消息',
     MPNEWS: '企微图文',
+    NEWS: '图文卡片',
     IMAGE: '图片附件',
   }
   return labels[kind] ?? kind

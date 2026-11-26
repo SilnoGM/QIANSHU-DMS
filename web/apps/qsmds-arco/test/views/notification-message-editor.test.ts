@@ -112,8 +112,9 @@ function mpnewsDraft(overrides: Record<string, unknown> = {}): MessageDraft {
 }
 
 test('消息类型标签与默认草稿保持单一来源', () => {
-  assert.equal(messageKindLabel('TEXT'), '普通图文')
+  assert.equal(messageKindLabel('TEXT'), '文本消息')
   assert.equal(messageKindLabel('MPNEWS'), '企微图文')
+  assert.equal(messageKindLabel('NEWS'), '图文卡片')
   assert.equal(messageKindLabel('IMAGE'), '图片附件')
 
   const image = createDefaultMessageDraft('IMAGE', context())
@@ -317,7 +318,7 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(detailSource, /编辑内容/u)
   assert.match(detailSource, /addMessageMenu/u)
   assert.match(detailSource, /<FaDropdown/u)
-  assert.match(detailSource, /普通图文/u)
+  assert.match(detailSource, /文本消息/u)
   assert.match(detailSource, /企微图文/u)
   assert.match(detailSource, /插入消息/u)
   assert.match(detailSource, /getApiClientFailureIssues/u)
