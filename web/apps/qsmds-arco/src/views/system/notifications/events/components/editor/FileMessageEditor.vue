@@ -5,6 +5,7 @@ import type { NotificationEventMediaSourceDto } from '@/api/generated/types.gen'
 import { computed, ref } from 'vue'
 import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
+import { NOTIFICATION_FILE_ACCEPT } from '@/utils/upload-policy'
 
 const props = defineProps<{
   modelValue: MessageDraft
@@ -195,7 +196,7 @@ function formatSize(value: string): string {
       ref="fileInput"
       class="hidden"
       type="file"
-      accept=".pdf,.docx,.xlsx"
+      :accept="NOTIFICATION_FILE_ACCEPT"
       @change="onFileSelected"
     >
   </div>

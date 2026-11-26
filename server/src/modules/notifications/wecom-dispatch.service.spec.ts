@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
+import type { NotificationAssetUrlService } from './notification-asset-url.service'
 import { WecomDispatchService } from './wecom-dispatch.service'
 import type { WecomSecretService } from './wecom-secret.service'
 import type { WecomTokenService } from './wecom-token.service'
@@ -115,8 +116,10 @@ function service(
     sendTextcard: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
   },
   mediaOverrides: Record<string, unknown> = {},
+  assetUrls?: NotificationAssetUrlService,
 ): WecomDispatchService {
   const mediaService = {
     read: jest.fn(),
@@ -133,6 +136,7 @@ function service(
     mediaService as unknown as import('./wecom-media.service').WecomMediaService,
     appTransport,
     robotTransport,
+    assetUrls,
   )
 }
 
@@ -170,6 +174,7 @@ describe('WecomDispatchService', () => {
       sendMarkdown: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -218,6 +223,7 @@ describe('WecomDispatchService', () => {
       sendMarkdown: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -270,8 +276,9 @@ describe('WecomDispatchService', () => {
       sendTextcard: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -322,8 +329,8 @@ describe('WecomDispatchService', () => {
         }),
       },
     })
-    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn(), sendMarkdown: jest.fn(), sendTextcard: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
+    const app = { sendText: jest.fn(), uploadImage: jest.fn(), uploadImageUrl: jest.fn(), sendImage: jest.fn(), sendMpnews: jest.fn(), sendMarkdown: jest.fn(), sendTextcard: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -356,7 +363,7 @@ describe('WecomDispatchService', () => {
           }),
         },
       })
-      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }
+      const robot = { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }
       const instance = service(prisma, robot)
 
       await runDelivery(instance, robotDelivery())
@@ -429,8 +436,9 @@ describe('WecomDispatchService', () => {
       sendTextcard: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app)
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app)
 
     await runDelivery(instance, appDelivery())
 
@@ -520,6 +528,7 @@ describe('WecomDispatchService', () => {
       sendMarkdown: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
     const instance = service(prisma, robot)
 
@@ -627,6 +636,7 @@ describe('WecomDispatchService', () => {
       sendMarkdown: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
     const instance = service(prisma, robot, undefined, {
       read: jest.fn().mockResolvedValue(Buffer.from('image')),
@@ -722,6 +732,7 @@ describe('WecomDispatchService', () => {
       sendTextcard: jest.fn(),
       uploadFile: jest.fn(),
       sendFile: jest.fn(),
+      sendNews: jest.fn(),
     }
     const prepared = {
       ok: true,
@@ -729,7 +740,7 @@ describe('WecomDispatchService', () => {
       mimeType: 'image/png',
       filename: 'image.png',
     }
-    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn() }, app, {
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app, {
       read: jest.fn().mockResolvedValue(Buffer.from('source')),
       prepareAppImage: jest.fn().mockResolvedValue(prepared),
       prepareMpnewsInlineImage: jest.fn().mockResolvedValue(prepared),
@@ -753,6 +764,197 @@ describe('WecomDispatchService', () => {
     expect(prisma.notificationDeliveryMessage.update).toHaveBeenCalledWith({
       where: { id: 'delivery-message-mpnews' },
       data: expect.objectContaining({ status: 'ACCEPTED', providerMsgId: 'msg-2' }),
+    })
+  })
+
+  it('sends a news card with signed image URLs and plain articles without images', async () => {
+    const imageId = '00000000-0000-4000-8000-000000000098'
+    const prisma = basePrisma({
+      wecomApp: {
+        findUnique: jest.fn().mockResolvedValue({
+          key: 'wecom-app',
+          agentId: 100001,
+          corpId: 'corp-1',
+          enabled: true,
+          status: 'ACTIVE',
+          secretEncrypted: 'encrypted-secret',
+        }),
+      },
+      wecomBinding: {
+        findUnique: jest.fn().mockResolvedValue({
+          wecomUserId: 'zhangsan',
+          status: 'ACTIVE',
+          verifiedAt: new Date('2026-11-25T10:00:00.000Z'),
+        }),
+      },
+      wecomAppMembership: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          verifiedAt: new Date('2026-11-25T10:00:00.000Z'),
+        }),
+      },
+      notificationDeliveryMessage: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'delivery-message-news',
+          deliveryId: 'delivery-2',
+          renderedMessageId: 'rendered-news',
+          sortOrder: 0,
+          status: 'PENDING',
+          attemptCount: 0,
+          nextAttemptAt: new Date('2026-11-25T10:00:00.000Z'),
+          providerMsgId: null,
+          failureCode: null,
+          failureMessage: null,
+          acceptedAt: null,
+          renderedMessage: {
+            kind: 'NEWS',
+            payloadSnapshot: {
+              articles: [
+                {
+                  title: '订单通知',
+                  description: '请查收订单资料',
+                  url: 'https://dms.example.com/sales/1',
+                  imageAssetId: imageId,
+                },
+                {
+                  title: '第二篇',
+                  description: null,
+                  url: 'https://dms.example.com/sales/2',
+                  imageAssetId: null,
+                },
+              ],
+            },
+          },
+        }]),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    })
+    const app = {
+      sendText: jest.fn(),
+      uploadImage: jest.fn(),
+      uploadImageUrl: jest.fn(),
+      sendImage: jest.fn(),
+      sendMpnews: jest.fn(),
+      sendMarkdown: jest.fn(),
+      sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
+      sendNews: jest.fn().mockResolvedValue({ ok: true, msgId: 'msg-news' }),
+    }
+    const assetUrls = {
+      createNewsImageUrl: jest.fn().mockReturnValue('https://dms.example.com/api/public/notification-assets/token'),
+    } as unknown as NotificationAssetUrlService
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app, {}, assetUrls)
+
+    await runDelivery(instance, appDelivery())
+
+    expect(assetUrls.createNewsImageUrl).toHaveBeenCalledWith(imageId)
+    expect(app.sendNews).toHaveBeenCalledWith({
+      accessToken: 'token-1',
+      agentId: 100001,
+      toUser: 'zhangsan',
+      articles: [
+        {
+          title: '订单通知',
+          description: '请查收订单资料',
+          url: 'https://dms.example.com/sales/1',
+          picurl: 'https://dms.example.com/api/public/notification-assets/token',
+        },
+        {
+          title: '第二篇',
+          description: null,
+          url: 'https://dms.example.com/sales/2',
+          picurl: null,
+        },
+      ],
+    })
+    expect(prisma.notificationDeliveryMessage.update).toHaveBeenCalledWith({
+      where: { id: 'delivery-message-news' },
+      data: expect.objectContaining({ status: 'ACCEPTED', providerMsgId: 'msg-news' }),
+    })
+  })
+
+  it('marks a news card failed when its image cannot be signed', async () => {
+    const prisma = basePrisma({
+      wecomApp: {
+        findUnique: jest.fn().mockResolvedValue({
+          key: 'wecom-app',
+          agentId: 100001,
+          corpId: 'corp-1',
+          enabled: true,
+          status: 'ACTIVE',
+          secretEncrypted: 'encrypted-secret',
+        }),
+      },
+      wecomBinding: {
+        findUnique: jest.fn().mockResolvedValue({
+          wecomUserId: 'zhangsan',
+          status: 'ACTIVE',
+          verifiedAt: new Date('2026-11-25T10:00:00.000Z'),
+        }),
+      },
+      wecomAppMembership: {
+        findUnique: jest.fn().mockResolvedValue({
+          status: 'ACTIVE',
+          verifiedAt: new Date('2026-11-25T10:00:00.000Z'),
+        }),
+      },
+      notificationDeliveryMessage: {
+        findMany: jest.fn().mockResolvedValue([{
+          id: 'delivery-message-news',
+          deliveryId: 'delivery-2',
+          renderedMessageId: 'rendered-news',
+          sortOrder: 0,
+          status: 'PENDING',
+          attemptCount: 0,
+          nextAttemptAt: new Date('2026-11-25T10:00:00.000Z'),
+          providerMsgId: null,
+          failureCode: null,
+          failureMessage: null,
+          acceptedAt: null,
+          renderedMessage: {
+            kind: 'NEWS',
+            payloadSnapshot: {
+              articles: [{
+                title: '订单通知',
+                description: null,
+                url: 'https://dms.example.com/sales/1',
+                imageAssetId: '00000000-0000-4000-8000-000000000098',
+              }],
+            },
+          },
+        }]),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    })
+    const app = {
+      sendText: jest.fn(),
+      uploadImage: jest.fn(),
+      uploadImageUrl: jest.fn(),
+      sendImage: jest.fn(),
+      sendMpnews: jest.fn(),
+      sendMarkdown: jest.fn(),
+      sendTextcard: jest.fn(),
+      uploadFile: jest.fn(),
+      sendFile: jest.fn(),
+      sendNews: jest.fn(),
+    }
+    const assetUrls = {
+      createNewsImageUrl: jest.fn().mockReturnValue(null),
+    } as unknown as NotificationAssetUrlService
+    const instance = service(prisma, { sendText: jest.fn(), sendImage: jest.fn(), sendMarkdown: jest.fn(), uploadFile: jest.fn(), sendFile: jest.fn(), sendNews: jest.fn() }, app, {}, assetUrls)
+
+    await runDelivery(instance, appDelivery())
+
+    expect(app.sendNews).not.toHaveBeenCalled()
+    expect(prisma.notificationDeliveryMessage.update).toHaveBeenCalledWith({
+      where: { id: 'delivery-message-news' },
+      data: expect.objectContaining({
+        status: 'FAILED',
+        failureCode: 'WECOM_NEWS_IMAGE_URL_UNAVAILABLE',
+      }),
     })
   })
 })

@@ -26,6 +26,7 @@ import FileMessageEditor from './FileMessageEditor.vue'
 import ImageMessageEditor from './ImageMessageEditor.vue'
 import MarkdownMessageEditor from './MarkdownMessageEditor.vue'
 import MpnewsMessageEditor from './MpnewsMessageEditor.vue'
+import NewsMessageEditor from './NewsMessageEditor.vue'
 import TextcardMessageEditor from './TextcardMessageEditor.vue'
 import TextMessageEditor from './TextMessageEditor.vue'
 import VariablePalette from './VariablePalette.vue'
@@ -242,6 +243,13 @@ function insertVariable(name: string): void {
           :errors="errors"
           :media-sources="media?.sources ?? []"
           :media-max-count="media?.maxCount ?? 0"
+        />
+        <NewsMessageEditor
+          v-else-if="kind === 'NEWS'"
+          ref="editorRef"
+          v-model="draft.payload"
+          :disabled="!canUpdate"
+          :errors="errors"
         />
         <div v-else class="text-sm text-muted-foreground p-6 text-center border border-border rounded-lg border-dashed">
           该类型暂未开放编辑。

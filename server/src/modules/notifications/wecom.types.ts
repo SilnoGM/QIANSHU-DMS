@@ -51,6 +51,13 @@ export interface WecomMpnewsArticle {
   readonly digest?: string | null
 }
 
+export interface WecomNewsArticle {
+  readonly title: string
+  readonly description?: string | null
+  readonly url: string
+  readonly picurl?: string | null
+}
+
 export interface WecomAppTransport {
   sendText(input: {
     readonly accessToken: string
@@ -109,6 +116,12 @@ export interface WecomAppTransport {
     readonly url: string
     readonly btntxt?: string | null
   }): Promise<WecomTransportResult>
+  sendNews(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly articles: readonly WecomNewsArticle[]
+  }): Promise<WecomTransportResult>
 }
 
 export interface WecomRobotTransport {
@@ -136,6 +149,10 @@ export interface WecomRobotTransport {
   sendFile(input: {
     readonly webhookKey: string
     readonly mediaId: string
+  }): Promise<WecomTransportResult>
+  sendNews(input: {
+    readonly webhookKey: string
+    readonly articles: readonly WecomNewsArticle[]
   }): Promise<WecomTransportResult>
 }
 

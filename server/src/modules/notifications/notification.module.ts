@@ -5,6 +5,8 @@ import { AuthModule } from '../auth/auth.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { NotificationAdminController } from './notification-admin.controller'
+import { NotificationAssetUrlService } from './notification-asset-url.service'
+import { NotificationPublicAssetController } from './notification-public-asset.controller'
 import { NotificationAdminService } from './notification-admin.service'
 import { NotificationContentMediaController } from './notification-content-media.controller'
 import { NotificationContentMediaService } from './notification-content-media.service'
@@ -35,11 +37,12 @@ import { WECOM_APP_TRANSPORT, WECOM_ROBOT_TRANSPORT } from './wecom.types'
 @Global()
 @Module({
   imports: [AuthModule, MediaModule, NumberingModule],
-  controllers: [NotificationAdminController, NotificationContentMediaController, NotificationEventConfigController, NotificationInboxController, NotificationPreferenceController, WecomAdminController],
+  controllers: [NotificationAdminController, NotificationContentMediaController, NotificationEventConfigController, NotificationInboxController, NotificationPreferenceController, NotificationPublicAssetController, WecomAdminController],
   providers: [
     SystemNotificationService,
     WecomAdminService,
     NotificationAdminService,
+    NotificationAssetUrlService,
     NotificationContentMediaService,
     NotificationEventConfigService,
     NotificationInboxService,

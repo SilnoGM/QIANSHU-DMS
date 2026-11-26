@@ -411,6 +411,15 @@ function messageSummary(message: MessageDraft): string {
       ? message.payload.title
       : '未填写标题'
   }
+  if (message.kind === 'NEWS') {
+    const articles = Array.isArray(message.payload.articles) ? message.payload.articles : []
+    const first = articles[0]
+    const title = typeof first === 'object' && first !== null && !Array.isArray(first)
+      ? (first as Record<string, unknown>).title
+      : null
+    const prefix = typeof title === 'string' && title.trim().length > 0 ? title : '未填写标题'
+    return articles.length > 1 ? `${prefix} 等 ${articles.length} 篇` : prefix
+  }
   if (message.kind === 'FILE') {
     return typeof message.payload.filename === 'string' && message.payload.filename.length > 0
       ? message.payload.filename
@@ -435,6 +444,8 @@ function messageTypeDescription(message: MessageDraft): string {
       return '文本卡片'
     case 'MPNEWS':
       return '企微图文（封面 + 正文）'
+    case 'NEWS':
+      return '图文卡片（1–8 篇文章）'
     case 'FILE':
       return '文件'
     case 'IMAGE':
@@ -527,6 +538,11 @@ const addMessageMenu = computed(() => {
       icon: 'i-lucide:file-text',
       handle: () => openCreateMessage('FILE'),
     })
+    items.push({
+      label: messageKindLabel('NEWS'),
+      icon: 'i-lucide:gallery-horizontal-end',
+      handle: () => openCreateMessage('NEWS'),
+    })
   }
   if (
     draft.channel === 'WECOM'
@@ -566,8 +582,8 @@ function validateDraft(draft: ChannelDraft): string | null {
     }
     // 切换发送方式保留原内容，但群机器人不支持 mpnews；保存前必须显式处理不兼容消息。
     const allowedKinds: MessageKind[] = draft.sendMethod === 'ROBOT'
-      ? ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'FILE', 'IMAGE']
-      : ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE']
+      ? ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'NEWS', 'FILE', 'IMAGE']
+      : ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'NEWS', 'FILE', 'IMAGE']
     const unsupported = draft.messages.find(message => !allowedKinds.includes(message.kind))
     if (unsupported !== undefined) {
       return `企业微信${draft.sendMethod === 'ROBOT' ? '群机器人' : '应用消息'}不支持 ${messageKindLabel(unsupported.kind)} 消息，请删除或切换发送方式`
@@ -933,7 +949,7 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
                 <div class="text-xs text-muted-foreground mt-0.5">
-                  按顺序发送；图片附件在全部正文之后发送。
+                  按消息顺序发送，图片附件同样参与排序；单条失败不影响后续消息。
                 </div>
               </div>
               <FaDropdown
@@ -982,7 +998,7 @@ onBeforeUnmount(() => {
                   <FaIcon name="i-lucide:message-square-plus" class="size-5" />
                 </span>
                 <span class="text-sm font-medium">尚未配置消息内容</span>
-                <span class="text-xs text-muted-foreground">从右上角添加文本消息、企微图文或图片附件。</span>
+                <span class="text-xs text-muted-foreground">从右上角添加文本消息、企微图文、图文卡片或图片附件。</span>
                 <FaButton v-if="canUpdate && activeDraft.channel === 'IN_APP'" variant="outline" size="sm" @click="openCreateMessage('TEXT')">
                   添加文本消息
                 </FaButton>

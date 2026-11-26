@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
-import type { WecomAppTransport, WecomImageUrlResult, WecomMediaUploadResult, WecomMpnewsArticle, WecomTransportResult } from './wecom.types'
+import type { WecomAppTransport, WecomImageUrlResult, WecomMediaUploadResult, WecomMpnewsArticle, WecomNewsArticle, WecomTransportResult } from './wecom.types'
 import { utf8Bytes } from './wecom.types'
 
 const MAX_RESPONSE_BYTES = 64 * 1024
@@ -156,6 +156,31 @@ export class WecomAppHttpTransport implements WecomAppTransport {
         ...(input.btntxt === undefined || input.btntxt === null ? {} : { btntxt: input.btntxt }),
       },
     }, 'TEXTCARD')
+  }
+
+  async sendNews(input: {
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+    readonly articles: readonly WecomNewsArticle[]
+  }): Promise<WecomTransportResult> {
+    const config = this.configService.get<WecomConfiguration>('wecom')
+    if (config === undefined) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_CONFIG_MISSING', message: 'WECOM 配置缺失' }
+    }
+    return this.sendJsonMessage(config.baseUrl, input.accessToken, {
+      touser: input.toUser,
+      agentid: input.agentId,
+      msgtype: 'news',
+      news: {
+        articles: input.articles.map(article => ({
+          title: article.title,
+          ...(article.description === undefined || article.description === null ? {} : { description: article.description }),
+          url: article.url,
+          ...(article.picurl === undefined || article.picurl === null ? {} : { picurl: article.picurl }),
+        })),
+      },
+    }, 'NEWS')
   }
 
   private async sendJsonMessage(

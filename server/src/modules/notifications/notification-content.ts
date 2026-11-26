@@ -26,8 +26,8 @@ export type NotificationMessageKindValue = (typeof NOTIFICATION_MESSAGE_KINDS)[n
  */
 export const IMPLEMENTED_MESSAGE_KINDS_BY_METHOD: Readonly<Record<NotificationSendMethodValue, readonly NotificationMessageKindValue[]>> = Object.freeze({
   IN_APP: ['TEXT'],
-  APP: ['TEXT', 'MARKDOWN', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE'],
-  ROBOT: ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'FILE', 'IMAGE'],
+  APP: ['TEXT', 'MARKDOWN', 'TEXTCARD', 'NEWS', 'MPNEWS', 'FILE', 'IMAGE'],
+  ROBOT: ['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'NEWS', 'FILE', 'IMAGE'],
 })
 
 export const MPNEWS_MAX_CONTENT_BYTES = 666 * 1024
@@ -42,10 +42,24 @@ const TEXTCARD_DESCRIPTION_MAX_BYTES = 512
 const TEXTCARD_URL_MAX_LENGTH = 2_048
 const TEXTCARD_BUTTON_MAX_BYTES = 16
 export const FILE_MAX_BYTES = 20n * 1_024n * 1_024n
+const NEWS_MAX_ARTICLES = 8
+const NEWS_ARTICLE_DESCRIPTION_MAX_BYTES = 512
+const NEWS_ARTICLE_URL_MAX_LENGTH = 2_048
 
 export interface NotificationFilePayload {
   readonly mediaAssetId: string | null
   readonly filename?: string | null
+}
+
+export interface NotificationNewsArticle {
+  readonly title: string
+  readonly description: string | null
+  readonly url: string
+  readonly imageAssetId: string | null
+}
+
+export interface NotificationNewsPayload {
+  readonly articles: readonly NotificationNewsArticle[]
 }
 
 export interface NotificationMarkdownPayload {
@@ -93,7 +107,7 @@ export interface NotificationContentItemInput {
 
 export interface NormalizedNotificationContentItem {
   readonly kind: NotificationMessageKindValue
-  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | NotificationMarkdownPayload | NotificationTextcardPayload | NotificationFilePayload | Record<string, never>
+  readonly payload: NotificationTextPayload | NotificationMpnewsPayload | NotificationMarkdownPayload | NotificationTextcardPayload | NotificationFilePayload | NotificationNewsPayload | Record<string, never>
   readonly mediaPolicy: unknown
   readonly enabled: boolean
   readonly sortOrder: number
@@ -489,6 +503,66 @@ function validateFile(input: {
   }
 }
 
+function validateNews(input: {
+  readonly payload: unknown
+  readonly allowedVariables: readonly string[] | null
+  readonly itemIndex: number
+}): { readonly payload?: NotificationNewsPayload, readonly issues: readonly NotificationContentIssue[] } {
+  const record = asRecord(input.payload)
+  const rawArticles = Array.isArray(record?.articles) ? record.articles : []
+  const issues: NotificationContentIssue[] = []
+  if (rawArticles.length < 1 || rawArticles.length > NEWS_MAX_ARTICLES) {
+    issues.push(issue('NOTIFICATION_CONTENT_NEWS_ARTICLE_COUNT', `图文卡片必须包含 1–${NEWS_MAX_ARTICLES} 篇文章`, input.itemIndex, 'articles'))
+    return { issues }
+  }
+  const articles: NotificationNewsArticle[] = []
+  rawArticles.forEach((rawArticle, index) => {
+    const article = asRecord(rawArticle)
+    const title = asTrimmedString(article?.title)
+    const descriptionText = article?.description === null || article?.description === undefined
+      ? null
+      : asTrimmedString(article.description)
+    const description = descriptionText !== null && descriptionText.length > 0 ? descriptionText : null
+    const url = asTrimmedString(article?.url)
+    const imageText = article?.imageAssetId === null || article?.imageAssetId === undefined
+      ? null
+      : asTrimmedString(article.imageAssetId)
+    const imageAssetId = imageText !== null && imageText.length > 0 ? imageText : null
+    const fieldPrefix = `articles.${index}`
+    if (title === null || title.length === 0) {
+      issues.push(issue('NOTIFICATION_CONTENT_NEWS_TITLE_EMPTY', '图文卡片标题不能为空', input.itemIndex, `${fieldPrefix}.title`))
+    }
+    else if (bytesOf(title) > MAX_TITLE_BYTES) {
+      issues.push(issue('NOTIFICATION_CONTENT_NEWS_TITLE_TOO_LONG', '图文卡片标题不能超过 128 字节', input.itemIndex, `${fieldPrefix}.title`))
+    }
+    if (description !== null && bytesOf(description) > NEWS_ARTICLE_DESCRIPTION_MAX_BYTES) {
+      issues.push(issue('NOTIFICATION_CONTENT_NEWS_DESCRIPTION_TOO_LONG', '图文卡片描述不能超过 512 字节', input.itemIndex, `${fieldPrefix}.description`))
+    }
+    if (url === null || url.length === 0 || url.length > NEWS_ARTICLE_URL_MAX_LENGTH || !isHttpUrl(url)) {
+      issues.push(issue('NOTIFICATION_CONTENT_NEWS_URL_INVALID', '图文卡片链接必须是有效的 http/https URL', input.itemIndex, `${fieldPrefix}.url`))
+    }
+    if (imageAssetId !== null && !UUID_PATTERN.test(imageAssetId)) {
+      issues.push(issue('NOTIFICATION_CONTENT_NEWS_IMAGE_INVALID', '图文卡片图片资产 ID 无效', input.itemIndex, `${fieldPrefix}.imageAssetId`))
+    }
+    issues.push(...inspectContentPlaceholders({
+      texts: [title ?? '', description ?? '', url ?? ''],
+      allowedVariables: input.allowedVariables,
+      itemIndex: input.itemIndex,
+      field: fieldPrefix,
+    }))
+    articles.push({
+      title: title ?? '',
+      description,
+      url: url ?? '',
+      imageAssetId,
+    })
+  })
+  return {
+    ...(issues.length === 0 ? { payload: { articles } } : {}),
+    issues,
+  }
+}
+
 function validateMpnews(input: {
   readonly payload: unknown
   readonly allowedVariables: readonly string[] | null
@@ -705,6 +779,7 @@ export interface NotificationContentAssetIds {
   readonly coverAssetId: string | null
   readonly inlineAssetIds: readonly string[]
   readonly fileAssetId: string | null
+  readonly newsImageAssetIds: readonly string[]
 }
 
 /** 从内容 payload 提取固定媒体资产 ID；业务动态来源不在此列。 */
@@ -719,10 +794,28 @@ export function extractNotificationContentAssetIds(item: {
       coverAssetId: null,
       inlineAssetIds: [],
       fileAssetId: fileAssetId !== null && UUID_PATTERN.test(fileAssetId) ? fileAssetId : null,
+      newsImageAssetIds: [],
+    }
+  }
+  if (item.kind === 'NEWS') {
+    const articles = Array.isArray(record?.articles) ? record.articles : []
+    const imageAssetIds = new Set<string>()
+    for (const rawArticle of articles) {
+      const article = asRecord(rawArticle)
+      const imageAssetId = asTrimmedString(article?.imageAssetId)
+      if (imageAssetId !== null && UUID_PATTERN.test(imageAssetId)) {
+        imageAssetIds.add(imageAssetId)
+      }
+    }
+    return {
+      coverAssetId: null,
+      inlineAssetIds: [],
+      fileAssetId: null,
+      newsImageAssetIds: [...imageAssetIds],
     }
   }
   if (item.kind !== 'MPNEWS') {
-    return { coverAssetId: null, inlineAssetIds: [], fileAssetId: null }
+    return { coverAssetId: null, inlineAssetIds: [], fileAssetId: null, newsImageAssetIds: [] }
   }
   const cover = asRecord(record?.cover)
   const coverAssetId = asTrimmedString(cover?.mediaAssetId)
@@ -737,6 +830,7 @@ export function extractNotificationContentAssetIds(item: {
     coverAssetId: coverAssetId !== null && UUID_PATTERN.test(coverAssetId) ? coverAssetId : null,
     inlineAssetIds: [...inline].filter(assetId => UUID_PATTERN.test(assetId)),
     fileAssetId: null,
+    newsImageAssetIds: [],
   }
 }
 
@@ -839,7 +933,7 @@ export function renderMpnewsHtml(input: {
 
 
 /**
- * 渠道内容组的唯一校验入口。当前开放 TEXT、MPNEWS 与图片附件；未实现类型明确拒绝，
+ * 渠道内容组的唯一校验入口。可用类型按发送方式白名单开放；未实现类型明确拒绝，
  * 不把模型枚举当成可用能力。
  */
 export function validateNotificationContentGroup(input: {
@@ -938,6 +1032,25 @@ export function validateNotificationContentGroup(input: {
           enabled: item.enabled !== false,
           sortOrder: item.sortOrder ?? index,
           contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: item.mediaPolicy ?? {} }),
+        })
+      }
+      return
+    }
+    if (item.kind === 'NEWS') {
+      const result = validateNews({
+        payload: item.payload,
+        allowedVariables: input.allowedVariables,
+        itemIndex: index,
+      })
+      issues.push(...result.issues)
+      if (result.payload !== undefined) {
+        normalized.push({
+          kind: item.kind,
+          payload: result.payload,
+          mediaPolicy: {},
+          enabled: item.enabled !== false,
+          sortOrder: item.sortOrder ?? index,
+          contentHash: hashNotificationContent({ kind: item.kind, payload: result.payload, mediaPolicy: {} }),
         })
       }
       return

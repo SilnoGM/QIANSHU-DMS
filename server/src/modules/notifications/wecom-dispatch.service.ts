@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common'
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
@@ -22,6 +22,7 @@ import {
   type WecomTransportFailureKind,
   type WecomTransportResult,
 } from './wecom.types'
+import { NotificationAssetUrlService } from './notification-asset-url.service'
 import { WecomSecretService } from './wecom-secret.service'
 import { WecomMediaService } from './wecom-media.service'
 import { WecomTokenService } from './wecom-token.service'
@@ -117,6 +118,7 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
     private readonly mediaService: WecomMediaService,
     @Inject(WECOM_APP_TRANSPORT) private readonly appTransport: WecomAppTransport,
     @Inject(WECOM_ROBOT_TRANSPORT) private readonly robotTransport: WecomRobotTransport,
+    @Optional() private readonly assetUrls?: NotificationAssetUrlService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -373,6 +375,18 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         mediaItems,
         notificationId: notification.id,
         sendMessage: async (item) => {
+          if (item.renderedMessage.kind === 'NEWS') {
+            const result = await this.sendAppNewsItem({
+              item,
+              accessToken: token.accessToken,
+              agentId: app.agentId!,
+              toUser: binding.wecomUserId,
+            })
+            if (!result.ok && result.kind === 'TOKEN_INVALID') {
+              this.tokenService.invalidate(app.key)
+            }
+            return result
+          }
           if (item.renderedMessage.kind === 'FILE') {
             const result = await this.sendAppFileItem({
               item,
@@ -535,6 +549,9 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         notificationId: notification.id,
         sendMessage: async (item, isFirstText) => {
           const payload = asRecord(item.renderedMessage.payloadSnapshot)
+          if (item.renderedMessage.kind === 'NEWS') {
+            return this.sendRobotNewsItem({ item, webhookKey })
+          }
           if (item.renderedMessage.kind === 'FILE') {
             return this.sendRobotFileItem({ item, delivery, webhookKey })
           }
@@ -640,6 +657,90 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
       userIds: [...new Set(bindings.map(binding => binding.wecomUserId))],
       skipped: mention.userIds.length - bindings.length,
     }
+  }
+
+  private newsArticles(item: DeliveryMessageRow): {
+    readonly articles: ReadonlyArray<{ readonly title: string, readonly description: string | null, readonly url: string, readonly imageAssetId: string | null }>
+  } | null {
+    const payload = asRecord(item.renderedMessage.payloadSnapshot)
+    if (!Array.isArray(payload?.articles)) {
+      return null
+    }
+    const articles = payload.articles.flatMap((rawArticle) => {
+      const article = asRecord(rawArticle)
+      if (article === null || typeof article.title !== 'string' || typeof article.url !== 'string') {
+        return []
+      }
+      return [{
+        title: article.title,
+        description: typeof article.description === 'string' ? article.description : null,
+        url: article.url,
+        imageAssetId: typeof article.imageAssetId === 'string' ? article.imageAssetId : null,
+      }]
+    })
+    return articles.length === 0 ? null : { articles }
+  }
+
+  private newsImageUrl(assetId: string | null): string | null {
+    if (assetId === null) {
+      return null
+    }
+    return this.assetUrls?.createNewsImageUrl(assetId) ?? null
+  }
+
+  private async sendAppNewsItem(input: {
+    readonly item: DeliveryMessageRow
+    readonly accessToken: string
+    readonly agentId: number
+    readonly toUser: string
+  }): Promise<WecomTransportResult> {
+    const news = this.newsArticles(input.item)
+    if (news === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_NEWS_PAYLOAD_INVALID', message: '图文卡片内容不完整' }
+    }
+    const articles = []
+    for (const article of news.articles) {
+      const picurl = this.newsImageUrl(article.imageAssetId)
+      if (article.imageAssetId !== null && picurl === null) {
+        return { ok: false, kind: 'REJECTED', code: 'WECOM_NEWS_IMAGE_URL_UNAVAILABLE', message: '图文卡片图片签名 URL 不可用' }
+      }
+      articles.push({
+        title: article.title,
+        description: article.description,
+        url: article.url,
+        picurl,
+      })
+    }
+    return this.appTransport.sendNews({
+      accessToken: input.accessToken,
+      agentId: input.agentId,
+      toUser: input.toUser,
+      articles,
+    })
+  }
+
+  private async sendRobotNewsItem(input: {
+    readonly item: DeliveryMessageRow
+    readonly webhookKey: string
+  }): Promise<WecomTransportResult> {
+    const news = this.newsArticles(input.item)
+    if (news === null) {
+      return { ok: false, kind: 'REJECTED', code: 'WECOM_NEWS_PAYLOAD_INVALID', message: '图文卡片内容不完整' }
+    }
+    const articles = []
+    for (const article of news.articles) {
+      const picurl = this.newsImageUrl(article.imageAssetId)
+      if (article.imageAssetId !== null && picurl === null) {
+        return { ok: false, kind: 'REJECTED', code: 'WECOM_NEWS_IMAGE_URL_UNAVAILABLE', message: '图文卡片图片签名 URL 不可用' }
+      }
+      articles.push({
+        title: article.title,
+        description: article.description,
+        url: article.url,
+        picurl,
+      })
+    }
+    return this.robotTransport.sendNews({ webhookKey: input.webhookKey, articles })
   }
 
   private async sendAppFileItem(input: {

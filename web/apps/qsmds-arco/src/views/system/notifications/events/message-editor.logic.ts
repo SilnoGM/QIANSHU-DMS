@@ -214,6 +214,21 @@ export function createDefaultMessageDraft(
       enabled: true,
     }
   }
+  if (kind === 'NEWS') {
+    return {
+      kind,
+      payload: {
+        articles: [{
+          title: '',
+          description: null,
+          url: '',
+          imageAssetId: null,
+        }],
+      },
+      mediaPolicy: {},
+      enabled: true,
+    }
+  }
   if (kind === 'IMAGE') {
     return {
       kind,
@@ -422,6 +437,43 @@ export function validateMessageDraft(
       ['url', url],
       ['btntxt', btntxt],
     ], context, add)
+    return issues
+  }
+
+  if (message.kind === 'NEWS') {
+    const rawArticles = Array.isArray(payload?.articles) ? payload.articles : []
+    if (rawArticles.length < 1 || rawArticles.length > 8) {
+      add('articles', '图文卡片必须包含 1–8 篇文章')
+      return issues
+    }
+    rawArticles.forEach((rawArticle, index) => {
+      const article = asRecord(rawArticle)
+      const title = stringValue(article, 'title')
+      const description = optionalString(article, 'description')
+      const url = stringValue(article, 'url')
+      const imageAssetId = optionalString(article, 'imageAssetId')
+      const prefix = `articles.${index}`
+      if (title.trim().length === 0) {
+        add(`${prefix}.title`, '标题不能为空')
+      }
+      else if (bytesOf(title) > 128) {
+        add(`${prefix}.title`, '标题不能超过 128 字节')
+      }
+      if (description !== null && bytesOf(description) > 512) {
+        add(`${prefix}.description`, '描述不能超过 512 字节')
+      }
+      if (url.length > 2_048 || !isHttpUrl(url)) {
+        add(`${prefix}.url`, '链接必须是有效的 http/https URL')
+      }
+      if (imageAssetId !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(imageAssetId)) {
+        add(`${prefix}.imageAssetId`, '图片资产 ID 无效')
+      }
+      validateVariables([
+        [`${prefix}.title`, title],
+        [`${prefix}.description`, description],
+        [`${prefix}.url`, url],
+      ], context, add)
+    })
     return issues
   }
 

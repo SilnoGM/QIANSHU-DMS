@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type { WecomConfiguration } from '../../config/wecom.config'
-import type { WecomMediaUploadResult, WecomRobotTransport, WecomTransportResult } from './wecom.types'
+import type { WecomMediaUploadResult, WecomNewsArticle, WecomRobotTransport, WecomTransportResult } from './wecom.types'
 import { utf8Bytes } from './wecom.types'
 
 const MAX_RESPONSE_BYTES = 64 * 1024
@@ -269,6 +269,23 @@ export class WecomRobotHttpTransport implements WecomRobotTransport {
       msgtype: 'file',
       file: { media_id: input.mediaId },
     }, 'FILE')
+  }
+
+  async sendNews(input: {
+    readonly webhookKey: string
+    readonly articles: readonly WecomNewsArticle[]
+  }): Promise<WecomTransportResult> {
+    return this.sendJsonPayload(input.webhookKey, {
+      msgtype: 'news',
+      news: {
+        articles: input.articles.map(article => ({
+          title: article.title,
+          ...(article.description === undefined || article.description === null ? {} : { description: article.description }),
+          url: article.url,
+          ...(article.picurl === undefined || article.picurl === null ? {} : { picurl: article.picurl }),
+        })),
+      },
+    }, 'NEWS')
   }
 
   async sendImage(input: {

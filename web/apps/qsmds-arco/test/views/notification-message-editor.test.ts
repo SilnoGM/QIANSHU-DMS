@@ -43,6 +43,10 @@ const mpnewsEditorSource = readFileSync(
   new URL('../../src/views/system/notifications/events/components/editor/MpnewsMessageEditor.vue', import.meta.url),
   'utf8',
 )
+const newsEditorSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/components/editor/NewsMessageEditor.vue', import.meta.url),
+  'utf8',
+)
 const richTextSource = readFileSync(
   new URL('../../src/views/system/notifications/events/components/RichTextEditor.vue', import.meta.url),
   'utf8',
@@ -104,6 +108,23 @@ function mpnewsDraft(overrides: Record<string, unknown> = {}): MessageDraft {
       digest: null,
       contentSourceUrl: null,
       content: '<p>正文</p>',
+      ...overrides,
+    },
+    mediaPolicy: {},
+    enabled: true,
+  }
+}
+
+function newsDraft(overrides: Record<string, unknown> = {}): MessageDraft {
+  return {
+    kind: 'NEWS',
+    payload: {
+      articles: [{
+        title: '订单通知',
+        description: '请查收订单资料',
+        url: 'https://dms.example.com/sales/1',
+        imageAssetId: '00000000-0000-4000-8000-000000000333',
+      }],
       ...overrides,
     },
     mediaPolicy: {},
@@ -296,6 +317,50 @@ test('文件消息校验固定文件与业务来源', () => {
   assert.match(validateMessageDraft(unknown, context())[0]?.message ?? '', /未声明/u)
 })
 
+test('图文卡片校验文章数量、字段字节、链接、图片与变量', () => {
+  assert.deepEqual(validateMessageDraft(newsDraft(), context()), [])
+
+  const missingArticles = newsDraft({ articles: [] })
+  assert.match(validateMessageDraft(missingArticles, context())[0]?.message ?? '', /1–8/u)
+
+  const tooMany = newsDraft({
+    articles: Array.from({ length: 9 }, (_, index) => ({
+      title: `文章 ${index + 1}`,
+      description: null,
+      url: 'https://dms.example.com/1',
+      imageAssetId: null,
+    })),
+  })
+  assert.match(validateMessageDraft(tooMany, context())[0]?.message ?? '', /1–8/u)
+
+  const invalid = newsDraft({
+    articles: [{
+      title: ' ',
+      description: 'x'.repeat(513),
+      url: 'ftp://example.test/file',
+      imageAssetId: 'not-a-uuid',
+    }],
+  })
+  const fields = validateMessageDraft(invalid, context()).map(issue => issue.field)
+  assert.ok(fields.includes('articles.0.title'))
+  assert.ok(fields.includes('articles.0.description'))
+  assert.ok(fields.includes('articles.0.url'))
+  assert.ok(fields.includes('articles.0.imageAssetId'))
+
+  assert.match(
+    validateMessageDraft(newsDraft({
+      articles: [{ title: 'x'.repeat(129), description: null, url: 'https://dms.example.com/1', imageAssetId: null }],
+    }), context())[0]?.message ?? '',
+    /128/u,
+  )
+  assert.match(
+    validateMessageDraft(newsDraft({
+      articles: [{ title: '{{unknown}}', description: null, url: 'https://dms.example.com/1', imageAssetId: null }],
+    }), context())[0]?.message ?? '',
+    /未声明变量/u,
+  )
+})
+
 test('消息草稿快照可区分未修改与已修改', () => {
   const draft = textDraft('你好')
   const clone = cloneMessageDraft(draft)
@@ -363,6 +428,9 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(detailSource, /<FaDropdown/u)
   assert.match(detailSource, /文本消息/u)
   assert.match(detailSource, /企微图文/u)
+  assert.match(detailSource, /图文卡片/u)
+  assert.match(detailSource, /openCreateMessage\('NEWS'\)/u)
+  assert.match(detailSource, /'NEWS', 'FILE'/u)
   assert.match(detailSource, /Markdown/u)
   assert.match(detailSource, /文本卡片/u)
   assert.match(detailSource, /插入消息/u)
@@ -378,6 +446,7 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(modalSource, /<TextMessageEditor/u)
   assert.match(modalSource, /<ImageMessageEditor/u)
   assert.match(modalSource, /<MpnewsMessageEditor/u)
+  assert.match(modalSource, /<NewsMessageEditor/u)
   assert.match(modalSource, /<VariablePalette/u)
   assert.match(modalSource, /validateMessageDraft/u)
   assert.match(modalSource, /serverErrors/u)
@@ -409,4 +478,10 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(richTextSource, /mediaMaxCount/u)
   assert.match(assetImageViewSource, /mpnews-business-image-placeholder/u)
   assert.match(assetImageViewSource, /发布时插入/u)
+  assert.match(newsEditorSource, /VariableTextInput/u)
+  assert.match(newsEditorSource, /lastFocusedField/u)
+  assert.match(newsEditorSource, /MAX_ARTICLES = 8/u)
+  assert.match(newsEditorSource, /2 \* 1024 \* 1024/u)
+  assert.match(newsEditorSource, /contentMedia\.upload/u)
+  assert.match(newsEditorSource, /defineExpose\(\{ insertVariable \}\)/u)
 })

@@ -489,6 +489,25 @@ export class NotificationEventConfigService {
       }
     }
 
+    if (input.message.kind === 'NEWS') {
+      const articles = Array.isArray(payload.articles) ? payload.articles : []
+      return {
+        kind: input.message.kind,
+        payload: {
+          articles: articles.map((rawArticle) => {
+            const article = asRecord(rawArticle)
+            return {
+              title: typeof article?.title === 'string' ? article.title : '',
+              description: typeof article?.description === 'string' ? article.description : null,
+              url: typeof article?.url === 'string' ? article.url : '',
+              imageAssetId: typeof article?.imageAssetId === 'string' ? article.imageAssetId : null,
+            }
+          }),
+        },
+        warnings: [],
+      }
+    }
+
     if (input.message.kind === 'IMAGE') {
       const policy = parseNotificationImageMediaPolicy(input.message.mediaPolicy)
       return {
@@ -621,6 +640,7 @@ export class NotificationEventConfigService {
           const extracted = extractNotificationContentAssetIds({ kind: item.kind, payload: item.payload })
           if (extracted.coverAssetId !== null) assetIds.add(extracted.coverAssetId)
           if (extracted.fileAssetId !== null) assetIds.add(extracted.fileAssetId)
+          for (const assetId of extracted.newsImageAssetIds) assetIds.add(assetId)
           for (const assetId of extracted.inlineAssetIds) assetIds.add(assetId)
         }
         const assets = assetIds.size === 0
@@ -655,6 +675,9 @@ export class NotificationEventConfigService {
           }
           if (extracted.fileAssetId !== null) {
             refs.push({ assetId: extracted.fileAssetId, role: 'FILE' })
+          }
+          for (const assetId of extracted.newsImageAssetIds) {
+            refs.push({ assetId, role: 'NEWS_IMAGE' })
           }
           for (const assetId of extracted.inlineAssetIds) {
             refs.push({ assetId, role: 'INLINE' })

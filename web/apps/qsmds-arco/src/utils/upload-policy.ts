@@ -122,3 +122,17 @@ export function validateUploadFile(
 export const IMAGE_ONLY_ACCEPT = policyAccept('IMAGE_ONLY')
 export const PRODUCT_MEDIA_ACCEPT = policyAccept('PRODUCT_MEDIA')
 export const XLSX_ACCEPT = policyAccept('XLSX_ONLY')
+
+/**
+ * 通知中心「文件消息」固定附件的接受类型。
+ * 这是对外发送的通知内容，不属于业务凭证上传策略，因此不加入 UPLOAD_POLICIES，
+ * 避免放宽其他业务上传入口的格式白名单。
+ */
+export const NOTIFICATION_FILE_ACCEPT = [
+  '.pdf',
+  '.docx',
+  '.xlsx',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+].join(',')

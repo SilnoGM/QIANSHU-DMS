@@ -84,6 +84,7 @@ allowBuilds:
 | `CHEETAHGO_SECRET` | 猎豹 CheetahGo 开放平台 secret；与 appid 必须同时提供，缺省时广告账户同步任务跳过 | 模板保持为空 |
 | `WECOM_APP_SECRET_KEY` | 企业微信应用 Secret 与群 webhook key 的 AES-256-GCM 静态加密密钥；32-byte canonical base64url，未配置时无法保存 WECOM Secret | 模板保持为空 |
 | `WECOM_WORKER_ENABLED` | WECOM 派发开关；只有显式设为 `true` 才启动后台派发 | `false` |
+| `NOTIFICATION_ASSET_URL_SECRET` | NEWS 图文卡片图片的公开签名 URL 密钥，至少 32 字符；未配置时带图 NEWS 发送失败，纯文字 NEWS 不受影响 | 模板保持为空 |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 

@@ -439,7 +439,7 @@ export class SystemNotificationService {
       input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '企业微信渠道未配置消息内容' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
     }
-    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'MPNEWS', 'FILE', 'IMAGE'].includes(message.kind))) {
+    if (messages.some(message => !['TEXT', 'MARKDOWN', 'MARKDOWN_V2', 'TEXTCARD', 'NEWS', 'MPNEWS', 'FILE', 'IMAGE'].includes(message.kind))) {
       input.warnings.push({ code: 'MESSAGE_KIND_NOT_IMPLEMENTED', message: '当前发布链路暂不支持该消息类型' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED' }
     }
@@ -486,6 +486,14 @@ export class SystemNotificationService {
           resolved: mediaPlan.fileByMessageId.get(message.id),
         })
       }
+      if (message.kind === 'NEWS') {
+        return this.renderEventNewsMessage({
+          command: input.command,
+          channelConfig: input.channelConfig,
+          message,
+          variables: input.variables,
+        })
+      }
       return this.renderEventTextMessage({
         command: input.command,
         channelConfig: input.channelConfig,
@@ -510,6 +518,7 @@ export class SystemNotificationService {
       if (item.kind === 'MARKDOWN' || item.kind === 'MARKDOWN_V2') return item.payload.content
       if (item.kind === 'TEXTCARD') return item.payload.title
       if (item.kind === 'MPNEWS') return item.payload.title
+      if (item.kind === 'NEWS') return item.payload.articles[0]?.title ?? '图文卡片'
       if (item.kind === 'FILE') return '文件消息'
       return ''
     }).filter(part => part.length > 0).join('\n\n')
@@ -671,7 +680,7 @@ export class SystemNotificationService {
         id: string
         renderedMessageId: string
         mediaAssetId: string
-        role: 'INLINE' | 'FILE'
+        role: 'INLINE' | 'FILE' | 'NEWS_IMAGE'
         sourceKey: string | null
         sortOrder: number
       }>((row, index) => {
@@ -706,6 +715,24 @@ export class SystemNotificationService {
             sourceKey: resolved?.sourceKey ?? null,
             sortOrder: 0,
           }]
+        }
+        if (message.kind === 'NEWS') {
+          const articles = Array.isArray(asRecord(message.payload)?.articles)
+            ? asRecord(message.payload)!.articles as unknown[]
+            : []
+          return articles.flatMap((rawArticle, articleIndex) => {
+            const imageAssetId = asRecord(rawArticle)?.imageAssetId
+            return typeof imageAssetId === 'string' && imageAssetId.length > 0
+              ? [{
+                  id: randomUUID(),
+                  renderedMessageId: row.id,
+                  mediaAssetId: imageAssetId,
+                  role: 'NEWS_IMAGE' as const,
+                  sourceKey: null,
+                  sortOrder: articleIndex,
+                }]
+              : []
+          })
         }
         return []
       })
@@ -1248,6 +1275,88 @@ export class SystemNotificationService {
       },
       warnings: [...warnings],
     }
+  }
+
+  private renderEventNewsMessage(input: {
+    readonly command: SystemNotificationPublishCommand
+    readonly channelConfig: EventChannelConfig
+    readonly message: EventChannelMessage
+    readonly variables: Readonly<Record<string, string | number | null>>
+  }): {
+    readonly ok: true
+    readonly kind: 'NEWS'
+    readonly payload: {
+      readonly articles: ReadonlyArray<{
+        readonly title: string
+        readonly description: string | null
+        readonly url: string
+        readonly imageAssetId: string | null
+      }>
+    }
+    readonly warnings: readonly NotificationRenderWarning[]
+  } | {
+    readonly ok: false
+    readonly message: string
+  } {
+    const payload = asRecord(input.message.payload)
+    const rawArticles = Array.isArray(payload?.articles) ? payload.articles : []
+    const allowed = this.eventContentAllowedVariables(input.command.eventType)
+    const allowSensitive = input.channelConfig.allowSensitive
+    const warnings = new Set<NotificationRenderWarning>()
+    const articles: Array<{
+      title: string
+      description: string | null
+      url: string
+      imageAssetId: string | null
+    }> = []
+    for (const [index, rawArticle] of rawArticles.entries()) {
+      const article = asRecord(rawArticle)
+      if (article === null) {
+        return { ok: false, message: `图文卡片第 ${index + 1} 篇内容无效` }
+      }
+      const title = renderNotificationTemplate({
+        body: typeof article.title === 'string' ? article.title : '',
+        variables: input.variables,
+        allowed,
+        allowSensitive,
+        maxLength: 128,
+        maxBytes: 128,
+      })
+      const description = typeof article.description === 'string'
+        ? renderNotificationTemplate({
+            body: article.description,
+            variables: input.variables,
+            allowed,
+            allowSensitive,
+            maxLength: 512,
+            maxBytes: 512,
+          })
+        : null
+      const url = renderNotificationTemplate({
+        body: '',
+        linkUrlTemplate: typeof article.url === 'string' ? article.url : '',
+        variables: input.variables,
+        allowed,
+        allowSensitive,
+        maxLength: 1,
+      })
+      if (!title.ok) return { ok: false, message: title.message }
+      if (description !== null && !description.ok) return { ok: false, message: description.message }
+      if (!url.ok) return { ok: false, message: url.message }
+      if (url.linkUrl === null || !/^https?:\/\//iu.test(url.linkUrl)) {
+        return { ok: false, message: `图文卡片第 ${index + 1} 篇链接必须是 http/https URL` }
+      }
+      for (const warning of [...title.warnings, ...(description?.ok ? description.warnings : []), ...url.warnings]) {
+        warnings.add(warning)
+      }
+      articles.push({
+        title: title.content,
+        description: description?.ok ? description.content : null,
+        url: url.linkUrl,
+        imageAssetId: typeof article.imageAssetId === 'string' ? article.imageAssetId : null,
+      })
+    }
+    return { ok: true, kind: 'NEWS', payload: { articles }, warnings: [...warnings] }
   }
 
   private renderEventFileMessage(input: {

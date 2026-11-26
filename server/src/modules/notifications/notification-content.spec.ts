@@ -1,4 +1,5 @@
 import {
+  extractNotificationContentAssetIds,
   hashNotificationContent,
   renderMpnewsHtml,
   validateNotificationContentGroup,
@@ -23,6 +24,15 @@ function mpnews(overrides: Record<string, unknown> = {}) {
       ...overrides,
     },
   }
+}
+
+function news(articles: readonly Record<string, unknown>[] = [{
+  title: '订单通知',
+  description: '请查收订单资料',
+  url: 'https://dms.example.com/sales/1',
+  imageAssetId: COVER_ID,
+}]) {
+  return { kind: 'NEWS' as const, payload: { articles } }
 }
 
 describe('notification content group validation', () => {
@@ -190,6 +200,98 @@ describe('notification content group validation', () => {
       mediaSources: ['purchase.deliveryFile'],
     })
     expect(undeclared.ok).toBe(false)
+  })
+
+  it('accepts news cards on app and robot with article images', () => {
+    const app = validateNotificationContentGroup({
+      method: 'APP',
+      items: [news()],
+      allowedVariables: null,
+    })
+    expect(app.ok).toBe(true)
+    if (app.ok) {
+      expect(app.items[0]?.payload).toEqual({
+        articles: [{
+          title: '订单通知',
+          description: '请查收订单资料',
+          url: 'https://dms.example.com/sales/1',
+          imageAssetId: COVER_ID,
+        }],
+      })
+    }
+
+    const robot = validateNotificationContentGroup({
+      method: 'ROBOT',
+      items: [news([
+        { title: '第一篇', description: null, url: 'https://dms.example.com/1', imageAssetId: null },
+        { title: '第二篇', description: '', url: 'https://dms.example.com/2', imageAssetId: COVER_ID },
+      ])],
+      allowedVariables: null,
+    })
+    expect(robot.ok).toBe(true)
+    if (robot.ok) {
+      expect((robot.items[0]?.payload as { articles: unknown[] }).articles).toHaveLength(2)
+    }
+
+    expect(extractNotificationContentAssetIds(news([
+      { title: '第一篇', description: null, url: 'https://dms.example.com/1', imageAssetId: COVER_ID },
+      { title: '第二篇', description: null, url: 'https://dms.example.com/2', imageAssetId: COVER_ID },
+    ]))).toMatchObject({ newsImageAssetIds: [COVER_ID] })
+  })
+
+  it('rejects news cards outside the article and field limits', () => {
+    const tooMany = validateNotificationContentGroup({
+      method: 'APP',
+      items: [news(Array.from({ length: 9 }, (_, index) => ({
+        title: `文章 ${index + 1}`,
+        description: null,
+        url: 'https://dms.example.com/1',
+        imageAssetId: null,
+      })))],
+      allowedVariables: null,
+    })
+    expect(tooMany.ok).toBe(false)
+    if (!tooMany.ok) {
+      expect(tooMany.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_NEWS_ARTICLE_COUNT')
+      expect(tooMany.issues.find(item => item.code === 'NOTIFICATION_CONTENT_NEWS_ARTICLE_COUNT')?.field).toBe('articles')
+    }
+
+    const invalid = validateNotificationContentGroup({
+      method: 'APP',
+      items: [news([{
+        title: ' ',
+        description: 'x'.repeat(513),
+        url: 'ftp://example.test/file',
+        imageAssetId: 'not-a-uuid',
+      }])],
+      allowedVariables: null,
+    })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      const fields = invalid.issues.map(item => item.field)
+      expect(fields).toEqual(expect.arrayContaining([
+        'articles.0.title',
+        'articles.0.description',
+        'articles.0.url',
+        'articles.0.imageAssetId',
+      ]))
+      expect(invalid.issues.every(item => item.itemIndex === 0)).toBe(true)
+    }
+
+    const unknownVariable = validateNotificationContentGroup({
+      method: 'APP',
+      items: [news([{
+        title: '{{unknown}}',
+        description: null,
+        url: 'https://dms.example.com/1',
+        imageAssetId: null,
+      }])],
+      allowedVariables: ['customerName'],
+    })
+    expect(unknownVariable.ok).toBe(false)
+    if (!unknownVariable.ok) {
+      expect(unknownVariable.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_UNDECLARED_VARIABLE')
+    }
   })
 
   it('rejects textcard with unsafe link and markdown on unsupported method', () => {
