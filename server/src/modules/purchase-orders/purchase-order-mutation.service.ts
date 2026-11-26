@@ -75,6 +75,7 @@ import { NumberingGenerationError } from '../numbering/numbering.errors'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PURCHASE_ORDER_CENTS_FINGERPRINT_VERSION, PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_REVIEW_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
 import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
+import { PURCHASE_AUTO_REVIEW_ACTOR_ID } from './auto-review/purchase-auto-review.constants'
 
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const UUID_V4_PATTERN =
@@ -402,6 +403,8 @@ export class PurchaseOrderMutationService {
           targetId: purchaseOrderId,
           metadata: { action: 'REVIEW', fromStatus: transition.fromStatus, toStatus: transition.toStatus,
             imageDraftId,
+            // 系统账号代替审核人执行时显式标记，审计查询无需再按账号名推断。
+            automatic: trusted.actorUserId === PURCHASE_AUTO_REVIEW_ACTOR_ID,
           },
         })
       }

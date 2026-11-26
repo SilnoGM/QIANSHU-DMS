@@ -170,6 +170,8 @@ enum AuditEventType {
   SHIPMENT_COST_TRANSFERRED
   PURCHASE_ORDER_REVIEW_MARKS_PREPARED
   PURCHASE_ORDER_IMAGE_GENERATED
+  PURCHASE_AUTO_REVIEW_SETTING_UPDATED
+  PURCHASE_ORDER_AUTO_REVIEW_FAILED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
   PURCHASE_ORDER_PAYMENT_RECORDED
@@ -513,6 +515,18 @@ enum PurchaseOrderStatusDimension {
   @@map("purchase_order_status_dimension")
 }
 
+/// 自动托管任务只负责「派发唛头 → 生成图片 → 审核」的调度状态；
+/// 订单本身的审核状态仍以 purchase_orders 为准。
+enum PurchaseAutoReviewJobState {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  CANCELLED
+  FAILED
+
+  @@map("purchase_auto_review_job_state")
+}
+
 /// 货件当前业务归属。来源采购单永久保留，归属只由追加事件改变。
 enum ShipmentOwnerType {
   SALES_ORDER
@@ -852,6 +866,7 @@ model User {
   notificationEventChannelsUpdated  NotificationEventChannel[]    @relation("NotificationEventChannelUpdatedBy")
   notificationSettingsUpdated       NotificationSettings[]        @relation("NotificationSettingsUpdatedBy")
   notificationChannelSettingsUpdated NotificationChannelSettings[] @relation("NotificationChannelSettingsUpdatedBy")
+  purchaseAutoReviewSettingsUpdated  PurchaseAutoReviewSettings[]  @relation("PurchaseAutoReviewSettingsUpdatedBy")
   wecomBinding                      WecomBinding?                  @relation("WecomBindingUser")
   wecomBindingsCreated              WecomBinding[]                 @relation("WecomBindingBoundBy")
   wecomBindingsVerified             WecomBinding[]                 @relation("WecomBindingVerifiedBy")
@@ -1546,6 +1561,7 @@ model PurchaseOrder {
   payments     PurchaseOrderPayment[]
   documents    PurchaseOrderDocument[]
   imageDrafts  PurchaseOrderImageDraft[]
+  autoReviewJob PurchaseOrderAutoReviewJob?
   statusHistory PurchaseOrderStatusHistory[]
   amountRevisions PurchaseOrderAmountRevision[]
   shipmentLoadGroups ShipmentLoadGroup[]
@@ -2153,6 +2169,41 @@ model PurchaseOrderImageDraft {
 
   @@index([purchaseOrderId, createdAt(sort: Desc), id(sort: Desc)], map: "purchase_order_image_drafts_order_created_idx")
   @@map("purchase_order_image_drafts")
+}
+
+/// 自动托管全局开关；单例 id = 'default'，只控制此后新建的采购单。
+model PurchaseAutoReviewSettings {
+  id              String    @id @db.VarChar(32)
+  enabled         Boolean   @default(false)
+  version         Int       @default(1)
+  updatedByUserId String?   @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// 扫描命令每次运行的数据库时间；用于发现 timer 未生效。
+  lastScanAt      DateTime? @map("last_scan_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation("PurchaseAutoReviewSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("purchase_auto_review_settings")
+}
+
+/// 每个开启时创建的采购单一行；领取、重试与失败原因都以本表为准。
+model PurchaseOrderAutoReviewJob {
+  id               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId  String                     @unique(map: "purchase_order_auto_review_jobs_purchase_order_key") @map("purchase_order_id") @db.Uuid
+  state            PurchaseAutoReviewJobState @default(PENDING)
+  attempts         Int                        @default(0)
+  nextAttemptAt    DateTime                   @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  leaseExpiresAt   DateTime?                  @map("lease_expires_at") @db.Timestamptz(6)
+  lastErrorCode    String?                    @map("last_error_code") @db.VarChar(64)
+  lastErrorMessage String?                    @map("last_error_message") @db.VarChar(500)
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedAt      DateTime?                  @map("completed_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([state, nextAttemptAt], map: "purchase_order_auto_review_jobs_state_next_idx")
+  @@map("purchase_order_auto_review_jobs")
 }
 
 model PurchaseOrderStatusHistory {

@@ -269,9 +269,9 @@ describe('dictionary management database schema', () => {
       )
     }
     // 产品、资金、销售订单、销售加购、采购订单、开票申请、提款申请、广告充值、静态节点、装柜合并组、
-    // 看机预约与通知中心会在后续 append-only migration 扩展审计类型；字典测试锁定当前全量基线，
-    // 同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(184)
+    // 看机预约、通知中心与采购审核自动托管会在后续 append-only migration 扩展审计类型；
+    // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
+    expect(auditEventTypes).toHaveLength(186)
     expect(auditEventTypes).toEqual(expect.arrayContaining([
       'AD_ACCOUNT_SYNCED',
       'AD_ACCOUNT_ASSIGNED',

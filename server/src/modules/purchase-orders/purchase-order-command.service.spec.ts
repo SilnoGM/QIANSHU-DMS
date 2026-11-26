@@ -8,6 +8,8 @@ import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-m
 import { normalizePurchaseOrderCreateCommand } from './purchase-order-command.normalizer'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import type { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
+import type { SystemNotificationService } from '../notifications/system-notification.service'
+import type { PurchaseAutoReviewService } from './auto-review/purchase-auto-review.service'
 import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
@@ -43,7 +45,7 @@ function input(overrides: Record<string, unknown> = {}): Record<string, unknown>
   }
 }
 
-function setup() {
+function setup(options: { readonly autoReviewEnabled?: boolean } = {}) {
   const transaction = {
     auditEvent: { create: jest.fn().mockResolvedValue({}) },
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
@@ -113,6 +115,15 @@ function setup() {
       ruleId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ruleCode: 'TEST_MARK', activeRevision: 1,
     }),
   }
+  const notifications = {
+    publish: jest.fn().mockResolvedValue({
+      notificationId: 'noop', duplicated: false, channels: [], warnings: [],
+    }),
+  }
+  const autoReview = {
+    isEnabled: jest.fn().mockResolvedValue(options.autoReviewEnabled ?? false),
+    enqueueForOrder: jest.fn().mockResolvedValue(undefined),
+  }
   const service = new PurchaseOrderCommandService(
     prisma as unknown as PrismaService,
     numbering as unknown as NumberingGeneratorService,
@@ -122,10 +133,15 @@ function setup() {
     shipmentNumbers as unknown as PurchaseShipmentNumberingService,
     { createForOrder: jest.fn().mockResolvedValue(undefined) } as unknown as PaymentRecipientService,
     { businessToday: () => '2026-08-27' },
+    undefined,
+    notifications as unknown as SystemNotificationService,
+    autoReview as unknown as PurchaseAutoReviewService,
   )
   return {
     audit,
+    autoReview,
     dependencies,
+    notifications,
     numbering,
     prisma,
     resolver,
@@ -145,6 +161,29 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.shipmentNumbers.issue).toHaveBeenCalledWith(fixture.transaction, [expect.objectContaining({ purchaseOrderId: ORDER_ID, key: ACTOR_ID })])
     expect(fixture.transaction.purchaseOrderPart.createMany).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('enqueues an auto review job and suppresses the pending notification when enabled', async () => {
+    const fixture = setup({ autoReviewEnabled: true })
+    await fixture.service.create(context, input())
+
+    expect(fixture.autoReview.isEnabled).toHaveBeenCalled()
+    expect(fixture.autoReview.enqueueForOrder).toHaveBeenCalledWith(fixture.transaction, ORDER_ID)
+    expect(fixture.notifications.publish).not.toHaveBeenCalled()
+  })
+
+  it('publishes the pending notification and skips the job when auto review is off', async () => {
+    const fixture = setup()
+    await fixture.service.create(context, input())
+
+    expect(fixture.autoReview.enqueueForOrder).not.toHaveBeenCalled()
+    expect(fixture.notifications.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'PURCHASE_REVIEW_PENDING',
+        dedupeKey: `purchase-review:${ORDER_ID}`,
+      }),
+      { transaction: fixture.transaction },
+    )
   })
 
   it.each([

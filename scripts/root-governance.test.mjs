@@ -67,6 +67,9 @@ const supplierResidueAllowlist = Object.freeze([
   // 应付与批量付款按采购单已存 supplierValue 选单、解析历史字典标签；
   // 复制、取消、对账单只展示订单快照或自定义名称，不提供供应商增删改入口。
   // 付款记录列表与审核后金额修订同样只读取采购单快照和字典标签。
+  // 自动托管失败通知沿用采购单的供应商展示名，不新增供应商主数据入口。
+  'server/src/modules/purchase-orders/auto-review/purchase-auto-review-scan.service.spec.ts',
+  'server/src/modules/purchase-orders/auto-review/purchase-auto-review-scan.service.ts',
   'server/src/modules/purchase-orders/payables/README.md',
   'server/src/modules/purchase-orders/payables/purchase-payment-query.service.spec.ts',
   'server/src/modules/purchase-orders/payables/purchase-payment-query.service.ts',

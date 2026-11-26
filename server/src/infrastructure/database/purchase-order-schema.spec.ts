@@ -320,6 +320,7 @@ describe('purchase order domain schema', () => {
       'purchase-orders:create',
       'purchase-orders:create-stock',
       'purchase-orders:review',
+      'purchase-orders:auto-review',
       'purchase-orders:price-revision',
       'purchase-orders:update',
       'purchase-orders:payment',

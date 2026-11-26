@@ -57,6 +57,9 @@ import { SalesOrderWarehouseReceiptQueryService } from './warehouse-receipts/sal
 import { SalesOrderWarehouseReceiptService } from './warehouse-receipts/sales-order-warehouse-receipt.service'
 import { PurchaseCorrectionController } from './corrections/purchase-correction.controller'
 import { PurchaseCorrectionService } from './corrections/purchase-correction.service'
+import { PurchaseAutoReviewController } from './auto-review/purchase-auto-review.controller'
+import { PurchaseAutoReviewScanService } from './auto-review/purchase-auto-review-scan.service'
+import { PurchaseAutoReviewService } from './auto-review/purchase-auto-review.service'
 
 @Module({
   imports: [
@@ -87,6 +90,7 @@ import { PurchaseCorrectionService } from './corrections/purchase-correction.ser
     PurchaseOrderWarehouseReceiptController,
     SalesOrderWarehouseReceiptController,
     PurchaseCorrectionController,
+    PurchaseAutoReviewController,
   ],
   providers: [
     PurchasePayableVoucherService,
@@ -117,6 +121,8 @@ import { PurchaseCorrectionService } from './corrections/purchase-correction.ser
     SalesOrderWarehouseReceiptQueryService,
     SalesOrderWarehouseReceiptService,
     PurchaseCorrectionService,
+    PurchaseAutoReviewService,
+    PurchaseAutoReviewScanService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>
