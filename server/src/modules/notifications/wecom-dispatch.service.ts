@@ -11,6 +11,7 @@ import {
   nextQuietHoursEnd,
   parseNotificationQuietHours,
 } from './notification-quiet-hours'
+import { MPNEWS_MAX_CONTENT_BYTES } from './notification-content'
 import {
   isRetryableWecomFailure,
   parseWecomMentionConfig,
@@ -713,6 +714,14 @@ export class WecomDispatchService implements OnApplicationBootstrap, OnModuleDes
         const withoutData = tag.replace(/\sdata-asset-id\s*=\s*["'][^"']*["']/iu, '')
         return withoutData.replace(/^<img\b/iu, `<img src="${escapedUrl}"`)
       })
+    }
+    if (Buffer.byteLength(rendered, 'utf8') > MPNEWS_MAX_CONTENT_BYTES) {
+      return {
+        ok: false,
+        kind: 'REJECTED',
+        code: 'WECOM_MPNEWS_INLINE_TOO_LONG',
+        message: 'mpnews 正文替换图片地址后超过 666KB',
+      }
     }
     return { ok: true, content: rendered }
   }

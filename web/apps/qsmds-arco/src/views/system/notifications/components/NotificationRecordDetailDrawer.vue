@@ -441,6 +441,29 @@ defineExpose({ reload })
         </div>
       </section>
 
+      <section v-if="detail.inlineMedia.length > 0" class="flex flex-col gap-3">
+        <div class="flex flex-wrap gap-2 items-baseline justify-between">
+          <h3 class="qs-type-body-medium m-0">
+            正文内联图片
+          </h3>
+          <span class="qs-type-meta text-muted-foreground">{{ detail.inlineMedia.length }} 张</span>
+        </div>
+        <div class="flex flex-col gap-2">
+          <div
+            v-for="media in detail.inlineMedia"
+            :key="media.id"
+            class="p-3 border border-border rounded-lg flex flex-wrap gap-2 items-center justify-between"
+          >
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <span class="qs-type-body-medium break-all">{{ media.originalFilename }}</span>
+              <span class="qs-type-meta text-muted-foreground">
+                {{ media.sourceLabel !== null ? `${media.sourceLabel} · ` : '' }}消息 #{{ media.renderedMessageSortOrder + 1 }} · {{ media.mediaType }} · {{ media.mimeType ?? '未知类型' }} · {{ formatAttachmentSize(media.sizeBytes) }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <p class="qs-type-meta text-muted-foreground m-0 pt-3 border-t border-border">
         “完成”“已接受”表示企业微信已接受发送，不代表员工已阅读；站内阅读状态在员工通知中心查看。
       </p>

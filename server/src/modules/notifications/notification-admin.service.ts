@@ -310,7 +310,7 @@ export class NotificationAdminService {
     if (notification === null) {
       throw new ApiException(404, 'NOTIFICATION_RECORD_NOT_FOUND', '通知不存在')
     }
-    const [wecomDeliveries, inAppCounts, media] = await Promise.all([
+    const [wecomDeliveries, inAppCounts, media, inlineMedia] = await Promise.all([
       this.prisma.wecomDelivery.findMany({
         where: { notificationId: id },
         include: {
@@ -331,6 +331,19 @@ export class NotificationAdminService {
           mediaAsset: {
             select: { mediaType: true, mimeType: true, originalFilename: true, sizeBytes: true },
           },
+        },
+      }),
+      this.prisma.notificationRenderedMessageMedia.findMany({
+        where: { renderedMessage: { notificationId: id } },
+        orderBy: [{ renderedMessage: { sortOrder: 'asc' } }, { sortOrder: 'asc' }],
+        select: {
+          id: true,
+          sortOrder: true,
+          sourceKey: true,
+          mediaAsset: {
+            select: { mediaType: true, mimeType: true, originalFilename: true, sizeBytes: true },
+          },
+          renderedMessage: { select: { sortOrder: true } },
         },
       }),
     ])
@@ -378,6 +391,17 @@ export class NotificationAdminService {
         sourceKey: row.sourceKey,
         sourceLabel: resolveMediaSourceLabel(notification.eventType, row.sourceKey),
         blockedReason: row.blockedReason,
+      })),
+      inlineMedia: inlineMedia.map(row => ({
+        id: row.id,
+        renderedMessageSortOrder: row.renderedMessage.sortOrder,
+        sortOrder: row.sortOrder,
+        mediaType: row.mediaAsset.mediaType,
+        mimeType: row.mediaAsset.mimeType,
+        originalFilename: row.mediaAsset.originalFilename,
+        sizeBytes: row.mediaAsset.sizeBytes?.toString() ?? '0',
+        sourceKey: row.sourceKey,
+        sourceLabel: resolveMediaSourceLabel(notification.eventType, row.sourceKey),
       })),
     }
   }

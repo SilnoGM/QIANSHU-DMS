@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { NotificationEventMediaSourceDto } from '@/api/generated/types.gen'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
@@ -16,6 +17,8 @@ const props = defineProps<{
   modelValue: Record<string, unknown>
   disabled?: boolean
   errors: Record<string, string>
+  mediaSources?: NotificationEventMediaSourceDto[]
+  mediaMaxCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -268,6 +271,8 @@ onBeforeUnmount(() => {
         ref="richTextRef"
         :model-value="content"
         :disabled="disabled"
+        :media-sources="mediaSources ?? []"
+        :media-max-count="mediaMaxCount ?? 0"
         @focus="lastFocusedField = 'content'"
         @update:model-value="value => setString('content', value)"
       />
@@ -275,7 +280,7 @@ onBeforeUnmount(() => {
         {{ errors.content }}
       </p>
       <p v-else class="text-xs text-muted-foreground m-0">
-        正文图片仅允许 DMS 资产，单张不超过 2 MiB。
+        正文支持 DMS 静态图片和业务图片占位；单张不超过 2 MiB，业务图片在发布时按来源插入。
       </p>
     </div>
 

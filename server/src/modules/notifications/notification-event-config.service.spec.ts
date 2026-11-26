@@ -310,7 +310,7 @@ describe('NotificationEventConfigService', () => {
               author: null,
               digest: '客户 {{customerName}}',
               contentSourceUrl: 'https://dms.example.com/notice',
-              content: '<p>{{customerName}}</p><img data-asset-id="00000000-0000-4000-8000-000000000097">',
+              content: '<p>{{customerName}}</p><img data-asset-id="00000000-0000-4000-8000-000000000097"><img data-media-source="salesOrder.issuanceVoucher">',
             },
             mediaPolicy: {},
             enabled: true,
@@ -337,6 +337,9 @@ describe('NotificationEventConfigService', () => {
         contentSourceUrl: 'https://dms.example.com/notice',
         content: expect.stringContaining('&lt;b&gt;客户&lt;/b&gt;'),
       }),
+      warnings: expect.arrayContaining([
+        expect.stringContaining('业务图片占位'),
+      ]),
       assetIds: expect.arrayContaining([coverId, '00000000-0000-4000-8000-000000000097']),
     })
   })

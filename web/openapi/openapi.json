@@ -134548,6 +134548,58 @@
           "blockedReason"
         ]
       },
+      "NotificationRecordInlineMediaDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "renderedMessageSortOrder": {
+            "type": "integer",
+            "description": "所属渲染消息在渠道内容中的序号"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "图片在正文中的序号"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true
+          },
+          "originalFilename": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "string",
+            "description": "字节数，避免 BigInt 序列化问题"
+          },
+          "sourceKey": {
+            "type": "string",
+            "nullable": true,
+            "description": "业务语义来源键"
+          },
+          "sourceLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "来源中文名"
+          }
+        },
+        "required": [
+          "id",
+          "renderedMessageSortOrder",
+          "sortOrder",
+          "mediaType",
+          "mimeType",
+          "originalFilename",
+          "sizeBytes",
+          "sourceKey",
+          "sourceLabel"
+        ]
+      },
       "NotificationRecordDetailDto": {
         "type": "object",
         "properties": {
@@ -134666,6 +134718,12 @@
             "items": {
               "$ref": "#/components/schemas/NotificationRecordMediaDto"
             }
+          },
+          "inlineMedia": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationRecordInlineMediaDto"
+            }
           }
         },
         "required": [
@@ -134689,7 +134747,8 @@
           "wecomDeliveryCounts",
           "mediaCount",
           "deliveries",
-          "media"
+          "media",
+          "inlineMedia"
         ]
       },
       "NotificationCancelResultDto": {

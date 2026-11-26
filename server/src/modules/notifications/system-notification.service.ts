@@ -6,7 +6,9 @@ import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import {
+  extractMpnewsMediaSourceSlots,
   extractNotificationContentAssetIds,
+  mpnewsHasStaticTextOutsideImages,
   parseNotificationImageMediaPolicy,
   renderMpnewsHtml,
 } from './notification-content'
@@ -61,6 +63,17 @@ interface ResolvedChannelResult {
 interface NotificationMediaAttachment {
   readonly mediaAssetId: string
   readonly sortOrder: number
+}
+
+interface NotificationInlineMediaAssignment {
+  readonly slotIndex: number
+  readonly mediaAssetId: string
+  readonly sourceKey: string
+}
+
+interface ResolvedEventMediaPlan {
+  readonly attachments: readonly NotificationMediaAttachment[]
+  readonly inlineByMessageId: ReadonlyMap<string, readonly NotificationInlineMediaAssignment[]>
 }
 
 /** 非 UUID 输入不能进 SQL：PostgreSQL 会以 22P02 中止整个业务事务。 */
@@ -412,7 +425,9 @@ export class SystemNotificationService {
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CHANNEL_DISABLED' }
     }
 
-    const messages = input.channelConfig.messages.filter(message => message.enabled)
+    const messages = input.channelConfig.messages
+      .filter(message => message.enabled)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
     if (messages.length === 0) {
       input.warnings.push({ code: 'CONTENT_NOT_CONFIGURED', message: '企业微信渠道未配置消息内容' })
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'CONTENT_NOT_CONFIGURED' }
@@ -422,14 +437,12 @@ export class SystemNotificationService {
       return { channel: 'WECOM', status: 'SKIPPED', recipientCount: 0, skippedCount: 0, skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED' }
     }
 
-    // 图片附件是通知级媒体：发布事务内先按内容项策略裁决并落 notification_media，
-    // 再只为实际 PENDING 的投递创建 wecom_delivery_media。
-    const imageMessages = messages.filter(message => message.kind === 'IMAGE')
-    const attachments = await this.prepareEventNotificationMedia(transaction, {
+    // 附件和正文业务图片共用同一组 command.media，按渠道消息顺序统一分配。
+    const mediaPlan = await this.resolveEventNotificationMedia(transaction, {
       notificationId: input.notificationId,
       eventType: input.command.eventType,
       channelConfig: input.channelConfig,
-      imageMessages,
+      messages,
       command: input.command,
       warnings: input.warnings,
     })
@@ -440,6 +453,7 @@ export class SystemNotificationService {
           channelConfig: input.channelConfig,
           message,
           variables: input.variables,
+          inlineMedia: mediaPlan.inlineByMessageId.get(message.id) ?? [],
         })
       : this.renderEventTextMessage({
           command: input.command,
@@ -614,12 +628,30 @@ export class SystemNotificationService {
     }))
     if (renderedRows.length > 0) {
       await transaction.notificationRenderedMessage.createMany({ data: renderedRows })
+      const inlineRows = renderedRows.flatMap((row, index) => {
+        const message = renderableMessages[index]
+        if (message?.kind !== 'MPNEWS') {
+          return []
+        }
+        const assignments = mediaPlan.inlineByMessageId.get(message.id) ?? []
+        return assignments.map(assignment => ({
+          id: randomUUID(),
+          renderedMessageId: row.id,
+          mediaAssetId: assignment.mediaAssetId,
+          role: 'INLINE' as const,
+          sourceKey: assignment.sourceKey,
+          sortOrder: assignment.slotIndex,
+        }))
+      })
+      if (inlineRows.length > 0) {
+        await transaction.notificationRenderedMessageMedia.createMany({ data: inlineRows })
+      }
     }
     await transaction.wecomDelivery.createMany({ data: deliveries })
     const sendable = deliveries.filter(delivery => delivery.status === 'PENDING')
-    if (sendable.length > 0 && attachments.length > 0) {
+    if (sendable.length > 0 && mediaPlan.attachments.length > 0) {
       await transaction.wecomDeliveryMedia.createMany({
-        data: sendable.flatMap(delivery => attachments.map(item => ({
+        data: sendable.flatMap(delivery => mediaPlan.attachments.map(item => ({
           deliveryId: delivery.id,
           mediaAssetId: item.mediaAssetId,
           sortOrder: item.sortOrder,
@@ -646,34 +678,63 @@ export class SystemNotificationService {
   }
 
   /**
-   * 按事件渠道的 IMAGE 内容项裁决业务附件。
-   *
-   * 每个 IMAGE 项独立持有来源集合与数量上限；多个项按消息顺序分配附件。
-   * 被拦下的附件同样写 `notification_media` 并记录原因，发布本身不抛异常。
+   * 按渠道消息 sortOrder 统一裁决 command.media：
+   * - MPNEWS 按正文业务图片占位顺序，每个占位消费一张；
+   * - IMAGE 项按自身 policy 消费剩余图片；
+   * - 被拦下的附件写入 notification_media，正文内联图片由调用方写入 rendered message media。
    */
-  private async prepareEventNotificationMedia(
+  private async resolveEventNotificationMedia(
     transaction: Transaction,
     input: {
       readonly notificationId: string
       readonly eventType: string
       readonly channelConfig: { readonly allowSensitive: boolean }
-      readonly imageMessages: readonly EventChannelMessage[]
+      readonly messages: readonly EventChannelMessage[]
       readonly command: SystemNotificationPublishCommand
       readonly warnings: Array<{ code: NotificationPublishWarningCode, message: string }>
     },
-  ): Promise<readonly NotificationMediaAttachment[]> {
+  ): Promise<ResolvedEventMediaPlan> {
     const requested = this.uniqueMediaItems(input.command.media)
+    const inlineSlotsByMessageId = new Map<string, readonly string[]>()
+    for (const message of input.messages) {
+      if (message.kind !== 'MPNEWS') {
+        continue
+      }
+      const content = asRecord(message.payload)?.content
+      if (typeof content !== 'string') {
+        continue
+      }
+      const slots = extractMpnewsMediaSourceSlots(content)
+      if (slots.length > 0) {
+        inlineSlotsByMessageId.set(message.id, slots)
+      }
+    }
+    const totalInlineSlots = [...inlineSlotsByMessageId.values()]
+      .reduce((total, slots) => total + slots.length, 0)
     if (requested.length === 0) {
-      return []
+      if (totalInlineSlots > 0) {
+        input.warnings.push({
+          code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+          message: `${totalInlineSlots} 张正文业务图片未插入：缺少来源图片或资产不可用`,
+        })
+      }
+      return {
+        attachments: [],
+        inlineByMessageId: new Map(),
+      }
     }
 
     const declaredSources = new Set(
       (notificationEventMediaCapability(input.eventType)?.sources ?? []).map(source => source.key),
     )
-    const specs = input.imageMessages.flatMap((message) => {
+    const specs = input.messages.flatMap((message) => {
+      if (message.kind !== 'IMAGE') {
+        return []
+      }
       const policy = parseNotificationImageMediaPolicy(message.mediaPolicy)
       return policy === null ? [] : [{ policy, remaining: policy.maxCount }]
     })
+    const hasInlineConsumers = inlineSlotsByMessageId.size > 0
     const queryable = requested
       .map(item => item.assetId)
       .filter(assetId => USER_SUPPLIED_UUID_PATTERN.test(assetId))
@@ -684,64 +745,155 @@ export class SystemNotificationService {
           select: { id: true, mediaType: true, status: true, deletedAt: true, objectKey: true },
         })
     const assetById = new Map(assets.map(asset => [asset.id, asset]))
-    const rows: Array<{
-      readonly mediaAssetId: string
-      readonly sortOrder: number
-      readonly sourceKey: string | null
-      readonly blockedReason: string | null
-    }> = []
-    const allowed: NotificationMediaAttachment[] = []
 
-    requested.forEach((item, sortOrder) => {
-      const asset = assetById.get(item.assetId)
-      const sourceKey = item.sourceKey
-      const matchingSpecs = specs.filter(spec => spec.policy.sourceKeys.length === 0
-        || (sourceKey !== null && spec.policy.sourceKeys.includes(sourceKey)))
-      const spec = matchingSpecs.find(candidate => candidate.remaining > 0)
+    const states = requested.map((item, sortOrder) => {
       let blockedReason: string | null = null
-      if (specs.length === 0) {
+      if (specs.length === 0 && !hasInlineConsumers) {
         blockedReason = 'POLICY_DISABLED'
       }
       else if (!input.channelConfig.allowSensitive) {
         // 图片不能像文本变量一样脱敏；敏感开关关闭时只能整张不发。
         blockedReason = 'SENSITIVE_BLOCKED'
       }
-      else if (sourceKey !== null && !declaredSources.has(sourceKey)) {
+      else if (item.sourceKey !== null && !declaredSources.has(item.sourceKey)) {
         blockedReason = 'SOURCE_NOT_DECLARED'
       }
-      else if (spec === undefined) {
-        blockedReason = matchingSpecs.length > 0 ? 'LIMIT_EXCEEDED' : 'SOURCE_NOT_SELECTED'
+      else {
+        const asset = assetById.get(item.assetId)
+        if (asset === undefined) {
+          blockedReason = 'ASSET_NOT_FOUND'
+        }
+        else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
+          blockedReason = 'ASSET_NOT_READY'
+        }
+        else if (asset.mediaType !== 'IMAGE') {
+          blockedReason = 'KIND_NOT_ALLOWED'
+        }
       }
-      else if (asset === undefined) {
-        blockedReason = 'ASSET_NOT_FOUND'
+      return {
+        assetId: item.assetId,
+        sourceKey: item.sourceKey,
+        sortOrder,
+        assignedTo: null as 'INLINE' | 'ATTACHMENT' | null,
+        blockedReason,
       }
-      else if (asset.status !== 'READY' || asset.deletedAt !== null || asset.objectKey === null) {
-        blockedReason = 'ASSET_NOT_READY'
-      }
-      else if (asset.mediaType !== 'IMAGE') {
-        blockedReason = 'KIND_NOT_ALLOWED'
-      }
-      if (blockedReason === null && spec !== undefined) {
-        spec.remaining -= 1
-        allowed.push({ mediaAssetId: item.assetId, sortOrder })
-      }
-      rows.push({ mediaAssetId: item.assetId, sortOrder, sourceKey, blockedReason })
     })
 
-    await transaction.notificationMedia.createMany({
-      data: rows.map(row => ({
-        notificationId: input.notificationId,
-        mediaAssetId: row.mediaAssetId,
-        sortOrder: row.sortOrder,
-        sourceKey: row.sourceKey,
-        blockedReason: row.blockedReason,
-      })),
-    })
+    const inlineByMessageId = new Map<string, NotificationInlineMediaAssignment[]>()
+    let skippedInlineCount = 0
+
+    for (const message of input.messages) {
+      if (message.kind === 'MPNEWS') {
+        const slots = inlineSlotsByMessageId.get(message.id) ?? []
+        if (slots.length === 0) {
+          continue
+        }
+        const assignments: NotificationInlineMediaAssignment[] = []
+        slots.forEach((sourceKey, slotIndex) => {
+          const state = states.find(candidate =>
+            candidate.assignedTo === null
+            && candidate.blockedReason === null
+            && candidate.sourceKey === sourceKey,
+          )
+          if (state === undefined) {
+            skippedInlineCount += 1
+            return
+          }
+          state.assignedTo = 'INLINE'
+          assignments.push({
+            slotIndex,
+            mediaAssetId: state.assetId,
+            sourceKey,
+          })
+        })
+        if (assignments.length > 0) {
+          inlineByMessageId.set(message.id, assignments)
+        }
+        continue
+      }
+
+      if (message.kind !== 'IMAGE') {
+        continue
+      }
+      const policy = parseNotificationImageMediaPolicy(message.mediaPolicy)
+      if (policy === null) {
+        continue
+      }
+      let remaining = policy.maxCount
+      for (const state of states) {
+        if (remaining <= 0) {
+          break
+        }
+        if (state.assignedTo !== null || state.blockedReason !== null) {
+          continue
+        }
+        if (policy.sourceKeys.length > 0
+          && (state.sourceKey === null || !policy.sourceKeys.includes(state.sourceKey))) {
+          continue
+        }
+        state.assignedTo = 'ATTACHMENT'
+        remaining -= 1
+      }
+    }
+
+    const rows: Array<{
+      readonly mediaAssetId: string
+      readonly sortOrder: number
+      readonly sourceKey: string | null
+      readonly blockedReason: string | null
+    }> = []
+    const attachments: NotificationMediaAttachment[] = []
+    for (const state of states) {
+      if (state.assignedTo === 'INLINE') {
+        continue
+      }
+      if (state.assignedTo === 'ATTACHMENT') {
+        attachments.push({ mediaAssetId: state.assetId, sortOrder: state.sortOrder })
+        rows.push({
+          mediaAssetId: state.assetId,
+          sortOrder: state.sortOrder,
+          sourceKey: state.sourceKey,
+          blockedReason: null,
+        })
+        continue
+      }
+      const matchingSpecs = specs.filter(spec => spec.policy.sourceKeys.length === 0
+        || (state.sourceKey !== null && spec.policy.sourceKeys.includes(state.sourceKey)))
+      const blockedReason = state.blockedReason
+        ?? (matchingSpecs.length > 0 ? 'LIMIT_EXCEEDED' : 'SOURCE_NOT_SELECTED')
+      rows.push({
+        mediaAssetId: state.assetId,
+        sortOrder: state.sortOrder,
+        sourceKey: state.sourceKey,
+        blockedReason,
+      })
+    }
+
+    if (rows.length > 0) {
+      await transaction.notificationMedia.createMany({
+        data: rows.map(row => ({
+          notificationId: input.notificationId,
+          mediaAssetId: row.mediaAssetId,
+          sortOrder: row.sortOrder,
+          sourceKey: row.sourceKey,
+          blockedReason: row.blockedReason,
+        })),
+      })
+    }
     const blocked = rows.filter(row => row.blockedReason !== null).length
     if (blocked > 0) {
       input.warnings.push({ code: 'MEDIA_ATTACHMENT_BLOCKED', message: `${blocked} 个附件未发送` })
     }
-    return allowed
+    if (skippedInlineCount > 0) {
+      input.warnings.push({
+        code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+        message: `${skippedInlineCount} 张正文业务图片未插入：缺少来源图片或资产不可用`,
+      })
+    }
+    return {
+      attachments,
+      inlineByMessageId,
+    }
   }
 
   private eventContentAllowedVariables(eventType: string): NotificationTemplateVariable[] {
@@ -842,11 +994,31 @@ export class SystemNotificationService {
     }
   }
 
+  private replaceMpnewsInlineMedia(
+    content: string,
+    assignments: readonly NotificationInlineMediaAssignment[],
+  ): string {
+    let slotIndex = 0
+    return content.replace(
+      /<img\b[^>]*\bdata-media-source\s*=\s*["'][^"']+["'][^>]*>/giu,
+      (tag) => {
+        const assignment = assignments.find(item => item.slotIndex === slotIndex)
+        slotIndex += 1
+        if (assignment === undefined) {
+          return ''
+        }
+        const withoutSource = tag.replace(/\sdata-media-source\s*=\s*["'][^"']*["']/iu, '')
+        return withoutSource.replace(/^<img\b/iu, `<img data-asset-id="${assignment.mediaAssetId}"`)
+      },
+    )
+  }
+
   private renderEventMpnewsMessage(input: {
     readonly command: SystemNotificationPublishCommand
     readonly channelConfig: EventChannelConfig
     readonly message: EventChannelMessage
     readonly variables: Readonly<Record<string, string | number | null>>
+    readonly inlineMedia: readonly NotificationInlineMediaAssignment[]
   }): {
     readonly ok: true
     readonly kind: 'MPNEWS'
@@ -907,8 +1079,12 @@ export class SystemNotificationService {
       allowSensitive,
       maxLength: 1,
     })
+    const resolvedContent = this.replaceMpnewsInlineMedia(rawContent, input.inlineMedia)
+    if (extractMpnewsMediaSourceSlots(rawContent).length > 0 && !mpnewsHasStaticTextOutsideImages(resolvedContent)) {
+      return { ok: false, message: 'mpnews 正文业务图片缺失后没有静态文字' }
+    }
     const content = renderMpnewsHtml({
-      html: rawContent,
+      html: resolvedContent,
       variables: input.variables,
       allowed,
       allowSensitive,

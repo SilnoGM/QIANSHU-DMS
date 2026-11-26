@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service'
 import { MediaAssetService } from '../media/media-asset.service'
 import { MediaAssetRetentionService } from '../media/media-retention.service'
 import {
+  extractMpnewsMediaSourceSlots,
   extractNotificationContentAssetIds,
   parseNotificationImageMediaPolicy,
   renderMpnewsHtml,
@@ -379,6 +380,10 @@ export class NotificationEventConfigService {
       }
       if (!content.ok) warnings.push(content.message)
       if (content.ok) warnings.push(...content.warnings)
+      const mediaSourceSlots = extractMpnewsMediaSourceSlots(rawContent)
+      if (mediaSourceSlots.length > 0) {
+        warnings.push(`正文包含 ${mediaSourceSlots.length} 个业务图片占位，发布时按业务附件插入`)
+      }
       const assetIds = new Set<string>()
       if (mediaAssetId !== null) assetIds.add(mediaAssetId)
       for (const match of (content.ok ? content.content : rawContent).matchAll(/\bdata-asset-id\s*=\s*["']([^"']+)["']/giu)) {

@@ -92,6 +92,7 @@ function basePrisma(configs: unknown[]) {
     },
     wecomDeliveryMedia: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     notificationRenderedMessage: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    notificationRenderedMessageMedia: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     notificationDeliveryMessage: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $queryRaw: jest.fn().mockResolvedValue([{ id: USER_ID }]),
     $transaction: jest.fn(),
@@ -336,6 +337,199 @@ describe('SystemNotificationService event config branch', () => {
       skipReason: 'MESSAGE_KIND_NOT_IMPLEMENTED',
     })
     expect(prisma.wecomDelivery.createMany).not.toHaveBeenCalled()
+  })
+
+  it('resolves mpnews inline media and persists the rendered media reference', async () => {
+    const coverId = '00000000-0000-4000-8000-000000000099'
+    const assetId = '33333333-3333-4333-8333-333333333333'
+    const config = wecomConfig({
+      allowSensitive: true,
+      messages: [{
+        id: 'message-mpnews',
+        channelConfigId: 'config-wecom',
+        sortOrder: 0,
+        kind: 'MPNEWS',
+        payload: {
+          cover: { mediaAssetId: coverId },
+          title: '采购通知',
+          author: null,
+          digest: null,
+          contentSourceUrl: null,
+          content: '<p>附件：</p><img data-media-source="purchase.orderImage" alt="采购单图片">',
+        },
+        mediaPolicy: {},
+        contentHash: 'a'.repeat(64),
+        enabled: true,
+        createdAt: new Date('2026-11-25T10:00:00.000Z'),
+        updatedAt: new Date('2026-11-25T10:00:00.000Z'),
+      }],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    prisma.mediaAsset.findMany.mockResolvedValue([{
+      id: assetId,
+      mediaType: 'IMAGE',
+      status: 'READY',
+      deletedAt: null,
+      objectKey: 'assets/2026/11/order.png',
+    }])
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    await service.publish({
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      source: { type: 'purchase_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: {},
+      media: [{ assetId, sourceKey: 'purchase.orderImage' }],
+    })
+
+    expect(prisma.notificationRenderedMessage.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        kind: 'MPNEWS',
+        payloadSnapshot: expect.objectContaining({
+          content: expect.stringContaining(`data-asset-id="${assetId}"`),
+        }),
+      })],
+    })
+    expect(prisma.notificationRenderedMessage.createMany).not.toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          content: expect.stringContaining('data-media-source'),
+        }),
+      })],
+    })
+    expect(prisma.notificationRenderedMessageMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: assetId,
+        role: 'INLINE',
+        sourceKey: 'purchase.orderImage',
+        sortOrder: 0,
+      })],
+    })
+    expect(prisma.notificationMedia.createMany).not.toHaveBeenCalled()
+    expect(prisma.wecomDeliveryMedia.createMany).not.toHaveBeenCalled()
+  })
+
+  it('removes missing mpnews inline media and reports a warning', async () => {
+    const coverId = '00000000-0000-4000-8000-000000000099'
+    const config = wecomConfig({
+      allowSensitive: true,
+      messages: [{
+        id: 'message-mpnews',
+        channelConfigId: 'config-wecom',
+        sortOrder: 0,
+        kind: 'MPNEWS',
+        payload: {
+          cover: { mediaAssetId: coverId },
+          title: '采购通知',
+          author: null,
+          digest: null,
+          contentSourceUrl: null,
+          content: '<p>附件：</p><img data-media-source="purchase.orderImage" alt="采购单图片">',
+        },
+        mediaPolicy: {},
+        contentHash: 'a'.repeat(64),
+        enabled: true,
+        createdAt: new Date('2026-11-25T10:00:00.000Z'),
+        updatedAt: new Date('2026-11-25T10:00:00.000Z'),
+      }],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    const result = await service.publish({
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      source: { type: 'purchase_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: {},
+    })
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+    }))
+    expect(prisma.notificationRenderedMessage.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          content: expect.not.stringContaining('data-media-source'),
+        }),
+      })],
+    })
+    expect(prisma.notificationRenderedMessageMedia.createMany).not.toHaveBeenCalled()
+  })
+
+  it('allocates media in message-group order before mpnews inline slots', async () => {
+    const coverId = '00000000-0000-4000-8000-000000000099'
+    const assetId = '33333333-3333-4333-8333-333333333333'
+    const config = wecomConfig({
+      allowSensitive: true,
+      messages: [
+        {
+          ...textMessage('', 0),
+          id: 'message-image',
+          kind: 'IMAGE',
+          payload: {},
+          mediaPolicy: { sourceKeys: ['purchase.orderImage'], maxCount: 1 },
+        },
+        {
+          id: 'message-mpnews',
+          channelConfigId: 'config-wecom',
+          sortOrder: 1,
+          kind: 'MPNEWS',
+          payload: {
+            cover: { mediaAssetId: coverId },
+            title: '采购通知',
+            author: null,
+            digest: null,
+            contentSourceUrl: null,
+            content: '<p>附件：</p><img data-media-source="purchase.orderImage">',
+          },
+          mediaPolicy: {},
+          contentHash: 'a'.repeat(64),
+          enabled: true,
+          createdAt: new Date('2026-11-25T10:00:00.000Z'),
+          updatedAt: new Date('2026-11-25T10:00:00.000Z'),
+        },
+      ],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    prisma.mediaAsset.findMany.mockResolvedValue([{
+      id: assetId,
+      mediaType: 'IMAGE',
+      status: 'READY',
+      deletedAt: null,
+      objectKey: 'assets/2026/11/order.png',
+    }])
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    const result = await service.publish({
+      eventType: 'PURCHASE_REVIEW_APPROVED',
+      source: { type: 'purchase_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: {},
+      media: [{ assetId, sourceKey: 'purchase.orderImage' }],
+    })
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'MPNEWS_INLINE_MEDIA_SKIPPED',
+    }))
+    expect(prisma.notificationMedia.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        mediaAssetId: assetId,
+        blockedReason: null,
+      })],
+    })
+    expect(prisma.notificationRenderedMessageMedia.createMany).not.toHaveBeenCalled()
   })
 
   it('maps business media into image attachment messages and delivery media', async () => {

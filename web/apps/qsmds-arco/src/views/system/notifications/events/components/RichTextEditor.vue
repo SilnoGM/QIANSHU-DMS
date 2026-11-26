@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import type { NotificationEventMediaSourceDto } from '@/api/generated/types.gen'
 import { mergeAttributes, Node } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { EditorContent, useEditor, VueNodeViewRenderer } from '@tiptap/vue-3'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
 import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
@@ -11,6 +12,8 @@ import AssetImageView from './AssetImageView.vue'
 const props = defineProps<{
   modelValue: string
   disabled?: boolean
+  mediaSources?: NotificationEventMediaSourceDto[]
+  mediaMaxCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -27,7 +30,8 @@ const previewUrls = new Map<string, string>()
 const MAXIMUM_INLINE_IMAGE_BYTES = 2 * 1024 * 1024
 
 /**
- * mpnews 正文图片只允许 DMS 资产：编辑器只保留 data-asset-id，不存外部 src。
+ * mpnews 正文图片只允许 DMS 资产或 business media source：
+ * 静态图只保留 data-asset-id，业务图片只保留 data-media-source，二者都不存外部 src。
  * 预览优先级：本次会话的上传 blob > 已保存配置引用的私有图片地址。
  */
 const AssetImage = Node.create({
@@ -37,17 +41,38 @@ const AssetImage = Node.create({
   atom: true,
   addAttributes() {
     return {
-      assetId: { default: null },
-      alt: { default: null },
+      assetId: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-asset-id'),
+      },
+      mediaSource: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-media-source'),
+      },
+      alt: {
+        default: null,
+        parseHTML: element => element.getAttribute('alt'),
+      },
     }
   },
   parseHTML() {
-    return [{ tag: 'img[data-asset-id]' }]
+    return [
+      { tag: 'img[data-asset-id]' },
+      { tag: 'img[data-media-source]' },
+    ]
   },
   renderHTML({ HTMLAttributes }) {
+    const mediaSource = typeof HTMLAttributes.mediaSource === 'string' ? HTMLAttributes.mediaSource : ''
+    if (mediaSource.length > 0) {
+      return ['img', mergeAttributes({
+        'data-media-source': mediaSource,
+        'alt': HTMLAttributes.alt ?? '',
+      })]
+    }
+    const assetId = typeof HTMLAttributes.assetId === 'string' ? HTMLAttributes.assetId : ''
     return ['img', mergeAttributes({
-      'data-asset-id': HTMLAttributes.assetId,
-      'alt': HTMLAttributes.alt ?? '',
+      ...(assetId.length > 0 ? { 'data-asset-id': assetId } : {}),
+      alt: HTMLAttributes.alt ?? '',
     })]
   },
   addNodeView() {
@@ -158,6 +183,33 @@ function chooseImage(): void {
   fileInput.value?.click()
 }
 
+const businessImageCount = computed(() => (
+  [...props.modelValue.matchAll(/\bdata-media-source\s*=/gu)].length
+))
+const businessImageMenu = computed(() => {
+  const maxCount = props.mediaMaxCount ?? 0
+  return [(props.mediaSources ?? []).map(source => ({
+    label: `${source.label}（${source.key}）`,
+    icon: 'i-lucide:image',
+    disabled: props.disabled === true || businessImageCount.value >= maxCount,
+    handle: () => insertBusinessImage(source),
+  }))]
+})
+
+function insertBusinessImage(source: NotificationEventMediaSourceDto): void {
+  if (props.disabled) {
+    return
+  }
+  editor.value?.chain().focus().insertContent({
+    type: 'assetImage',
+    attrs: {
+      assetId: null,
+      mediaSource: source.key,
+      alt: source.label,
+    },
+  }).run()
+}
+
 async function onImageSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -235,6 +287,15 @@ onBeforeUnmount(() => {
       <FaButton variant="ghost" size="icon-sm" :disabled="disabled" title="引用" @click="toggleBlockquote">
         <FaIcon name="i-lucide:quote" />
       </FaButton>
+      <FaDropdown
+        v-if="(mediaSources?.length ?? 0) > 0"
+        :items="businessImageMenu"
+        align="start"
+      >
+        <FaButton variant="ghost" size="icon-sm" :disabled="disabled" title="插入业务图片">
+          <FaIcon name="i-lucide:image" />
+        </FaButton>
+      </FaDropdown>
       <FaButton variant="ghost" size="icon-sm" :disabled="disabled || uploading" title="插入图片" @click="chooseImage">
         <FaIcon :name="uploading ? 'i-lucide:loader-circle' : 'i-lucide:image-plus'" :class="uploading ? 'animate-spin' : undefined" />
       </FaButton>

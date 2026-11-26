@@ -1260,6 +1260,7 @@ model MediaAsset {
   avatarProfile UserProfile? @relation("UserProfileAvatar")
   notificationMedia NotificationMedia[] @relation("NotificationMediaAsset")
   notificationEventChannelMessageMedia NotificationEventChannelMessageMedia[] @relation("NotificationEventChannelMessageMediaAsset")
+  notificationRenderedMessageMedia NotificationRenderedMessageMedia[] @relation("NotificationRenderedMessageMediaAsset")
   wecomDeliveryMedia WecomDeliveryMedia[] @relation("WecomDeliveryMediaAsset")
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
@@ -3808,10 +3809,30 @@ model NotificationRenderedMessage {
 
   notification     Notification              @relation("NotificationRenderedMessages", fields: [notificationId], references: [id], onDelete: Cascade, onUpdate: Restrict)
   deliveryMessages NotificationDeliveryMessage[]
+  media            NotificationRenderedMessageMedia[] @relation("NotificationRenderedMessageMedia")
 
   @@unique([notificationId, channel, sendMethod, sortOrder], map: "notification_rendered_messages_notification_channel_sort_key")
   @@index([notificationId, channel, sendMethod], map: "notification_rendered_messages_notification_channel_idx")
   @@map("notification_rendered_messages")
+}
+
+/// 正文内联媒体引用：动态业务图片发布时解析为具体资产后留档，并参与媒体回收保护。
+model NotificationRenderedMessageMedia {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  renderedMessageId String                 @map("rendered_message_id") @db.Uuid
+  mediaAssetId      String                 @map("media_asset_id") @db.Uuid
+  role              NotificationMessageMediaRole @default(INLINE)
+  /// 事件契约中的业务语义来源键，例如 `salesOrder.issuanceVoucher`。
+  sourceKey         String?                @map("source_key") @db.VarChar(64)
+  sortOrder         Int                    @default(0) @map("sort_order")
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  renderedMessage NotificationRenderedMessage @relation("NotificationRenderedMessageMedia", fields: [renderedMessageId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  mediaAsset      MediaAsset                  @relation("NotificationRenderedMessageMediaAsset", fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([renderedMessageId, sortOrder], map: "notification_rendered_message_media_message_sort_key")
+  @@index([mediaAssetId], map: "notification_rendered_message_media_asset_idx")
+  @@map("notification_rendered_message_media")
 }
 
 /// 单条投递内的实际发送消息项；逐项状态、重试与 provider 标识。

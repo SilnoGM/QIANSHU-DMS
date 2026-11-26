@@ -107,6 +107,8 @@ function containsUnsafeHtml(value: string): boolean {
     || /\son[a-z]+\s*=/iu.test(value)
     || /\b(?:javascript|data):/iu.test(value)
     || /<img[^>]*\ssrc\s*=/iu.test(value)
+    || /<img[^>]*\sdata-asset-id\s*=[^>]*\sdata-media-source\s*=/iu.test(value)
+    || /<img[^>]*\sdata-media-source\s*=[^>]*\sdata-asset-id\s*=/iu.test(value)
 }
 
 function textIsVisuallyEmpty(value: string): boolean {
@@ -191,6 +193,27 @@ export function imageSourceKeys(mediaPolicy: unknown, allSources: readonly strin
 export function imageMaxCount(mediaPolicy: unknown): number {
   const value = asRecord(mediaPolicy)?.maxCount
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
+/** 按正文顺序提取业务图片占位来源；同一来源可出现多次。 */
+export function extractMediaSourceKeys(html: string): string[] {
+  const keys: string[] = []
+  for (const match of html.matchAll(/\bdata-media-source\s*=\s*["']([^"']+)["']/giu)) {
+    if (match[1] !== undefined) {
+      keys.push(match[1])
+    }
+  }
+  return keys
+}
+
+/** 去掉全部图片后是否仍有可见文字；业务图片占位不能作为正文唯一内容。 */
+export function hasStaticTextOutsideImages(html: string): boolean {
+  return html
+    .replace(/<img\b[^>]*>/giu, ' ')
+    .replace(/<[^>]*>/gu, ' ')
+    .replace(/&nbsp;/giu, ' ')
+    .trim()
+    .length > 0
 }
 
 /** 服务端字段可能是 cover.mediaAssetId 这类嵌套路径，编辑器按顶层控件归并。 */
@@ -365,6 +388,19 @@ export function validateMessageDraft(
     }
     if (containsUnsafeHtml(content)) {
       add('content', '正文包含不支持的 HTML 或不安全内容')
+    }
+    const mediaSourceKeys = extractMediaSourceKeys(content)
+    if (mediaSourceKeys.length > 0) {
+      const unknown = [...new Set(mediaSourceKeys.filter(key => !context.mediaSources.includes(key)))]
+      if (unknown.length > 0) {
+        add('content', `正文业务图片来源未声明：${unknown.join('、')}`)
+      }
+      if (mediaSourceKeys.length > context.mediaMaxCount) {
+        add('content', `正文业务图片占位不能超过 ${context.mediaMaxCount} 个`)
+      }
+      if (!hasStaticTextOutsideImages(content)) {
+        add('content', '正文包含业务图片占位时必须保留静态文字')
+      }
     }
     validateVariables([
       ['title', title],

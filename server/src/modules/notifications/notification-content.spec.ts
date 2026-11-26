@@ -105,6 +105,78 @@ describe('notification content group validation', () => {
     }
   })
 
+  it('accepts mpnews business image placeholders with declared sources and static text', () => {
+    const content = '<p>附件如下：</p><img data-media-source="salesOrder.issuanceVoucher" alt="出单凭证">'
+    const result = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({ content })],
+      allowedVariables: null,
+      mediaSources: ['salesOrder.issuanceVoucher'],
+      mediaMaxCount: 3,
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('rejects undeclared, over-limit and text-less business image placeholders', () => {
+    const undeclared = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({ content: '<p>附件：</p><img data-media-source="unknown.source">' })],
+      allowedVariables: null,
+      mediaSources: ['salesOrder.issuanceVoucher'],
+      mediaMaxCount: 3,
+    })
+    expect(undeclared.ok).toBe(false)
+    if (!undeclared.ok) {
+      expect(undeclared.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_MEDIA_SOURCE_UNDECLARED')
+    }
+
+    const overLimit = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({
+        content: '<p>附件：</p><img data-media-source="salesOrder.issuanceVoucher"><img data-media-source="salesOrder.issuanceVoucher">',
+      })],
+      allowedVariables: null,
+      mediaSources: ['salesOrder.issuanceVoucher'],
+      mediaMaxCount: 1,
+    })
+    expect(overLimit.ok).toBe(false)
+    if (!overLimit.ok) {
+      expect(overLimit.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_INLINE_MEDIA_LIMIT')
+    }
+
+    const textless = validateNotificationContentGroup({
+      method: 'APP',
+      items: [mpnews({ content: '<img data-media-source="salesOrder.issuanceVoucher">' })],
+      allowedVariables: null,
+      mediaSources: ['salesOrder.issuanceVoucher'],
+      mediaMaxCount: 3,
+    })
+    expect(textless.ok).toBe(false)
+    if (!textless.ok) {
+      expect(textless.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_MPSNEWS_STATIC_TEXT_REQUIRED')
+    }
+  })
+
+  it('rejects ambiguous or sourceless mpnews image tags', () => {
+    for (const content of [
+      `<p>正文</p><img data-asset-id="${COVER_ID}" data-media-source="salesOrder.issuanceVoucher">`,
+      '<p>正文</p><img alt="没有来源">',
+    ]) {
+      const result = validateNotificationContentGroup({
+        method: 'APP',
+        items: [mpnews({ content })],
+        allowedVariables: null,
+        mediaSources: ['salesOrder.issuanceVoucher'],
+        mediaMaxCount: 3,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.issues.map(item => item.code)).toContain('NOTIFICATION_CONTENT_HTML_UNSAFE')
+      }
+    }
+  })
+
+
   it('accepts a valid mpnews only for app messages', () => {
     const app = validateNotificationContentGroup({
       method: 'APP',

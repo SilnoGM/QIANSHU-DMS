@@ -259,6 +259,18 @@ export class NotificationRecordMediaDto {
   blockedReason!: string | null
 }
 
+export class NotificationRecordInlineMediaDto {
+  @ApiProperty({ format: 'uuid' }) id!: string
+  @ApiProperty({ type: 'integer', description: '所属渲染消息在渠道内容中的序号' }) renderedMessageSortOrder!: number
+  @ApiProperty({ type: 'integer', description: '图片在正文中的序号' }) sortOrder!: number
+  @ApiProperty() mediaType!: string
+  @ApiProperty({ type: 'string', nullable: true }) mimeType!: string | null
+  @ApiProperty() originalFilename!: string
+  @ApiProperty({ type: 'string', description: '字节数，避免 BigInt 序列化问题' }) sizeBytes!: string
+  @ApiProperty({ type: 'string', nullable: true, description: '业务语义来源键' }) sourceKey!: string | null
+  @ApiProperty({ type: 'string', nullable: true, description: '来源中文名' }) sourceLabel!: string | null
+}
+
 export class NotificationRecordDto {
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ type: 'string', nullable: true, description: '历史通知可能没有编号' }) notificationNo!: string | null
@@ -291,6 +303,7 @@ export class NotificationRecordPageDto {
 export class NotificationRecordDetailDto extends NotificationRecordDto {
   @ApiProperty({ type: () => [NotificationDeliveryDto] }) deliveries!: NotificationDeliveryDto[]
   @ApiProperty({ type: () => [NotificationRecordMediaDto] }) media!: NotificationRecordMediaDto[]
+  @ApiProperty({ type: () => [NotificationRecordInlineMediaDto] }) inlineMedia!: NotificationRecordInlineMediaDto[]
 }
 
 export class NotificationCancelResultDto {

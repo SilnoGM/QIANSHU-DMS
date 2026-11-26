@@ -140,9 +140,25 @@ describe('createOpenApiDocument', () => {
             items: { type: 'string' },
           },
         },
+        issues: {
+          description: '结构化业务校验问题；客户端可据此定位渠道、消息项与字段',
+          type: 'array',
+          items: { $ref: '#/components/schemas/ApiErrorIssue' },
+        },
         requestId: { type: 'string' },
       },
       required: ['code', 'message', 'requestId'],
+    })
+    expect(document.components?.schemas?.ApiErrorIssue).toEqual({
+      type: 'object',
+      properties: {
+        code: { type: 'string' },
+        message: { type: 'string' },
+        field: { type: 'string', description: '出错字段路径，例如 content 或 cover.mediaAssetId' },
+        itemIndex: { type: 'number', description: '出错项在所属集合中的 0-based 序号' },
+        channel: { type: 'string', description: '业务渠道标识，例如 IN_APP 或 WECOM' },
+      },
+      required: ['code', 'message'],
     })
     expect(closeSpy).toHaveBeenCalledTimes(1)
   })

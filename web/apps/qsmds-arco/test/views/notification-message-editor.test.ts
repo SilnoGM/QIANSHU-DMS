@@ -9,7 +9,9 @@ import test from 'node:test'
 import {
   cloneMessageDraft,
   createDefaultMessageDraft,
+  extractMediaSourceKeys,
   filterVariables,
+  hasStaticTextOutsideImages,
   imageMaxCount,
   imageSourceKeys,
   insertAtSelection,
@@ -43,6 +45,10 @@ const mpnewsEditorSource = readFileSync(
 )
 const richTextSource = readFileSync(
   new URL('../../src/views/system/notifications/events/components/RichTextEditor.vue', import.meta.url),
+  'utf8',
+)
+const assetImageViewSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/components/AssetImageView.vue', import.meta.url),
   'utf8',
 )
 
@@ -219,6 +225,33 @@ test('mpnews 校验封面、标题、正文、危险 HTML 与变量', () => {
   )
 })
 
+test('mpnews 业务图片占位校验来源、数量与静态文字', () => {
+  const source = 'salesOrder.issuanceVoucher'
+  const withSource = { ...context(), mediaSources: [source], mediaMaxCount: 2 }
+
+  assert.deepEqual(extractMediaSourceKeys(
+    `<p>附件：</p><img data-media-source="${source}"><img data-media-source="${source}">`,
+  ), [source, source])
+  assert.equal(hasStaticTextOutsideImages(`<p>附件：</p><img data-media-source="${source}">`), true)
+  assert.equal(hasStaticTextOutsideImages(`<img data-media-source="${source}">`), false)
+
+  assert.deepEqual(validateMessageDraft(mpnewsDraft({
+    content: `<p>附件：</p><img data-media-source="${source}">`,
+  }), withSource), [])
+
+  assert.match(validateMessageDraft(mpnewsDraft({
+    content: '<p>附件：</p><img data-media-source="unknown.source">',
+  }), withSource)[0]?.message ?? '', /未声明/u)
+
+  assert.match(validateMessageDraft(mpnewsDraft({
+    content: `<p>附件：</p><img data-media-source="${source}"><img data-media-source="${source}"><img data-media-source="${source}">`,
+  }), withSource)[0]?.message ?? '', /不能超过 2 个/u)
+
+  assert.match(validateMessageDraft(mpnewsDraft({
+    content: `<img data-media-source="${source}">`,
+  }), withSource)[0]?.message ?? '', /静态文字/u)
+})
+
 test('消息草稿快照可区分未修改与已修改', () => {
   const draft = textDraft('你好')
   const clone = cloneMessageDraft(draft)
@@ -319,4 +352,10 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(mpnewsEditorSource, /最近聚焦的字段/u)
   assert.match(richTextSource, /'focus': \[\]/u)
   assert.match(richTextSource, /onFocus/u)
+  assert.match(richTextSource, /data-media-source/u)
+  assert.match(richTextSource, /insertBusinessImage/u)
+  assert.match(richTextSource, /<FaDropdown/u)
+  assert.match(richTextSource, /mediaMaxCount/u)
+  assert.match(assetImageViewSource, /mpnews-business-image-placeholder/u)
+  assert.match(assetImageViewSource, /发布时插入/u)
 })

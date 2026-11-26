@@ -137,8 +137,9 @@ const MPNEWS_ALLOWED_TAGS = new Set([
 const MPNEWS_VOID_TAGS = new Set(['br', 'hr', 'img'])
 const MPNEWS_ALLOWED_ATTRIBUTES: Readonly<Record<string, ReadonlySet<string>>> = {
   a: new Set(['href', 'target', 'rel']),
-  img: new Set(['data-asset-id', 'alt']),
+  img: new Set(['data-asset-id', 'data-media-source', 'alt']),
 }
+const MPNEWS_MEDIA_SOURCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u
 const MPNEWS_TAG_PATTERN = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[^<>]*?)?)(\/)?>/gu
 const MPNEWS_ATTRIBUTE_PATTERN = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gu
 
@@ -214,12 +215,22 @@ function validateMpnewsHtmlStructure(value: string): string | null {
       if (name === 'img' && attribute === 'data-asset-id' && !UUID_PATTERN.test(attributeValue)) {
         return '正文图片必须引用有效的 DMS 资产'
       }
+      if (name === 'img' && attribute === 'data-media-source' && !MPNEWS_MEDIA_SOURCE_PATTERN.test(attributeValue)) {
+        return '正文业务图片来源格式无效'
+      }
     }
     if (name === 'a' && !attributes.has('href')) {
       return '正文链接必须包含 href'
     }
-    if (name === 'img' && !attributes.has('data-asset-id')) {
-      return '正文图片必须使用 DMS 资产'
+    if (name === 'img') {
+      const hasAsset = attributes.has('data-asset-id')
+      const hasMediaSource = attributes.has('data-media-source')
+      if (!hasAsset && !hasMediaSource) {
+        return '正文图片必须使用 DMS 资产或业务图片占位'
+      }
+      if (hasAsset && hasMediaSource) {
+        return '正文图片不能同时声明 DMS 资产和业务图片占位'
+      }
     }
     if (MPNEWS_VOID_TAGS.has(name)) {
       continue
@@ -323,6 +334,8 @@ function validateMpnews(input: {
   readonly payload: unknown
   readonly allowedVariables: readonly string[] | null
   readonly itemIndex: number
+  readonly mediaSources?: readonly string[] | null
+  readonly mediaMaxCount?: number
 }): { readonly payload?: NotificationMpnewsPayload, readonly issues: readonly NotificationContentIssue[] } {
   const record = asRecord(input.payload)
   const issues: NotificationContentIssue[] = []
@@ -376,6 +389,37 @@ function validateMpnews(input: {
   const htmlIssue = validateMpnewsHtmlStructure(content)
   if (htmlIssue !== null) {
     issues.push(issue('NOTIFICATION_CONTENT_HTML_UNSAFE', htmlIssue, input.itemIndex, 'content'))
+  }
+  else {
+    const mediaSourceSlots = extractMpnewsMediaSourceSlots(content)
+    if (mediaSourceSlots.length > 0) {
+      const declaredSources = new Set(input.mediaSources ?? [])
+      const undeclared = [...new Set(mediaSourceSlots.filter(sourceKey => !declaredSources.has(sourceKey)))]
+      if (undeclared.length > 0) {
+        issues.push(issue(
+          'NOTIFICATION_CONTENT_MEDIA_SOURCE_UNDECLARED',
+          `正文业务图片来源未声明：${undeclared.join('、')}`,
+          input.itemIndex,
+          'content',
+        ))
+      }
+      if (mediaSourceSlots.length > (input.mediaMaxCount ?? 0)) {
+        issues.push(issue(
+          'NOTIFICATION_CONTENT_INLINE_MEDIA_LIMIT',
+          `正文业务图片占位不能超过 ${input.mediaMaxCount ?? 0} 个`,
+          input.itemIndex,
+          'content',
+        ))
+      }
+      if (!mpnewsHasStaticTextOutsideImages(content)) {
+        issues.push(issue(
+          'NOTIFICATION_CONTENT_MPSNEWS_STATIC_TEXT_REQUIRED',
+          '正文包含业务图片占位时必须保留静态文字',
+          input.itemIndex,
+          'content',
+        ))
+      }
+    }
   }
   issues.push(...inspectContentPlaceholders({
     texts: [title ?? '', digest ?? '', content, contentSourceUrl ?? ''],
@@ -525,6 +569,26 @@ export function extractNotificationContentAssetIds(item: {
     coverAssetId: coverAssetId !== null && UUID_PATTERN.test(coverAssetId) ? coverAssetId : null,
     inlineAssetIds: [...inline].filter(assetId => UUID_PATTERN.test(assetId)),
   }
+}
+
+/** 按正文顺序提取业务图片来源占位；同一来源可出现多次，每个占位消费一张图片。 */
+export function extractMpnewsMediaSourceSlots(html: string): string[] {
+  const slots: string[] = []
+  for (const match of html.matchAll(/<img\b[^>]*\bdata-media-source\s*=\s*["']([^"']+)["'][^>]*>/giu)) {
+    if (match[1] !== undefined) {
+      slots.push(match[1])
+    }
+  }
+  return slots
+}
+
+/** 去掉全部图片后是否仍有可见文字；业务图片占位不能作为正文唯一内容。 */
+export function mpnewsHasStaticTextOutsideImages(html: string): boolean {
+  return html
+    .replace(/<img\b[^>]*>/giu, ' ')
+    .replace(/<[^>]*>/gu, ' ')
+    .replace(/&nbsp;/giu, ' ')
+    .trim().length > 0
 }
 
 function escapeHtml(value: string): string {
@@ -679,6 +743,8 @@ export function validateNotificationContentGroup(input: {
         payload: item.payload,
         allowedVariables: input.allowedVariables,
         itemIndex: index,
+        mediaSources: input.mediaSources,
+        mediaMaxCount: input.mediaMaxCount,
       })
       issues.push(...result.issues)
       if (result.payload !== undefined) {

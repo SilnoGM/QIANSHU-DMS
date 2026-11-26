@@ -213,6 +213,8 @@ function insertVariable(name: string): void {
           v-model="draft.payload"
           :disabled="!canUpdate"
           :errors="errors"
+          :media-sources="media?.sources ?? []"
+          :media-max-count="media?.maxCount ?? 0"
         />
         <div v-else class="text-sm text-muted-foreground p-6 text-center border border-border rounded-lg border-dashed">
           该类型暂未开放编辑。
