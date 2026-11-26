@@ -37,7 +37,7 @@ function variableToken(name: string): string {
         可用变量
       </div>
       <p class="text-xs text-muted-foreground mt-0.5">
-        点击变量插入到正文；变量值由发布时业务数据渲染。
+        点击变量插入到最近聚焦的输入框或正文；变量值由发布时业务数据渲染。
       </p>
     </div>
 

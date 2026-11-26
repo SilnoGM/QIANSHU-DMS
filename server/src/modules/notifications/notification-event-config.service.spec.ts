@@ -341,6 +341,57 @@ describe('NotificationEventConfigService', () => {
     })
   })
 
+  it('warns when mpnews metadata exceeds the byte limit after variable rendering', async () => {
+    const prisma = createPrismaMock()
+    const coverId = '00000000-0000-4000-8000-000000000099'
+    prisma.notificationEventChannel.findMany.mockResolvedValue([
+      channelRow({
+        channel: 'WECOM',
+        sendMethod: 'APP',
+        targetMode: 'USERS',
+        targetConfig: { userIds: [] },
+        ttlSeconds: 3_600,
+        allowSensitive: true,
+        messages: [
+          {
+            id: '00000000-0000-4000-8000-000000000098',
+            sortOrder: 0,
+            kind: 'MPNEWS',
+            payload: {
+              cover: { mediaAssetId: coverId },
+              title: '{{orderNo}}{{orderNo}}{{orderNo}}',
+              author: null,
+              digest: null,
+              contentSourceUrl: null,
+              content: '<p>正文</p>',
+            },
+            mediaPolicy: {},
+            enabled: true,
+            contentHash: CONTENT_HASH,
+          },
+        ],
+      }),
+    ])
+    const service = createService(prisma)
+
+    const result = await service.preview(EVENT_TYPE, {
+      variables: { orderNo: '中'.repeat(64) },
+    })
+
+    const item = result.channels[0]?.items[0]
+    expect(item).toMatchObject({
+      kind: 'MPNEWS',
+      payload: expect.objectContaining({
+        title: expect.stringMatching(/…$/u),
+      }),
+      warnings: expect.arrayContaining([
+        expect.stringContaining('标题渲染后超过 128 字节'),
+      ]),
+    })
+    const renderedTitle = (item?.payload as { title?: string } | undefined)?.title ?? ''
+    expect(new TextEncoder().encode(renderedTitle).length).toBeLessThanOrEqual(128)
+  })
+
   it('activates a freshly uploaded draft image during save', async () => {
     const prisma = createPrismaMock()
     const media = createMediaMocks()

@@ -33,6 +33,18 @@ const paletteSource = readFileSync(
   new URL('../../src/views/system/notifications/events/components/editor/VariablePalette.vue', import.meta.url),
   'utf8',
 )
+const variableInputSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/components/editor/VariableTextInput.vue', import.meta.url),
+  'utf8',
+)
+const mpnewsEditorSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/components/editor/MpnewsMessageEditor.vue', import.meta.url),
+  'utf8',
+)
+const richTextSource = readFileSync(
+  new URL('../../src/views/system/notifications/events/components/RichTextEditor.vue', import.meta.url),
+  'utf8',
+)
 
 const variables: NotificationEventVariableDto[] = [
   {
@@ -291,4 +303,20 @@ test('详情页只展示消息列表，编辑统一走弹窗', () => {
   assert.match(paletteSource, /filterVariables/u)
   assert.match(paletteSource, /variableToken/u)
   assert.match(paletteSource, /@mousedown\.prevent/u)
+  assert.match(paletteSource, /最近聚焦的输入框或正文/u)
+
+  assert.match(variableInputSource, /insertAtSelection/u)
+  assert.match(variableInputSource, /focusin/u)
+  assert.match(variableInputSource, /setSelectionRange/u)
+  assert.match(variableInputSource, /defineExpose/u)
+
+  assert.match(mpnewsEditorSource, /VariableTextInput/u)
+  assert.match(mpnewsEditorSource, /lastFocusedField/u)
+  assert.match(mpnewsEditorSource, /lastFocusedField = 'title'/u)
+  assert.match(mpnewsEditorSource, /lastFocusedField = 'author'/u)
+  assert.match(mpnewsEditorSource, /lastFocusedField = 'digest'/u)
+  assert.match(mpnewsEditorSource, /lastFocusedField = 'contentSourceUrl'/u)
+  assert.match(mpnewsEditorSource, /最近聚焦的字段/u)
+  assert.match(richTextSource, /'focus': \[\]/u)
+  assert.match(richTextSource, /onFocus/u)
 })

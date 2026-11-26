@@ -42,6 +42,47 @@ function truncate(text: string, maxLength: number): { readonly content: string, 
   return { content: `${text.slice(0, Math.max(0, maxLength - 1))}…`, truncated: true }
 }
 
+const textEncoder = new TextEncoder()
+
+function utf8Bytes(text: string): number {
+  return textEncoder.encode(text).length
+}
+
+/**
+ * 企业微信的标题、作者、摘要按 UTF-8 字节限长；变量展开后必须按字节二次截断，
+ * 不能只依赖 JavaScript 字符数。
+ */
+function truncateUtf8(text: string, maxBytes: number): { readonly content: string, readonly truncated: boolean } {
+  if (maxBytes <= 0) {
+    return { content: '', truncated: text.length > 0 }
+  }
+  if (utf8Bytes(text) <= maxBytes) {
+    return { content: text, truncated: false }
+  }
+
+  const suffix = '…'
+  const suffixBytes = utf8Bytes(suffix)
+  let result = ''
+  if (maxBytes >= suffixBytes) {
+    const budget = maxBytes - suffixBytes
+    for (const character of text) {
+      if (utf8Bytes(result + character) > budget) {
+        break
+      }
+      result += character
+    }
+    return { content: `${result}${suffix}`, truncated: true }
+  }
+
+  for (const character of text) {
+    if (utf8Bytes(result + character) > maxBytes) {
+      break
+    }
+    result += character
+  }
+  return { content: result, truncated: true }
+}
+
 /**
  * 模板只支持 {{variable}} 占位，不执行表达式、不渲染 HTML。
  *
@@ -55,6 +96,8 @@ export function renderNotificationTemplate(input: {
   readonly allowed: readonly NotificationTemplateVariable[]
   readonly allowSensitive: boolean
   readonly maxLength?: number
+  /** 渲染结果的 UTF-8 字节上限；用于企业微信标题/作者/摘要。 */
+  readonly maxBytes?: number
 }): NotificationTemplateRenderResult {
   const maxLength = Math.min(
     Math.max(1, input.maxLength ?? MAX_NOTIFICATION_TEMPLATE_LENGTH),
@@ -115,13 +158,17 @@ export function renderNotificationTemplate(input: {
   const renderedLink = input.linkUrlTemplate
     ? input.linkUrlTemplate.replace(PLACEHOLDER_PATTERN, (_match, name: string) => resolve(name))
     : null
-  const truncated = truncate(renderedBody, maxLength)
+  const charLimited = truncate(renderedBody, maxLength)
+  const maxBytes = input.maxBytes !== undefined && Number.isFinite(input.maxBytes)
+    ? Math.max(0, Math.floor(input.maxBytes))
+    : null
+  const limited = maxBytes === null ? charLimited : truncateUtf8(charLimited.content, maxBytes)
 
   return {
     ok: true,
-    content: truncated.content,
+    content: limited.content,
     linkUrl: renderedLink,
-    truncated: truncated.truncated,
+    truncated: charLimited.truncated || limited.truncated,
     warnings: [...new Set(warnings)],
   }
 }

@@ -1442,6 +1442,7 @@ export type NotificationPublishWarningCode =
   | 'CONTENT_NOT_CONFIGURED'
   | 'CONTENT_RENDER_FAILED'
   | 'MESSAGE_KIND_NOT_IMPLEMENTED'
+  | 'MPNEWS_METADATA_TRUNCATED'
 
 export interface SystemNotificationPublishChannelResult {
   readonly channel: NotificationChannel

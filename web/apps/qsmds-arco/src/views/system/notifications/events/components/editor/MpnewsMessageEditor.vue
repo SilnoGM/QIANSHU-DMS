@@ -4,6 +4,13 @@ import { getApiClientFailureMessage } from '@/api/errors'
 import notificationsApi from '@/api/modules/notifications'
 import { IMAGE_ONLY_ACCEPT } from '@/utils/upload-policy'
 import RichTextEditor from '../RichTextEditor.vue'
+import VariableTextInput from './VariableTextInput.vue'
+
+type VariableField = 'title' | 'author' | 'digest' | 'contentSourceUrl' | 'content'
+
+interface VariableInputRef {
+  insertVariable?: (name: string) => void
+}
 
 const props = defineProps<{
   modelValue: Record<string, unknown>
@@ -17,7 +24,12 @@ const emit = defineEmits<{
 
 const MAXIMUM_COVER_BYTES = 10 * 1024 * 1024
 
-const richTextRef = ref<{ insertVariable?: (name: string) => void } | null>(null)
+const richTextRef = ref<VariableInputRef | null>(null)
+const titleRef = ref<VariableInputRef | null>(null)
+const authorRef = ref<VariableInputRef | null>(null)
+const digestRef = ref<VariableInputRef | null>(null)
+const sourceUrlRef = ref<VariableInputRef | null>(null)
+const lastFocusedField = ref<VariableField>('content')
 const coverFileInput = ref<HTMLInputElement | null>(null)
 const coverUploading = ref(false)
 const coverUploadError = ref<string | null>(null)
@@ -101,7 +113,22 @@ function clearCover(): void {
 }
 
 function insertVariable(name: string): void {
-  richTextRef.value?.insertVariable?.(name)
+  switch (lastFocusedField.value) {
+    case 'title':
+      titleRef.value?.insertVariable?.(name)
+      return
+    case 'author':
+      authorRef.value?.insertVariable?.(name)
+      return
+    case 'digest':
+      digestRef.value?.insertVariable?.(name)
+      return
+    case 'contentSourceUrl':
+      sourceUrlRef.value?.insertVariable?.(name)
+      return
+    case 'content':
+      richTextRef.value?.insertVariable?.(name)
+  }
 }
 
 defineExpose({ insertVariable })
@@ -169,48 +196,65 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex flex-col gap-2">
-      <div class="text-xs text-muted-foreground font-medium">
-        文章信息
+      <div class="flex flex-wrap gap-2 items-baseline">
+        <div class="text-xs text-muted-foreground font-medium">
+          文章信息
+        </div>
+        <span class="text-[11px] text-muted-foreground">
+          支持变量，点击会插入到最近聚焦的字段；标题/作者/摘要渲染后超出字节上限会截断。
+        </span>
       </div>
       <div class="gap-3 grid md:grid-cols-2">
         <label class="text-sm flex flex-col gap-1">
           <span class="font-medium">标题</span>
-          <FaInput
+          <VariableTextInput
+            ref="titleRef"
             :model-value="title"
             :disabled="disabled"
             maxlength="128"
-            @update:model-value="value => setString('title', value ?? '')"
+            placeholder="支持 {{变量}}"
+            @focus="lastFocusedField = 'title'"
+            @update:model-value="value => setString('title', value)"
           />
           <span v-if="errors.title !== undefined" class="text-xs text-destructive">{{ errors.title }}</span>
         </label>
         <label class="text-sm flex flex-col gap-1">
           <span class="font-medium">作者</span>
-          <FaInput
+          <VariableTextInput
+            ref="authorRef"
             :model-value="author"
             :disabled="disabled"
             maxlength="64"
-            @update:model-value="value => setString('author', value ?? '', true)"
+            placeholder="支持 {{变量}}"
+            @focus="lastFocusedField = 'author'"
+            @update:model-value="value => setString('author', value, true)"
           />
           <span v-if="errors.author !== undefined" class="text-xs text-destructive">{{ errors.author }}</span>
         </label>
         <label class="text-sm flex flex-col gap-1">
           <span class="font-medium">摘要</span>
-          <FaInput
+          <VariableTextInput
+            ref="digestRef"
             :model-value="digest"
             :disabled="disabled"
             maxlength="512"
-            @update:model-value="value => setString('digest', value ?? '', true)"
+            placeholder="支持 {{变量}}"
+            @focus="lastFocusedField = 'digest'"
+            @update:model-value="value => setString('digest', value, true)"
           />
           <span v-if="errors.digest !== undefined" class="text-xs text-destructive">{{ errors.digest }}</span>
         </label>
         <label class="text-sm flex flex-col gap-1">
           <span class="font-medium">阅读原文</span>
-          <FaInput
+          <VariableTextInput
+            ref="sourceUrlRef"
             :model-value="contentSourceUrl"
             :disabled="disabled"
             placeholder="https://"
-            @update:model-value="value => setString('contentSourceUrl', value ?? '', true)"
+            @focus="lastFocusedField = 'contentSourceUrl'"
+            @update:model-value="value => setString('contentSourceUrl', value, true)"
           />
+          <span class="text-[11px] text-muted-foreground">变量只能放在固定 http/https 地址中</span>
           <span v-if="errors.contentSourceUrl !== undefined" class="text-xs text-destructive">{{ errors.contentSourceUrl }}</span>
         </label>
       </div>
@@ -224,13 +268,14 @@ onBeforeUnmount(() => {
         ref="richTextRef"
         :model-value="content"
         :disabled="disabled"
+        @focus="lastFocusedField = 'content'"
         @update:model-value="value => setString('content', value)"
       />
       <p v-if="errors.content !== undefined" class="text-xs text-destructive m-0">
         {{ errors.content }}
       </p>
       <p v-else class="text-xs text-muted-foreground m-0">
-        正文图片仅允许 DMS 资产，单张不超过 2 MiB；右侧变量会插入到正文光标位置。
+        正文图片仅允许 DMS 资产，单张不超过 2 MiB。
       </p>
     </div>
 

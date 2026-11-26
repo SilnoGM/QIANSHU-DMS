@@ -332,6 +332,7 @@ export class NotificationEventConfigService {
         allowed: input.allowed,
         allowSensitive: input.channel.allowSensitive,
         maxLength: 128,
+        maxBytes: 128,
       })
       const author = rawAuthor === null ? null : renderNotificationTemplate({
         body: rawAuthor,
@@ -339,6 +340,7 @@ export class NotificationEventConfigService {
         allowed: input.allowed,
         allowSensitive: input.channel.allowSensitive,
         maxLength: 64,
+        maxBytes: 64,
       })
       const digest = rawDigest === null ? null : renderNotificationTemplate({
         body: rawDigest,
@@ -346,6 +348,7 @@ export class NotificationEventConfigService {
         allowed: input.allowed,
         allowSensitive: input.channel.allowSensitive,
         maxLength: 512,
+        maxBytes: 512,
       })
       const sourceUrl = rawContentSourceUrl === null ? null : renderNotificationTemplate({
         body: '',
@@ -364,6 +367,15 @@ export class NotificationEventConfigService {
       const warnings: string[] = []
       for (const result of [title, author, digest, sourceUrl]) {
         if (result !== null && !result.ok) warnings.push(result.message)
+      }
+      for (const [label, result, maxBytes] of [
+        ['标题', title, 128],
+        ['作者', author, 64],
+        ['摘要', digest, 512],
+      ] as const) {
+        if (result !== null && result.ok && result.truncated) {
+          warnings.push(`mpnews ${label}渲染后超过 ${maxBytes} 字节，已截断`)
+        }
       }
       if (!content.ok) warnings.push(content.message)
       if (content.ok) warnings.push(...content.warnings)

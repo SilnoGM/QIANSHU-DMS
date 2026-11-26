@@ -15,6 +15,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'focus': []
 }>()
 
 const linkHref = ref('')
@@ -76,6 +77,9 @@ const editor = useEditor({
   ],
   onUpdate: ({ editor: current }) => {
     emit('update:modelValue', current.getHTML())
+  },
+  onFocus: () => {
+    emit('focus')
   },
 })
 

@@ -108,6 +108,11 @@ function sanitizeVariables(input: Readonly<Record<string, string | number | null
 }
 
 /**
+ * 内容渲染阶段可传递的内部警告；发布层再映射为 NotificationPublishWarningCode。
+ */
+type NotificationRenderWarning = 'SENSITIVE_VARIABLE_MASKED' | 'MPNEWS_METADATA_TRUNCATED'
+
+/**
  * 业务侧唯一发布入口。
  *
  * 只写数据库：解析事件渠道配置、收件人、内容与幂等键，创建逻辑通知与站外交付；
@@ -451,6 +456,9 @@ export class SystemNotificationService {
     if (renderedItems.some(item => item.warnings.includes('SENSITIVE_VARIABLE_MASKED'))) {
       input.warnings.push({ code: 'SENSITIVE_VARIABLE_MASKED', message: '敏感变量已脱敏' })
     }
+    if (renderedItems.some(item => item.warnings.includes('MPNEWS_METADATA_TRUNCATED'))) {
+      input.warnings.push({ code: 'MPNEWS_METADATA_TRUNCATED', message: 'mpnews 标题、作者或摘要超过企业微信字节限制，已截断' })
+    }
     const summary = renderedItems.map(item => item.kind === 'TEXT' ? item.content : item.payload.title).join('\n\n')
 
     const targetConfig = asRecord(input.channelConfig.targetConfig)
@@ -760,7 +768,7 @@ export class SystemNotificationService {
     readonly title: string
     readonly content: string
     readonly linkUrl: string | null
-    readonly warnings: readonly 'SENSITIVE_VARIABLE_MASKED'[]
+    readonly warnings: readonly NotificationRenderWarning[]
   } | {
     readonly ok: false
     readonly message: string
@@ -796,7 +804,7 @@ export class SystemNotificationService {
           : titleResult !== null && !titleResult.ok ? titleResult.message : '文本内容渲染失败',
       }
     }
-    const warnings = new Set<'SENSITIVE_VARIABLE_MASKED'>()
+    const warnings = new Set<NotificationRenderWarning>()
     if (titleResult?.ok) {
       for (const warning of titleResult.warnings) warnings.add(warning)
     }
@@ -851,7 +859,7 @@ export class SystemNotificationService {
       readonly content: string
       readonly assetIds: readonly string[]
     }
-    readonly warnings: readonly 'SENSITIVE_VARIABLE_MASKED'[]
+    readonly warnings: readonly NotificationRenderWarning[]
   } | {
     readonly ok: false
     readonly message: string
@@ -873,6 +881,7 @@ export class SystemNotificationService {
       allowed,
       allowSensitive,
       maxLength: 128,
+      maxBytes: 128,
     })
     const author = rawAuthor === null ? null : renderNotificationTemplate({
       body: rawAuthor,
@@ -880,6 +889,7 @@ export class SystemNotificationService {
       allowed,
       allowSensitive,
       maxLength: 64,
+      maxBytes: 64,
     })
     const digest = rawDigest === null ? null : renderNotificationTemplate({
       body: rawDigest,
@@ -887,6 +897,7 @@ export class SystemNotificationService {
       allowed,
       allowSensitive,
       maxLength: 512,
+      maxBytes: 512,
     })
     const sourceUrl = rawContentSourceUrl === null ? null : renderNotificationTemplate({
       body: '',
@@ -915,9 +926,15 @@ export class SystemNotificationService {
         return { ok: false, message: 'mpnews 阅读原文链接必须是 http/https URL' }
       }
     }
-    const warnings = new Set<'SENSITIVE_VARIABLE_MASKED'>()
+    const warnings = new Set<NotificationRenderWarning>()
     for (const warning of [...title.warnings, ...(author?.ok ? author.warnings : []), ...(digest?.ok ? digest.warnings : []), ...(sourceUrl?.ok ? sourceUrl.warnings : []), ...content.warnings]) {
       warnings.add(warning)
+    }
+    const metadataTruncated = title.truncated
+      || (author !== null && author.ok && author.truncated)
+      || (digest !== null && digest.ok && digest.truncated)
+    if (metadataTruncated) {
+      warnings.add('MPNEWS_METADATA_TRUNCATED')
     }
     const extracted = extractNotificationContentAssetIds({
       kind: 'MPNEWS',

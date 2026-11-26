@@ -258,6 +258,55 @@ describe('SystemNotificationService event config branch', () => {
     })
   })
 
+  it('truncates mpnews metadata by utf8 bytes and reports a warning', async () => {
+    const coverId = '00000000-0000-4000-8000-000000000099'
+    const config = wecomConfig({
+      messages: [{
+        id: 'message-mpnews',
+        channelConfigId: 'config-wecom',
+        sortOrder: 0,
+        kind: 'MPNEWS',
+        payload: {
+          cover: { mediaAssetId: coverId },
+          title: '{{orderNo}}{{orderNo}}{{orderNo}}',
+          author: null,
+          digest: null,
+          contentSourceUrl: null,
+          content: '<p>正文</p>',
+        },
+        mediaPolicy: {},
+        contentHash: 'a'.repeat(64),
+        enabled: true,
+        createdAt: new Date('2026-11-25T10:00:00.000Z'),
+        updatedAt: new Date('2026-11-25T10:00:00.000Z'),
+      }],
+    })
+    const prisma = basePrisma([config])
+    prisma.notificationInboxItem.count.mockResolvedValue(0)
+    const service = new SystemNotificationService(
+      prisma as unknown as PrismaService,
+      createNumbering(),
+    )
+
+    const result = await service.publish({
+      eventType: EVENT_TYPE,
+      source: { type: 'sales_order', id: 'order-1' },
+      target: { kind: 'USERS', userIds: [USER_ID] },
+      variables: { orderNo: '中'.repeat(64) },
+    })
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: 'MPNEWS_METADATA_TRUNCATED',
+    }))
+    expect(prisma.notificationRenderedMessage.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          title: expect.stringMatching(/…$/u),
+        }),
+      })],
+    })
+  })
+
   it('skips WECOM when content contains an unimplemented kind', async () => {
     const config = wecomConfig({
       messages: [{
