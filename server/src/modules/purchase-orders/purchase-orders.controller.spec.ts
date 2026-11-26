@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 
 import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
+import { MODULE_METADATA } from '@nestjs/common/constants'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
@@ -10,6 +11,7 @@ import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_ANY_PERMISSIONS_METADATA, REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
 import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
+import { PurchaseAutoReviewController } from './auto-review/purchase-auto-review.controller'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
@@ -19,6 +21,7 @@ import { PurchaseOrderReviewContextController } from './purchase-order-review-co
 import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
+import { PurchaseOrdersModule } from './purchase-orders.module'
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111'
 const ACTOR_ID = '22222222-2222-4222-8222-222222222222'
@@ -85,6 +88,19 @@ const providers = [{
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('registers the static auto-review setting route before the :id routes', () => {
+    const controllers = Reflect.getMetadata(
+      MODULE_METADATA.CONTROLLERS,
+      PurchaseOrdersModule,
+    ) as unknown[]
+    const autoReviewIndex = controllers.indexOf(PurchaseAutoReviewController)
+    const ordersIndex = controllers.indexOf(PurchaseOrdersController)
+
+    expect(autoReviewIndex).toBeGreaterThanOrEqual(0)
+    expect(ordersIndex).toBeGreaterThanOrEqual(0)
+    expect(autoReviewIndex).toBeLessThan(ordersIndex)
+  })
+
   it('allows purchase cancellation for editors or reviewers and accepts an omitted reason', async () => {
     const updateOrderStatus = jest.fn().mockResolvedValue({ id: ORDER_ID, orderStatus: 'CANCELLED' })
     const controller = new PurchaseOrdersController(

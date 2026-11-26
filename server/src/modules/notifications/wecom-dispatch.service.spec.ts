@@ -78,7 +78,18 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     },
     notificationUserMute: { findFirst: jest.fn().mockResolvedValue(null) },
     notificationChannelPolicy: { findUnique: jest.fn().mockResolvedValue(null) },
-    notificationEventChannel: { findUnique: jest.fn().mockResolvedValue(null) },
+    // 默认显式关闭静默，避免用例结果随运行时刻落入 23:00–08:45 而波动；
+    // 需要验证静默的用例自行覆盖 quietHours。
+    notificationEventChannel: {
+      findUnique: jest.fn().mockResolvedValue({
+        quietHours: {
+          enabled: false,
+          start: '23:00',
+          end: '08:45',
+          timezone: 'Asia/Shanghai',
+        },
+      }),
+    },
     notificationDeliveryMessage: {
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({}),
@@ -206,6 +217,12 @@ describe('WecomDispatchService', () => {
       notificationEventChannel: {
         findUnique: jest.fn().mockResolvedValue({
           targetConfig: { mention: { mode: 'ALL' } },
+          quietHours: {
+            enabled: false,
+            start: '23:00',
+            end: '08:45',
+            timezone: 'Asia/Shanghai',
+          },
         }),
       },
       wecomTarget: {
