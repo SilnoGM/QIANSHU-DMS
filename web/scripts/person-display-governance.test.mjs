@@ -14,9 +14,6 @@ const ALLOWED_PERSON_TEXT_FILES = new Map([
   ['views/operations/sales-orders/create.vue', '新建销售订单表单只读出单人'],
   ['views/operations/sales-orders/sales-order-create-review.vue', '新建销售订单确认摘要'],
   ['views/operations/purchase-orders/purchase-order-review-image.vue', '采购审核图片说明'],
-  // 模板键分组名不是系统人员，没有头像、账号与人员链接语义。
-  ['views/system/notifications/components/TemplateDomainRail.vue', '模板键分组名，不是系统人员'],
-  ['views/system/notifications/components/TemplateKeyDetail.vue', '模板键分组名，不是系统人员'],
   ['components/business/QsSalesOrderDesc/index.vue', '销售订单单据/打印预览'],
   ['components/business/QsPurchaseOrderDesc/index.vue', '采购订单单据/打印预览'],
 ])

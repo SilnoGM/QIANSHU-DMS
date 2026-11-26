@@ -92,7 +92,7 @@ test('快照基础 API 使用稳定字节、hash 与安全解析行为', () => {
   )
 })
 
-test('已退役 operationId 公开清单冻结且精确为供应商六条加对账两条', () => {
+test('已退役 operationId 公开清单冻结且精确', () => {
   assert.equal(Object.isFrozen(RETIRED_OPERATION_IDS), true)
   assert.deepEqual(RETIRED_OPERATION_IDS, [
     'suppliers_list',
@@ -103,6 +103,35 @@ test('已退役 operationId 公开清单冻结且精确为供应商六条加对�
     'suppliers_disable',
     'slh_reconciliation_batch_match_preview',
     'slh_reconciliation_batch_reconcile',
+    'assistant_accounts_check_status',
+    'assistant_accounts_create',
+    'assistant_accounts_list',
+    'assistant_accounts_qrcode',
+    'assistant_accounts_update',
+    'assistant_bindings_check',
+    'assistant_bindings_create',
+    'assistant_bindings_delete',
+    'assistant_bindings_list',
+    'assistant_bindings_reassign',
+    'assistant_bindings_verify',
+    'assistant_channel_get',
+    'assistant_channel_test',
+    'assistant_channel_update',
+    'assistant_contacts_list',
+    'assistant_targets_list',
+    'assistant_targets_members',
+    'assistant_targets_mention_message',
+    'assistant_targets_sync',
+    'assistant_targets_update',
+    'notification_media_public_get',
+    'notification_media_public_head',
+    'notifications_policies_list',
+    'notifications_policies_update',
+    'notifications_templates_create',
+    'notifications_templates_list',
+    'notifications_templates_preview',
+    'notifications_templates_test',
+    'notifications_templates_update',
   ])
 })
 
