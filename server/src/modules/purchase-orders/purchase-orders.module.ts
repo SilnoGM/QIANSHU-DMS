@@ -78,6 +78,9 @@ import { PurchaseAutoReviewService } from './auto-review/purchase-auto-review.se
     NotificationModule,
   ],
   controllers: [
+    // 静态路由必须先于 PurchaseOrdersController 的 `GET :id` 注册，
+    // 否则 /purchase-orders/auto-review-setting 会被当成订单 ID 并返回 422。
+    PurchaseAutoReviewController,
     PurchasePayableController,
     PurchasePaymentController,
     PurchaseOrdersController,
@@ -90,7 +93,6 @@ import { PurchaseAutoReviewService } from './auto-review/purchase-auto-review.se
     PurchaseOrderWarehouseReceiptController,
     SalesOrderWarehouseReceiptController,
     PurchaseCorrectionController,
-    PurchaseAutoReviewController,
   ],
   providers: [
     PurchasePayableVoucherService,
