@@ -31,7 +31,10 @@ const triggerLabel = computed(() => {
   if (props.loading) {
     return '正在加载选项…'
   }
-  return props.modelValue.length === 0 ? props.placeholder : `已选择 ${props.modelValue.length} 项`
+  if (props.modelValue.length === 0) {
+    return props.placeholder
+  }
+  return `已选择：${props.modelValue.map(labelFor).join('、')}`
 })
 
 function labelFor(value: string): string {
@@ -40,10 +43,6 @@ function labelFor(value: string): string {
 
 function toggle(value: string): void {
   emit('update:modelValue', toggleTargetValue(props.modelValue, value))
-}
-
-function remove(value: string): void {
-  emit('update:modelValue', props.modelValue.filter(item => item !== value))
 }
 
 function clearAll(): void {
@@ -59,25 +58,6 @@ watch(open, (value) => {
 
 <template>
   <div class="flex flex-col gap-2">
-    <div v-if="modelValue.length > 0" class="flex flex-wrap gap-1.5">
-      <span
-        v-for="value in modelValue"
-        :key="value"
-        class="text-xs px-2 py-1 border border-border rounded-md bg-muted/50 inline-flex gap-1 max-w-full items-center"
-      >
-        <span class="truncate">{{ labelFor(value) }}</span>
-        <button
-          v-if="!disabled"
-          type="button"
-          class="text-muted-foreground shrink-0 hover:text-foreground"
-          :aria-label="`移除 ${labelFor(value)}`"
-          @click="remove(value)"
-        >
-          <FaIcon name="i-lucide:x" class="size-3" />
-        </button>
-      </span>
-    </div>
-
     <FaPopover v-model:open="open" class="p-0 max-w-[calc(100vw-2rem)] w-80" :collision-padding="16">
       <button
         type="button"
@@ -89,6 +69,7 @@ watch(open, (value) => {
         <span
           class="truncate"
           :class="modelValue.length === 0 || loading ? 'text-muted-foreground' : 'text-foreground'"
+          :title="triggerLabel"
         >
           {{ triggerLabel }}
         </span>

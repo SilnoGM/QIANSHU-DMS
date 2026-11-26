@@ -174,7 +174,7 @@ function insertVariable(name: string): void {
     @update:model-value="value => emit('update:modelValue', value)"
   >
     <div class="gap-4 grid lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <div class="flex flex-col gap-3 min-w-0">
+      <div class="flex flex-col gap-3 min-w-0 lg:h-full">
         <div
           v-if="hasErrors"
           class="px-3 py-2.5 border border-destructive/30 rounded-lg bg-destructive/5"
@@ -194,6 +194,7 @@ function insertVariable(name: string): void {
           v-if="kind === 'TEXT'"
           ref="editorRef"
           v-model="draft.payload"
+          class="flex-1"
           :channel="channel"
           :disabled="!canUpdate"
           :error="errors.content"

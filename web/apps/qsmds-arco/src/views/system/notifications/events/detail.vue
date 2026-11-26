@@ -804,7 +804,7 @@ onBeforeUnmount(() => {
                   <span v-if="activeDraft.targetMode === 'GROUP'" class="text-xs text-muted-foreground">
                     仅列出已启用且标记为内部群的群机器人目标。
                   </span>
-                  <div v-else class="text-sm px-3 border border-border rounded-md bg-muted/30 flex gap-2 h-9 items-center">
+                  <div v-if="activeDraft.targetMode === 'COMMAND_TARGET'" class="text-sm px-3 border border-border rounded-md bg-muted/30 flex gap-2 h-9 items-center">
                     <FaIcon name="i-lucide:waypoints" class="text-muted-foreground shrink-0 size-4" />
                     <span class="truncate">{{ event?.dynamicTargetLabel ?? '由业务发布时传入' }}</span>
                   </div>

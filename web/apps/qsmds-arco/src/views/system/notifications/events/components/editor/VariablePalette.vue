@@ -56,11 +56,11 @@ function variableToken(name: string): string {
       title="该事件未登记变量说明，使用占位符可能导致发布失败"
     />
 
-    <div v-if="filtered.length === 0" class="text-xs text-muted-foreground py-6 text-center border border-border rounded-lg border-dashed">
+    <div v-if="filtered.length === 0" class="text-xs text-muted-foreground py-6 text-center border border-border rounded-lg border-dashed flex items-center justify-center lg:min-h-[52vh]">
       没有匹配的变量
     </div>
 
-    <div v-else class="pr-1 flex flex-col gap-1.5 max-h-[52vh] overflow-y-auto">
+    <div v-else class="pr-1 flex flex-col gap-1.5 max-h-[52vh] overflow-y-auto lg:min-h-[52vh]">
       <button
         v-for="variable in filtered"
         :key="variable.name"

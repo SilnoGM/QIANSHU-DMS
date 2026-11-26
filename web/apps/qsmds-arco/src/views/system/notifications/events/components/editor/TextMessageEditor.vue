@@ -76,10 +76,11 @@ defineExpose({ insertVariable })
     </div>
     <FaTextarea
       ref="textareaRef"
+      class="flex-1"
       :model-value="content"
       :disabled="disabled"
       :maxlength="channel === 'IN_APP' ? 2000 : 2048"
-      input-class="min-h-64"
+      input-class="min-h-64 lg:h-full"
       placeholder="输入文本内容，支持 {{变量}} 占位符"
       @update:model-value="value => { content = String(value ?? ''); rememberSelection() }"
       @select="rememberSelection"
