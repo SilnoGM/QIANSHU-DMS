@@ -102,6 +102,7 @@ watch(open, (value) => {
               v-model="search"
               type="search"
               clearable
+              class="w-full"
               placeholder="搜索选项"
               aria-label="搜索选项"
             />
