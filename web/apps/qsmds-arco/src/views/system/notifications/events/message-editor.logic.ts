@@ -157,6 +157,11 @@ export function messageDraftSnapshot(message: MessageDraft): string {
   return JSON.stringify(message)
 }
 
+/** 新增消息即使保留默认值也必须回写；编辑已有消息未改动则只关闭。 */
+export function shouldApplyMessageDraft(isEditing: boolean, dirty: boolean): boolean {
+  return isEditing ? dirty : true
+}
+
 export function createDefaultMessageDraft(
   kind: MessageKind,
   context: Pick<MessageEditorContext, 'mediaMaxCount' | 'mediaSources'>,
