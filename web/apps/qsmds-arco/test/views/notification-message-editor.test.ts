@@ -21,6 +21,7 @@ import {
   messageKindLabel,
   normalizeServerIssues,
   serverErrorsForMessage,
+  shouldApplyMessageDraft,
   validateMessageDraft,
 } from '../../src/views/system/notifications/events/message-editor.logic'
 
@@ -360,6 +361,14 @@ test('图文卡片校验文章数量、字段字节、链接、图片与变量',
     }), context())[0]?.message ?? '',
     /未声明变量/u,
   )
+})
+
+test('新增消息保留默认值时也必须回写，编辑已有消息未改动只关闭', () => {
+  assert.equal(shouldApplyMessageDraft(false, false), true)
+  assert.equal(shouldApplyMessageDraft(false, true), true)
+  assert.equal(shouldApplyMessageDraft(true, false), false)
+  assert.equal(shouldApplyMessageDraft(true, true), true)
+  assert.match(modalSource, /shouldApplyMessageDraft\(props\.seed !== null, dirty\.value\)/u)
 })
 
 test('消息草稿快照可区分未修改与已修改', () => {

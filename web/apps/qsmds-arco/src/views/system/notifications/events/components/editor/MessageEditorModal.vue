@@ -20,6 +20,7 @@ import {
   messageDraftSnapshot,
   messageFieldLabel,
   messageKindLabel,
+  shouldApplyMessageDraft,
   validateMessageDraft,
 } from '../../message-editor.logic'
 import FileMessageEditor from './FileMessageEditor.vue'
@@ -127,8 +128,9 @@ function complete(): void {
     return
   }
   errors.value = {}
-  // 未改动时只关闭，避免把「打开后点完成」误标成页面有未保存修改。
-  if (!dirty.value) {
+  // 新增消息即使保留图片附件的默认来源也要回写；编辑已有消息未改动时只关闭，
+  // 避免把「打开后点完成」误标成页面有未保存修改。
+  if (!shouldApplyMessageDraft(props.seed !== null, dirty.value)) {
     closingForced.value = true
     emit('update:modelValue', false)
     return
