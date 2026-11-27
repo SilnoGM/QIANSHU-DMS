@@ -363,6 +363,23 @@ test('图文卡片校验文章数量、字段字节、链接、图片与变量',
   )
 })
 
+test('站内文本允许 / 开头的路由链接，企微仍要求绝对 URL', () => {
+  const routeDraft = textDraft('查看详情')
+  routeDraft.payload.linkUrl = '/qs-finance/realtime-payments/sales-receipts'
+  assert.deepEqual(validateMessageDraft(routeDraft, context({ channel: 'IN_APP', sendMethod: 'IN_APP' })), [])
+  assert.match(
+    validateMessageDraft(routeDraft, context({ channel: 'WECOM', sendMethod: 'APP' }))[0]?.message ?? '',
+    /http\/https/u,
+  )
+
+  const protocolRelative = textDraft('查看详情')
+  protocolRelative.payload.linkUrl = '//evil.example/path'
+  assert.match(
+    validateMessageDraft(protocolRelative, context({ channel: 'IN_APP', sendMethod: 'IN_APP' }))[0]?.message ?? '',
+    /站内链接/u,
+  )
+})
+
 test('新增消息保留默认值时也必须回写，编辑已有消息未改动只关闭', () => {
   assert.equal(shouldApplyMessageDraft(false, false), true)
   assert.equal(shouldApplyMessageDraft(false, true), true)
