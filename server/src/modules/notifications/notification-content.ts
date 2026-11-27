@@ -157,6 +157,11 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** 站内收件箱支持 / 开头的路由；协议相对地址（//host）仍拒绝。 */
+function isValidTextLink(value: string, method: NotificationSendMethodValue): boolean {
+  return isHttpUrl(value) || (method === 'IN_APP' && value.startsWith('/') && !value.startsWith('//'))
+}
+
 /**
  * mpnews 正文的严格白名单校验。
  *
@@ -343,8 +348,15 @@ function validateText(input: {
   if (title !== null && bytesOf(title) > 200) {
     issues.push(issue('NOTIFICATION_CONTENT_TITLE_TOO_LONG', '文本标题不能超过 200 字节', input.itemIndex, 'title'))
   }
-  if (linkUrl !== null && (linkUrl.length === 0 || !isHttpUrl(linkUrl))) {
-    issues.push(issue('NOTIFICATION_CONTENT_LINK_INVALID', '链接必须是 http/https URL', input.itemIndex, 'linkUrl'))
+  if (linkUrl !== null && (linkUrl.length === 0 || !isValidTextLink(linkUrl, input.method))) {
+    issues.push(issue(
+      'NOTIFICATION_CONTENT_LINK_INVALID',
+      input.method === 'IN_APP'
+        ? '站内链接必须是 / 开头的路径或 http/https URL'
+        : '链接必须是 http/https URL',
+      input.itemIndex,
+      'linkUrl',
+    ))
   }
   if (input.method === 'IN_APP') {
     if (content.length > IN_APP_TEXT_MAX_LENGTH) {

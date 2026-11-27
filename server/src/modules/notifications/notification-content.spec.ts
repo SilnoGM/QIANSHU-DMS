@@ -50,6 +50,29 @@ describe('notification content group validation', () => {
     }
   })
 
+  it('allows in-app route links but keeps WeCom links absolute', () => {
+    const inApp = validateNotificationContentGroup({
+      method: 'IN_APP',
+      items: [{ kind: 'TEXT', payload: { content: '查看详情', linkUrl: '/qs-finance/realtime-payments/sales-receipts' } }],
+      allowedVariables: null,
+    })
+    expect(inApp.ok).toBe(true)
+
+    const protocolRelative = validateNotificationContentGroup({
+      method: 'IN_APP',
+      items: [{ kind: 'TEXT', payload: { content: '查看详情', linkUrl: '//evil.example/path' } }],
+      allowedVariables: null,
+    })
+    expect(protocolRelative.ok).toBe(false)
+
+    const wecom = validateNotificationContentGroup({
+      method: 'APP',
+      items: [{ kind: 'TEXT', payload: { content: '查看详情', linkUrl: '/qs-finance/realtime-payments/sales-receipts' } }],
+      allowedVariables: null,
+    })
+    expect(wecom.ok).toBe(false)
+  })
+
   it('rejects in-app multiple enabled items', () => {
     const result = validateNotificationContentGroup({
       method: 'IN_APP',

@@ -66,6 +66,15 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** 站内收件箱支持 / 开头的路由；协议相对地址（//host）仍拒绝。 */
+function isInAppRoute(value: string): boolean {
+  return value.startsWith('/') && !value.startsWith('//')
+}
+
+function isValidTextLink(value: string, channel: MessageChannel): boolean {
+  return isHttpUrl(value) || (channel === 'IN_APP' && isInAppRoute(value))
+}
+
 function extractPlaceholders(value: string): {
   readonly names: readonly string[]
   readonly singleBrace: readonly string[]
@@ -388,8 +397,10 @@ export function validateMessageDraft(
     if (title !== null && bytesOf(title) > 200) {
       add('title', '标题不能超过 200 字节')
     }
-    if (linkUrl !== null && !isHttpUrl(linkUrl)) {
-      add('linkUrl', '链接必须是 http/https URL')
+    if (linkUrl !== null && !isValidTextLink(linkUrl, context.channel)) {
+      add('linkUrl', context.channel === 'IN_APP'
+        ? '站内链接必须是 / 开头的路径或 http/https URL'
+        : '链接必须是 http/https URL')
     }
     validateVariables([
       ['title', title],
